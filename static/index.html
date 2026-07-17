@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OV v1.0 — 短剧 AI Agent</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --panel: #1a1a1a;
+    --border: #2a2a2a;
+    --text: #e0e0e0;
+    --dim: #888;
+    --accent: #7c5cfc;
+    --accent-hover: #9a7eff;
+    --green: #2ecc71;
+    --red: #e74c3c;
+    --radius: 8px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 顶栏 */
+  header {
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .badge {
+    font-size: 12px;
+    color: var(--dim);
+    background: var(--panel);
+    padding: 4px 10px;
+    border-radius: 12px;
+  }
+
+  /* 主体 */
+  main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* 左侧面板 */
+  .left-panel {
+    width: 420px;
+    min-width: 420px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Tab 切换 */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 12px;
+    background: none;
+    border: none;
+    color: var(--dim);
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* 面板内容 */
+  .tab-content {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .tab-content.active { display: flex; }
+
+  label {
+    font-size: 13px;
+    color: var(--dim);
+    margin-bottom: 6px;
+    display: block;
+  }
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus, input[type="text"]:focus {
+    border-color: var(--accent);
+  }
+  textarea { min-height: 100px; }
+  .field { margin-bottom: 16px; }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-green {
+    background: var(--green);
+    color: #fff;
+  }
+  .btn-red {
+    background: var(--red);
+    color: #fff;
+  }
+
+  /* 上传区域 */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--dim);
+    font-size: 14px;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(124, 92, 252, 0.05);
+  }
+  .drop-zone .icon { font-size: 32px; margin-bottom: 8px; }
+  .file-info {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: var(--panel);
+    border-radius: var(--radius);
+    font-size: 13px;
+    display: none;
+  }
+  .file-info.visible { display: block; }
+
+  /* 右侧 - 文本展示 */
+  .right-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .text-header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+  }
+  .text-header .title { font-size: 14px; color: var(--dim); }
+  .text-header .status {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+  }
+  .status-draft { background: rgba(252, 186, 3, 0.15); color: #fcba03; }
+  .status-approved { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+  .status-rejected { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+
+  .text-content {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    font-size: 15px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    font-family: "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+  }
+  .text-placeholder {
+    color: var(--dim);
+    text-align: center;
+    margin-top: 80px;
+    font-size: 15px;
+  }
+
+  /* 底部操作栏 */
+  .action-bar {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    align-items: center;
+  }
+  .action-bar .info { margin-right: auto; font-size: 13px; color: var(--dim); }
+
+  /* 弹窗 */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 480px;
+    max-width: 90vw;
+  }
+  .modal h3 { margin-bottom: 16px; font-size: 16px; }
+  .modal textarea { min-height: 100px; margin-bottom: 16px; }
+  .modal .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* Loading */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid transparent;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 24px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    z-index: 200;
+    animation: fadeInOut 3s ease;
+    pointer-events: none;
+  }
+  .toast-error { background: var(--red); color: #fff; }
+  .toast-success { background: var(--green); color: #fff; }
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>OV v1.0 — 短剧 AI Agent</h1>
+  <span class="badge">V0.1 小说创作</span>
+</header>
+
+<main>
+  <!-- 左侧面板 -->
+  <div class="left-panel">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="ai">AI 创作</button>
+      <button class="tab-btn" data-tab="import">导入文件</button>
+    </div>
+
+    <!-- AI 创作 Tab -->
+    <div class="tab-content active" id="tab-ai">
+      <div class="field">
+        <label>创意描述</label>
+        <textarea id="user-idea" placeholder="例如：唐朝女将军在沙场上发现敌军统帅是自己失散多年的兄长……"></textarea>
+      </div>
+      <div class="field">
+        <label>风格偏好（可选）</label>
+        <input type="text" id="style-prefs" placeholder="例如：快节奏、悬疑感强、古装权谋">
+      </div>
+      <button class="btn btn-primary" id="btn-generate" onclick="generateStory()">
+        <span id="gen-spinner" style="display:none" class="spinner"></span>生成章节
+      </button>
+    </div>
+
+    <!-- 导入文件 Tab -->
+    <div class="tab-content" id="tab-import">
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div>
+          <div class="icon">&#128196;</div>
+          <div>点击或拖拽上传 .txt / .md 文件</div>
+          <div style="font-size:12px;margin-top:4px;color:var(--dim)">最大 5MB，自动识别编码</div>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept=".txt,.md" style="display:none" onchange="handleFileSelect(event)">
+      <div class="file-info" id="file-info"></div>
+      <button class="btn btn-primary" id="btn-import" onclick="importFile()" disabled style="margin-top:12px">
+        <span id="import-spinner" style="display:none" class="spinner"></span>导入并展示
+      </button>
+    </div>
+  </div>
+
+  <!-- 右侧 - 文本展示 -->
+  <div class="right-panel">
+    <div class="text-header">
+      <span class="title" id="text-title">等待输入…</span>
+      <span class="status status-draft" id="text-status" style="display:none"></span>
+    </div>
+    <div class="text-content" id="text-content">
+      <div class="text-placeholder">
+        &#x1F4DD;<br><br>左侧输入创意开始创作，<br>或切换到「导入文件」上传已有的小说文稿。
+      </div>
+    </div>
+    <div class="action-bar" id="action-bar" style="display:none">
+      <span class="info" id="action-info"></span>
+      <button class="btn btn-red" onclick="openRejectModal()">驳回重来</button>
+      <button class="btn btn-green" onclick="approveChapter()">通过，进入分镜</button>
+    </div>
+  </div>
+</main>
+
+<!-- 驳回弹窗 -->
+<div class="modal-overlay" id="reject-modal">
+  <div class="modal">
+    <h3>驳回修改意见</h3>
+    <textarea id="reject-feedback" placeholder="请描述需要修改的地方，例如：人物对话太少、场景描述不够详细、节奏太慢……"></textarea>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--border);color:var(--text)" onclick="closeRejectModal()">取消</button>
+      <button class="btn btn-primary" id="btn-reject-submit" onclick="rejectChapter()">
+        <span id="reject-spinner" style="display:none" class="spinner"></span>提交驳回
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 状态管理
+// ============================================================
+let currentProject = null;
+let selectedFile = null;
+
+// ============================================================
+// Tab 切换
+// ============================================================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ============================================================
+// 文件拖拽上传
+// ============================================================
+const dropZone = document.getElementById('drop-zone');
+
+['dragenter', 'dragover'].forEach(evt => {
+  dropZone.addEventListener(evt, e => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+});
+
+['dragleave', 'drop'].forEach(evt => {
+  dropZone.addEventListener(evt, e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+  });
+});
+
+dropZone.addEventListener('drop', e => {
+  const files = e.dataTransfer.files;
+  if (files.length > 0) setFile(files[0]);
+});
+
+function handleFileSelect(event) {
+  const files = event.target.files;
+  if (files.length > 0) setFile(files[0]);
+}
+
+function setFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['txt', 'md'].includes(ext)) {
+    showToast('仅支持 .txt 和 .md 文件', 'error');
+    return;
+  }
+  selectedFile = file;
+  const info = document.getElementById('file-info');
+  info.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+  info.classList.add('visible');
+  document.getElementById('btn-import').disabled = false;
+}
+
+// ============================================================
+// AI 创作
+// ============================================================
+async function generateStory() {
+  const idea = document.getElementById('user-idea').value.trim();
+  if (!idea) { showToast('请输入创意描述', 'error'); return; }
+
+  setButtonLoading('btn-generate', 'gen-spinner', true);
+  try {
+    const res = await fetch('/generate-story', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_idea: idea,
+        style_preferences: document.getElementById('style-prefs').value.trim()
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '生成失败');
+    currentProject = data;
+    renderChapter(data);
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    setButtonLoading('btn-generate', 'gen-spinner', false);
+  }
+}
+
+// ============================================================
+// 导入文件
+// ============================================================
+async function importFile() {
+  if (!selectedFile) return;
+
+  setButtonLoading('btn-import', 'import-spinner', true);
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    const res = await fetch('/import-story', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '导入失败');
+    currentProject = data;
+    renderChapter(data);
+    selectedFile = null;
+    document.getElementById('file-info').classList.remove('visible');
+    document.getElementById('btn-import').disabled = true;
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    setButtonLoading('btn-import', 'import-spinner', false);
+  }
+}
+
+// ============================================================
+// 文本渲染
+// ============================================================
+function renderChapter(project) {
+  document.getElementById('text-content').innerHTML = '';
+  document.getElementById('text-content').textContent = project.chapter_text;
+  document.getElementById('text-title').textContent =
+    '项目 ' + project.id + (project.source === 'ai' ? ' — AI 创作' : ' — 导入: ' + project.filename);
+
+  const statusEl = document.getElementById('text-status');
+  statusEl.style.display = 'inline-block';
+  statusEl.textContent = statusLabel(project.status);
+  statusEl.className = 'status status-' + project.status;
+
+  document.getElementById('action-bar').style.display = 'flex';
+  document.getElementById('action-info').textContent =
+    project.source === 'ai'
+      ? '来源：LLM 创作 | 状态：待审核'
+      : `来源：${project.filename} (${project.char_count} 字) | 状态：待审核`;
+}
+
+function statusLabel(s) {
+  return { draft: '待审核', approved: '已通过', rejected: '已驳回' }[s] || s;
+}
+
+// ============================================================
+// 审核操作
+// ============================================================
+async function approveChapter() {
+  if (!currentProject) return;
+  try {
+    const res = await fetch(`/projects/${currentProject.id}/approve`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '操作失败');
+    currentProject = data;
+    document.getElementById('text-status').textContent = statusLabel(data.status);
+    document.getElementById('text-status').className = 'status status-' + data.status;
+    document.getElementById('action-bar').style.display = 'none';
+    showToast('章节已通过！进入下一阶段：分镜拆解', 'success');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function openRejectModal() {
+  document.getElementById('reject-modal').classList.add('active');
+  document.getElementById('reject-feedback').value = '';
+  document.getElementById('reject-feedback').focus();
+}
+
+function closeRejectModal() {
+  document.getElementById('reject-modal').classList.remove('active');
+}
+
+async function rejectChapter() {
+  if (!currentProject) return;
+  const feedback = document.getElementById('reject-feedback').value.trim();
+  if (!feedback) { showToast('请填写修改意见', 'error'); return; }
+
+  setButtonLoading('btn-reject-submit', 'reject-spinner', true);
+  try {
+    const res = await fetch(`/projects/${currentProject.id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedback })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '驳回失败');
+    currentProject = data;
+
+    if (currentProject.source === 'ai') {
+      renderChapter(data);
+      showToast('已根据反馈重新生成', 'success');
+    } else {
+      document.getElementById('text-status').textContent = statusLabel(data.status);
+      document.getElementById('text-status').className = 'status status-' + data.status;
+      showToast('已驳回，请编辑后重新提交', 'success');
+    }
+
+    closeRejectModal();
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    setButtonLoading('btn-reject-submit', 'reject-spinner', false);
+  }
+}
+
+// ============================================================
+// 工具函数
+// ============================================================
+function setButtonLoading(btnId, spinnerId, loading) {
+  const btn = document.getElementById(btnId);
+  const spinner = document.getElementById(spinnerId);
+  btn.disabled = loading;
+  spinner.style.display = loading ? 'inline-block' : 'none';
+}
+
+function showToast(msg, type) {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+</script>
+
+</body>
+</html>
