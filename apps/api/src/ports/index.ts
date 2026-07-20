@@ -1,4 +1,5 @@
 export * from './generation.js';
+export * from './llm.js';
 
 export type QueueJobType =
   | 'prompt_construct'

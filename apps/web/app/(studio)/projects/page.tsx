@@ -34,7 +34,8 @@ export default function ProjectsPage() {
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api('/projects', {
         method: 'POST',
@@ -43,7 +44,7 @@ export default function ProjectsPage() {
           description: getFormText(form, 'description'),
         },
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setCreating(false);
       await load();
     } catch (reason) {

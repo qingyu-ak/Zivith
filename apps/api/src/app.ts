@@ -8,8 +8,12 @@ import { S3StorageAdapter } from './adapters/s3.js';
 import { registerErrorHandler } from './errors.js';
 import type { StoragePort } from './ports/index.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerGenerationRoutes } from './routes/generation.js';
 import { registerResourceRoutes } from './routes/resources.js';
+import { registerShotPromptRoutes } from './routes/shot-prompts.js';
 import { registerStubRoutes } from './routes/stubs.js';
+import { registerVisualRequirementRoutes } from './routes/visual-requirements.js';
+import { registerWorkflowRoutes } from './routes/workflows.js';
 
 export interface BuildAppOptions {
   db?: PrismaClient;
@@ -65,6 +69,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
     origin: (process.env.WEB_ORIGIN ?? 'http://localhost:3000')
       .split(',')
       .map((origin) => origin.trim()),
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
   });
   await app.register(multipart, {
     limits: { files: 1, fileSize: 10 * 1024 * 1024, fields: 10 },
@@ -79,7 +85,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (api, _options, done) => {
       registerAuthRoutes(api, db);
       api.register((protectedApi, _protectedOptions, protectedDone) => {
+        registerGenerationRoutes(protectedApi, db);
         registerResourceRoutes(protectedApi, db, options.storage ?? storageFromEnvironment());
+        registerShotPromptRoutes(protectedApi, db);
+        registerVisualRequirementRoutes(protectedApi, db);
+        registerWorkflowRoutes(protectedApi, db);
         protectedDone();
       });
       registerStubRoutes(api);
