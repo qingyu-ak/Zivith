@@ -1,5 +1,7 @@
 # Zivith
 
+Build cinematic AI videos from a single idea using autonomous AI agents.
+
 Zivith is an AI-native film production studio. This repository is a pnpm/Turborepo
 monorepo for the web application, API, domain model, database, and shared UI.
 
