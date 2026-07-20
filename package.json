@@ -1,0 +1,32 @@
+{
+  "name": "zivith",
+  "version": "0.1.0-pre",
+  "private": true,
+  "description": "AI-native film production studio",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=22.0.0 <23",
+    "pnpm": ">=10.0.0 <11"
+  },
+  "scripts": {
+    "postinstall": "pnpm --filter @zivith/database prisma:generate",
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "eslint .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:migrate": "turbo run db:migrate --filter=./packages/database",
+    "db:seed": "turbo run db:seed --filter=./packages/database"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.29.0",
+    "eslint": "^9.29.0",
+    "globals": "^16.2.0",
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.35.0"
+  }
+}
