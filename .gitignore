@@ -1,0 +1,33 @@
+# Dependencies and package-manager state
+node_modules/
+.pnpm-store/
+
+# Build and test output
+.next/
+.turbo/
+build/
+coverage/
+dist/
+*.tsbuildinfo
+
+# Environment files (examples remain tracked)
+.env
+.env.*
+!.env.example
+!.env.development.example
+!.env.test.example
+!.env.production.example
+
+# Local data and logs
+.data/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

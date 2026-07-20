@@ -1,0 +1,444 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberRole {
+  owner
+  editor
+  viewer
+}
+
+enum ApprovalState {
+  draft
+  approved
+}
+
+enum ShotState {
+  draft
+  prompting
+  generating
+  review
+  approved
+}
+
+enum AssetType {
+  character
+  location
+  prop
+  style
+  media
+  knowledge
+  prompt_template
+}
+
+enum AssetState {
+  draft
+  active
+  archived
+}
+
+enum MediaType {
+  image
+  video
+  audio
+  three_d_model
+  document
+}
+
+enum MediaSource {
+  uploaded
+  generated
+  imported
+}
+
+enum JobStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum OutputStatus {
+  queued
+  generating
+  completed
+  failed
+}
+
+enum RequirementStatus {
+  pending
+  generating
+  review
+  approved
+  rejected
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String         @map("password_hash")
+  displayName   String         @map("display_name")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  deletedAt     DateTime?      @map("deleted_at")
+  memberships   ProjectMember[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+  projects      Project[]      @relation("ProjectOwner")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  familyId   String    @map("family_id")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  replacedBy String?   @map("replaced_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, familyId])
+  @@map("refresh_tokens")
+}
+
+model Project {
+  id          String          @id @default(uuid())
+  ownerId     String          @map("owner_id")
+  name        String
+  description String?
+  defaults    Json            @default("{}")
+  settings    Json            @default("{}")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
+  owner       User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members     ProjectMember[]
+  stories     Story[]
+  assets      Asset[]
+  media       Media[]
+  tasks       Task[]
+  workflows   WorkflowRun[]
+
+  @@index([ownerId, deletedAt])
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String     @map("project_id")
+  userId    String     @map("user_id")
+  role      MemberRole @default(viewer)
+  createdAt DateTime   @default(now()) @map("created_at")
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model Story {
+  id                    String        @id @default(uuid())
+  projectId             String        @map("project_id")
+  title                 String
+  logline               String?
+  synopsis              String?
+  genre                 String?
+  theme                 String?
+  targetAudience        String?       @map("target_audience")
+  tone                  String?
+  targetDurationSeconds Int?          @map("target_duration_seconds")
+  language              String?
+  screenplay            String?
+  state                 ApprovalState @default(draft)
+  overrides             Json?
+  order                 Int
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  deletedAt             DateTime?     @map("deleted_at")
+  project               Project       @relation(fields: [projectId], references: [id])
+  scenes                Scene[]
+
+  @@index([projectId, order, deletedAt])
+  @@map("stories")
+}
+
+model Scene {
+  id               String                   @id @default(uuid())
+  storyId          String                   @map("story_id")
+  projectId        String                   @map("project_id")
+  title            String
+  description      String?
+  order            Int
+  state            ApprovalState            @default(draft)
+  locationId       String?                  @map("location_id")
+  time             String?
+  weather          String?
+  mood             String?
+  characterIds     String[]                 @default([]) @map("character_ids")
+  overrides        Json?
+  approvedSnapshot Json?                    @map("approved_snapshot")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  deletedAt        DateTime?                @map("deleted_at")
+  story            Story                    @relation(fields: [storyId], references: [id])
+  shots            Shot[]
+  requirements     VisualAssetRequirement[]
+
+  @@index([storyId, order, deletedAt])
+  @@index([projectId, deletedAt])
+  @@map("scenes")
+}
+
+model Shot {
+  id               String       @id @default(uuid())
+  sceneId          String       @map("scene_id")
+  projectId        String       @map("project_id")
+  order            Int
+  label            String?
+  state            ShotState    @default(draft)
+  narrativeMode    String       @default("present") @map("narrative_mode")
+  locationArea     String?      @map("location_area")
+  camera           Json?
+  composition      Json?
+  lighting         Json?
+  color            Json?
+  mood             String?
+  style            Json?
+  characters       Json         @default("[]")
+  dialogue         Json?
+  action           Json?
+  audio            Json?
+  prompt           Json         @default("{\"source\":\"auto\"}")
+  approvedSnapshot Json?        @map("approved_snapshot")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  deletedAt        DateTime?    @map("deleted_at")
+  scene            Scene        @relation(fields: [sceneId], references: [id])
+  outputs          Output[]
+  prompts          PromptVersion[]
+
+  @@index([sceneId, order, deletedAt])
+  @@index([projectId, deletedAt])
+  @@map("shots")
+}
+
+model Asset {
+  id              String      @id @default(uuid())
+  projectId       String      @map("project_id")
+  type            AssetType
+  state           AssetState  @default(draft)
+  name            String
+  description     String
+  aliases         String[]    @default([])
+  baseCharacterId String?     @map("base_character_id")
+  appearance      Json?
+  data            Json        @default("{}")
+  referenceImages String[]    @default([]) @map("reference_images")
+  tags            String[]    @default([])
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  deletedAt       DateTime?   @map("deleted_at")
+  project         Project     @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, type, state, deletedAt])
+  @@index([baseCharacterId])
+  @@map("assets")
+}
+
+model Media {
+  id                 String       @id @default(uuid())
+  projectId          String       @map("project_id")
+  name               String
+  mediaType          MediaType    @map("media_type")
+  mimeType           String       @map("mime_type")
+  storageKey         String       @unique @map("storage_key")
+  url                String
+  thumbnailUrl       String?      @map("thumbnail_url")
+  fileSizeBytes      BigInt?      @map("file_size_bytes")
+  resolution         String?
+  durationSeconds    Float?       @map("duration_seconds")
+  source             MediaSource
+  generationMetadata Json?        @map("generation_metadata")
+  tags               String[]     @default([])
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+  deletedAt          DateTime?    @map("deleted_at")
+  project            Project      @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, mediaType, deletedAt])
+  @@map("media")
+}
+
+model VisualAssetRequirement {
+  id                String            @id @default(uuid())
+  sceneId           String            @map("scene_id")
+  assetType         AssetType         @map("asset_type")
+  assetId           String            @map("asset_id")
+  variantKey        String            @map("variant_key")
+  required          Boolean
+  reason            String
+  status            RequirementStatus @default(pending)
+  candidateMediaIds String[]          @default([]) @map("candidate_media_ids")
+  approvedMediaId   String?           @map("approved_media_id")
+  generationJobId   String?           @map("generation_job_id")
+  version           Int               @default(1)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  deletedAt         DateTime?         @map("deleted_at")
+  scene             Scene             @relation(fields: [sceneId], references: [id])
+
+  @@index([sceneId, assetType, assetId, variantKey])
+  @@index([sceneId, status, deletedAt])
+  @@map("visual_asset_requirements")
+}
+
+model PromptVersion {
+  id         String   @id @default(uuid())
+  shotId     String   @map("shot_id")
+  positive   String
+  negative   String?
+  source     String
+  approvedAt DateTime? @map("approved_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  shot       Shot     @relation(fields: [shotId], references: [id])
+
+  @@index([shotId, createdAt])
+  @@map("prompt_versions")
+}
+
+model Output {
+  id              String       @id @default(uuid())
+  shotId          String       @map("shot_id")
+  status          OutputStatus @default(queued)
+  videoUrl        String?      @map("video_url")
+  thumbnailUrl    String?      @map("thumbnail_url")
+  provider        String
+  providerJobId   String?      @unique @map("provider_job_id")
+  idempotencyKey  String       @unique @map("idempotency_key")
+  model           String
+  modelVersion    String?      @map("model_version")
+  parameters      Json
+  durationSeconds Float?       @map("duration_seconds")
+  resolution      String?
+  fileSizeBytes   BigInt?      @map("file_size_bytes")
+  isActive        Boolean      @default(false) @map("is_active")
+  promptSnapshot  Json         @map("prompt_snapshot")
+  contextSnapshot Json         @map("context_snapshot")
+  visualMediaIds  String[]     @default([]) @map("visual_media_ids")
+  errorCode       String?      @map("error_code")
+  generatedAt     DateTime?    @map("generated_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  shot            Shot         @relation(fields: [shotId], references: [id])
+
+  @@index([shotId, status])
+  @@map("outputs")
+}
+
+model Task {
+  id             String    @id @default(uuid())
+  projectId      String    @map("project_id")
+  type           String
+  status         JobStatus @default(queued)
+  idempotencyKey String    @unique @map("idempotency_key")
+  provider       String?
+  providerJobId  String?   @map("provider_job_id")
+  payload        Json
+  result         Json?
+  errorCode      String?   @map("error_code")
+  attempts       Int       @default(0)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  project        Project   @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, status])
+  @@index([provider, providerJobId])
+  @@map("tasks")
+}
+
+model WorkflowRun {
+  id         String         @id @default(uuid())
+  projectId  String         @map("project_id")
+  type       String
+  status     JobStatus      @default(queued)
+  input      Json
+  state      Json           @default("{}")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  project    Project        @relation(fields: [projectId], references: [id])
+  steps      WorkflowStep[]
+
+  @@index([projectId, status])
+  @@map("workflow_runs")
+}
+
+model WorkflowStep {
+  id            String      @id @default(uuid())
+  workflowRunId String      @map("workflow_run_id")
+  name          String
+  status        JobStatus   @default(queued)
+  input         Json
+  output        Json?
+  order         Int
+  startedAt     DateTime?   @map("started_at")
+  completedAt   DateTime?   @map("completed_at")
+  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowRunId, order])
+  @@map("workflow_steps")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String?  @map("actor_id")
+  projectId    String?  @map("project_id")
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id")
+  action       String
+  before       Json?
+  after        Json?
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+  actor        User?    @relation(fields: [actorId], references: [id])
+
+  @@index([projectId, entityType, entityId])
+  @@map("audit_logs")
+}
+
+model ProviderCredential {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  provider        String
+  encryptedSecret Bytes    @map("encrypted_secret")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, provider])
+  @@map("provider_credentials")
+}
+
+model ProviderUsage {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  userId        String   @map("user_id")
+  provider      String
+  model         String
+  operation     String
+  units         Decimal  @db.Decimal(18, 6)
+  estimatedCost Decimal  @map("estimated_cost") @db.Decimal(18, 6)
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([projectId, provider, createdAt])
+  @@map("provider_usage")
+}

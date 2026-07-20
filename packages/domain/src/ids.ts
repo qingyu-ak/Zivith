@@ -1,0 +1,23 @@
+export type Brand<T, B extends string> = T & { readonly __brand: B };
+
+export type UserId = Brand<string, 'UserId'>;
+export type ProjectId = Brand<string, 'ProjectId'>;
+export type StoryId = Brand<string, 'StoryId'>;
+export type SceneId = Brand<string, 'SceneId'>;
+export type ShotId = Brand<string, 'ShotId'>;
+export type CharacterId = Brand<string, 'CharacterId'>;
+export type LocationId = Brand<string, 'LocationId'>;
+export type PropId = Brand<string, 'PropId'>;
+export type StyleId = Brand<string, 'StyleId'>;
+export type AssetId = Brand<string, 'AssetId'>;
+export type MediaId = Brand<string, 'MediaId'>;
+export type OutputId = Brand<string, 'OutputId'>;
+export type VisualAssetRequirementId = Brand<string, 'VisualAssetRequirementId'>;
+export type ImageGenerationJobId = Brand<string, 'ImageGenerationJobId'>;
+export type VideoGenerationJobId = Brand<string, 'VideoGenerationJobId'>;
+export type WorkflowRunId = Brand<string, 'WorkflowRunId'>;
+export type WorkflowStepId = Brand<string, 'WorkflowStepId'>;
+export type TemplateId = Brand<string, 'TemplateId'>;
+export type KnowledgeId = Brand<string, 'KnowledgeId'>;
+
+export const asId = <T extends Brand<string, string>>(value: string): T => value as T;
