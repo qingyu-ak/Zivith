@@ -49,6 +49,7 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | [Technical Architecture](Technical-Architecture.md) | System design, adapters, APIs, queues, BYOK, and data storage |
 | [Implementation Plan](Implementation-Plan.md) | Phased roadmap with live progress checkboxes |
 | [Next Tasks](Next-Tasks.md) | Current engineering backlog (stabilize → finish Phase 2 → 2.5) |
+| [Director Copilot RFC (thin)](Director-Copilot-RFC.md) | Project sidebar co-pilot scope lock (Phase 3+; not a chatbot) |
 | [Code Agent Design Guide](Code-Agent-Design-Guide.md) | Implementation conventions for AI code agents |
 
 ### Historical
