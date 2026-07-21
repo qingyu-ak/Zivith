@@ -6,10 +6,16 @@ import { ApiError } from '../errors.js';
 
 const shotParams = z.object({ id: z.string().uuid() });
 const outputParams = z.object({ id: z.string().uuid(), oid: z.string().uuid() });
+const projectParams = z.object({ projectId: z.string().uuid() });
+const listTasksQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  type: z.enum(['video_generate']).default('video_generate'),
+});
 const generateBody = z
   .object({
     request_id: z.string().trim().min(1).max(200).optional(),
     model: z.literal('mock-v1').default('mock-v1'),
+    async: z.boolean().optional(),
   })
   .strict();
 
@@ -34,6 +40,13 @@ async function requireShotMember(
   return shot;
 }
 
+async function requireProjectMember(db: PrismaClient, projectId: string, userId: string) {
+  const member = await db.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+  });
+  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
+}
+
 export function registerGenerationRoutes(
   app: FastifyInstance,
   db: PrismaClient,
@@ -46,8 +59,9 @@ export function registerGenerationRoutes(
     const output = await service.generate(id, {
       model: body.model,
       ...(body.request_id ? { requestId: body.request_id } : {}),
+      ...(body.async !== undefined ? { async: body.async } : {}),
     });
-    return reply.status(201).send(output);
+    return reply.status(body.async ? 202 : 201).send(output);
   });
 
   app.get('/shots/:id/outputs', async (request) => {
@@ -56,6 +70,17 @@ export function registerGenerationRoutes(
     return db.output.findMany({
       where: { shotId: id },
       orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  app.get('/projects/:projectId/generation-tasks', async (request) => {
+    const { projectId } = projectParams.parse(request.params);
+    const query = listTasksQuery.parse(request.query);
+    await requireProjectMember(db, projectId, request.user.sub);
+    return db.task.findMany({
+      where: { projectId, type: query.type },
+      orderBy: { createdAt: 'desc' },
+      take: query.limit,
     });
   });
 
@@ -73,3 +98,5 @@ export function registerGenerationRoutes(
     });
   });
 }
+
+export { listTasksQuery };

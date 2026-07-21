@@ -46,13 +46,13 @@ Goal: make the Mock Story→Video loop reliable and reviewable without expanding
 
 Do after Track A exit.
 
-| ID | Task | Notes |
-|----|------|-------|
-| B1 | Wire BullMQ enqueue + worker for generation jobs | Adapter exists; generation currently runs in-request |
-| B2 | Implement `GET /workflows/:runId/events` SSE | Replace 501 stub; WorkflowPanel can poll less / stream gates |
-| B3 | Call `recoverInterruptedRuns()` on API boot | Orchestrator method exists; not auto-invoked |
-| B4 | Lightweight generation queue surface | Project- or shot-scoped job list with mock progress |
-| B5 | Pause / resume UX (if still in Phase 2 scope) | Spec asked for it; cancel+recover may be enough for MVP — decide during B3 |
+| ID | Task | Notes | Status |
+|----|------|-------|--------|
+| B1 | Wire BullMQ enqueue + worker for generation jobs | Redis → BullMQ; no Redis → in-memory queue | Done 2026-07-21 |
+| B2 | Implement `GET /workflows/:runId/events` SSE | Polling snapshot stream; WorkflowPanel subscribes | Done 2026-07-21 |
+| B3 | Call `recoverInterruptedRuns()` on API boot | Invoked from `server.ts` | Done 2026-07-21 |
+| B4 | Lightweight generation queue surface | Project-page `GenerationQueuePanel` | Done 2026-07-21 |
+| B5 | Pause / resume UX | Deferred — cancel + boot recover is enough for MVP | Deferred |
 
 **Exit criteria for Track B:** Phase 2 checkboxes in Implementation Plan move from partial to done for queue UI, SSE, and recovery.
 

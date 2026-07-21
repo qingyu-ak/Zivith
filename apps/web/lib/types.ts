@@ -229,3 +229,17 @@ export interface PromptVersionDTO {
   approved_at?: string | null;
   created_at: string;
 }
+
+export interface GenerationTaskDTO {
+  id: string;
+  project_id: string;
+  type: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  provider?: string | null;
+  payload?: Record<string, unknown>;
+  attempts: number;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  error_code?: string | null;
+}

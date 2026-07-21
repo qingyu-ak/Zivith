@@ -91,15 +91,15 @@ Infrastructure decisions: see root [`ARCHITECTURE-DECISIONS.md`](../ARCHITECTURE
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Phase 0 Foundation | ~90% done | Queue adapter unused in runtime; no staging deploy |
+| Phase 0 Foundation | ~95% done | BullMQ wired when REDIS_URL set; no staging deploy |
 | Phase 1 Core Domain | ~90% done | Inheritance is read-time resolve; Character/Location only |
-| Phase 2 AI Agent + Mock Gen | ~70% done | Story→Video mock E2E works; SSE / queue UI / recover UX open |
+| Phase 2 AI Agent + Mock Gen | ~85% done | Queue + SSE + recover landed; mock providers remain |
 | Phase 2.5 First Providers | Not started | DeepSeek + Tongyi Wanxiang + Kling |
 | Phase 3–5 | Not started | — |
 
 **Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
 **Strategy:** B-Line — Agent pipeline first, video generation mocked.  
-**Near-term focus:** Stabilize the landed Workflow UI / shot-prompt path, then close Phase 2 gaps. See [Next Tasks](Next-Tasks.md).
+**Near-term focus:** Track B closed; next is Phase 2.5 providers. See [Next Tasks](Next-Tasks.md).
 
 ---
 

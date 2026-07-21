@@ -164,7 +164,7 @@ This is the B-Line MVP: the creative pipeline is fully functional, while video m
 - [x] Human-in-the-loop review gates at every stage
 - [x] Mandatory prompt review before every video generation request
 - [x] **Mock Generation Adapter** — returns placeholder videos
-- [~] Generation Queue UI with mock progress simulation — shot/workflow surfaces show outputs; no dedicated queue page / SSE
+- [x] Generation Queue UI with mock progress simulation — project-page task list + BullMQ/in-memory worker
 - [~] Scene visual-assets review panel — embedded in WorkflowPanel; not a standalone gallery
 
 ### Mock Adapter Specification
@@ -219,7 +219,7 @@ The placeholder video displays the Shot's structured data as text overlay, allow
 - [x] Shot Agent configures Shot fields (camera, lighting, character actions, dialogue)
 - [x] Prompt Agent constructs complete prompts from Shot data
 - [x] Mock generation produces placeholder videos with correct metadata
-- [~] Workflow can be cancelled; interrupt recovery exists in orchestrator but is not auto-run on boot / exposed as pause-resume UX
+- [x] Workflow can be cancelled; interrupted runs are requeued on API boot; pause/resume deferred (cancel + recover)
 
 ### Agent Quality Metrics (Phase 2)
 

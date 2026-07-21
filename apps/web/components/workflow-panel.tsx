@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { Badge, Button, Card, Field, Select, Spinner, Textarea } from '@zivith/ui';
-import { api, errorMessage } from '@/lib/api';
+import { api, errorMessage, session } from '@/lib/api';
 import { getFormText } from '@/lib/form-data';
 import type {
   OutputDTO,
@@ -178,6 +178,67 @@ export function WorkflowPanel({
   useEffect(() => {
     void loadLatest();
   }, [loadLatest]);
+
+  useEffect(() => {
+    if (!run || ['completed', 'failed', 'cancelled'].includes(run.status)) return;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+    const token = session.getToken();
+    if (!token) return;
+
+    const controller = new AbortController();
+    let active = true;
+
+    const connect = async () => {
+      try {
+        const response = await fetch(`${API_URL}/workflows/${run.id}/events`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) return;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (active) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() ?? '';
+          for (const chunk of chunks) {
+            const lines = chunk.split('\n');
+            const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim();
+            const dataLine = lines.find((line) => line.startsWith('data:'));
+            if (!dataLine) continue;
+            try {
+              const data = JSON.parse(dataLine.slice(5).trim()) as {
+                status?: string;
+                run_id?: string;
+              };
+              if (event === 'workflow' || event === 'done') {
+                const latest = await api<WorkflowRunDTO>(`/workflows/${run.id}`);
+                if (active) setRun(latest);
+              }
+              if (event === 'done' || data.status === 'completed') {
+                await onArtifactsChanged();
+              }
+            } catch {
+              // ignore malformed SSE frames
+            }
+          }
+        }
+      } catch (reason) {
+        if (!controller.signal.aborted && active) {
+          setError(errorMessage(reason));
+        }
+      }
+    };
+
+    void connect();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [run?.id, run?.status, onArtifactsChanged]);
 
   useEffect(() => {
     if (!run) {

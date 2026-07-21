@@ -50,11 +50,39 @@ function shot(requirementStatus: 'approved' | 'review' = 'approved') {
 }
 
 function database(currentShot = shot()) {
-  const outputUpdate = vi.fn().mockResolvedValue({
+  const completedOutput = {
     id: 'output-1',
-    status: 'completed',
+    shotId: currentShot.id,
+    status: 'completed' as const,
     videoUrl: 'https://example.test/mock.mp4',
-  });
+    idempotencyKey: 'mock-video:request-1',
+    model: 'mock-v1',
+    promptSnapshot: currentShot.prompt,
+    visualMediaIds: ['media-1'],
+  };
+  let outputState: Record<string, unknown> = {
+    id: 'output-1',
+    shotId: currentShot.id,
+    status: 'queued',
+    idempotencyKey: 'mock-video:request-1',
+    model: 'mock-v1',
+    promptSnapshot: currentShot.prompt,
+    visualMediaIds: ['media-1'],
+  };
+  const taskState = {
+    id: 'task-1',
+    idempotencyKey: 'mock-video:request-1',
+    payload: {
+      shot_id: currentShot.id,
+      output_id: 'output-1',
+      request_id: 'request-1',
+      positive: currentShot.prompt.positive,
+      negative: currentShot.prompt.negative,
+      visual_media_ids: ['media-1'],
+    },
+    startedAt: null as Date | null,
+  };
+
   const db = {
     shot: {
       findFirst: vi.fn().mockResolvedValue(currentShot),
@@ -69,19 +97,31 @@ function database(currentShot = shot()) {
       }),
     },
     output: {
-      findUnique: vi.fn().mockResolvedValue(null),
-      create: vi.fn().mockResolvedValue({}),
-      update: outputUpdate,
+      findUnique: vi.fn().mockImplementation(async ({ where }: { where: { id?: string; idempotencyKey?: string } }) => {
+        if (where.idempotencyKey) return null;
+        return outputState;
+      }),
+      findUniqueOrThrow: vi.fn().mockImplementation(async () => outputState),
+      create: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+        outputState = { ...outputState, ...data, status: 'queued' };
+        return outputState;
+      }),
+      update: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+        outputState = { ...outputState, ...data };
+        if (data.status === 'completed') Object.assign(outputState, completedOutput);
+        return outputState;
+      }),
     },
     task: {
-      create: vi.fn().mockResolvedValue({}),
-      update: vi.fn().mockResolvedValue({}),
+      create: vi.fn().mockResolvedValue(taskState),
+      findFirst: vi.fn().mockResolvedValue(taskState),
+      update: vi.fn().mockResolvedValue(taskState),
     },
     $transaction: vi
       .fn()
       .mockImplementation(async (operations: Promise<unknown>[]) => Promise.all(operations)),
   } as unknown as PrismaClient;
-  return { db, outputUpdate };
+  return { db, getOutput: () => outputState };
 }
 
 const adapter: VideoGenerationAdapter = {
@@ -119,7 +159,7 @@ describe('GenerationService', () => {
         reference_image_urls: ['media-1'],
       }),
     );
-    expect(db.shot.update).toHaveBeenLastCalledWith({
+    expect(db.shot.update).toHaveBeenCalledWith({
       where: { id: '11111111-1111-4111-8111-111111111111' },
       data: { state: 'review' },
     });
@@ -130,5 +170,25 @@ describe('GenerationService', () => {
     await expect(
       new GenerationService(db, adapter).generate('11111111-1111-4111-8111-111111111111'),
     ).rejects.toMatchObject({ code: 'VISUAL_ASSETS_NOT_APPROVED' });
+  });
+
+  it('returns queued output immediately in async mode', async () => {
+    vi.clearAllMocks();
+    const { db } = database();
+    const service = new GenerationService(db, adapter);
+    const memory = {
+      enqueue: vi.fn().mockResolvedValue({ job_id: 'mock-video:request-1' }),
+      cancel: vi.fn(),
+    };
+    service.attachQueue(memory);
+    const output = await service.generate('11111111-1111-4111-8111-111111111111', {
+      requestId: 'request-1',
+      async: true,
+    });
+    expect(output.status).toBe('queued');
+    expect(memory.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'video_generate' }),
+    );
+    expect(adapter.generate).not.toHaveBeenCalled();
   });
 });

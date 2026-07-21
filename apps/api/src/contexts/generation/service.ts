@@ -3,6 +3,7 @@ import { asId, type Shot } from '@zivith/domain';
 import { Prisma, type PrismaClient } from '@zivith/database';
 import { MockGenerationAdapter } from '../../adapters/mock-generation.js';
 import { ApiError } from '../../errors.js';
+import type { QueuePort } from '../../ports/index.js';
 import type { VideoGenerationAdapter } from '../../ports/generation.js';
 
 function record(value: unknown): Record<string, unknown> {
@@ -42,15 +43,29 @@ export async function assertPromptApprovedForGeneration(
 export interface GenerateVideoOptions {
   requestId?: string;
   model?: string;
+  /** When true, return queued Output immediately without waiting for the worker. */
+  async?: boolean;
 }
 
 export class GenerationService {
+  private queue: QueuePort | null = null;
+
   constructor(
     private readonly db: PrismaClient,
     private readonly adapter: VideoGenerationAdapter = new MockGenerationAdapter(),
   ) {}
 
+  attachQueue(queue: QueuePort): void {
+    this.queue = queue;
+  }
+
   async generate(shotId: string, options: GenerateVideoOptions = {}) {
+    const queued = await this.enqueue(shotId, options);
+    if (options.async) return queued;
+    return this.waitForOutput(queued.id);
+  }
+
+  async enqueue(shotId: string, options: GenerateVideoOptions = {}) {
     const shot = await this.db.shot.findFirst({
       where: { id: shotId, deletedAt: null },
       include: {
@@ -117,7 +132,7 @@ export class GenerationService {
         dialogue: shot.dialogue,
       },
     };
-    await this.db.$transaction([
+    const [output] = await this.db.$transaction([
       this.db.output.create({
         data: {
           id: outputId,
@@ -138,21 +153,92 @@ export class GenerationService {
           id: taskId,
           projectId: shot.projectId,
           type: 'video_generate',
-          status: 'running',
+          status: 'queued',
           idempotencyKey,
           provider: this.adapter.provider,
-          payload: json({ shot_id: shotId, output_id: outputId }),
-          attempts: 1,
-          startedAt: new Date(),
+          payload: json({
+            shot_id: shotId,
+            output_id: outputId,
+            request_id: requestId,
+            model: options.model ?? 'mock-v1',
+            positive,
+            negative: negative ?? null,
+            visual_media_ids: visualMediaIds,
+          }),
+          attempts: 0,
         },
       }),
       this.db.shot.update({ where: { id: shotId }, data: { state: 'generating' } }),
     ]);
 
+    if (this.queue) {
+      await this.queue.enqueue({
+        id: taskId,
+        type: 'video_generate',
+        idempotency_key: idempotencyKey,
+        payload: { output_id: outputId, task_id: taskId, shot_id: shotId },
+      });
+    } else {
+      await this.processQueuedOutput(outputId);
+      return this.db.output.findUniqueOrThrow({ where: { id: outputId } });
+    }
+
+    return output;
+  }
+
+  async processQueuedOutput(outputId: string): Promise<void> {
+    const output = await this.db.output.findUnique({ where: { id: outputId } });
+    if (!output) throw new ApiError(404, 'OUTPUT_NOT_FOUND', '视频输出不存在');
+    if (output.status === 'completed' || output.status === 'failed') return;
+
+    const task = await this.db.task.findFirst({
+      where: { idempotencyKey: output.idempotencyKey },
+    });
+    if (!task) throw new ApiError(404, 'TASK_NOT_FOUND', '生成任务不存在');
+
+    const shot = await this.db.shot.findFirst({
+      where: { id: output.shotId, deletedAt: null },
+      include: {
+        scene: { include: { requirements: true, story: { include: { project: true } } } },
+      },
+    });
+    if (!shot) throw new ApiError(404, 'SHOT_NOT_FOUND', '镜头不存在');
+
+    const payload = record(task.payload);
+    const positive =
+      typeof payload.positive === 'string'
+        ? payload.positive
+        : typeof record(output.promptSnapshot).positive === 'string'
+          ? String(record(output.promptSnapshot).positive)
+          : '';
+    const negative =
+      typeof payload.negative === 'string'
+        ? payload.negative
+        : typeof record(output.promptSnapshot).negative === 'string'
+          ? String(record(output.promptSnapshot).negative)
+          : undefined;
+    const requestId =
+      typeof payload.request_id === 'string' ? payload.request_id : output.idempotencyKey;
+    const visualMediaIds = Array.isArray(payload.visual_media_ids)
+      ? payload.visual_media_ids.filter((id): id is string => typeof id === 'string')
+      : output.visualMediaIds;
+
+    await this.db.$transaction([
+      this.db.output.update({ where: { id: outputId }, data: { status: 'generating' } }),
+      this.db.task.update({
+        where: { id: task.id },
+        data: {
+          status: 'running',
+          attempts: { increment: 1 },
+          startedAt: task.startedAt ?? new Date(),
+        },
+      }),
+    ]);
+
     try {
       const result = await this.adapter.generate({
         request_id: requestId,
-        model: options.model ?? 'mock-v1',
+        model: output.model,
         positive_prompt: positive,
         ...(negative ? { negative_prompt: negative } : {}),
         shot: this.domainShot(shot),
@@ -162,7 +248,7 @@ export class GenerationService {
       if (result.status !== 'completed' || !result.video_url) {
         throw new Error(`Mock generation ended with ${result.status}`);
       }
-      const [output] = await this.db.$transaction([
+      await this.db.$transaction([
         this.db.output.update({
           where: { id: outputId },
           data: {
@@ -176,7 +262,7 @@ export class GenerationService {
           },
         }),
         this.db.task.update({
-          where: { id: taskId },
+          where: { id: task.id },
           data: {
             status: 'completed',
             providerJobId: result.job_id,
@@ -184,9 +270,8 @@ export class GenerationService {
             completedAt: new Date(),
           },
         }),
-        this.db.shot.update({ where: { id: shotId }, data: { state: 'review' } }),
+        this.db.shot.update({ where: { id: shot.id }, data: { state: 'review' } }),
       ]);
-      return output;
     } catch (error) {
       await this.db.$transaction([
         this.db.output.update({
@@ -194,7 +279,7 @@ export class GenerationService {
           data: { status: 'failed', errorCode: 'MOCK_GENERATION_FAILED' },
         }),
         this.db.task.update({
-          where: { id: taskId },
+          where: { id: task.id },
           data: {
             status: 'failed',
             errorCode: 'MOCK_GENERATION_FAILED',
@@ -204,10 +289,24 @@ export class GenerationService {
             completedAt: new Date(),
           },
         }),
-        this.db.shot.update({ where: { id: shotId }, data: { state: 'draft' } }),
+        this.db.shot.update({ where: { id: shot.id }, data: { state: 'draft' } }),
       ]);
       throw new ApiError(502, 'MOCK_GENERATION_FAILED', 'Mock 视频生成失败');
     }
+  }
+
+  private async waitForOutput(outputId: string, timeoutMs = 120_000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const output = await this.db.output.findUnique({ where: { id: outputId } });
+      if (!output) throw new ApiError(404, 'OUTPUT_NOT_FOUND', '视频输出不存在');
+      if (output.status === 'completed') return output;
+      if (output.status === 'failed') {
+        throw new ApiError(502, 'MOCK_GENERATION_FAILED', 'Mock 视频生成失败');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new ApiError(504, 'GENERATION_TIMEOUT', '视频生成等待超时');
   }
 
   private domainShot(shot: {
