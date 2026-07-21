@@ -32,11 +32,11 @@ Goal: make the Mock Story→Video loop reliable and reviewable without expanding
 |----|------|-----|------------------|--------|
 | A1 | Manual E2E pass of WorkflowPanel gates | Confirm story/scene/visual/shot/prompt/video review paths; capture broken UX | `workflow-panel.tsx`, `workflows.ts`, `mock-runner.ts` | Open |
 | A2 | Harden review artifact loading | Fail clearly when candidate media / prompt ids missing; avoid silent empty grids | `workflow-panel.tsx`, visual-requirements + shot-prompts APIs | Done 2026-07-21 |
-| A3 | Story / scene / shot review content in panel | Today detailed cards exist mainly for visual/prompt/video; earlier gates only show step chips | `workflow-panel.tsx` | Open |
-| A4 | Automation controls in start form | API accepts per-stage automation; UI hardcodes `assisted` | `workflow-panel.tsx`, `workflows.ts` | Open |
+| A3 | Story / scene / shot review content in panel | Today detailed cards exist mainly for visual/prompt/video; earlier gates only show step chips | `workflow-panel.tsx` | Done 2026-07-21 |
+| A4 | Automation controls in start form | API accepts per-stage automation; UI hardcodes `assisted` | `workflow-panel.tsx`, `workflows.ts` | Done 2026-07-21 |
 | A5 | Shot-page ↔ workflow consistency | Prompt approve / generate / outputs stay in sync after workflow runs | `shots/[shotId]/page.tsx`, `shot-prompts.ts`, `generation.ts` | Done 2026-07-21 |
-| A6 | Regression tests for review actions | Cover approve_all / reject / retry_with_feedback and required prompt gate | `apps/api/test/mock-workflow-runner.test.ts`, `workflow.test.ts` | Open |
-| A7 | Refresh / cancel / re-start UX polish | Avoid stuck busy states; refresh latest run after cancel; confirm re-start semantics | `workflow-panel.tsx`, orchestrator cancel | Open |
+| A6 | Regression tests for review actions | Cover approve_all / reject / retry_with_feedback and required prompt gate | `apps/api/test/mock-workflow-runner.test.ts`, `workflow.test.ts` | Done 2026-07-21 |
+| A7 | Refresh / cancel / re-start UX polish | Avoid stuck busy states; refresh latest run after cancel; confirm re-start semantics | `workflow-panel.tsx`, orchestrator cancel | Done 2026-07-21 |
 
 **Exit criteria for Track A:** one operator can start a brief, walk every review gate, approve required visual assets + prompts, receive mock videos, cancel mid-run, and restart — without console/API surprises.
 

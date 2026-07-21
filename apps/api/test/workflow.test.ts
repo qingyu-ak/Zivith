@@ -33,6 +33,15 @@ describe('workflow API contracts', () => {
       }).feedback,
     ).toBe('强化暖色晨光。');
   });
+
+  it('accepts approve_all for the mandatory prompt gate', () => {
+    expect(
+      reviewSchema.parse({
+        step: 'prompt_review',
+        action: 'approve_all',
+      }).action,
+    ).toBe('approve_all');
+  });
 });
 
 describe('workflow recovery', () => {
