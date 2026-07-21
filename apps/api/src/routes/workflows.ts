@@ -26,6 +26,8 @@ const startWorkflowSchema = z
   .strict();
 
 const runParams = z.object({ runId: z.string().uuid() });
+const projectParams = z.object({ projectId: z.string().uuid() });
+const listRunsQuery = z.object({ limit: z.coerce.number().int().min(1).max(20).default(5) });
 const reviewSchema = z
   .object({
     step: z.enum([
@@ -86,6 +88,18 @@ export function registerWorkflowRoutes(
   orchestrator = new WorkflowOrchestrator(db),
   runner = new MockWorkflowRunner(db, orchestrator),
 ): void {
+  app.get('/projects/:projectId/workflows', async (request) => {
+    const { projectId } = projectParams.parse(request.params);
+    const { limit } = listRunsQuery.parse(request.query);
+    await requireProjectMember(db, request.user.sub, projectId);
+    return db.workflowRun.findMany({
+      where: { projectId, type: 'story_to_video' },
+      include: { steps: { orderBy: { order: 'asc' } } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  });
+
   app.post('/workflows/story-to-video', async (request, reply) => {
     const body = startWorkflowSchema.parse(request.body);
     await requireProjectMember(db, request.user.sub, body.project_id, true);

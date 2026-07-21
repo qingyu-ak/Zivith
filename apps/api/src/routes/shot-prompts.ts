@@ -137,6 +137,15 @@ export function registerShotPromptRoutes(app: FastifyInstance, db: PrismaClient)
   const runtime = new AgentRuntime();
   const agent = new PromptAgent();
 
+  app.get('/shots/:id/prompts', async (request) => {
+    const { id } = shotParams.parse(request.params);
+    await shotForMember(db, id, request.user.sub);
+    return db.promptVersion.findMany({
+      where: { shotId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+  });
+
   app.post('/shots/:id/generate-prompt', async (request, reply) => {
     const { id } = shotParams.parse(request.params);
     const shot = await shotForMember(db, id, request.user.sub, true);

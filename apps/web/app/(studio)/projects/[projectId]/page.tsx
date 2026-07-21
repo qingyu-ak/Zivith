@@ -8,6 +8,7 @@ import { Button, Card, EmptyState, Field, Input, Spinner, Textarea } from '@zivi
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormText } from '@/lib/form-data';
 import type { ProjectDTO, StoryDTO } from '@/lib/types';
+import { WorkflowPanel } from '@/components/workflow-panel';
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -136,6 +137,7 @@ export default function ProjectPage() {
           </form>
         </Card>
       )}
+      <WorkflowPanel projectId={projectId} onArtifactsChanged={load} />
       {stories.length === 0 ? (
         <EmptyState
           title="项目还是空的"

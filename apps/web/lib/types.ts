@@ -149,3 +149,83 @@ export interface ApiList<T> {
   items?: T[];
   next_cursor?: string | null;
 }
+
+export type WorkflowStepName =
+  | 'story'
+  | 'story_review'
+  | 'scene'
+  | 'scene_review'
+  | 'visual_prep'
+  | 'visual_assets_review'
+  | 'shot'
+  | 'shot_review'
+  | 'prompt'
+  | 'prompt_review'
+  | 'video'
+  | 'video_review';
+
+export type WorkflowStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface WorkflowStepDTO {
+  id: string;
+  name: WorkflowStepName;
+  status: WorkflowStatus;
+  order: number;
+  input: Record<string, unknown>;
+  output?: Record<string, unknown> | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface WorkflowRunDTO {
+  id: string;
+  project_id: string;
+  status: WorkflowStatus;
+  input: Record<string, unknown>;
+  state: {
+    current_step_index: number;
+    awaiting_review: WorkflowStepName | null;
+    revision: number;
+  };
+  steps: WorkflowStepDTO[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VisualRequirementDTO {
+  id: string;
+  scene_id: string;
+  asset_type: AssetType;
+  asset_id: string;
+  variant_key: string;
+  required: boolean;
+  reason: string;
+  status: 'pending' | 'generating' | 'review' | 'approved' | 'rejected';
+  candidate_media_ids: string[];
+  approved_media_id?: string | null;
+}
+
+export interface WorkflowMediaDTO {
+  id: string;
+  access_url?: string | null;
+  url?: string | null;
+}
+
+export interface OutputDTO {
+  id: string;
+  shot_id: string;
+  status: 'queued' | 'generating' | 'completed' | 'failed';
+  video_url?: string | null;
+  thumbnail_url?: string | null;
+  is_active: boolean;
+}
+
+export interface PromptVersionDTO {
+  id: string;
+  shot_id: string;
+  positive: string;
+  negative?: string | null;
+  source: string;
+  approved_at?: string | null;
+  created_at: string;
+}

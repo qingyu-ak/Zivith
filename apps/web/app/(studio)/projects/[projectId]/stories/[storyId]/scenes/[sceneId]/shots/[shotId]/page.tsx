@@ -7,7 +7,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { Badge, Button, Card, Field, Input, Select, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormList, getOptionalFormText } from '@/lib/form-data';
-import type { AssetDTO, ShotCharacterDTO, ShotDTO } from '@/lib/types';
+import type {
+  AssetDTO,
+  OutputDTO,
+  PromptVersionDTO,
+  ShotCharacterDTO,
+  ShotDTO,
+} from '@/lib/types';
 
 const option = (value: string, label: string) => (
   <option key={value} value={value}>
@@ -57,22 +63,29 @@ export default function ShotEditorPage() {
   const [shot, setShot] = useState<ShotDTO | null>(null);
   const [characters, setCharacters] = useState<AssetDTO[]>([]);
   const [cast, setCast] = useState<ShotCharacterDTO[]>([]);
+  const [promptVersions, setPromptVersions] = useState<PromptVersionDTO[]>([]);
+  const [outputs, setOutputs] = useState<OutputDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const [shotValue, assetValue] = await Promise.all([
+      const [shotValue, assetValue, promptValue, outputValue] = await Promise.all([
         api<ShotDTO>(`/shots/${shotId}`),
         api<AssetDTO[] | { data?: AssetDTO[]; items?: AssetDTO[] }>(
           `/projects/${projectId}/assets?type=character`,
         ),
+        api<PromptVersionDTO[]>(`/shots/${shotId}/prompts`),
+        api<OutputDTO[]>(`/shots/${shotId}/outputs`),
       ]);
       setShot(shotValue);
       setCast(shotValue.characters ?? []);
       setCharacters(unwrapList(assetValue));
+      setPromptVersions(promptValue);
+      setOutputs(outputValue);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -186,6 +199,70 @@ export default function ShotEditorPage() {
       router.push(`/projects/${projectId}/stories/${storyId}`);
     } catch (reason) {
       setError(errorMessage(reason));
+    }
+  }
+
+  async function generatePrompt() {
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/generate-prompt`, { method: 'POST', body: {} });
+      setNotice('AI 提示词已生成，请审核后再生成视频');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function approvePrompt(promptId: string) {
+    setGenerating(true);
+    setError('');
+    try {
+      await api(`/shots/${shotId}/prompts/${promptId}/approve`, {
+        method: 'POST',
+        body: {},
+      });
+      setNotice('提示词版本已审核通过');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function generateVideo() {
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/generate`, { method: 'POST', body: { model: 'mock-v1' } });
+      setNotice('Mock 视频生成完成');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function activateOutput(outputId: string) {
+    setGenerating(true);
+    setError('');
+    try {
+      await api(`/shots/${shotId}/outputs/${outputId}/activate`, {
+        method: 'POST',
+        body: {},
+      });
+      setNotice('已切换当前视频版本');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -665,6 +742,103 @@ export default function ShotEditorPage() {
               <Textarea name="prompt.custom" defaultValue={shot.prompt?.custom ?? ''} />
             </Field>
           </Section>
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">AI 生成与版本审核</h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  先生成并审核提示词，再调用 Mock 视频模型。
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={generating}
+                  onClick={() => void generatePrompt()}
+                >
+                  {generating ? '处理中…' : 'AI 生成提示词'}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={generating || !promptVersions.some((item) => item.approved_at)}
+                  onClick={() => void generateVideo()}
+                >
+                  生成 Mock 视频
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-300">提示词版本</h3>
+                <div className="mt-3 grid gap-3">
+                  {promptVersions.length === 0 ? (
+                    <p className="text-sm text-zinc-600">尚未生成提示词版本。</p>
+                  ) : (
+                    promptVersions.map((version) => (
+                      <div key={version.id} className="rounded-lg border border-line bg-ink p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <Badge tone={version.approved_at ? 'success' : 'neutral'}>
+                            {version.approved_at ? '已审核' : '待审核'}
+                          </Badge>
+                          {!version.approved_at && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={generating}
+                              onClick={() => void approvePrompt(version.id)}
+                            >
+                              审核通过
+                            </Button>
+                          )}
+                        </div>
+                        <p className="mt-3 line-clamp-4 text-xs leading-5 text-zinc-400">
+                          {version.positive}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-300">视频输出</h3>
+                <div className="mt-3 grid gap-3">
+                  {outputs.length === 0 ? (
+                    <p className="text-sm text-zinc-600">尚未生成视频输出。</p>
+                  ) : (
+                    outputs.map((output) => (
+                      <div key={output.id} className="rounded-lg border border-line bg-ink p-3">
+                        {output.video_url && (
+                          <video
+                            className="aspect-video w-full rounded-md bg-black"
+                            controls
+                            src={output.video_url}
+                          />
+                        )}
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <Badge tone={output.is_active ? 'success' : 'neutral'}>
+                            {output.is_active ? '当前版本' : output.status}
+                          </Badge>
+                          {!output.is_active && output.status === 'completed' && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={generating}
+                              onClick={() => void activateOutput(output.id)}
+                            >
+                              设为当前版本
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
         </fieldset>
         <div className="flex justify-end">
           <Button
