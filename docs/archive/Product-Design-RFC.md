@@ -1,10 +1,14 @@
-# Zivith Design Philosophy
+# Zivith Design Philosophy (Historical RFC)
 
 > Version: v0.1
 >
-> Status: Draft
+> Status: **Historical** — superseded by [`../Design-Philosophy.md`](../Design-Philosophy.md)
 >
 > Last Updated: 2026-07
+>
+> Archived: 2026-07-21
+>
+> Do not use this file as an implementation source of truth.
 
 ---
 

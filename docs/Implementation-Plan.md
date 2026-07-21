@@ -2,13 +2,13 @@
 
 > Zivith 实施计划
 >
-> Version: 2.0
+> Version: 2.1
 >
-> Status: Draft
+> Status: Active — progress synced 2026-07-21
 >
 > Strategy: B-Line — AI Agent Pipeline First, Video Gen Mocked
 >
-> Related: Technical-Architecture.md, AI-Agent-Collaboration.md, Core-Domain-Model.md
+> Related: Technical-Architecture.md, AI-Agent-Collaboration.md, Core-Domain-Model.md, Next-Tasks.md
 
 ---
 
@@ -17,6 +17,20 @@
 This document defines the phased implementation roadmap for Zivith.
 
 **Strategy decision (2026-07):** The MVP follows B-Line — the AI Agent creative pipeline is built first, while real video generation uses a Mock Adapter. This prioritizes demonstrating the "AI as creative partner" workflow over video quality, and defers video model selection to a later phase when the provider landscape is clearer.
+
+### Live progress (2026-07-21)
+
+| Phase | Progress | Summary |
+|-------|----------|---------|
+| 0 Foundation | ~90% | Monorepo, auth, Compose, CI done; BullMQ not wired; no staging deploy |
+| 1 Core Domain | ~90% | Full creative CRUD + inheritance + Character/Location assets |
+| 2 AI Agent + Mock Gen | ~70% | Mock Story→Video E2E + WorkflowPanel landed; SSE/queue/recover UX open |
+| 2.5 First Providers | 0% | Not started |
+| 3–5 | 0% | Not started |
+
+**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) (stabilize Workflow UI first).
+
+Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not started.
 
 ---
 
@@ -50,34 +64,34 @@ Phase 5: Polish & Launch         (2-3 weeks)
 
 ### Scope
 
-- [ ] Monorepo setup with package management
-- [ ] Database schema migration framework
-- [ ] API framework with routing, middleware, error handling
-- [ ] Authentication (sign-up, login, JWT session)
-- [ ] Frontend app shell with routing (Chinese UI)
-- [ ] UI component library foundation (Chinese labels)
-- [ ] Object storage integration
-- [ ] Job queue setup
-- [ ] CI/CD pipeline
-- [ ] Development, staging, production environments
+- [x] Monorepo setup with package management
+- [x] Database schema migration framework
+- [x] API framework with routing, middleware, error handling
+- [x] Authentication (sign-up, login, JWT session)
+- [x] Frontend app shell with routing (Chinese UI)
+- [x] UI component library foundation (Chinese labels)
+- [x] Object storage integration
+- [~] Job queue setup — BullMQ adapter exists; not wired into server/worker path
+- [x] CI/CD pipeline
+- [~] Development, staging, production environments — local Compose + env templates; no staging deploy
 
 ### Deliverables
 
-| Deliverable | Description |
-|-------------|-------------|
-| Repository structure | Monorepo with `apps/`, `packages/`, `docs/` |
-| Database schema | All tables for Project, Story, Scene, Shot, Asset, User |
-| API skeleton | All endpoint stubs returning 501 |
-| Auth flow | Complete sign-up / login / session management |
-| App shell | Navigation, project switcher, routing (Chinese labels) |
-| Dev environment | Docker Compose with all services, seed data script |
+| Deliverable | Description | Status |
+|-------------|-------------|--------|
+| Repository structure | Monorepo with `apps/`, `packages/`, `docs/` | Done |
+| Database schema | All tables for Project, Story, Scene, Shot, Asset, User | Done |
+| API skeleton | Remaining Phase 2.5+ stubs return 501 | Mostly done |
+| Auth flow | Complete sign-up / login / session management | Done |
+| App shell | Navigation, project switcher, routing (Chinese labels) | Done |
+| Dev environment | Docker Compose with all services, seed data script | Done |
 
 ### Completion Criteria
 
-- [ ] Developer can run `setup.sh` and have a working local environment
-- [ ] All API endpoint stubs respond
-- [ ] User can sign up, log in, and see an empty dashboard (Chinese UI)
-- [ ] CI passes on every PR (lint, type-check, test)
+- [x] Developer can run `setup.sh` / `setup.ps1` and have a working local environment
+- [x] Implemented API routes respond; remaining stubs return 501
+- [x] User can sign up, log in, and see the Chinese studio shell
+- [x] CI defined for lint, type-check, test, build on every PR
 
 ---
 
@@ -87,35 +101,35 @@ Phase 5: Polish & Launch         (2-3 weeks)
 
 ### Scope
 
-- [ ] Project CRUD (API + UI)
-- [ ] Story CRUD (API + UI)
-- [ ] Scene CRUD with reordering (API + UI)
-- [ ] Shot CRUD with full schema (API + UI)
-- [ ] Inheritance resolution logic
-- [ ] Shot lifecycle state machine
-- [ ] Basic Asset CRUD (Character, Location)
-- [ ] Asset reference resolution
-- [ ] Character reference image upload and storage
+- [x] Project CRUD (API + UI)
+- [x] Story CRUD (API + UI)
+- [x] Scene CRUD with reordering (API + UI)
+- [x] Shot CRUD with full schema (API + UI)
+- [x] Inheritance resolution logic (read-time merge via `packages/domain`)
+- [x] Shot lifecycle state machine
+- [x] Basic Asset CRUD (Character, Location)
+- [x] Asset reference resolution
+- [x] Character reference image upload and storage
 
 ### Deliverables
 
-| Deliverable | Description |
-|-------------|-------------|
-| Project Dashboard | List, create, delete projects |
-| Story Editor | Timeline view, story metadata editing |
-| Scene Canvas | Scene list with shot thumbnails, reorder |
-| Shot Editor | Full form for all Shot fields per Shot-Specification.md |
-| Asset Browser | List and detail views for Characters and Locations |
-| Inheritance Engine | Backend service that resolves inherited fields |
-| Reference Image Upload | Upload and attach images to Characters and Locations |
+| Deliverable | Description | Status |
+|-------------|-------------|--------|
+| Project Dashboard | List, create, delete projects | Done |
+| Story Editor | Story metadata and scene list | Done |
+| Scene Canvas | Scene list with shots, reorder | Done |
+| Shot Editor | Full form for Shot fields per Shot-Specification.md | Done |
+| Asset Browser | List and detail views for Characters and Locations | Done |
+| Inheritance Engine | Backend resolve on read; approved shots use snapshot | Done |
+| Reference Image Upload | Upload and attach images to Characters and Locations | Done |
 
 ### Completion Criteria
 
-- [ ] User can create a Project, add a Story, divide into Scenes, and define Shots
-- [ ] Inheritance works: changing Project style cascades to all non-approved Shots
-- [ ] Shot state machine transitions correctly (draft → prompting → generating → review → approved)
-- [ ] Asset references resolve correctly in API responses
-- [ ] Character reference images upload and display correctly
+- [x] User can create a Project, add a Story, divide into Scenes, and define Shots
+- [~] Inheritance works via read-time resolve (not a write-cascade to all shots)
+- [x] Shot state machine transitions correctly (approve / unfreeze / duplicate)
+- [x] Asset references resolve correctly in API responses
+- [x] Character reference images upload and display correctly
 
 ### Key API Endpoints (functional)
 
@@ -138,20 +152,20 @@ This is the B-Line MVP: the creative pipeline is fully functional, while video m
 
 ### Scope
 
-- [ ] Story Agent (generate story from brief)
-- [ ] Scene Agent (decompose story into scenes)
-- [ ] Visual Prep Agent (identify per-Scene Character/Location visual requirements and reuse recommendations)
-- [ ] Shot Agent (decompose scene into shots with field configuration)
-- [ ] Prompt Agent (construct prompts from resolved Shot data)
-- [ ] Asset Agent (generate characters/locations from descriptions)
-- [ ] Orchestrator (coordinate multi-agent workflows)
-- [ ] Workflow state machine and persistence
-- [ ] Automation level configuration per stage
-- [ ] Human-in-the-loop review gates at every stage
-- [ ] Mandatory prompt review before every video generation request
-- [ ] **Mock Generation Adapter** — returns placeholder videos
-- [ ] Generation Queue UI with mock progress simulation
-- [ ] Scene visual-assets review panel for Character/Location key images and variants
+- [x] Story Agent (generate story from brief) — Mock LLM
+- [x] Scene Agent (decompose story into scenes) — Mock LLM
+- [x] Visual Prep Agent (identify per-Scene Character/Location visual requirements and reuse recommendations)
+- [x] Shot Agent (decompose scene into shots with field configuration)
+- [x] Prompt Agent (construct prompts from resolved Shot data)
+- [x] Asset Agent (generate characters/locations from descriptions)
+- [x] Orchestrator (coordinate multi-agent workflows)
+- [x] Workflow state machine and persistence
+- [x] Automation level configuration per stage
+- [x] Human-in-the-loop review gates at every stage
+- [x] Mandatory prompt review before every video generation request
+- [x] **Mock Generation Adapter** — returns placeholder videos
+- [~] Generation Queue UI with mock progress simulation — shot/workflow surfaces show outputs; no dedicated queue page / SSE
+- [~] Scene visual-assets review panel — embedded in WorkflowPanel; not a standalone gallery
 
 ### Mock Adapter Specification
 
@@ -187,25 +201,25 @@ The placeholder video displays the Shot's structured data as text overlay, allow
 
 ### Deliverables
 
-| Deliverable | Description |
-|-------------|-------------|
-| Agent Runtime | Generic agent execution framework |
-| Individual Agents | Story, Scene, Shot, Prompt, Asset agents |
-| Orchestrator | Workflow DAG executor: Story → Scene → Scene review → Visual Prep → visual-assets review → Shot → Prompt → mandatory prompt review → Video → review |
-| Workflow UI | "Generate Story" flow with progress and review panels |
-| Automation Settings | Per-stage automation level configuration |
-| Asset Agent UI | "Create Character" / "Create Location" AI-assisted flows |
-| Mock Adapter | Placeholder video generation for end-to-end flow testing |
-| Generation Queue UI | Real-time progress with mock timing |
+| Deliverable | Description | Status |
+|-------------|-------------|--------|
+| Agent Runtime | Generic agent execution framework | Done |
+| Individual Agents | Story, Scene, Shot, Prompt, Asset, Visual Prep | Done (Mock) |
+| Orchestrator | Workflow DAG executor with review gates | Done |
+| Workflow UI | Project-page `WorkflowPanel` + shot prompt/output flows | Done (stabilize) |
+| Automation Settings | Per-stage automation level on start payload | Done (UI hardcodes assisted) |
+| Asset Agent UI | Character/Location AI-assisted flows | Partial via workflow |
+| Mock Adapter | Placeholder video generation | Done |
+| Generation Queue UI | Real-time progress with mock timing | Partial |
 
 ### Completion Criteria
 
-- [ ] User can input a creative brief and get a complete Story with Scenes and Shots
-- [ ] User can approve the required Scene, visual-assets, and prompt gates; prompt review cannot be bypassed by full-auto mode
-- [ ] Shot Agent configures all Shot fields (camera, lighting, character actions, dialogue)
-- [ ] Prompt Agent constructs complete prompts from Shot data
-- [ ] Mock generation produces placeholder videos with correct metadata
-- [ ] Workflow can be paused, resumed, and recovered from crashes
+- [x] User can input a creative brief and get a complete Story with Scenes and Shots (Mock)
+- [x] User can approve the required Scene, visual-assets, and prompt gates; prompt review cannot be bypassed by full-auto mode
+- [x] Shot Agent configures Shot fields (camera, lighting, character actions, dialogue)
+- [x] Prompt Agent constructs complete prompts from Shot data
+- [x] Mock generation produces placeholder videos with correct metadata
+- [~] Workflow can be cancelled; interrupt recovery exists in orchestrator but is not auto-run on boot / exposed as pause-resume UX
 
 ### Agent Quality Metrics (Phase 2)
 

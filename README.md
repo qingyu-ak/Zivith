@@ -6,6 +6,7 @@ Zivith is an AI-native film production studio. This repository is a pnpm/Turbore
 monorepo for the web application, API, domain model, database, and shared UI.
 
 The canonical product and architecture specifications live in [`docs/`](docs/README.md).
+Active engineering backlog: [`docs/Next-Tasks.md`](docs/Next-Tasks.md).
 
 ## Prerequisites
 

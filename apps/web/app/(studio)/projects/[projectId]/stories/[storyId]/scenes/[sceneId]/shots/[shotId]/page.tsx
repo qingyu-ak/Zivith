@@ -70,6 +70,7 @@ export default function ShotEditorPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [syncWarning, setSyncWarning] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -86,6 +87,18 @@ export default function ShotEditorPage() {
       setCharacters(unwrapList(assetValue));
       setPromptVersions(promptValue);
       setOutputs(outputValue);
+
+      const approved = promptValue.find((item) => item.approved_at);
+      const shotPositive = shotValue.prompt?.positive?.trim() ?? '';
+      if (approved && shotPositive && approved.positive.trim() !== shotPositive) {
+        setSyncWarning(
+          '镜头表单中的提示词与已审核版本不一致。生成视频将以已审核版本为准；保存镜头前请先重新审核提示词。',
+        );
+      } else if (promptValue.length > 0 && !approved && shotValue.prompt?.positive) {
+        setSyncWarning('存在未审核的提示词版本。请先审核通过后再生成视频。');
+      } else {
+        setSyncWarning('');
+      }
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -93,9 +106,55 @@ export default function ShotEditorPage() {
     }
   }, [projectId, shotId]);
 
+  const refreshArtifacts = useCallback(async () => {
+    try {
+      const [shotValue, promptValue, outputValue] = await Promise.all([
+        api<ShotDTO>(`/shots/${shotId}`),
+        api<PromptVersionDTO[]>(`/shots/${shotId}/prompts`),
+        api<OutputDTO[]>(`/shots/${shotId}/outputs`),
+      ]);
+      setShot((current) =>
+        current
+          ? {
+              ...current,
+              state: shotValue.state,
+              prompt: shotValue.prompt,
+            }
+          : shotValue,
+      );
+      setPromptVersions(promptValue);
+      setOutputs(outputValue);
+      const approved = promptValue.find((item) => item.approved_at);
+      const shotPositive = shotValue.prompt?.positive?.trim() ?? '';
+      if (approved && shotPositive && approved.positive.trim() !== shotPositive) {
+        setSyncWarning(
+          '镜头表单中的提示词与已审核版本不一致。生成视频将以已审核版本为准；保存镜头前请先重新审核提示词。',
+        );
+      } else if (promptValue.length > 0 && !approved && shotValue.prompt?.positive) {
+        setSyncWarning('存在未审核的提示词版本。请先审核通过后再生成视频。');
+      } else {
+        setSyncWarning('');
+      }
+    } catch {
+      // Keep the editor usable if a background refresh fails.
+    }
+  }, [shotId]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshArtifacts();
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refreshArtifacts]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -279,6 +338,13 @@ export default function ShotEditorPage() {
       </div>
     );
   const frozen = shot.state === 'approved';
+  const approvedPrompt = promptVersions.find((item) => item.approved_at);
+  const promptFormKey = [
+    shot.id,
+    approvedPrompt?.id ?? promptVersions[0]?.id ?? 'none',
+    shot.prompt?.positive?.slice(0, 32) ?? '',
+    outputs[0]?.id ?? 'no-output',
+  ].join(':');
 
   return (
     <form
@@ -346,6 +412,11 @@ export default function ShotEditorPage() {
         {notice && (
           <p className="rounded-lg bg-accent/10 p-3 text-sm text-accent" role="status">
             {notice}
+          </p>
+        )}
+        {syncWarning && (
+          <p className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-200" role="status">
+            {syncWarning}
           </p>
         )}
         {frozen && (
@@ -718,7 +789,11 @@ export default function ShotEditorPage() {
               />
             </Field>
           </Section>
-          <Section title="提示词" description="结构化镜头与视频生成模型之间的桥梁。">
+          <Section
+            key={`prompt-${promptFormKey}`}
+            title="提示词"
+            description="结构化镜头与视频生成模型之间的桥梁。工作流或 AI 生成后会刷新此处字段。"
+          >
             <Field label="来源">
               <Select name="prompt.source" defaultValue={shot.prompt?.source ?? 'auto'}>
                 {option('auto', 'AI 自动构建')}
@@ -742,12 +817,17 @@ export default function ShotEditorPage() {
               <Textarea name="prompt.custom" defaultValue={shot.prompt?.custom ?? ''} />
             </Field>
           </Section>
-          <Card>
+          <Card key={`ai-${promptFormKey}`}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">AI 生成与版本审核</h2>
                 <p className="mt-1 text-sm text-zinc-500">
-                  先生成并审核提示词，再调用 Mock 视频模型。
+                  与项目页工作流共用同一套提示词版本与视频输出。从工作流返回后会自动同步。
+                </p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  <Link className="text-accent hover:underline" href={`/projects/${projectId}`}>
+                    ← 返回项目工作流
+                  </Link>
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -776,28 +856,35 @@ export default function ShotEditorPage() {
                   {promptVersions.length === 0 ? (
                     <p className="text-sm text-zinc-600">尚未生成提示词版本。</p>
                   ) : (
-                    promptVersions.map((version) => (
-                      <div key={version.id} className="rounded-lg border border-line bg-ink p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <Badge tone={version.approved_at ? 'success' : 'neutral'}>
-                            {version.approved_at ? '已审核' : '待审核'}
-                          </Badge>
-                          {!version.approved_at && (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              disabled={generating}
-                              onClick={() => void approvePrompt(version.id)}
-                            >
-                              审核通过
-                            </Button>
-                          )}
+                    promptVersions.map((version) => {
+                      const matchesShot =
+                        (shot.prompt?.positive?.trim() ?? '') === version.positive.trim();
+                      return (
+                        <div key={version.id} className="rounded-lg border border-line bg-ink p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge tone={version.approved_at ? 'success' : 'neutral'}>
+                                {version.approved_at ? '已审核' : '待审核'}
+                              </Badge>
+                              {matchesShot && <Badge tone="success">与镜头同步</Badge>}
+                            </div>
+                            {!version.approved_at && (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={generating}
+                                onClick={() => void approvePrompt(version.id)}
+                              >
+                                审核通过
+                              </Button>
+                            )}
+                          </div>
+                          <p className="mt-3 line-clamp-4 text-xs leading-5 text-zinc-400">
+                            {version.positive}
+                          </p>
                         </div>
-                        <p className="mt-3 line-clamp-4 text-xs leading-5 text-zinc-400">
-                          {version.positive}
-                        </p>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

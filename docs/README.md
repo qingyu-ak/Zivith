@@ -4,7 +4,9 @@
 >
 > Version: 0.1.0-pre
 >
-> Status: Design Phase
+> Status: Implementation — Phase 2 (Mock pipeline) in progress
+>
+> Last Progress Sync: 2026-07-21
 
 ---
 
@@ -40,12 +42,20 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 |----------|-------------|
 | [Design Philosophy](Design-Philosophy.md) | Product vision, principles, and creative hierarchy |
 | [Core Domain Model](Core-Domain-Model.md) | Domain objects, ownership rules, inheritance model |
+| [Domain Model Walkthrough](Domain-Model-Walkthrough.md) | End-to-end domain walkthrough using「阁楼上的秘密」 |
 | [Shot Specification](Shot-Specification.md) | Complete Shot schema, lifecycle, prompt construction |
 | [Asset Model](Asset-Model.md) | Asset taxonomy (Characters, Locations, Styles, etc.) |
 | [AI Agent Collaboration](AI-Agent-Collaboration.md) | Agent architecture, required review gates, and Visual Prep workflow |
 | [Technical Architecture](Technical-Architecture.md) | System design, adapters, APIs, queues, BYOK, and data storage |
-| [Implementation Plan](Implementation-Plan.md) | Phased roadmap, Phase 2.5 provider validation, and productionization |
+| [Implementation Plan](Implementation-Plan.md) | Phased roadmap with live progress checkboxes |
+| [Next Tasks](Next-Tasks.md) | Current engineering backlog (stabilize → finish Phase 2 → 2.5) |
 | [Code Agent Design Guide](Code-Agent-Design-Guide.md) | Implementation conventions for AI code agents |
+
+### Historical
+
+| Document | Description |
+|----------|-------------|
+| [Product Design RFC (archived)](archive/Product-Design-RFC.md) | Early draft superseded by Design Philosophy |
 
 ---
 
@@ -61,37 +71,45 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 
 ---
 
-## Tech Stack (proposed, not finalized)
+## Tech Stack (current)
 
-The architecture is designed to be technology-agnostic. The following stack is proposed for initial implementation:
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js (App Router), Chinese UI |
+| Backend API | Node.js 22 + Fastify |
+| Domain / DB | `@zivith/domain` + Prisma / PostgreSQL 16 |
+| Object Storage | S3-compatible (MinIO locally) |
+| Job Queue | BullMQ adapter present; not yet wired into the main generation path |
+| AI Integration | Mock LLM + Mock video adapters (Phase 2); real providers in Phase 2.5 |
 
-| Layer | Proposed Technology |
-|-------|-------------------|
-| Frontend | React / Next.js (SPA) |
-| Backend API | Node.js or Python (FastAPI) |
-| Database | PostgreSQL |
-| Object Storage | S3-compatible (Cloudflare R2 / MinIO) |
-| Job Queue | Redis + BullMQ or similar |
-| AI Integration | LLM, Image, and Video adapters |
+Infrastructure decisions: see root [`ARCHITECTURE-DECISIONS.md`](../ARCHITECTURE-DECISIONS.md).
 
 ---
 
-## Project Status
+## Project Status (2026-07-21)
 
-- **Phase**: Design & Planning
-- **Repository**: To be initialized
-- **First provider integration**: DeepSeek + Tongyi Wanxiang + Kling
-- **Target MVP**: 19-26 weeks from Phase 0 start
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 0 Foundation | ~90% done | Queue adapter unused in runtime; no staging deploy |
+| Phase 1 Core Domain | ~90% done | Inheritance is read-time resolve; Character/Location only |
+| Phase 2 AI Agent + Mock Gen | ~70% done | Story→Video mock E2E works; SSE / queue UI / recover UX open |
+| Phase 2.5 First Providers | Not started | DeepSeek + Tongyi Wanxiang + Kling |
+| Phase 3–5 | Not started | — |
+
+**Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
+**Strategy:** B-Line — Agent pipeline first, video generation mocked.  
+**Near-term focus:** Stabilize the landed Workflow UI / shot-prompt path, then close Phase 2 gaps. See [Next Tasks](Next-Tasks.md).
 
 ---
 
 ## Getting Started (for Developers)
 
-1. Read [Design Philosophy](Design-Philosophy.md) for the product vision
-2. Read [Core Domain Model](Core-Domain-Model.md) for the data model
-3. Read [Technical Architecture](Technical-Architecture.md) for system design
-4. Read [Implementation Plan](Implementation-Plan.md) for the roadmap
-5. Read [Code Agent Design Guide](Code-Agent-Design-Guide.md) before writing code
+1. Follow the root [README](../README.md) for `setup` / `pnpm dev`
+2. Read [Design Philosophy](Design-Philosophy.md) for the product vision
+3. Read [Core Domain Model](Core-Domain-Model.md) for the data model
+4. Read [Technical Architecture](Technical-Architecture.md) for system design
+5. Read [Implementation Plan](Implementation-Plan.md) and [Next Tasks](Next-Tasks.md)
+6. Read [Code Agent Design Guide](Code-Agent-Design-Guide.md) before writing code
 
 ---
 
