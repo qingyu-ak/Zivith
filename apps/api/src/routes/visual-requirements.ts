@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { Prisma, type PrismaClient } from '@zivith/database';
+import type { Prisma, PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import {
@@ -8,11 +8,9 @@ import {
   readVisualPromptFromAssetData,
 } from '../contexts/agent/visual-trait.js';
 import { generateRequirementImage } from '../contexts/visual/generate-requirement-image.js';
+import { omitUndefined } from '../lib/omit-undefined.js';
 import { createProviderBundle } from '../providers/registry.js';
-import {
-  getRuntimeModelOverride,
-  getRuntimeProviderOverride,
-} from './providers.js';
+import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -77,19 +75,22 @@ function appearanceSummary(data: unknown, appearance: unknown): string | undefin
   return undefined;
 }
 
-async function enrichRequirement(db: PrismaClient, requirement: {
-  id: string;
-  sceneId: string;
-  assetType: string;
-  assetId: string;
-  variantKey: string;
-  required: boolean;
-  reason: string;
-  status: string;
-  candidateMediaIds: string[];
-  approvedMediaId: string | null;
-  version: number;
-}) {
+async function enrichRequirement(
+  db: PrismaClient,
+  requirement: {
+    id: string;
+    sceneId: string;
+    assetType: string;
+    assetId: string;
+    variantKey: string;
+    required: boolean;
+    reason: string;
+    status: string;
+    candidateMediaIds: string[];
+    approvedMediaId: string | null;
+    version: number;
+  },
+) {
   const asset = await db.asset.findFirst({
     where: { id: requirement.assetId, deletedAt: null },
   });
@@ -145,11 +146,7 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
           where: { id: asset.id },
           data: {
             data: json(
-              mergeVisualPromptIntoAssetData(
-                asset.data,
-                body.variant_key,
-                body.generation_prompt,
-              ),
+              mergeVisualPromptIntoAssetData(asset.data, body.variant_key, body.generation_prompt),
             ),
           },
         });
@@ -165,16 +162,16 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
     const body = requirementBody.partial().parse(request.body);
     const requirement = await db.visualAssetRequirement.update({
       where: { id: rid },
-      data: {
+      data: omitUndefined({
         assetType: body.asset_type,
         assetId: body.asset_id,
         variantKey: body.variant_key,
         required: body.required,
         reason: body.reason,
-        status: 'pending',
+        status: 'pending' as const,
         approvedMediaId: null,
         version: { increment: 1 },
-      },
+      }),
     });
     if (body.generation_prompt) {
       const assetId = body.asset_id ?? existing.assetId;
@@ -211,10 +208,7 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
         .filter(Boolean)
         .join(', ');
 
-    const providers = createProviderBundle(
-      getRuntimeProviderOverride(),
-      getRuntimeModelOverride(),
-    );
+    const providers = createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride());
     await db.visualAssetRequirement.update({
       where: { id: rid },
       data: { status: 'generating' },

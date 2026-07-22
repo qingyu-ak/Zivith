@@ -60,7 +60,8 @@ export class ShotAgent implements Agent<ShotAgentInput, ShotAgentOutput> {
   readonly id = 'shot';
   readonly name = 'Shot Agent';
 
-  validate(input: ShotAgentInput, _context: AgentContext): ValidationResult {
+  validate(input: ShotAgentInput, context: AgentContext): ValidationResult {
+    void context;
     if (input.scenes.length === 0) {
       return {
         valid: false,
@@ -70,16 +71,15 @@ export class ShotAgent implements Agent<ShotAgentInput, ShotAgentOutput> {
     return validAgentInput();
   }
 
-  estimate(input: ShotAgentInput, _context: AgentContext): CostEstimate {
+  estimate(input: ShotAgentInput, context: AgentContext): CostEstimate {
+    void context;
     return { model: 'mock-shot-v1', estimated_tokens: input.scenes.length * 400 };
   }
 
-  async execute(
-    input: ShotAgentInput,
-    _context: AgentContext,
-  ): Promise<AgentResult<ShotAgentOutput>> {
+  execute(input: ShotAgentInput, context: AgentContext): Promise<AgentResult<ShotAgentOutput>> {
+    void context;
     const shots = input.scenes.flatMap((scene) => this.sceneShots(scene));
-    return {
+    return Promise.resolve({
       status: 'success',
       data: { shots },
       warnings: [],
@@ -90,7 +90,7 @@ export class ShotAgent implements Agent<ShotAgentInput, ShotAgentOutput> {
         duration_ms: 0,
         timestamp: new Date().toISOString(),
       },
-    };
+    });
   }
 
   private sceneShots(scene: ShotAgentScene): GeneratedShot[] {
@@ -104,11 +104,7 @@ export class ShotAgent implements Agent<ShotAgentInput, ShotAgentOutput> {
       position: '画面中部',
     }));
     const lead = scene.characters[0];
-    const environment = [
-      scene.location_name ?? scene.title,
-      scene.time_of_day,
-      scene.weather,
-    ]
+    const environment = [scene.location_name ?? scene.title, scene.time_of_day, scene.weather]
       .filter(Boolean)
       .join('，');
 
@@ -191,7 +187,7 @@ export class ShotAgent implements Agent<ShotAgentInput, ShotAgentOutput> {
         dialogue: lead
           ? {
               text: `继续推进${scene.title}中的行动。`,
-              speaker_id: lead.id as ShotDialogue['speaker_id'],
+              speaker_id: lead.id as NonNullable<ShotDialogue['speaker_id']>,
               style: 'on_screen',
             }
           : null,

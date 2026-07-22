@@ -11,12 +11,12 @@ type PromptRecord = Record<string, unknown>;
 
 export interface PromptAgentCharacter {
   name: string;
-  presence?: string;
-  action?: string | null;
-  emotion?: string | null;
-  pose?: string | null;
-  expression?: string | null;
-  outfit?: string | null;
+  presence?: string | undefined;
+  action?: string | null | undefined;
+  emotion?: string | null | undefined;
+  pose?: string | null | undefined;
+  expression?: string | null | undefined;
+  outfit?: string | null | undefined;
 }
 
 export interface PromptAgentInput {
@@ -54,7 +54,8 @@ export class PromptAgent implements Agent<PromptAgentInput, GeneratedPrompt> {
   readonly id = 'prompt';
   readonly name = 'Prompt Agent';
 
-  validate(input: PromptAgentInput, _context: AgentContext): ValidationResult {
+  validate(input: PromptAgentInput, context: AgentContext): ValidationResult {
+    void context;
     if (!input.action && input.characters.length === 0 && !input.scene.description) {
       return {
         valid: false,
@@ -70,17 +71,16 @@ export class PromptAgent implements Agent<PromptAgentInput, GeneratedPrompt> {
     return validAgentInput();
   }
 
-  estimate(input: PromptAgentInput, _context: AgentContext): CostEstimate {
+  estimate(input: PromptAgentInput, context: AgentContext): CostEstimate {
+    void context;
     return {
       model: 'mock-prompt-v1',
       estimated_tokens: JSON.stringify(input).length / 4 + 300,
     };
   }
 
-  async execute(
-    input: PromptAgentInput,
-    _context: AgentContext,
-  ): Promise<AgentResult<GeneratedPrompt>> {
+  execute(input: PromptAgentInput, context: AgentContext): Promise<AgentResult<GeneratedPrompt>> {
+    void context;
     const custom = input.custom_prompt?.trim();
     const positive = custom || this.constructPositive(input);
     const negative = [
@@ -93,7 +93,7 @@ export class PromptAgent implements Agent<PromptAgentInput, GeneratedPrompt> {
       .filter((value, index, values) => values.indexOf(value) === index)
       .join(', ');
 
-    return {
+    return Promise.resolve({
       status: 'success',
       data: {
         positive,
@@ -110,7 +110,7 @@ export class PromptAgent implements Agent<PromptAgentInput, GeneratedPrompt> {
         duration_ms: 0,
         timestamp: new Date().toISOString(),
       },
-    };
+    });
   }
 
   private constructPositive(input: PromptAgentInput): string {

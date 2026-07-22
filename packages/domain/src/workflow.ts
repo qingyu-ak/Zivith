@@ -18,15 +18,16 @@ export const STORY_TO_VIDEO_STEPS = [
 export type StoryToVideoStep = (typeof STORY_TO_VIDEO_STEPS)[number];
 export type ReviewStep = Extract<StoryToVideoStep, `${string}_review`>;
 export type WorkflowReviewAction =
-  | 'approve'
-  | 'approve_all'
-  | 'reject'
-  | 'retry'
-  | 'retry_with_feedback';
+  'approve' | 'approve_all' | 'reject' | 'retry' | 'retry_with_feedback';
 
-export type StageAutomation = Partial<
-  Record<'story' | 'scene' | 'visual_assets' | 'shot' | 'prompt' | 'video', AutomationLevel>
->;
+export type StageAutomation = {
+  story?: AutomationLevel | undefined;
+  scene?: AutomationLevel | undefined;
+  visual_assets?: AutomationLevel | undefined;
+  shot?: AutomationLevel | undefined;
+  prompt?: AutomationLevel | undefined;
+  video?: AutomationLevel | undefined;
+};
 
 export interface StoryToVideoWorkflowState {
   version: 1;
@@ -46,10 +47,7 @@ const reviewStage: Record<ReviewStep, keyof StageAutomation> = {
   video_review: 'video',
 };
 
-const mandatoryReviewSteps = new Set<ReviewStep>([
-  'visual_assets_review',
-  'prompt_review',
-]);
+const mandatoryReviewSteps = new Set<ReviewStep>(['visual_assets_review', 'prompt_review']);
 
 export function createStoryToVideoState(
   automation: StageAutomation = {},
@@ -64,9 +62,7 @@ export function createStoryToVideoState(
   };
 }
 
-export function currentWorkflowStep(
-  state: StoryToVideoWorkflowState,
-): StoryToVideoStep | null {
+export function currentWorkflowStep(state: StoryToVideoWorkflowState): StoryToVideoStep | null {
   return STORY_TO_VIDEO_STEPS[state.current_step_index] ?? null;
 }
 
@@ -74,10 +70,7 @@ export function isReviewStep(step: StoryToVideoStep): step is ReviewStep {
   return step.endsWith('_review');
 }
 
-export function requiresHumanReview(
-  step: ReviewStep,
-  state: StoryToVideoWorkflowState,
-): boolean {
+export function requiresHumanReview(step: ReviewStep, state: StoryToVideoWorkflowState): boolean {
   if (mandatoryReviewSteps.has(step)) return true;
   const level = state.automation[reviewStage[step]] ?? 'assisted';
   return level !== 'full_auto';
@@ -89,7 +82,9 @@ export function completeWorkflowStep(
 ): StoryToVideoWorkflowState {
   const current = currentWorkflowStep(state);
   if (current !== completedStep) {
-    throw new Error(`Cannot complete ${completedStep}; current workflow step is ${current ?? 'done'}`);
+    throw new Error(
+      `Cannot complete ${completedStep}; current workflow step is ${current ?? 'done'}`,
+    );
   }
   if (isReviewStep(completedStep) && requiresHumanReview(completedStep, state)) {
     throw new Error(`Review step ${completedStep} requires an explicit decision`);

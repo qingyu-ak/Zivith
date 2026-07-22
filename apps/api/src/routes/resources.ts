@@ -71,8 +71,10 @@ export const sceneBodySchema = z.object({
   overrides: z.record(z.unknown()).nullable().optional(),
 });
 
-const clean = <T extends Record<string, unknown>>(value: T): T =>
-  Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+const clean = <T extends Record<string, unknown>>(value: T) =>
+  Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as {
+    [K in keyof T as T[K] extends undefined ? never : K]: Exclude<T[K], undefined>;
+  };
 const replaceBigInt = (_key: string, item: unknown): unknown =>
   typeof item === 'bigint' ? item.toString() : item;
 const json = (value: unknown): Prisma.InputJsonValue => {
@@ -326,7 +328,7 @@ async function audit(
   after?: unknown,
 ) {
   await db.auditLog.create({
-    data: {
+    data: clean({
       actorId: request.user.sub,
       projectId,
       entityType,
@@ -334,7 +336,7 @@ async function audit(
       action,
       before: before == null ? undefined : json(before),
       after: after == null ? undefined : json(after),
-    },
+    }),
   });
 }
 
@@ -358,13 +360,13 @@ export function registerResourceRoutes(
   app.post('/projects', async (request, reply) => {
     const body = projectBody.parse(request.body);
     const project = await db.project.create({
-      data: {
+      data: clean({
         ownerId: request.user.sub,
         name: body.name,
         description: body.description,
         defaults: json(body.defaults ?? {}),
-        members: { create: { userId: request.user.sub, role: 'owner' } },
-      },
+        members: { create: { userId: request.user.sub, role: 'owner' as const } },
+      }),
     });
     return reply.status(201).send(project);
   });
@@ -426,7 +428,7 @@ export function registerResourceRoutes(
     const body = storyBodySchema.parse(request.body);
     const count = await db.story.count({ where: { projectId: pid, deletedAt: null } });
     const story = await db.story.create({
-      data: {
+      data: clean({
         projectId: pid,
         order: count + 1,
         title: body.title,
@@ -440,7 +442,7 @@ export function registerResourceRoutes(
         language: body.language,
         screenplay: body.screenplay,
         overrides: body.overrides ? json(body.overrides) : undefined,
-      },
+      }),
     });
     return reply.status(201).send(story);
   });
@@ -460,7 +462,7 @@ export function registerResourceRoutes(
     const body = storyBodySchema.partial().parse(request.body);
     return db.story.update({
       where: { id },
-      data: {
+      data: clean({
         title: body.title,
         logline: body.logline,
         synopsis: body.synopsis,
@@ -477,7 +479,7 @@ export function registerResourceRoutes(
             : body.overrides === null
               ? Prisma.JsonNull
               : json(body.overrides),
-      },
+      }),
     });
   });
   app.delete('/stories/:id', async (request, reply) => {
@@ -503,7 +505,7 @@ export function registerResourceRoutes(
     const body = sceneBodySchema.parse(request.body);
     const count = await db.scene.count({ where: { storyId: sid, deletedAt: null } });
     const scene = await db.scene.create({
-      data: {
+      data: clean({
         storyId: sid,
         projectId,
         order: body.order ?? count + 1,
@@ -515,7 +517,7 @@ export function registerResourceRoutes(
         mood: body.mood,
         characterIds: body.character_ids ?? [],
         overrides: body.overrides ? json(body.overrides) : undefined,
-      },
+      }),
     });
     return reply.status(201).send(sceneDto(scene));
   });
@@ -539,7 +541,7 @@ export function registerResourceRoutes(
     return db.$transaction(async (tx) => {
       const updated = await tx.scene.update({
         where: { id },
-        data: {
+        data: clean({
           title: body.title,
           description: body.summary !== undefined ? body.summary : body.description,
           locationId: body.location_id,
@@ -554,9 +556,9 @@ export function registerResourceRoutes(
               : body.overrides === null
                 ? Prisma.JsonNull
                 : json(body.overrides),
-          state: 'draft',
+          state: 'draft' as const,
           approvedSnapshot: Prisma.JsonNull,
-        },
+        }),
       });
       await tx.visualAssetRequirement.updateMany({
         where: { sceneId: id },
@@ -623,7 +625,7 @@ export function registerResourceRoutes(
     const order =
       body.order ?? (await db.shot.count({ where: { sceneId: sid, deletedAt: null } })) + 1;
     const shot = await db.shot.create({
-      data: {
+      data: clean({
         sceneId: sid,
         projectId,
         order,
@@ -641,7 +643,7 @@ export function registerResourceRoutes(
         action: body.action ? json(body.action) : undefined,
         audio: body.audio ? json(body.audio) : undefined,
         prompt: json(body.prompt),
-      },
+      }),
     });
     return reply.status(201).send(shot);
   });
@@ -689,7 +691,7 @@ export function registerResourceRoutes(
     const body = shotPatchSchema.parse(request.body);
     const updated = await db.shot.update({
       where: { id },
-      data: {
+      data: clean({
         label: body.label,
         order: body.order,
         narrativeMode: body.narrative_mode,
@@ -745,7 +747,7 @@ export function registerResourceRoutes(
               ? Prisma.JsonNull
               : json(body.audio),
         prompt: body.prompt ? json(body.prompt) : undefined,
-      },
+      }),
     });
     await audit(db, request, projectId, 'shot', id, 'update', existing, updated);
     return updated;
@@ -764,12 +766,12 @@ export function registerResourceRoutes(
     const order =
       (await db.shot.count({ where: { sceneId: source.sceneId, deletedAt: null } })) + 1;
     const copy = await db.shot.create({
-      data: {
+      data: clean({
         sceneId: source.sceneId,
         projectId,
         order,
         label: source.label ? `${source.label}（副本）` : null,
-        state: 'draft',
+        state: 'draft' as const,
         narrativeMode: source.narrativeMode,
         locationArea: source.locationArea,
         camera: source.camera ?? undefined,
@@ -783,7 +785,7 @@ export function registerResourceRoutes(
         action: source.action ?? undefined,
         audio: source.audio ?? undefined,
         prompt: json(source.prompt),
-      },
+      }),
     });
     return reply.status(201).send(copy);
   });
@@ -889,7 +891,7 @@ export function registerResourceRoutes(
       })
       .parse(request.query);
     const assets = await db.asset.findMany({
-      where: {
+      where: clean({
         projectId: pid,
         deletedAt: null,
         type: query.asset_type ?? query.type,
@@ -897,11 +899,11 @@ export function registerResourceRoutes(
         tags: query.tag ? { has: query.tag } : undefined,
         OR: query.q
           ? [
-              { name: { contains: query.q, mode: 'insensitive' } },
-              { description: { contains: query.q, mode: 'insensitive' } },
+              { name: { contains: query.q, mode: 'insensitive' as const } },
+              { description: { contains: query.q, mode: 'insensitive' as const } },
             ]
           : undefined,
-      },
+      }),
       orderBy: { updatedAt: 'desc' },
     });
     return assets.map(assetDto);
@@ -915,9 +917,9 @@ export function registerResourceRoutes(
         ? await (async () => {
             const body = parsed.data;
             return db.asset.create({
-              data: {
+              data: clean({
                 projectId: pid,
-                type: 'character',
+                type: 'character' as const,
                 state: body.state,
                 name: body.name,
                 description: body.description,
@@ -927,7 +929,7 @@ export function registerResourceRoutes(
                 baseCharacterId: body.base_character_id,
                 appearance: json(body.appearance),
                 data: json(body),
-              },
+              }),
             });
           })()
         : await (async () => {
@@ -968,7 +970,7 @@ export function registerResourceRoutes(
     const body = parseAssetPatchInput(asset.type, request.body);
     const updated = await db.asset.update({
       where: { id },
-      data: {
+      data: clean({
         name: body.name as string | undefined,
         description: body.description as string | undefined,
         state: body.state as 'draft' | 'active' | 'archived' | undefined,
@@ -978,7 +980,7 @@ export function registerResourceRoutes(
         baseCharacterId: body.base_character_id as string | null | undefined,
         appearance: body.appearance ? json(body.appearance) : undefined,
         data: json({ ...(asset.data as object), ...body }),
-      },
+      }),
     });
     return assetDto(updated);
   });

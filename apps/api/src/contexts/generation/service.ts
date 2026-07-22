@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { asId, type Shot } from '@zivith/domain';
-import { Prisma, type PrismaClient } from '@zivith/database';
+import type { Prisma, PrismaClient } from '@zivith/database';
 import { MockGenerationAdapter } from '../../adapters/mock-generation.js';
 import { ApiError } from '../../errors.js';
 import type { QueuePort } from '../../ports/index.js';
@@ -29,14 +29,9 @@ export async function assertPromptApprovedForGeneration(
   if (
     !approved ||
     approved.positive !== current.positive ||
-    (approved.negative ?? null) !==
-      (typeof current.negative === 'string' ? current.negative : null)
+    (approved.negative ?? null) !== (typeof current.negative === 'string' ? current.negative : null)
   ) {
-    throw new ApiError(
-      409,
-      'PROMPT_APPROVAL_REQUIRED',
-      '当前提示词必须明确审核通过后才能生成视频',
-    );
+    throw new ApiError(409, 'PROMPT_APPROVAL_REQUIRED', '当前提示词必须明确审核通过后才能生成视频');
   }
 }
 
@@ -344,7 +339,7 @@ export class GenerationService {
           data: {
             status: 'completed',
             videoUrl: result.video_url,
-            thumbnailUrl: result.thumbnail_url,
+            ...(result.thumbnail_url !== undefined ? { thumbnailUrl: result.thumbnail_url } : {}),
             providerJobId: result.job_id,
             parameters: json(result.metadata),
             durationSeconds: Number(record(shot.action).duration_hint ?? 5),
@@ -449,6 +444,6 @@ export class GenerationService {
       outputs: [],
       created_at: shot.createdAt,
       updated_at: shot.updatedAt,
-    } as Shot;
+    };
   }
 }

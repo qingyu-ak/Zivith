@@ -96,7 +96,10 @@ export function registerAuthRoutes(app: FastifyInstance, db: PrismaClient): void
       });
       await tx.refreshToken.update({
         where: { id: stored.id },
-        data: { revokedAt: new Date(), replacedBy: replacement?.id },
+        data: {
+          revokedAt: new Date(),
+          ...(replacement?.id ? { replacedBy: replacement.id } : {}),
+        },
       });
       return next;
     });

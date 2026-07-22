@@ -14,11 +14,11 @@ export interface EnrichVisualAssetInput {
   asset_name: string;
   variant_key: string;
   scene_title: string;
-  scene_context?: string;
-  story_title?: string;
-  story_synopsis?: string;
-  story_screenplay_excerpt?: string;
-  existing_description?: string;
+  scene_context?: string | undefined;
+  story_title?: string | undefined;
+  story_synopsis?: string | undefined;
+  story_screenplay_excerpt?: string | undefined;
+  existing_description?: string | undefined;
 }
 
 /** Build a deterministic fallback when LLM is unavailable or fails. */
@@ -32,7 +32,9 @@ export function buildFallbackVisualTrait(input: EnrichVisualAssetInput): VisualT
       ? `实体角色 ${input.asset_name}，与故事气质一致，服装与材质清晰可读`
       : `场景地点 ${input.asset_name}，空间层次清楚，光影符合变体 ${input.variant_key}`;
   const generation_prompt = [
-    input.asset_type === 'character' ? 'character key visual portrait' : 'environment establishing key visual',
+    input.asset_type === 'character'
+      ? 'character key visual portrait'
+      : 'environment establishing key visual',
     input.asset_name,
     appearance_summary,
     `scene: ${input.scene_title}`,

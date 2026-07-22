@@ -35,10 +35,7 @@ function parseState(value: Prisma.JsonValue): StoryToVideoWorkflowState {
     current_step_index: state.current_step_index,
     awaiting_review:
       typeof state.awaiting_review === 'string' ? (state.awaiting_review as ReviewStep) : null,
-    automation:
-      state.automation && typeof state.automation === 'object'
-        ? (state.automation as StageAutomation)
-        : {},
+    automation: state.automation && typeof state.automation === 'object' ? state.automation : {},
     revision: state.revision,
     feedback: typeof state.feedback === 'string' ? state.feedback : undefined,
   };
@@ -46,14 +43,14 @@ function parseState(value: Prisma.JsonValue): StoryToVideoWorkflowState {
 
 export interface StartWorkflowInput {
   brief: string;
-  story_id?: string;
-  automation?: StageAutomation;
+  story_id?: string | undefined;
+  automation?: StageAutomation | undefined;
 }
 
 export interface SubmitReviewInput {
   step: ReviewStep;
   action: WorkflowReviewAction;
-  feedback?: string;
+  feedback?: string | undefined;
 }
 
 export class WorkflowOrchestrator {
@@ -100,7 +97,9 @@ export class WorkflowOrchestrator {
         state = enterReview(state, stepName);
         if (state.awaiting_review) {
           await tx.workflowStep.update({
-            where: { workflowRunId_order: { workflowRunId: runId, order: state.current_step_index } },
+            where: {
+              workflowRunId_order: { workflowRunId: runId, order: state.current_step_index },
+            },
             data: { status: 'running', startedAt: new Date() },
           });
           await tx.workflowRun.update({
@@ -216,7 +215,14 @@ export class WorkflowOrchestrator {
         include: { steps: { orderBy: { order: 'asc' } } },
       });
     });
-    await this.audit(actorId, run.projectId, run.id, `workflow.review.${input.action}`, before, run);
+    await this.audit(
+      actorId,
+      run.projectId,
+      run.id,
+      `workflow.review.${input.action}`,
+      before,
+      run,
+    );
     return run;
   }
 
@@ -269,8 +275,8 @@ export class WorkflowOrchestrator {
         entityType: 'workflow_run',
         entityId: runId,
         action,
-        before: before === undefined ? undefined : json(before),
-        after: after === undefined ? undefined : json(after),
+        ...(before === undefined ? {} : { before: json(before) }),
+        ...(after === undefined ? {} : { after: json(after) }),
       },
     });
   }

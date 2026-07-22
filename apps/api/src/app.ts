@@ -56,15 +56,16 @@ function storageFromEnvironment(): StoragePort | undefined {
   const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY ?? process.env.S3_SECRET_KEY;
   const client = new S3Client({
     region: process.env.S3_REGION ?? 'auto',
-    endpoint: process.env.S3_ENDPOINT,
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
-    credentials:
-      accessKeyId && secretAccessKey
-        ? {
+    ...(process.env.S3_ENDPOINT ? { endpoint: process.env.S3_ENDPOINT } : {}),
+    ...(accessKeyId && secretAccessKey
+      ? {
+          credentials: {
             accessKeyId,
             secretAccessKey,
-          }
-        : undefined,
+          },
+        }
+      : {}),
   });
   return new S3StorageAdapter(client, bucket, process.env.S3_PUBLIC_BASE_URL);
 }
