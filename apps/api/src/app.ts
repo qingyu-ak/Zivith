@@ -6,6 +6,7 @@ import { S3Client } from '@aws-sdk/client-s3';
 import { prisma, type PrismaClient } from '@zivith/database';
 import { S3StorageAdapter } from './adapters/s3.js';
 import { GenerationService } from './contexts/generation/service.js';
+import type { QueueWorkBridge } from './contexts/generation/queue-work-bridge.js';
 import { MockWorkflowRunner } from './contexts/workflow/mock-runner.js';
 import { WorkflowOrchestrator } from './contexts/workflow/orchestrator.js';
 import { registerErrorHandler } from './errors.js';
@@ -32,6 +33,7 @@ export interface BuildAppOptions {
   jwtSecret?: string;
   logger?: boolean;
   generationService?: GenerationService;
+  queueWork?: QueueWorkBridge;
 }
 
 function toSnakeCase(value: unknown): unknown {
@@ -107,6 +109,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       orchestrator,
       generationService,
       createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+      options.queueWork,
     );
 
   app.get('/health', () => ({ status: 'ok' }));

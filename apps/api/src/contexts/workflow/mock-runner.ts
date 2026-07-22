@@ -7,6 +7,7 @@ import {
 } from '@zivith/domain';
 import { Prisma, type PrismaClient } from '@zivith/database';
 import type { GenerationService } from '../generation/service.js';
+import { QueueWorkBridge } from '../generation/queue-work-bridge.js';
 import { ApiError } from '../../errors.js';
 import { AgentRuntime } from '../agent/runtime.js';
 import { AssetAgent } from '../agent/asset-agent.js';
@@ -67,12 +68,14 @@ export class MockWorkflowRunner {
   private readonly llm: LLMAdapter;
   private readonly llmModel: string;
   private readonly providers: ProviderBundle;
+  private readonly queueWork: QueueWorkBridge;
 
   constructor(
     private readonly db: PrismaClient,
     private readonly orchestrator: WorkflowOrchestrator,
     generationService: GenerationService,
     providers: ProviderBundle = createProviderBundle(),
+    queueWork?: QueueWorkBridge,
   ) {
     this.providers = providers;
     this.storyAgent = new StoryAgent(providers.llm, providers.llmModel);
@@ -82,6 +85,7 @@ export class MockWorkflowRunner {
     this.imageModel = providers.imageModel;
     this.llm = providers.llm;
     this.llmModel = providers.llmModel;
+    this.queueWork = queueWork ?? QueueWorkBridge.createLocal();
   }
 
   async runUntilGate(runId: string, userId: string): Promise<WorkflowWithSteps> {
@@ -209,13 +213,15 @@ export class MockWorkflowRunner {
 
   private async executeStory(run: WorkflowWithSteps, userId: string): Promise<void> {
     const input = record(run.input);
-    const result = await this.runtime.execute(
-      this.storyAgent,
-      {
-        brief: asText(input.brief),
-        ...(typeof input.language === 'string' ? { language: input.language } : {}),
-      },
-      this.context(run, userId, 'story'),
+    const result = await this.queueWork.run('workflow_step', `${run.id}:story-agent`, () =>
+      this.runtime.execute(
+        this.storyAgent,
+        {
+          brief: asText(input.brief),
+          ...(typeof input.language === 'string' ? { language: input.language } : {}),
+        },
+        this.context(run, userId, 'story'),
+      ),
     );
     if (!result.data || result.status === 'failed') {
       throw new ApiError(422, 'STORY_AGENT_FAILED', result.warnings[0]?.message ?? '故事生成失败');
@@ -262,10 +268,12 @@ export class MockWorkflowRunner {
       tone: story.tone ?? '',
       screenplay: story.screenplay,
     };
-    const result = await this.runtime.execute(
-      this.sceneAgent,
-      { story: generatedStory },
-      this.context(run, userId, 'scene'),
+    const result = await this.queueWork.run('workflow_step', `${run.id}:scene-agent`, () =>
+      this.runtime.execute(
+        this.sceneAgent,
+        { story: generatedStory },
+        this.context(run, userId, 'scene'),
+      ),
     );
     if (!result.data || result.status === 'failed') {
       throw new ApiError(422, 'SCENE_AGENT_FAILED', result.warnings[0]?.message ?? '场景生成失败');
@@ -337,10 +345,12 @@ export class MockWorkflowRunner {
       : null;
     const storyScreenplay = story?.screenplay?.slice(0, 4_000);
 
-    const result = await this.runtime.execute(
-      this.visualPrepAgent,
-      { scenes: prepScenes },
-      this.context(run, userId, 'visual_assets'),
+    const result = await this.queueWork.run('workflow_step', `${run.id}:visual-prep-agent`, () =>
+      this.runtime.execute(
+        this.visualPrepAgent,
+        { scenes: prepScenes },
+        this.context(run, userId, 'visual_assets'),
+      ),
     );
     if (!result.data || result.status === 'failed') {
       throw new ApiError(
@@ -371,28 +381,28 @@ export class MockWorkflowRunner {
         .join(', ');
 
       if (!enrichedAssetIds.has(asset.id)) {
-        const traits = await enrichVisualAssetTraits(
-          this.llm,
-          this.llmModel,
+        const traits = await this.queueWork.run(
+          'workflow_step',
           `${run.id}:trait:${asset.id}`,
-          {
-            asset_type: requirement.asset_type,
-            asset_name: asset.name,
-            variant_key: requirement.variant_key,
-            scene_title: sceneTitle,
-            scene_context: [
-              typeof sceneMeta.summary === 'string' ? sceneMeta.summary : '',
-              typeof sceneMeta.description === 'string' ? sceneMeta.description : '',
-              typeof sceneMeta.mood === 'string' ? `mood:${sceneMeta.mood}` : '',
-              typeof sceneMeta.time_of_day === 'string' ? `time:${sceneMeta.time_of_day}` : '',
-            ]
-              .filter(Boolean)
-              .join(' | '),
-            story_title: story?.title,
-            story_synopsis: story?.synopsis ?? undefined,
-            story_screenplay_excerpt: storyScreenplay,
-            existing_description: asset.description,
-          },
+          () =>
+            enrichVisualAssetTraits(this.llm, this.llmModel, `${run.id}:trait:${asset.id}`, {
+              asset_type: requirement.asset_type,
+              asset_name: asset.name,
+              variant_key: requirement.variant_key,
+              scene_title: sceneTitle,
+              scene_context: [
+                typeof sceneMeta.summary === 'string' ? sceneMeta.summary : '',
+                typeof sceneMeta.description === 'string' ? sceneMeta.description : '',
+                typeof sceneMeta.mood === 'string' ? `mood:${sceneMeta.mood}` : '',
+                typeof sceneMeta.time_of_day === 'string' ? `time:${sceneMeta.time_of_day}` : '',
+              ]
+                .filter(Boolean)
+                .join(' | '),
+              story_title: story?.title,
+              story_synopsis: story?.synopsis ?? undefined,
+              story_screenplay_excerpt: storyScreenplay,
+              existing_description: asset.description,
+            }),
         );
         generationPrompt = traits.generation_prompt;
         await this.db.asset.update({
@@ -420,19 +430,24 @@ export class MockWorkflowRunner {
         if (typeof prompts[requirement.variant_key] === 'string') {
           generationPrompt = String(prompts[requirement.variant_key]);
         } else {
-          const traits = await enrichVisualAssetTraits(
-            this.llm,
-            this.llmModel,
+          const traits = await this.queueWork.run(
+            'workflow_step',
             `${run.id}:trait:${asset.id}:${requirement.variant_key}`,
-            {
-              asset_type: requirement.asset_type,
-              asset_name: refreshed.name,
-              variant_key: requirement.variant_key,
-              scene_title: sceneTitle,
-              story_title: story?.title,
-              story_synopsis: story?.synopsis ?? undefined,
-              existing_description: refreshed.description,
-            },
+            () =>
+              enrichVisualAssetTraits(
+                this.llm,
+                this.llmModel,
+                `${run.id}:trait:${asset.id}:${requirement.variant_key}`,
+                {
+                  asset_type: requirement.asset_type,
+                  asset_name: refreshed.name,
+                  variant_key: requirement.variant_key,
+                  scene_title: sceneTitle,
+                  story_title: story?.title,
+                  story_synopsis: story?.synopsis ?? undefined,
+                  existing_description: refreshed.description,
+                },
+              ),
           );
           generationPrompt = traits.generation_prompt;
           await this.db.asset.update({
@@ -455,11 +470,16 @@ export class MockWorkflowRunner {
       let provider = this.imageAdapter.provider;
       let isMock = provider === 'mock';
       try {
-        const generated = await this.imageAdapter.generate({
-          request_id: `${run.id}:${requirementId}`,
-          model: this.imageModel,
-          prompt: generationPrompt,
-        });
+        const generated = await this.queueWork.run(
+          'image_generate',
+          `${run.id}:image:${requirementId}`,
+          () =>
+            this.imageAdapter.generate({
+              request_id: `${run.id}:${requirementId}`,
+              model: this.imageModel,
+              prompt: generationPrompt,
+            }),
+        );
         if (generated.image_url) imageUrl = generated.image_url;
         isMock = Boolean(generated.metadata.is_mock);
       } catch (error) {
@@ -591,10 +611,12 @@ export class MockWorkflowRunner {
       });
     }
 
-    const result = await this.runtime.execute(
-      this.shotAgent,
-      { scenes: agentScenes },
-      this.context(run, userId, 'shot'),
+    const result = await this.queueWork.run('workflow_step', `${run.id}:shot-agent`, () =>
+      this.runtime.execute(
+        this.shotAgent,
+        { scenes: agentScenes },
+        this.context(run, userId, 'shot'),
+      ),
     );
     if (!result.data || result.status === 'failed') {
       throw new ApiError(422, 'SHOT_AGENT_FAILED', result.warnings[0]?.message ?? '镜头生成失败');
@@ -623,10 +645,11 @@ export class MockWorkflowRunner {
     const promptVersionIds: string[] = [];
     for (const shot of shots) {
       const promptInput = await this.promptInput(shot);
-      const result = await this.runtime.execute(
-        this.promptAgent,
-        promptInput,
-        this.context(run, userId, 'prompt'),
+      const result = await this.queueWork.run(
+        'prompt_construct',
+        `${run.id}:prompt:${shot.id}`,
+        () =>
+          this.runtime.execute(this.promptAgent, promptInput, this.context(run, userId, 'prompt')),
       );
       if (!result.data || result.status === 'failed') {
         throw new ApiError(
@@ -899,10 +922,15 @@ export class MockWorkflowRunner {
     });
     if (existing) return existing.id;
 
-    const result = await this.runtime.execute(
-      this.assetAgent,
-      { asset_type: assetType, name, scene_context: sceneContext },
-      this.context(run, userId, 'visual_assets'),
+    const result = await this.queueWork.run(
+      'workflow_step',
+      `${run.projectId}:asset-agent:${assetType}:${name.trim().toLocaleLowerCase()}`,
+      () =>
+        this.runtime.execute(
+          this.assetAgent,
+          { asset_type: assetType, name, scene_context: sceneContext },
+          this.context(run, userId, 'visual_assets'),
+        ),
     );
     if (!result.data || result.status === 'failed') {
       throw new ApiError(422, 'ASSET_AGENT_FAILED', result.warnings[0]?.message ?? '资产生成失败');

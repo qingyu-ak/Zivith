@@ -12,6 +12,24 @@ describe('generation queue runtime', () => {
     const runtime = createGenerationQueueRuntime(service);
     expect(runtime.mode).toBe('memory');
     expect(runtime.queue).toBeInstanceOf(InMemoryQueueAdapter);
+    expect(runtime.workBridge).toBeDefined();
+    if (previous === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = previous;
+  });
+
+  it('runs workflow LLM/image jobs through the memory queue bridge', async () => {
+    const previous = process.env.REDIS_URL;
+    delete process.env.REDIS_URL;
+    const service = new GenerationService({} as PrismaClient);
+    const runtime = createGenerationQueueRuntime(service);
+    const value = await runtime.workBridge.run('workflow_step', 'bridge-test-1', () =>
+      Promise.resolve(42),
+    );
+    expect(value).toBe(42);
+    const image = await runtime.workBridge.run('image_generate', 'bridge-test-2', () =>
+      Promise.resolve({ ok: true }),
+    );
+    expect(image).toEqual({ ok: true });
     if (previous === undefined) delete process.env.REDIS_URL;
     else process.env.REDIS_URL = previous;
   });
