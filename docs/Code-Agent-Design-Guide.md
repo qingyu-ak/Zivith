@@ -31,9 +31,15 @@ Code agents should read documents in this order before implementing:
 | 3 | `Shot-Specification.md` | Understand the core domain object schema |
 | 4 | `Asset-Model.md` | Understand the reusable resource taxonomy |
 | 5 | `AI-Agent-Collaboration.md` | Understand agent architecture and workflows |
-| 6 | `Technical-Architecture.md` | Understand system boundaries and data flow |
-| 7 | `Implementation-Plan.md` | Understand the phased roadmap and scope per phase |
-| 8 | `Code-Agent-Design-Guide.md` | (this document) Implementation conventions |
+| 6 | `architecture/architecture-principles.md` | Understand the architectural constitution that constrains all decisions |
+| 7 | `Technical-Architecture.md` | Understand system boundaries and data flow |
+| 8 | `Implementation-Plan.md` | Understand the phased roadmap and scope per phase |
+| 9 | `Code-Agent-Design-Guide.md` | (this document) Implementation conventions |
+
+Changes that are architecturally significant must additionally follow
+`architecture/adr-guide.md` and `architecture/rfc-guide.md`: irreversible decisions are
+recorded as ADRs, and cross-context or migration-bearing changes require an RFC before
+implementation.
 
 ---
 

@@ -112,5 +112,7 @@ MinIO services and removes their volumes after the run.
 
 ## Architecture decisions
 
-Infrastructure choices and their trade-offs are recorded in
-[`ARCHITECTURE-DECISIONS.md`](ARCHITECTURE-DECISIONS.md).
+Architecture decisions are recorded as ADRs in
+[`docs/architecture/adr/`](docs/architecture/adr/README.md), governed by the
+[Architecture Constitution](docs/architecture/architecture-principles.md) and the
+[ADR Guide](docs/architecture/adr-guide.md).

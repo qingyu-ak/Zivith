@@ -47,10 +47,12 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | [Asset Model](Asset-Model.md) | Asset taxonomy (Characters, Locations, Styles, etc.) |
 | [AI Agent Collaboration](AI-Agent-Collaboration.md) | Agent architecture, required review gates, and Visual Prep workflow |
 | [Architecture Principles](architecture/architecture-principles.md) | Long-term architectural constitution guiding all future ADRs and RFCs |
+| [ADR Guide](architecture/adr-guide.md) | When and how to record architecture decisions ([ADR index](architecture/adr/README.md)) |
+| [RFC Guide](architecture/rfc-guide.md) | Proposal, review, risk, migration, and acceptance process for significant changes |
 | [Technical Architecture](Technical-Architecture.md) | System design, adapters, APIs, queues, BYOK, and data storage |
 | [Implementation Plan](Implementation-Plan.md) | Phased roadmap with live progress checkboxes |
 | [Next Tasks](Next-Tasks.md) | Current engineering backlog (stabilize → finish Phase 2 → 2.5) |
-| [Director Copilot RFC (thin)](Director-Copilot-RFC.md) | Project sidebar co-pilot scope lock (Phase 3+; not a chatbot) |
+| [Director Copilot RFC (thin)](architecture/rfc/Director-Copilot-RFC.md) | Project sidebar co-pilot scope lock (Phase 3+; not a chatbot) |
 | [Code Agent Design Guide](Code-Agent-Design-Guide.md) | Implementation conventions for AI code agents |
 
 ### Historical
@@ -81,10 +83,10 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | Backend API | Node.js 22 + Fastify |
 | Domain / DB | `@zivith/domain` + Prisma / PostgreSQL 16 |
 | Object Storage | S3-compatible (MinIO locally) |
-| Job Queue | BullMQ adapter present; not yet wired into the main generation path |
+| Job Queue | BullMQ when `REDIS_URL` is set; in-process memory queue fallback otherwise |
 | AI Integration | Mock LLM + Mock video adapters (Phase 2); real providers in Phase 2.5 |
 
-Infrastructure decisions: see root [`ARCHITECTURE-DECISIONS.md`](../ARCHITECTURE-DECISIONS.md).
+Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 
 ---
 

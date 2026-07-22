@@ -94,7 +94,7 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
 - Full Asset taxonomy (Prop / Style / Knowledge) — Phase 4
 - Production rate limits / Review Agent polish — Phase 3
 - Staging cloud deploy — Phase 0 leftover, not blocking Track A
-- Director Copilot sidebar — see [Director-Copilot-RFC.md](Director-Copilot-RFC.md); Phase 3+, v1 Q&A only
+- Director Copilot sidebar — see [Director-Copilot-RFC.md](architecture/rfc/Director-Copilot-RFC.md); Phase 3+, v1 Q&A only
 - Renaming historical design docs beyond the 2026-07-21 archive pass
 
 ---
