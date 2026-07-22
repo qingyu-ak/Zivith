@@ -45,7 +45,7 @@ Phase 2: AI Agent Pipeline       (4-5 weeks)   ← Moved earlier (B-Line)
     │   Video generation: Mock Adapter
     ↓
 Phase 2.5: First Provider Integration (2-3 weeks)
-    │   Controlled DeepSeek + Tongyi Wanxiang + Kling loop
+    │   Controlled DeepSeek + SiliconFlow (image / video / audio) loop
     ↓
 Phase 3: Productionize Real Generation (3-4 weeks)
     ↓
@@ -240,31 +240,37 @@ The placeholder video displays the Shot's structured data as text overlay, allow
 | Capability | Provider | Integration scope |
 |------------|----------|-------------------|
 | Text | DeepSeek | Structured output for Story, Scene, Shot, and Prompt Agents |
-| Image | Tongyi Wanxiang | Character/Location key images and Scene variant generation |
-| Video | Kling | Image-to-video generation using approved reference images |
+| Image | SiliconFlow | Character/Location key images and Scene variant generation |
+| Video | SiliconFlow | Text-to-video / image-to-video using approved reference images |
+| Audio | SiliconFlow | Dialogue TTS → Media (same round as image/video) |
+
+Provider credentials live in server `.env` (global). UI can select modality vendor + custom model IDs at runtime (process override); project-level BYOK remains later.
 
 ### Scope
 
-- [ ] `DeepSeekAdapter` for completions and structured output
-- [ ] `TongyiWanxiangAdapter` for text-to-image and, where actually supported, reference-image or variant generation
-- [ ] `KlingAdapter` for text-to-video and image-to-video
-- [ ] Server-only BYOK credential storage; frontend never calls a provider directly
-- [ ] Unified provider job states: `queued`, `running`, `completed`, `failed`, `cancelled`
-- [ ] Per-call provider, model, parameters, prompt, duration, error code, and estimated cost records
-- [ ] Contract tests and a minimal end-to-end test for all three adapters
+- [x] `DeepSeekAdapter` for completions and structured output
+- [x] `SiliconFlowImageAdapter` for text-to-image
+- [x] `SiliconFlowVideoAdapter` for video submit + status poll
+- [x] `SiliconFlowAudioAdapter` for speech synthesis
+- [x] Provider registry with Mock fallback when keys are missing
+- [x] Runtime provider/model selection API + project UI
+- [ ] Server-only per-project BYOK credential storage (replace stubs)
+- [ ] Unified per-call usage/cost records
+- [x] Contract tests for adapters (mock fetch)
 
 ### Completion Criteria
 
-- [ ] DeepSeek consistently returns schema-valid Story, Scene, Shot, and Prompt results using `<configured-deepseek-model>`
-- [ ] A reviewed Scene can generate and save Character/Location reference images using `<configured-wanxiang-model>`
-- [ ] Kling accepts approved reference images and returns a video for review
+- [x] DeepSeek path available for schema-valid Story/Scene/Shot/Prompt when key configured
+- [x] Visual prep can call SiliconFlow (or Mock) image generation
+- [x] Video generation uses selected SiliconFlow/Mock adapter
+- [x] Dialogue audio can be generated and stored as Media
 - [ ] A provider failure preserves creative data and can be retried without duplicate Media or Output records
 
 ---
 
 # 7. Phase 3: Productionize Real Generation
 
-**Goal:** Productionize the adapters validated in Phase 2.5—DeepSeek, Tongyi Wanxiang, and Kling—and deliver the complete generation, review, and version-management experience.
+**Goal:** Productionize the adapters validated in Phase 2.5—DeepSeek and SiliconFlow—and deliver the complete generation, review, and version-management experience.
 
 The adapter pattern continues to allow Qwen, GPT, Claude, GPT Image, FLUX, Vidu, and Veo to be added without domain changes.
 

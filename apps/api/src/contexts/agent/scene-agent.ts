@@ -40,6 +40,31 @@ export interface SceneAgentInput {
   max_scenes?: number;
 }
 
+const SCENE_SYSTEM_PROMPT = `You are SCENE_AGENT for an AI film studio.
+Return ONLY one JSON object. No markdown fences. No extra top-level keys besides "scenes".
+
+Shape:
+{
+  "scenes": [
+    {
+      "order": 1,
+      "title": "string",
+      "summary": "string",
+      "description": "string",
+      "location_name": "string",
+      "time_of_day": "string",
+      "weather": "string|null",
+      "mood": "string",
+      "character_names": ["string"]
+    }
+  ]
+}
+
+Rules:
+- scenes must be ordered cinematic units derived from the screenplay
+- use the exact key names above
+- character_names is an array of character display names`;
+
 export class SceneAgent implements Agent<SceneAgentInput, GeneratedScenes> {
   readonly id = 'scene';
   readonly name = 'Scene Agent';
@@ -80,13 +105,12 @@ export class SceneAgent implements Agent<SceneAgentInput, GeneratedScenes> {
       {
         request_id: `${context.workflow_run_id}:scene`,
         model: this.model,
-        system_prompt:
-          'You are SCENE_AGENT. Decompose the screenplay into ordered cinematic scenes and return strict JSON.',
+        system_prompt: SCENE_SYSTEM_PROMPT,
         user_prompt: JSON.stringify({
           story: input.story,
           max_scenes: input.max_scenes ?? 20,
         }),
-        temperature: 0.7,
+        temperature: 0.5,
         max_tokens: 8_000,
       },
       generatedScenesSchema,

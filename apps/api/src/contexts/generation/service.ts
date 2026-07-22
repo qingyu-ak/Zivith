@@ -47,16 +47,87 @@ export interface GenerateVideoOptions {
   async?: boolean;
 }
 
+type VideoAdapterSource = VideoGenerationAdapter | (() => VideoGenerationAdapter);
+
 export class GenerationService {
   private queue: QueuePort | null = null;
+  private readonly adapterSource: VideoAdapterSource;
 
   constructor(
     private readonly db: PrismaClient,
-    private readonly adapter: VideoGenerationAdapter = new MockGenerationAdapter(),
-  ) {}
+    adapter: VideoAdapterSource = new MockGenerationAdapter(),
+  ) {
+    this.adapterSource = adapter;
+  }
+
+  private get adapter(): VideoGenerationAdapter {
+    return typeof this.adapterSource === 'function' ? this.adapterSource() : this.adapterSource;
+  }
+
+  private defaultModel(): string {
+    return this.adapter.supportedModels[0]?.id ?? 'mock-v1';
+  }
 
   attachQueue(queue: QueuePort): void {
     this.queue = queue;
+  }
+
+  async cancelTask(taskId: string) {
+    const task = await this.db.task.findUnique({ where: { id: taskId } });
+    if (!task) throw new ApiError(404, 'TASK_NOT_FOUND', '生成任务不存在');
+    if (task.status === 'completed' || task.status === 'cancelled') {
+      return task;
+    }
+    if (task.status !== 'queued' && task.status !== 'running') {
+      throw new ApiError(409, 'TASK_NOT_CANCELLABLE', '只能取消排队中或生成中的任务');
+    }
+
+    const payload = record(task.payload);
+    const outputId = typeof payload.output_id === 'string' ? payload.output_id : null;
+    const shotId = typeof payload.shot_id === 'string' ? payload.shot_id : null;
+
+    if (this.queue) {
+      await this.queue.cancel(task.idempotencyKey);
+    }
+
+    const providerJobId = task.providerJobId;
+    if (providerJobId) {
+      try {
+        await this.adapter.cancel(providerJobId);
+      } catch {
+        // Provider cancel is best-effort.
+      }
+    }
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const cancelledTask = await tx.task.update({
+        where: { id: taskId },
+        data: {
+          status: 'cancelled',
+          errorCode: 'CANCELLED',
+          completedAt: new Date(),
+          result: json({ cancelled: true }),
+        },
+      });
+      if (outputId) {
+        await tx.output.updateMany({
+          where: {
+            id: outputId,
+            status: { in: ['queued', 'generating'] },
+          },
+          data: { status: 'failed', errorCode: 'CANCELLED' },
+        });
+      }
+      if (shotId) {
+        await tx.shot.updateMany({
+          where: { id: shotId, state: 'generating' },
+          data: { state: 'draft' },
+        });
+      }
+      return cancelledTask;
+    });
+
+    return updated;
   }
 
   async generate(shotId: string, options: GenerateVideoOptions = {}) {
@@ -140,9 +211,9 @@ export class GenerationService {
           status: 'queued',
           provider: this.adapter.provider,
           idempotencyKey,
-          model: options.model ?? 'mock-v1',
+          model: options.model ?? this.defaultModel(),
           modelVersion: '1',
-          parameters: json({ is_mock: true }),
+          parameters: json({ is_mock: this.adapter.provider === 'mock' }),
           promptSnapshot: json({ positive, negative: negative ?? null }),
           contextSnapshot: json(contextSnapshot),
           visualMediaIds,
@@ -160,7 +231,7 @@ export class GenerationService {
             shot_id: shotId,
             output_id: outputId,
             request_id: requestId,
-            model: options.model ?? 'mock-v1',
+            model: options.model ?? this.defaultModel(),
             positive,
             negative: negative ?? null,
             visual_media_ids: visualMediaIds,
@@ -195,6 +266,15 @@ export class GenerationService {
       where: { idempotencyKey: output.idempotencyKey },
     });
     if (!task) throw new ApiError(404, 'TASK_NOT_FOUND', '生成任务不存在');
+    if (task.status === 'cancelled') {
+      if (output.status === 'queued' || output.status === 'generating') {
+        await this.db.output.update({
+          where: { id: outputId },
+          data: { status: 'failed', errorCode: 'CANCELLED' },
+        });
+      }
+      return;
+    }
 
     const shot = await this.db.shot.findFirst({
       where: { id: output.shotId, deletedAt: null },
@@ -245,6 +325,16 @@ export class GenerationService {
         reference_image_urls: visualMediaIds,
         parameters: { output_id: outputId },
       });
+
+      const latestTask = await this.db.task.findFirst({ where: { id: task.id } });
+      if (latestTask?.status === 'cancelled') {
+        await this.db.output.update({
+          where: { id: outputId },
+          data: { status: 'failed', errorCode: 'CANCELLED' },
+        });
+        return;
+      }
+
       if (result.status !== 'completed' || !result.video_url) {
         throw new Error(`Mock generation ended with ${result.status}`);
       }
@@ -273,6 +363,14 @@ export class GenerationService {
         this.db.shot.update({ where: { id: shot.id }, data: { state: 'review' } }),
       ]);
     } catch (error) {
+      const latestTask = await this.db.task.findFirst({ where: { id: task.id } });
+      if (latestTask?.status === 'cancelled') {
+        await this.db.output.update({
+          where: { id: outputId },
+          data: { status: 'failed', errorCode: 'CANCELLED' },
+        });
+        return;
+      }
       await this.db.$transaction([
         this.db.output.update({
           where: { id: outputId },

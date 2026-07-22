@@ -298,8 +298,28 @@ export default function ShotEditorPage() {
     setError('');
     setNotice('');
     try {
-      await api(`/shots/${shotId}/generate`, { method: 'POST', body: { model: 'mock-v1' } });
-      setNotice('Mock 视频生成完成');
+      await api(`/shots/${shotId}/generate`, { method: 'POST', body: {} });
+      setNotice('视频生成完成（使用当前所选视频提供商）');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function generateAudio() {
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api<{ media: { url?: string }; provider?: string; model?: string }>(
+        `/shots/${shotId}/generate-audio`,
+        { method: 'POST', body: {} },
+      );
+      setNotice(
+        `对白音频已生成（${result.provider ?? 'provider'} / ${result.model ?? 'model'}）`,
+      );
       await load();
     } catch (reason) {
       setError(errorMessage(reason));
@@ -788,6 +808,19 @@ export default function ShotEditorPage() {
                 defaultValue={shot.audio?.volume_sfx ?? ''}
               />
             </Field>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={generating || frozen}
+                onClick={() => void generateAudio()}
+              >
+                {generating ? '处理中…' : '生成对白音频'}
+              </Button>
+              <p className="text-xs text-zinc-500">
+                使用镜头对白文本；提供商可在项目页「模型提供商」中切换。
+              </p>
+            </div>
           </Section>
           <Section
             key={`prompt-${promptFormKey}`}
@@ -844,7 +877,7 @@ export default function ShotEditorPage() {
                   disabled={generating || !promptVersions.some((item) => item.approved_at)}
                   onClick={() => void generateVideo()}
                 >
-                  生成 Mock 视频
+                  生成视频
                 </Button>
               </div>
             </div>

@@ -13,6 +13,17 @@ import { ApiError } from '../errors.js';
 import { authenticate } from './auth.js';
 import type { StoragePort } from '../ports/index.js';
 
+/** Prefer remote/data URLs stored on Media; only sign object storage for local keys. */
+async function resolveMediaAccessUrl(
+  url: string,
+  storageKey: string,
+  storage?: StoragePort,
+): Promise<string> {
+  if (/^(https?:|data:)/i.test(url)) return url;
+  if (storage) return storage.signedReadUrl(storageKey);
+  return url;
+}
+
 const idParams = z.object({ id: z.string().uuid() });
 const projectParams = z.object({ pid: z.string().uuid() });
 const storyParams = z.object({ sid: z.string().uuid() });
@@ -1016,7 +1027,7 @@ export function registerResourceRoutes(
     await requireMember(db, request.user.sub, media.projectId);
     return {
       ...media,
-      access_url: storage ? await storage.signedReadUrl(media.storageKey) : media.url,
+      access_url: await resolveMediaAccessUrl(media.url, media.storageKey, storage),
     };
   });
 

@@ -71,9 +71,43 @@ function textField(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+type ArtifactKind = 'story' | 'scene' | 'visual' | 'shot' | 'prompt' | 'video';
+
+function stepArtifactKind(name: WorkflowStepName): ArtifactKind | null {
+  switch (name) {
+    case 'story':
+    case 'story_review':
+      return 'story';
+    case 'scene':
+    case 'scene_review':
+      return 'scene';
+    case 'visual_prep':
+    case 'visual_assets_review':
+      return 'visual';
+    case 'shot':
+    case 'shot_review':
+      return 'shot';
+    case 'prompt':
+    case 'prompt_review':
+      return 'prompt';
+    case 'video':
+    case 'video_review':
+      return 'video';
+    default:
+      return null;
+  }
+}
+
+function defaultSelectedStep(run: WorkflowRunDTO): WorkflowStepName | null {
+  if (run.state.awaiting_review) return run.state.awaiting_review;
+  const completed = [...run.steps].reverse().find((step) => step.status === 'completed');
+  return completed?.name ?? run.steps[0]?.name ?? null;
+}
+
 interface VisualReviewItem {
   requirement: VisualRequirementDTO;
   media?: WorkflowMediaDTO;
+  sceneTitle?: string;
   issue?: string;
 }
 
@@ -153,6 +187,9 @@ export function WorkflowPanel({
   const [visualItems, setVisualItems] = useState<VisualReviewItem[]>([]);
   const [promptItems, setPromptItems] = useState<PromptReviewItem[]>([]);
   const [videoItems, setVideoItems] = useState<VideoReviewItem[]>([]);
+  const [selectedStep, setSelectedStep] = useState<WorkflowStepName | null>(null);
+  const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
 
   const clearArtifacts = useCallback(() => {
     setStory(null);
@@ -178,6 +215,17 @@ export function WorkflowPanel({
   useEffect(() => {
     void loadLatest();
   }, [loadLatest]);
+
+  useEffect(() => {
+    if (!run) {
+      setSelectedStep(null);
+      return;
+    }
+    setSelectedStep((current) => {
+      if (current && run.steps.some((step) => step.name === current)) return current;
+      return defaultSelectedStep(run);
+    });
+  }, [run?.id, run?.state.awaiting_review, run?.status]);
 
   useEffect(() => {
     if (!run || ['completed', 'failed', 'cancelled'].includes(run.status)) return;
@@ -227,9 +275,18 @@ export function WorkflowPanel({
           }
         }
       } catch (reason) {
-        if (!controller.signal.aborted && active) {
-          setError(errorMessage(reason));
+        if (!active || controller.signal.aborted) return;
+        // SSE drops on API restart / navigation — reconnect quietly instead of red banner.
+        if (
+          reason instanceof Error &&
+          (reason.name === 'AbortError' || /failed to fetch/i.test(reason.message))
+        ) {
+          window.setTimeout(() => {
+            if (active && !controller.signal.aborted) void connect();
+          }, 2_500);
+          return;
         }
+        setError(errorMessage(reason));
       }
     };
 
@@ -241,67 +298,61 @@ export function WorkflowPanel({
   }, [run?.id, run?.status, onArtifactsChanged]);
 
   useEffect(() => {
-    if (!run) {
+    if (!run || !selectedStep) {
       clearArtifacts();
       return;
     }
-    const review = run.state.awaiting_review;
+    const kind = stepArtifactKind(selectedStep);
     clearArtifacts();
-    if (
-      !review ||
-      ![
-        'story_review',
-        'scene_review',
-        'shot_review',
-        'visual_assets_review',
-        'prompt_review',
-        'video_review',
-      ].includes(review)
-    ) {
-      return;
-    }
+    if (!kind) return;
 
     let active = true;
     setLoadingArtifacts(true);
     const load = async () => {
-      if (review === 'story_review') {
+      if (kind === 'story') {
         const storyId = textField(stepOutput(run, 'story').story_id);
-        if (!storyId) throw new Error('故事审核材料缺失：工作流未记录故事 ID');
+        if (!storyId) throw new Error('故事材料缺失：工作流未记录故事 ID');
         const loaded = await api<StoryDTO>(`/stories/${storyId}`);
         if (active) {
-          if (!loaded?.title) throw new Error('故事审核材料无法加载');
+          if (!loaded?.title) throw new Error('故事材料无法加载');
           setStory(loaded);
         }
         return;
       }
 
-      if (review === 'scene_review') {
+      if (kind === 'scene') {
         const sceneIds = stringArray(stepOutput(run, 'scene').scene_ids);
-        if (sceneIds.length === 0) throw new Error('场景审核材料缺失：工作流未记录场景列表');
+        if (sceneIds.length === 0) throw new Error('场景材料缺失：工作流未记录场景列表');
         const loaded = await Promise.all(sceneIds.map((id) => api<SceneDTO>(`/scenes/${id}`)));
         if (active) {
-          if (loaded.some((item) => !item?.id)) throw new Error('部分场景审核材料无法加载');
+          if (loaded.some((item) => !item?.id)) throw new Error('部分场景材料无法加载');
           setScenes(loaded);
         }
         return;
       }
 
-      if (review === 'shot_review') {
+      if (kind === 'shot') {
         const shotIds = stringArray(stepOutput(run, 'shot').shot_ids);
-        if (shotIds.length === 0) throw new Error('镜头审核材料缺失：工作流未记录镜头列表');
+        if (shotIds.length === 0) throw new Error('镜头材料缺失：工作流未记录镜头列表');
         const loaded = await Promise.all(shotIds.map((id) => api<ShotDTO>(`/shots/${id}`)));
         if (active) {
-          if (loaded.some((item) => !item?.id)) throw new Error('部分镜头审核材料无法加载');
+          if (loaded.some((item) => !item?.id)) throw new Error('部分镜头材料无法加载');
           setShots(loaded);
         }
         return;
       }
 
-      if (review === 'visual_assets_review') {
+      if (kind === 'visual') {
         const sceneIds = stringArray(stepOutput(run, 'scene').scene_ids);
         if (sceneIds.length === 0) {
-          throw new Error('视觉资产审核材料缺失：工作流未记录场景列表');
+          throw new Error('视觉资产材料缺失：工作流未记录场景列表');
         }
+        const scenesLoaded = await Promise.all(
+          sceneIds.map((sceneId) => api<SceneDTO>(`/scenes/${sceneId}`)),
+        );
+        const sceneTitleById = new Map(
+          scenesLoaded.map((scene) => [scene.id, scene.title] as const),
+        );
         const groups = await Promise.all(
           sceneIds.map((sceneId) =>
             api<VisualRequirementDTO[]>(`/scenes/${sceneId}/visual-requirements`),
@@ -309,24 +360,27 @@ export function WorkflowPanel({
         );
         const requirements = groups.flat();
         if (requirements.length === 0) {
-          throw new Error('视觉资产审核材料为空：未找到任何角色/地点视觉需求');
+          throw new Error('视觉资产材料为空：未找到任何角色/地点视觉需求');
         }
         const items = await Promise.all(
           requirements.map(async (requirement) => {
+            const sceneTitle = sceneTitleById.get(requirement.scene_id);
             const mediaId = requirement.candidate_media_ids[0];
             if (requirement.required && !mediaId) {
               return {
                 requirement,
+                sceneTitle,
                 issue: '必需视觉需求缺少候选图片，无法通过审核',
               } satisfies VisualReviewItem;
             }
-            if (!mediaId) return { requirement } satisfies VisualReviewItem;
+            if (!mediaId) return { requirement, sceneTitle } satisfies VisualReviewItem;
             try {
               const media = await api<WorkflowMediaDTO>(`/media/${mediaId}`);
-              return { requirement, media } satisfies VisualReviewItem;
+              return { requirement, media, sceneTitle } satisfies VisualReviewItem;
             } catch {
               return {
                 requirement,
+                sceneTitle,
                 issue: `候选图片 ${mediaId.slice(0, 8)}… 无法加载`,
               } satisfies VisualReviewItem;
             }
@@ -335,6 +389,11 @@ export function WorkflowPanel({
         const blocked = items.filter((item) => item.issue);
         if (active) {
           setVisualItems(items);
+          setPromptDrafts(
+            Object.fromEntries(
+              items.map((item) => [item.requirement.id, item.requirement.generation_prompt ?? '']),
+            ),
+          );
           if (blocked.length > 0) {
             setArtifactWarning(
               `${blocked.length} 项视觉需求材料不完整，请修复后再点“审核通过并继续”`,
@@ -344,37 +403,37 @@ export function WorkflowPanel({
         return;
       }
 
-      if (review === 'prompt_review') {
+      if (kind === 'prompt') {
         const output = stepOutput(run, 'prompt');
         const shotIds = stringArray(output.shot_ids);
         const promptIds = stringArray(output.prompt_version_ids);
         if (shotIds.length === 0) {
-          throw new Error('提示词审核材料缺失：工作流未记录镜头列表');
-        }
-        if (shotIds.length !== promptIds.length) {
-          throw new Error(
-            `提示词审核材料不完整：镜头 ${shotIds.length} 个，提示词版本 ${promptIds.length} 个`,
-          );
+          throw new Error('提示词材料缺失：工作流未记录镜头列表');
         }
         const items = await Promise.all(
           shotIds.map(async (shotId, index) => {
-            const promptId = promptIds[index]!;
+            const promptId = promptIds[index];
             const [shot, versions] = await Promise.all([
               api<ShotDTO>(`/shots/${shotId}`),
               api<PromptVersionDTO[]>(`/shots/${shotId}/prompts`),
             ]);
-            const prompt = versions.find((version) => version.id === promptId);
+            const prompt =
+              (promptId ? versions.find((version) => version.id === promptId) : undefined) ??
+              versions.find((version) => version.approved_at) ??
+              versions[0];
             if (!prompt) {
               return {
                 shot,
                 prompt: {
-                  id: promptId,
+                  id: promptId ?? `missing-${shotId}`,
                   shot_id: shotId,
                   positive: '',
                   source: 'missing',
                   created_at: '',
                 },
-                issue: `找不到提示词版本 ${promptId.slice(0, 8)}…`,
+                issue: promptId
+                  ? `找不到提示词版本 ${promptId.slice(0, 8)}…`
+                  : '缺少提示词版本',
               } satisfies PromptReviewItem;
             }
             const shotPositive = shot.prompt?.positive?.trim() ?? '';
@@ -408,12 +467,7 @@ export function WorkflowPanel({
       const shotIds = stringArray(output.shot_ids);
       const outputIds = stringArray(output.output_ids);
       if (shotIds.length === 0) {
-        throw new Error('视频审核材料缺失：工作流未记录镜头列表');
-      }
-      if (shotIds.length !== outputIds.length) {
-        throw new Error(
-          `视频审核材料不完整：镜头 ${shotIds.length} 个，输出 ${outputIds.length} 个`,
-        );
+        throw new Error('视频材料缺失：工作流未记录镜头列表');
       }
       const outputIdSet = new Set(outputIds);
       const items = await Promise.all(
@@ -425,7 +479,9 @@ export function WorkflowPanel({
           ]);
           const matched =
             outputs.find((item) => item.id === expectedOutputId) ??
-            outputs.find((item) => outputIdSet.has(item.id));
+            outputs.find((item) => outputIdSet.has(item.id)) ??
+            outputs.find((item) => item.is_active) ??
+            outputs[0];
           if (!matched) {
             return {
               shot,
@@ -463,7 +519,7 @@ export function WorkflowPanel({
     return () => {
       active = false;
     };
-  }, [run, clearArtifacts]);
+  }, [run, selectedStep, clearArtifacts]);
 
   const approveReady = useMemo(
     () =>
@@ -608,6 +664,65 @@ export function WorkflowPanel({
 
   const review = run?.state.awaiting_review;
   const terminal = Boolean(run && ['completed', 'failed', 'cancelled'].includes(run.status));
+  const viewKind = selectedStep ? stepArtifactKind(selectedStep) : null;
+  const isLiveReview = Boolean(review && selectedStep === review);
+
+  async function regenerateVisual(requirement: VisualRequirementDTO) {
+    const prompt = (promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '').trim();
+    if (!prompt) {
+      setError('请先填写生图提示词');
+      return;
+    }
+    setRegeneratingId(requirement.id);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/scenes/${requirement.scene_id}/visual-requirements/${requirement.id}/generate`, {
+        method: 'POST',
+        body: { prompt },
+      });
+      setNotice('已按当前提示词重新生成候选图');
+      // Force reload by toggling selected step dependency
+      setSelectedStep((current) => current);
+      const sceneIds = stringArray(stepOutput(run!, 'scene').scene_ids);
+      const scenesLoaded = await Promise.all(
+        sceneIds.map((sceneId) => api<SceneDTO>(`/scenes/${sceneId}`)),
+      );
+      const sceneTitleById = new Map(scenesLoaded.map((scene) => [scene.id, scene.title] as const));
+      const groups = await Promise.all(
+        sceneIds.map((sceneId) =>
+          api<VisualRequirementDTO[]>(`/scenes/${sceneId}/visual-requirements`),
+        ),
+      );
+      const requirements = groups.flat();
+      const items = await Promise.all(
+        requirements.map(async (item) => {
+          const sceneTitle = sceneTitleById.get(item.scene_id);
+          const mediaId = item.candidate_media_ids[0];
+          if (!mediaId) return { requirement: item, sceneTitle } satisfies VisualReviewItem;
+          try {
+            const media = await api<WorkflowMediaDTO>(`/media/${mediaId}`);
+            return { requirement: item, media, sceneTitle } satisfies VisualReviewItem;
+          } catch {
+            return {
+              requirement: item,
+              sceneTitle,
+              issue: `候选图片 ${mediaId.slice(0, 8)}… 无法加载`,
+            } satisfies VisualReviewItem;
+          }
+        }),
+      );
+      setVisualItems(items);
+      setPromptDrafts((current) => ({
+        ...current,
+        [requirement.id]: prompt,
+      }));
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setRegeneratingId(null);
+    }
+  }
 
   return (
     <Card className="mb-8">
@@ -688,26 +803,38 @@ export function WorkflowPanel({
       {run && (
         <>
           <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
-            {run.steps.map((step) => (
-              <div
-                key={step.id}
-                className={`rounded-lg border p-3 text-xs ${
-                  step.status === 'completed'
-                    ? 'border-accent/30 bg-accent/5 text-accent'
-                    : step.status === 'running'
-                      ? 'border-amber-400/30 bg-amber-400/5 text-amber-300'
-                      : step.status === 'cancelled'
-                        ? 'border-red-400/30 bg-red-400/5 text-red-300'
-                        : 'border-line text-zinc-500'
-                }`}
-              >
-                <p className="font-medium">{stepLabels[step.name]}</p>
-                <p className="mt-1 opacity-70">{statusLabels[step.status]}</p>
-              </div>
-            ))}
+            {run.steps.map((step) => {
+              const selectable =
+                step.status === 'completed' ||
+                step.status === 'running' ||
+                step.name === review;
+              const selected = selectedStep === step.name;
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  disabled={!selectable}
+                  onClick={() => setSelectedStep(step.name)}
+                  className={`rounded-lg border p-3 text-left text-xs transition ${
+                    selected ? 'ring-1 ring-accent' : ''
+                  } ${
+                    step.status === 'completed'
+                      ? 'border-accent/30 bg-accent/5 text-accent'
+                      : step.status === 'running'
+                        ? 'border-amber-400/30 bg-amber-400/5 text-amber-300'
+                        : step.status === 'cancelled'
+                          ? 'border-red-400/30 bg-red-400/5 text-red-300'
+                          : 'border-line text-zinc-500'
+                  } ${selectable ? 'cursor-pointer hover:brightness-110' : 'cursor-default opacity-60'}`}
+                >
+                  <p className="font-medium">{stepLabels[step.name]}</p>
+                  <p className="mt-1 opacity-70">{statusLabels[step.status]}</p>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="mt-5 flex items-center gap-3 border-t border-line pt-5">
+          <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-5">
             <Badge
               tone={
                 run.status === 'completed'
@@ -721,12 +848,19 @@ export function WorkflowPanel({
             </Badge>
             <p className="text-sm text-zinc-400">
               {review ? `等待你完成“${stepLabels[review]}”` : '工作流状态已同步'}
+              {selectedStep ? ` · 正在查看“${stepLabels[selectedStep]}”` : ''}
             </p>
           </div>
 
-          {loadingArtifacts && <Spinner label="正在加载审核材料…" />}
+          {selectedStep && !isLiveReview && (
+            <p className="mt-3 text-xs text-zinc-500">
+              只读回看历史产物。要改内容请回到当前审核闸使用「按反馈重新生成」，或取消后重新开始。任意步骤时间旅行回退尚未立项。
+            </p>
+          )}
 
-          {review === 'story_review' && !loadingArtifacts && story && (
+          {loadingArtifacts && <Spinner label="正在加载材料…" />}
+
+          {viewKind === 'story' && !loadingArtifacts && story && (
             <div className="mt-5 rounded-lg border border-line bg-ink p-4">
               <p className="text-sm font-medium">{story.title}</p>
               {story.logline && (
@@ -742,10 +876,10 @@ export function WorkflowPanel({
             </div>
           )}
 
-          {review === 'scene_review' && !loadingArtifacts && (
+          {viewKind === 'scene' && !loadingArtifacts && (
             <div className="mt-5 grid gap-3">
               {scenes.length === 0 ? (
-                <p className="text-sm text-zinc-500">没有可展示的场景审核材料。</p>
+                <p className="text-sm text-zinc-500">没有可展示的场景材料。</p>
               ) : (
                 scenes.map((scene) => (
                   <div key={scene.id} className="rounded-lg border border-line bg-ink p-4">
@@ -765,10 +899,10 @@ export function WorkflowPanel({
             </div>
           )}
 
-          {review === 'shot_review' && !loadingArtifacts && (
+          {viewKind === 'shot' && !loadingArtifacts && (
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               {shots.length === 0 ? (
-                <p className="text-sm text-zinc-500 md:col-span-2">没有可展示的镜头审核材料。</p>
+                <p className="text-sm text-zinc-500 md:col-span-2">没有可展示的镜头材料。</p>
               ) : (
                 shots.map((shot) => (
                   <div key={shot.id} className="rounded-lg border border-line bg-ink p-4">
@@ -792,43 +926,86 @@ export function WorkflowPanel({
             </div>
           )}
 
-          {review === 'visual_assets_review' && !loadingArtifacts && (
+          {viewKind === 'visual' && !loadingArtifacts && (
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {visualItems.length === 0 ? (
                 <p className="text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">
-                  没有可展示的视觉审核材料。
+                  没有可展示的视觉材料。
                 </p>
               ) : (
-                visualItems.map(({ requirement, media, issue }) => (
-                  <div
-                    key={requirement.id}
-                    className={`rounded-lg border bg-ink p-3 ${
-                      issue ? 'border-amber-400/40' : 'border-line'
-                    }`}
-                  >
-                    {(media?.access_url || media?.url) && (
-                      <img
-                        className="mb-3 aspect-video w-full rounded-md object-cover"
-                        src={media.access_url || media.url || ''}
-                        alt={requirement.reason}
-                      />
-                    )}
-                    <p className="text-sm font-medium">
-                      {requirement.asset_type === 'character' ? '角色' : '地点'} ·{' '}
-                      {requirement.variant_key}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-zinc-500">{requirement.reason}</p>
-                    {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
-                  </div>
-                ))
+                visualItems.map(({ requirement, media, sceneTitle, issue }) => {
+                  const imageSrc = media?.access_url || media?.url || '';
+                  const typeLabel = requirement.asset_type === 'character' ? '角色关键图' : '地点参考';
+                  const draft = promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '';
+                  return (
+                    <div
+                      key={requirement.id}
+                      className={`rounded-lg border bg-ink p-3 ${
+                        issue ? 'border-amber-400/40' : 'border-line'
+                      }`}
+                    >
+                      {imageSrc ? (
+                        <img
+                          className="mb-3 aspect-video w-full rounded-md object-cover bg-zinc-900"
+                          src={imageSrc}
+                          alt={requirement.reason}
+                          onError={(event) => {
+                            event.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="mb-3 flex aspect-video items-center justify-center rounded-md bg-zinc-900 text-xs text-zinc-600">
+                          暂无预览
+                        </div>
+                      )}
+                      <p className="text-sm font-medium">
+                        {sceneTitle ? `场景「${sceneTitle}」` : '场景'} · {typeLabel}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        {requirement.asset?.name ?? requirement.variant_key}
+                      </p>
+                      {requirement.asset?.appearance_summary && (
+                        <p className="mt-1 text-xs leading-5 text-zinc-500">
+                          特征：{requirement.asset.appearance_summary}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs leading-5 text-zinc-500">{requirement.reason}</p>
+                      <Field label="生图提示词">
+                        <Textarea
+                          value={draft}
+                          disabled={!isLiveReview || busy || regeneratingId === requirement.id}
+                          onChange={(event) =>
+                            setPromptDrafts((current) => ({
+                              ...current,
+                              [requirement.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                      {isLiveReview && (
+                        <div className="mt-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={busy || regeneratingId === requirement.id}
+                            onClick={() => void regenerateVisual(requirement)}
+                          >
+                            {regeneratingId === requirement.id ? '生成中…' : '按提示词重生成'}
+                          </Button>
+                        </div>
+                      )}
+                      {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
+                    </div>
+                  );
+                })
               )}
             </div>
           )}
 
-          {review === 'prompt_review' && !loadingArtifacts && (
+          {viewKind === 'prompt' && !loadingArtifacts && (
             <div className="mt-5 grid gap-3">
               {promptItems.length === 0 ? (
-                <p className="text-sm text-zinc-500">没有可展示的提示词审核材料。</p>
+                <p className="text-sm text-zinc-500">没有可展示的提示词材料。</p>
               ) : (
                 promptItems.map(({ shot, prompt, issue, warning }) => (
                   <div
@@ -859,7 +1036,7 @@ export function WorkflowPanel({
             </div>
           )}
 
-          {review === 'video_review' && !loadingArtifacts && (
+          {viewKind === 'video' && !loadingArtifacts && (
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               {videoItems.length === 0 ? (
                 <p className="text-sm text-zinc-500 md:col-span-2">没有可展示的视频审核材料。</p>
@@ -889,7 +1066,7 @@ export function WorkflowPanel({
             </div>
           )}
 
-          {review && (
+          {isLiveReview && review && (
             <div className="mt-5 grid gap-3 border-t border-line pt-5">
               <Textarea
                 className="min-h-20"

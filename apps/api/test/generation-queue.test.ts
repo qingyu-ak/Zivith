@@ -33,4 +33,19 @@ describe('InMemoryQueueAdapter', () => {
       expect.objectContaining({ type: 'video_generate', payload: { output_id: 'output-1' } }),
     );
   });
+
+  it('skips processor when cancelled before tick', async () => {
+    const queue = new InMemoryQueueAdapter();
+    const processor = vi.fn().mockResolvedValue(undefined);
+    queue.registerProcessor('video_generate', processor);
+    await queue.enqueue({
+      id: 'task-2',
+      type: 'video_generate',
+      idempotency_key: 'job-2',
+      payload: { output_id: 'output-2' },
+    });
+    await queue.cancel('job-2');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(processor).not.toHaveBeenCalled();
+  });
 });

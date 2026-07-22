@@ -86,8 +86,12 @@ export function registerWorkflowRoutes(
   app: FastifyInstance,
   db: PrismaClient,
   orchestrator = new WorkflowOrchestrator(db),
-  runner = new MockWorkflowRunner(db, orchestrator),
+  runnerOrFactory:
+    | MockWorkflowRunner
+    | (() => MockWorkflowRunner) = () => new MockWorkflowRunner(db, orchestrator),
 ): void {
+  const runner = () =>
+    typeof runnerOrFactory === 'function' ? runnerOrFactory() : runnerOrFactory;
   app.get('/projects/:projectId/workflows', async (request) => {
     const { projectId } = projectParams.parse(request.params);
     const { limit } = listRunsQuery.parse(request.query);
@@ -115,7 +119,7 @@ export function registerWorkflowRoutes(
       ...(body.story_id ? { story_id: body.story_id } : {}),
       ...(body.automation ? { automation: body.automation } : {}),
     });
-    return reply.status(202).send(await runner.runUntilGate(run.id, request.user.sub));
+    return reply.status(202).send(await runner().runUntilGate(run.id, request.user.sub));
   });
 
   app.get('/workflows/:runId', async (request) => {
@@ -127,7 +131,7 @@ export function registerWorkflowRoutes(
     const { runId } = runParams.parse(request.params);
     const body = reviewSchema.parse(request.body);
     await getRunForMember(db, request.user.sub, runId, true);
-    return runner.submitReview(runId, request.user.sub, body);
+    return runner().submitReview(runId, request.user.sub, body);
   });
 
   app.post('/workflows/:runId/cancel', async (request) => {

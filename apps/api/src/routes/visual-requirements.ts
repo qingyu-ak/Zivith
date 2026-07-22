@@ -1,7 +1,22 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import type { PrismaClient } from '@zivith/database';
+import { Prisma, type PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
+import {
+  mergeVisualPromptIntoAssetData,
+  readVisualPromptFromAssetData,
+} from '../contexts/agent/visual-trait.js';
+import { generateRequirementImage } from '../contexts/visual/generate-requirement-image.js';
+import { createProviderBundle } from '../providers/registry.js';
+import {
+  getRuntimeModelOverride,
+  getRuntimeProviderOverride,
+} from './providers.js';
+
+function json(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 const sceneParams = z.object({ id: z.string().uuid() });
 const requirementParams = z.object({ id: z.string().uuid(), rid: z.string().uuid() });
@@ -12,10 +27,16 @@ const requirementBody = z
     variant_key: z.string().trim().min(1).max(300),
     required: z.boolean().default(true),
     reason: z.string().trim().min(1).max(10_000),
+    generation_prompt: z.string().trim().min(1).max(5_000).optional(),
   })
   .strict();
 const approveBody = z.object({ media_id: z.string().uuid().optional() }).strict();
 const rejectBody = z.object({ reason: z.string().trim().max(10_000).optional() }).strict();
+const generateBody = z
+  .object({
+    prompt: z.string().trim().min(1).max(5_000).optional(),
+  })
+  .strict();
 
 async function sceneForMember(db: PrismaClient, sceneId: string, userId: string, write = false) {
   const scene = await db.scene.findFirst({
@@ -41,14 +62,64 @@ async function requirementForScene(db: PrismaClient, sceneId: string, requiremen
   return requirement;
 }
 
+function appearanceSummary(data: unknown, appearance: unknown): string | undefined {
+  if (appearance && typeof appearance === 'object' && !Array.isArray(appearance)) {
+    const custom = (appearance as Record<string, unknown>).custom;
+    if (typeof custom === 'string' && custom.trim()) return custom.trim();
+  }
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const visual = (data as Record<string, unknown>).visual;
+    if (visual && typeof visual === 'object' && !Array.isArray(visual)) {
+      const summary = (visual as Record<string, unknown>).appearance_summary;
+      if (typeof summary === 'string' && summary.trim()) return summary.trim();
+    }
+  }
+  return undefined;
+}
+
+async function enrichRequirement(db: PrismaClient, requirement: {
+  id: string;
+  sceneId: string;
+  assetType: string;
+  assetId: string;
+  variantKey: string;
+  required: boolean;
+  reason: string;
+  status: string;
+  candidateMediaIds: string[];
+  approvedMediaId: string | null;
+  version: number;
+}) {
+  const asset = await db.asset.findFirst({
+    where: { id: requirement.assetId, deletedAt: null },
+  });
+  const generationPrompt = asset
+    ? readVisualPromptFromAssetData(asset.data, requirement.variantKey)
+    : undefined;
+  return {
+    ...requirement,
+    generation_prompt: generationPrompt ?? null,
+    asset: asset
+      ? {
+          id: asset.id,
+          name: asset.name,
+          description: asset.description,
+          appearance_summary: appearanceSummary(asset.data, asset.appearance) ?? null,
+          type: asset.type,
+        }
+      : null,
+  };
+}
+
 export function registerVisualRequirementRoutes(app: FastifyInstance, db: PrismaClient): void {
   app.get('/scenes/:id/visual-requirements', async (request) => {
     const { id } = sceneParams.parse(request.params);
     await sceneForMember(db, id, request.user.sub);
-    return db.visualAssetRequirement.findMany({
+    const requirements = await db.visualAssetRequirement.findMany({
       where: { sceneId: id, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
+    return Promise.all(requirements.map((item) => enrichRequirement(db, item)));
   });
 
   app.post('/scenes/:id/visual-requirements', async (request, reply) => {
@@ -65,15 +136,34 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
         reason: body.reason,
       },
     });
-    return reply.status(201).send(requirement);
+    if (body.generation_prompt) {
+      const asset = await db.asset.findFirst({
+        where: { id: body.asset_id, deletedAt: null },
+      });
+      if (asset) {
+        await db.asset.update({
+          where: { id: asset.id },
+          data: {
+            data: json(
+              mergeVisualPromptIntoAssetData(
+                asset.data,
+                body.variant_key,
+                body.generation_prompt,
+              ),
+            ),
+          },
+        });
+      }
+    }
+    return reply.status(201).send(await enrichRequirement(db, requirement));
   });
 
   app.patch('/scenes/:id/visual-requirements/:rid', async (request) => {
     const { id, rid } = requirementParams.parse(request.params);
     await sceneForMember(db, id, request.user.sub, true);
-    await requirementForScene(db, id, rid);
+    const existing = await requirementForScene(db, id, rid);
     const body = requirementBody.partial().parse(request.body);
-    return db.visualAssetRequirement.update({
+    const requirement = await db.visualAssetRequirement.update({
       where: { id: rid },
       data: {
         assetType: body.asset_type,
@@ -85,6 +175,70 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
         approvedMediaId: null,
         version: { increment: 1 },
       },
+    });
+    if (body.generation_prompt) {
+      const assetId = body.asset_id ?? existing.assetId;
+      const variantKey = body.variant_key ?? existing.variantKey;
+      const asset = await db.asset.findFirst({ where: { id: assetId, deletedAt: null } });
+      if (asset) {
+        await db.asset.update({
+          where: { id: asset.id },
+          data: {
+            data: json(
+              mergeVisualPromptIntoAssetData(asset.data, variantKey, body.generation_prompt),
+            ),
+          },
+        });
+      }
+    }
+    return enrichRequirement(db, requirement);
+  });
+
+  app.post('/scenes/:id/visual-requirements/:rid/generate', async (request, reply) => {
+    const { id, rid } = requirementParams.parse(request.params);
+    await sceneForMember(db, id, request.user.sub, true);
+    const requirement = await requirementForScene(db, id, rid);
+    const body = generateBody.parse(request.body ?? {});
+    const asset = await db.asset.findFirst({
+      where: { id: requirement.assetId, deletedAt: null },
+    });
+    if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '关联资产不存在');
+
+    const prompt =
+      body.prompt?.trim() ||
+      readVisualPromptFromAssetData(asset.data, requirement.variantKey) ||
+      [asset.name, asset.description, requirement.reason, `variant ${requirement.variantKey}`]
+        .filter(Boolean)
+        .join(', ');
+
+    const providers = createProviderBundle(
+      getRuntimeProviderOverride(),
+      getRuntimeModelOverride(),
+    );
+    await db.visualAssetRequirement.update({
+      where: { id: rid },
+      data: { status: 'generating' },
+    });
+
+    const result = await generateRequirementImage({
+      db,
+      requirementId: rid,
+      image: providers.image,
+      imageModel: providers.imageModel,
+      prompt,
+      requestId: randomUUID(),
+    });
+    if (!result) throw new ApiError(404, 'VISUAL_REQUIREMENT_NOT_FOUND', '视觉需求不存在');
+
+    return reply.status(201).send({
+      ...(await enrichRequirement(db, result.requirement)),
+      media: {
+        id: result.media.id,
+        url: result.media.url,
+        access_url: result.media.url,
+      },
+      provider: providers.selection.image,
+      model: providers.imageModel,
     });
   });
 
@@ -117,7 +271,7 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
         },
       }),
     ]);
-    return approved;
+    return enrichRequirement(db, approved);
   });
 
   app.post('/scenes/:id/visual-requirements/:rid/reject', async (request) => {
@@ -125,9 +279,10 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
     await sceneForMember(db, id, request.user.sub, true);
     await requirementForScene(db, id, rid);
     rejectBody.parse(request.body ?? {});
-    return db.visualAssetRequirement.update({
+    const rejected = await db.visualAssetRequirement.update({
       where: { id: rid },
       data: { status: 'rejected', approvedMediaId: null, version: { increment: 1 } },
     });
+    return enrichRequirement(db, rejected);
   });
 }

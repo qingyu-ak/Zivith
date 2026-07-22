@@ -16,7 +16,9 @@ const statusLabels: Record<GenerationTaskDTO['status'], string> = {
 export function GenerationQueuePanel({ projectId }: { projectId: string }) {
   const [tasks, setTasks] = useState<GenerationTaskDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -40,6 +42,25 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
     return () => clearInterval(timer);
   }, [load]);
 
+  async function cancelTask(taskId: string) {
+    if (!confirm('确定取消该视频生成任务吗？')) return;
+    setCancellingId(taskId);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/projects/${projectId}/generation-tasks/${taskId}/cancel`, {
+        method: 'POST',
+        body: {},
+      });
+      setNotice('已取消任务（若供应商侧已开始，可能仍会短暂计费）');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   const active = tasks.some((task) => task.status === 'queued' || task.status === 'running');
 
   return (
@@ -48,7 +69,9 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
         <div>
           <p className="text-xs font-medium uppercase tracking-widest text-accent">Phase 2</p>
           <h2 className="mt-1 text-lg font-semibold">生成队列</h2>
-          <p className="mt-1 text-sm text-zinc-500">Mock 视频任务经队列执行；有 Redis 时走 BullMQ。</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            视频任务经队列执行；排队中可取消，生成中尽力取消。
+          </p>
         </div>
         <Button variant="ghost" onClick={() => void load()} disabled={loading}>
           刷新
@@ -59,6 +82,9 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
         <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
           {error}
         </p>
+      )}
+      {notice && (
+        <p className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-300">{notice}</p>
       )}
 
       {loading && tasks.length === 0 ? (
@@ -76,6 +102,7 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
             const payload = task.payload ?? {};
             const shotId =
               typeof payload.shot_id === 'string' ? payload.shot_id.slice(0, 8) : '—';
+            const canCancel = task.status === 'queued' || task.status === 'running';
             return (
               <div
                 key={task.id}
@@ -87,17 +114,28 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
                     {task.provider ?? 'mock'} · 尝试 {task.attempts}
                   </p>
                 </div>
-                <Badge
-                  tone={
-                    task.status === 'completed'
-                      ? 'success'
-                      : task.status === 'running' || task.status === 'queued'
-                        ? 'warning'
-                        : 'neutral'
-                  }
-                >
-                  {statusLabels[task.status]}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    tone={
+                      task.status === 'completed'
+                        ? 'success'
+                        : task.status === 'running' || task.status === 'queued'
+                          ? 'warning'
+                          : 'neutral'
+                    }
+                  >
+                    {statusLabels[task.status]}
+                  </Badge>
+                  {canCancel && (
+                    <Button
+                      variant="ghost"
+                      disabled={cancellingId === task.id}
+                      onClick={() => void cancelTask(task.id)}
+                    >
+                      {cancellingId === task.id ? '取消中…' : '取消'}
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}

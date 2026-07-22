@@ -124,5 +124,13 @@ export function unwrapList<T>(payload: T[] | { data?: T[]; items?: T[] }): T[] {
 }
 
 export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : '发生未知错误';
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) {
+    if (error.name === 'AbortError') return '';
+    if (/failed to fetch|networkerror|load failed/i.test(error.message)) {
+      return '无法连接服务器，请确认 API 已启动后刷新';
+    }
+    return error.message;
+  }
+  return '发生未知错误';
 }

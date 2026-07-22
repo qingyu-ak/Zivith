@@ -2,7 +2,6 @@ import type { FastifyInstance, HTTPMethods } from 'fastify';
 import { authenticate } from './auth.js';
 
 const routes: Array<[HTTPMethods, string]> = [
-  ['POST', '/scenes/:id/visual-requirements/:rid/generate'],
   ['PUT', '/provider-credentials/:provider'],
   ['DELETE', '/provider-credentials/:provider'],
   ['GET', '/projects/:pid/provider-usage'],

@@ -14,7 +14,7 @@ const listTasksQuery = z.object({
 const generateBody = z
   .object({
     request_id: z.string().trim().min(1).max(200).optional(),
-    model: z.literal('mock-v1').default('mock-v1'),
+    model: z.string().trim().min(1).max(200).optional(),
     async: z.boolean().optional(),
   })
   .strict();
@@ -57,7 +57,7 @@ export function registerGenerationRoutes(
     await requireShotMember(db, id, request.user.sub, true);
     const body = generateBody.parse(request.body ?? {});
     const output = await service.generate(id, {
-      model: body.model,
+      ...(body.model ? { model: body.model } : {}),
       ...(body.request_id ? { requestId: body.request_id } : {}),
       ...(body.async !== undefined ? { async: body.async } : {}),
     });
@@ -82,6 +82,26 @@ export function registerGenerationRoutes(
       orderBy: { createdAt: 'desc' },
       take: query.limit,
     });
+  });
+
+  app.post('/projects/:projectId/generation-tasks/:taskId/cancel', async (request) => {
+    const params = z
+      .object({ projectId: z.string().uuid(), taskId: z.string().uuid() })
+      .parse(request.params);
+    await requireProjectMember(db, params.projectId, request.user.sub);
+    const member = await db.projectMember.findUnique({
+      where: {
+        projectId_userId: { projectId: params.projectId, userId: request.user.sub },
+      },
+    });
+    if (!member || member.role === 'viewer') {
+      throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
+    }
+    const task = await db.task.findFirst({
+      where: { id: params.taskId, projectId: params.projectId },
+    });
+    if (!task) throw new ApiError(404, 'TASK_NOT_FOUND', '生成任务不存在');
+    return service.cancelTask(task.id);
   });
 
   app.post('/shots/:id/outputs/:oid/activate', async (request) => {

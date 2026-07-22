@@ -20,7 +20,7 @@ Recently landed (commits through `05d078e`):
 - Frontend: [`apps/web/components/workflow-panel.tsx`](../apps/web/components/workflow-panel.tsx) on the project page; shot editor prompt approve + mock outputs
 - Domain: [`packages/domain/src/workflow.ts`](../packages/domain/src/workflow.ts)
 
-Still stubbed (501): workflow SSE events, visual-requirement image generate, BYOK credentials, provider usage/limits/callbacks — see [`apps/api/src/routes/stubs.ts`](../apps/api/src/routes/stubs.ts).
+Still stubbed (501): BYOK credentials, provider usage/limits/callbacks — see [`apps/api/src/routes/stubs.ts`](../apps/api/src/routes/stubs.ts). (Workflow SSE and visual-requirement generate are implemented.)
 
 ---
 
@@ -62,14 +62,33 @@ Do after Track A exit.
 
 Do after Track B (or explicitly re-prioritize).
 
-| ID | Task |
-|----|------|
-| C1 | `DeepSeekAdapter` structured output for Story/Scene/Shot/Prompt agents |
-| C2 | `TongyiWanxiangAdapter` for Character/Location key images + `visual-requirements/:rid/generate` |
-| C3 | `KlingAdapter` image-to-video |
-| C4 | Server-only BYOK credential store (replace stubs) |
-| C5 | Unified provider job states + usage/cost records |
-| C6 | Contract tests + one minimal E2E across the three adapters |
+| ID | Task | Status |
+|----|------|--------|
+| C1 | `DeepSeekAdapter` structured output for Story/Scene/Shot/Prompt agents | Done |
+| C2 | SiliconFlow image adapter + visual prep wiring | Done |
+| C3 | SiliconFlow video adapter + generation path | Done |
+| C4 | SiliconFlow audio / dialogue TTS + Media | Done |
+| C5 | Provider catalog + runtime selection API/UI (keep multi-vendor choice) | Done |
+| C6 | Contract tests (mock fetch) | Done |
+| C7 | Per-project BYOK credential store (replace stubs) | Later |
+| C8 | Usage/cost records | Later |
+
+**Provider set (2026-07-21 decision):** DeepSeek for text; SiliconFlow for image / video / audio. Mock remains the no-key fallback.
+
+---
+
+## Track D — Workflow revisit & Visual Prep depth
+
+Do after Track C core (or in parallel with polish).
+
+| ID | Task | Status |
+|----|------|--------|
+| D1 | Click completed/current workflow steps for **read-only** artifact revisit | Done 2026-07-21 |
+| D2 | Visual Prep: LLM trait drafts on Character/Location + per-requirement generation prompts | Done 2026-07-21 |
+| D3 | `POST .../visual-requirements/:rid/generate` (edit prompt → regenerate image) | Done 2026-07-21 |
+| D4 | Arbitrary step time-travel rollback / reopen any passed gate | **Not planned** — never a first-class doc item; use current-gate `reject`/`retry`, entity unfreeze, or cancel+restart |
+
+**Product note:** Docs never listed “click completed steps to edit history” or full timeline rollback. Track D adds **read-only revisit** only. Visual Prep aligns toward「特征/生图提示词 → 可审 → 出图」using story + approved scenes (not a Chapter file model).
 
 ---
 
@@ -84,7 +103,9 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓
          Track B exit → Phase 2 closed
               ↓
-         C1…C6 (Phase 2.5)
+         C1…C6 (Phase 2.5 core) → C7/C8 later
+              ↓
+         D1…D3 (revisit + visual depth) — D4 not planned
 ```
 
 ---
@@ -96,6 +117,7 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
 - Staging cloud deploy — Phase 0 leftover, not blocking Track A
 - Director Copilot sidebar — see [Director-Copilot-RFC.md](architecture/rfc/Director-Copilot-RFC.md); Phase 3+, v1 Q&A only
 - Renaming historical design docs beyond the 2026-07-21 archive pass
+- **Arbitrary workflow step time-travel rollback** — not documented as a deliverable; see Track D4
 
 ---
 

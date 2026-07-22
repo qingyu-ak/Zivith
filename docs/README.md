@@ -84,7 +84,7 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | Domain / DB | `@zivith/domain` + Prisma / PostgreSQL 16 |
 | Object Storage | S3-compatible (MinIO locally) |
 | Job Queue | BullMQ when `REDIS_URL` is set; in-process memory queue fallback otherwise |
-| AI Integration | Mock LLM + Mock video adapters (Phase 2); real providers in Phase 2.5 |
+| AI Integration | DeepSeek (LLM) + SiliconFlow (image/video/audio) with Mock fallback; multi-vendor selection |
 
 Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 
@@ -97,12 +97,12 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 | Phase 0 Foundation | ~95% done | BullMQ wired when REDIS_URL set; no staging deploy |
 | Phase 1 Core Domain | ~90% done | Inheritance is read-time resolve; Character/Location only |
 | Phase 2 AI Agent + Mock Gen | ~85% done | Queue + SSE + recover landed; mock providers remain |
-| Phase 2.5 First Providers | Not started | DeepSeek + Tongyi Wanxiang + Kling |
+| Phase 2.5 First Providers | In progress | DeepSeek + SiliconFlow (image/video/audio); Mock fallback |
 | Phase 3–5 | Not started | — |
 
 **Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
 **Strategy:** B-Line — Agent pipeline first, video generation mocked.  
-**Near-term focus:** Track B closed; next is Phase 2.5 providers. See [Next Tasks](Next-Tasks.md).
+**Near-term focus:** Phase 2.5 providers (DeepSeek + SiliconFlow). See [Next Tasks](Next-Tasks.md).
 
 ---
 

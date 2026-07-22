@@ -6,10 +6,19 @@ import { S3Client } from '@aws-sdk/client-s3';
 import { prisma, type PrismaClient } from '@zivith/database';
 import { S3StorageAdapter } from './adapters/s3.js';
 import { GenerationService } from './contexts/generation/service.js';
+import { MockWorkflowRunner } from './contexts/workflow/mock-runner.js';
+import { WorkflowOrchestrator } from './contexts/workflow/orchestrator.js';
 import { registerErrorHandler } from './errors.js';
 import type { StoragePort } from './ports/index.js';
-import { registerAuthRoutes } from './routes/auth.js';
+import { createProviderBundle } from './providers/registry.js';
+import { registerAudioRoutes } from './routes/audio.js';
+import { authenticate, registerAuthRoutes } from './routes/auth.js';
 import { registerGenerationRoutes } from './routes/generation.js';
+import {
+  getRuntimeModelOverride,
+  getRuntimeProviderOverride,
+  registerProviderRoutes,
+} from './routes/providers.js';
 import { registerResourceRoutes } from './routes/resources.js';
 import { registerShotPromptRoutes } from './routes/shot-prompts.js';
 import { registerStubRoutes } from './routes/stubs.js';
@@ -60,10 +69,15 @@ function storageFromEnvironment(): StoragePort | undefined {
   return new S3StorageAdapter(client, bucket, process.env.S3_PUBLIC_BASE_URL);
 }
 
+function resolveVideoAdapter() {
+  return createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()).video;
+}
+
 export async function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: options.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
   const db = options.db ?? prisma;
-  const generationService = options.generationService ?? new GenerationService(db);
+  const generationService =
+    options.generationService ?? new GenerationService(db, resolveVideoAdapter);
   const jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET;
   if (!jwtSecret || jwtSecret.length < 32)
     throw new Error('JWT_SECRET must contain at least 32 characters');
@@ -84,17 +98,29 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   registerErrorHandler(app);
 
+  const storage = options.storage ?? storageFromEnvironment();
+  const orchestrator = new WorkflowOrchestrator(db);
+  const createRunner = () =>
+    new MockWorkflowRunner(
+      db,
+      orchestrator,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+
   app.get('/health', () => ({ status: 'ok' }));
   app.register(
     (api, _options, done) => {
       registerAuthRoutes(api, db);
       api.register((protectedApi, _protectedOptions, protectedDone) => {
+        protectedApi.addHook('preHandler', authenticate);
         registerGenerationRoutes(protectedApi, db, generationService);
-        registerResourceRoutes(protectedApi, db, options.storage ?? storageFromEnvironment());
+        registerResourceRoutes(protectedApi, db, storage);
         registerShotPromptRoutes(protectedApi, db);
         registerVisualRequirementRoutes(protectedApi, db);
-        registerWorkflowRoutes(protectedApi, db);
+        registerWorkflowRoutes(protectedApi, db, orchestrator, createRunner);
         registerWorkflowEventRoutes(protectedApi, db);
+        registerProviderRoutes(protectedApi);
+        registerAudioRoutes(protectedApi, db, storage);
         protectedDone();
       });
       registerStubRoutes(api);

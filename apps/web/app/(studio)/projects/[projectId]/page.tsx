@@ -10,6 +10,7 @@ import { getFormText } from '@/lib/form-data';
 import type { ProjectDTO, StoryDTO } from '@/lib/types';
 import { WorkflowPanel } from '@/components/workflow-panel';
 import { GenerationQueuePanel } from '@/components/generation-queue-panel';
+import { ProviderPanel } from '@/components/provider-panel';
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -138,6 +139,7 @@ export default function ProjectPage() {
           </form>
         </Card>
       )}
+      <ProviderPanel />
       <WorkflowPanel projectId={projectId} onArtifactsChanged={load} />
       <GenerationQueuePanel projectId={projectId} />
       {stories.length === 0 ? (

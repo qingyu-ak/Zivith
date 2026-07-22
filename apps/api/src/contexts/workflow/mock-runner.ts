@@ -6,8 +6,6 @@ import {
   type StageAutomation,
 } from '@zivith/domain';
 import { Prisma, type PrismaClient } from '@zivith/database';
-import { mockAgentResponder } from '../../adapters/mock-agent-responder.js';
-import { MockLLMAdapter } from '../../adapters/mock-llm.js';
 import { GenerationService } from '../generation/service.js';
 import { ApiError } from '../../errors.js';
 import { AgentRuntime } from '../agent/runtime.js';
@@ -17,6 +15,13 @@ import { SceneAgent, type GeneratedScenes } from '../agent/scene-agent.js';
 import { ShotAgent, type ShotAgentScene, type ShotAgentOutput } from '../agent/shot-agent.js';
 import { StoryAgent, type GeneratedStory } from '../agent/story-agent.js';
 import { VisualPrepAgent, type VisualPrepScene } from '../agent/visual-prep-agent.js';
+import {
+  enrichVisualAssetTraits,
+  mergeVisualPromptIntoAssetData,
+} from '../agent/visual-trait.js';
+import { createProviderBundle, type ProviderBundle } from '../../providers/registry.js';
+import type { ImageGenerationAdapter } from '../../ports/media.js';
+import type { LLMAdapter } from '../../ports/llm.js';
 import { WorkflowOrchestrator, type SubmitReviewInput } from './orchestrator.js';
 
 type WorkflowWithSteps = Awaited<ReturnType<MockWorkflowRunner['getRun']>>;
@@ -40,6 +45,13 @@ function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
+/** Local SVG placeholder — avoids placehold.co which is often blocked in CN. */
+function svgPlaceholderDataUrl(label: string, size = 1024): string {
+  const text = label.slice(0, 18).replace(/[<>&'"]/g, '');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect fill="#141414" width="100%" height="100%"/><text x="50%" y="50%" fill="#a3e635" font-family="sans-serif" font-size="42" text-anchor="middle" dominant-baseline="middle">${text}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 export class MockWorkflowRunner {
   private readonly runtime = new AgentRuntime();
   private readonly storyAgent: StoryAgent;
@@ -49,15 +61,25 @@ export class MockWorkflowRunner {
   private readonly shotAgent = new ShotAgent();
   private readonly promptAgent = new PromptAgent();
   private readonly generationService: GenerationService;
+  private readonly imageAdapter: ImageGenerationAdapter;
+  private readonly imageModel: string;
+  private readonly llm: LLMAdapter;
+  private readonly llmModel: string;
+  private readonly providers: ProviderBundle;
 
   constructor(
     private readonly db: PrismaClient,
     private readonly orchestrator: WorkflowOrchestrator,
+    providers: ProviderBundle = createProviderBundle(),
   ) {
-    const llm = new MockLLMAdapter({ responder: mockAgentResponder });
-    this.storyAgent = new StoryAgent(llm);
-    this.sceneAgent = new SceneAgent(llm);
-    this.generationService = new GenerationService(db);
+    this.providers = providers;
+    this.storyAgent = new StoryAgent(providers.llm, providers.llmModel);
+    this.sceneAgent = new SceneAgent(providers.llm, providers.llmModel);
+    this.generationService = new GenerationService(db, providers.video);
+    this.imageAdapter = providers.image;
+    this.imageModel = providers.imageModel;
+    this.llm = providers.llm;
+    this.llmModel = providers.llmModel;
   }
 
   async runUntilGate(runId: string, userId: string): Promise<WorkflowWithSteps> {
@@ -308,6 +330,13 @@ export class MockWorkflowRunner {
       });
     }
 
+    const storyOutput = record(run.steps.find((step) => step.name === 'story')?.output);
+    const storyId = typeof storyOutput.story_id === 'string' ? storyOutput.story_id : null;
+    const story = storyId
+      ? await this.db.story.findFirst({ where: { id: storyId, deletedAt: null } })
+      : null;
+    const storyScreenplay = story?.screenplay?.slice(0, 4_000);
+
     const result = await this.runtime.execute(
       this.visualPrepAgent,
       { scenes: prepScenes },
@@ -321,31 +350,157 @@ export class MockWorkflowRunner {
       );
     }
     const requirementIds: string[] = [];
+    const enrichedAssetIds = new Set<string>();
     for (const requirement of result.data.requirements) {
       const requirementId = deterministicUuid(
         `${run.id}:requirement:${requirement.scene_id}:${requirement.asset_type}:${requirement.asset_id}:${requirement.variant_key}`,
       );
       const mediaId = deterministicUuid(`${requirementId}:candidate`);
       const asset = await this.db.asset.findUniqueOrThrow({ where: { id: requirement.asset_id } });
+      const sceneMeta = scenes[sceneIds.indexOf(requirement.scene_id)] ?? {};
+      const sceneTitle = String(sceneMeta.title ?? requirement.reason);
+
+      let generationPrompt = [
+        asset.name,
+        asset.description,
+        requirement.reason,
+        `variant ${requirement.variant_key}`,
+        'cinematic key visual, high detail',
+      ]
+        .filter(Boolean)
+        .join(', ');
+
+      if (!enrichedAssetIds.has(asset.id)) {
+        const traits = await enrichVisualAssetTraits(
+          this.llm,
+          this.llmModel,
+          `${run.id}:trait:${asset.id}`,
+          {
+            asset_type: requirement.asset_type,
+            asset_name: asset.name,
+            variant_key: requirement.variant_key,
+            scene_title: sceneTitle,
+            scene_context: [
+              typeof sceneMeta.summary === 'string' ? sceneMeta.summary : '',
+              typeof sceneMeta.description === 'string' ? sceneMeta.description : '',
+              typeof sceneMeta.mood === 'string' ? `mood:${sceneMeta.mood}` : '',
+              typeof sceneMeta.time_of_day === 'string' ? `time:${sceneMeta.time_of_day}` : '',
+            ]
+              .filter(Boolean)
+              .join(' | '),
+            story_title: story?.title,
+            story_synopsis: story?.synopsis ?? undefined,
+            story_screenplay_excerpt: storyScreenplay,
+            existing_description: asset.description,
+          },
+        );
+        generationPrompt = traits.generation_prompt;
+        await this.db.asset.update({
+          where: { id: asset.id },
+          data: {
+            description: traits.description,
+            appearance: json({
+              custom: traits.appearance_summary,
+            }),
+            data: json(
+              mergeVisualPromptIntoAssetData(
+                asset.data,
+                requirement.variant_key,
+                traits.generation_prompt,
+                traits.appearance_summary,
+              ),
+            ),
+          },
+        });
+        enrichedAssetIds.add(asset.id);
+      } else {
+        const refreshed = await this.db.asset.findUniqueOrThrow({ where: { id: asset.id } });
+        const fromData = record(record(refreshed.data).visual);
+        const prompts = record(fromData.generation_prompts);
+        if (typeof prompts[requirement.variant_key] === 'string') {
+          generationPrompt = String(prompts[requirement.variant_key]);
+        } else {
+          const traits = await enrichVisualAssetTraits(
+            this.llm,
+            this.llmModel,
+            `${run.id}:trait:${asset.id}:${requirement.variant_key}`,
+            {
+              asset_type: requirement.asset_type,
+              asset_name: refreshed.name,
+              variant_key: requirement.variant_key,
+              scene_title: sceneTitle,
+              story_title: story?.title,
+              story_synopsis: story?.synopsis ?? undefined,
+              existing_description: refreshed.description,
+            },
+          );
+          generationPrompt = traits.generation_prompt;
+          await this.db.asset.update({
+            where: { id: asset.id },
+            data: {
+              data: json(
+                mergeVisualPromptIntoAssetData(
+                  refreshed.data,
+                  requirement.variant_key,
+                  traits.generation_prompt,
+                  traits.appearance_summary,
+                ),
+              ),
+            },
+          });
+        }
+      }
+
+      let imageUrl = svgPlaceholderDataUrl(asset.name);
+      let provider = this.imageAdapter.provider;
+      let isMock = provider === 'mock';
+      try {
+        const generated = await this.imageAdapter.generate({
+          request_id: `${run.id}:${requirementId}`,
+          model: this.imageModel,
+          prompt: generationPrompt,
+        });
+        if (generated.image_url) imageUrl = generated.image_url;
+        isMock = Boolean(generated.metadata.is_mock);
+      } catch (error) {
+        provider = 'mock-fallback';
+        isMock = true;
+        console.warn(
+          '[visual-prep] image generation failed, using placeholder',
+          error instanceof Error ? error.message : error,
+        );
+      }
       await this.db.media.upsert({
         where: { id: mediaId },
         create: {
           id: mediaId,
           projectId: run.projectId,
-          name: `${asset.name} Mock Key Image`,
+          name: `${asset.name} Key Image`,
           mediaType: 'image',
           mimeType: 'image/png',
-          storageKey: `mock/visual-assets/${mediaId}.png`,
-          url: `https://placehold.co/1024x1024/png?text=${encodeURIComponent(asset.name)}`,
+          storageKey: `visual-assets/${mediaId}.png`,
+          url: imageUrl,
           source: 'generated',
           generationMetadata: {
-            is_mock: true,
-            provider: 'mock',
+            is_mock: isMock,
+            provider,
+            model: this.imageModel,
             workflow_run_id: run.id,
+            generation_prompt: generationPrompt,
           },
-          tags: ['mock-generated', requirement.asset_type],
+          tags: ['generated', requirement.asset_type],
         },
-        update: { deletedAt: null },
+        update: {
+          deletedAt: null,
+          url: imageUrl,
+          generationMetadata: {
+            is_mock: isMock,
+            provider,
+            model: this.imageModel,
+            workflow_run_id: run.id,
+            generation_prompt: generationPrompt,
+          },
+        },
       });
       await this.db.visualAssetRequirement.upsert({
         where: { id: requirementId },
@@ -376,6 +531,7 @@ export class MockWorkflowRunner {
       requirement_ids: requirementIds,
       asset_ids: [...assetIds],
       agent_metadata: result.metadata,
+      image_provider: this.providers.selection.image,
     });
   }
 
@@ -524,14 +680,15 @@ export class MockWorkflowRunner {
       shotIds.map((shotId) =>
         this.generationService.generate(shotId, {
           requestId: `${run.id}:${shotId}`,
-          model: 'mock-v1',
+          model: this.providers.videoModel,
         }),
       ),
     );
     await this.orchestrator.completeStep(run.id, 'video', {
       shot_ids: shotIds,
       output_ids: outputs.map((output) => output.id),
-      provider: 'mock',
+      provider: this.providers.selection.video,
+      model: this.providers.videoModel,
     });
   }
 

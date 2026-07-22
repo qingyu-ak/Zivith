@@ -9,7 +9,82 @@ import {
 } from '@zivith/domain';
 import type { LLMAdapter } from '../../ports/llm.js';
 
-export const generatedStorySchema = z
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asText(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    const parts = value
+      .map((item) => asText(item))
+      .filter((item): item is string => Boolean(item));
+    if (parts.length > 0) return parts.join('；');
+  }
+  return undefined;
+}
+
+function scenesToScreenplay(scenes: unknown): string | undefined {
+  if (!Array.isArray(scenes) || scenes.length === 0) return undefined;
+  return scenes
+    .map((scene, index) => {
+      const item = record(scene);
+      const order =
+        typeof item.order === 'number' && Number.isFinite(item.order) ? item.order : index + 1;
+      const title = asText(item.title) ?? `场景 ${order}`;
+      const body =
+        asText(item.screenplay) ??
+        asText(item.description) ??
+        asText(item.summary) ??
+        asText(item.content) ??
+        asText(item.action) ??
+        '';
+      const location = asText(item.location_name) ?? asText(item.location);
+      const header = location ? `## Scene ${order}: ${title}（${location}）` : `## Scene ${order}: ${title}`;
+      return `${header}\n${body}`.trim();
+    })
+    .join('\n\n');
+}
+
+/** Map common LLM shape variants into the canonical story payload. */
+export function normalizeGeneratedStoryInput(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const obj = raw as Record<string, unknown>;
+  const theme = asText(obj.theme) ?? asText(obj.themes);
+  const combinedSynopsis = [asText(obj.logline), asText(obj.ending)]
+    .filter(Boolean)
+    .join('\n\n');
+  const synopsis =
+    asText(obj.synopsis) ??
+    asText(obj.summary) ??
+    asText(obj.overview) ??
+    (combinedSynopsis || undefined);
+  const screenplay =
+    asText(obj.screenplay) ??
+    asText(obj.script) ??
+    asText(obj.screen_play) ??
+    scenesToScreenplay(obj.scenes) ??
+    synopsis;
+  const genre = asText(obj.genre) ?? asText(obj.genres) ?? '剧情';
+  const tone = asText(obj.tone) ?? asText(obj.mood) ?? asText(obj.atmosphere) ?? '克制而温暖';
+  const title = asText(obj.title) ?? '未命名故事';
+  const logline = asText(obj.logline) ?? asText(obj.one_liner) ?? synopsis?.slice(0, 500);
+
+  return {
+    title,
+    logline,
+    synopsis,
+    genre,
+    theme: theme ?? '待定',
+    tone,
+    screenplay,
+  };
+}
+
+const generatedStoryShape = z
   .object({
     title: z.string().trim().min(1).max(300),
     logline: z.string().trim().min(1).max(10_000),
@@ -21,13 +96,36 @@ export const generatedStorySchema = z
   })
   .strict();
 
-export type GeneratedStory = z.infer<typeof generatedStorySchema>;
+export const generatedStorySchema = z.preprocess(
+  normalizeGeneratedStoryInput,
+  generatedStoryShape,
+) as z.ZodType<GeneratedStory>;
+
+export type GeneratedStory = z.infer<typeof generatedStoryShape>;
 
 export interface StoryAgentInput {
   brief: string;
   language?: string;
   target_duration_seconds?: number;
 }
+
+const STORY_SYSTEM_PROMPT = `You are STORY_AGENT for an AI film studio.
+Return ONLY one JSON object. No markdown fences. No extra keys.
+
+Required keys (all strings):
+- title
+- logline
+- synopsis
+- genre
+- theme
+- tone
+- screenplay
+
+Rules:
+- language follows the creative brief (default zh-CN)
+- screenplay must be a continuous screenplay text (scene headings + action + dialogue), NOT a scenes array
+- theme is a single string (not "themes")
+- do not include scenes, ending, themes, cast, or other extra fields`;
 
 export class StoryAgent implements Agent<StoryAgentInput, GeneratedStory> {
   readonly id = 'story';
@@ -63,14 +161,22 @@ export class StoryAgent implements Agent<StoryAgentInput, GeneratedStory> {
       {
         request_id: `${context.workflow_run_id}:story`,
         model: this.model,
-        system_prompt:
-          'You are STORY_AGENT. Return a complete cinematic story as strict JSON matching the requested schema.',
+        system_prompt: STORY_SYSTEM_PROMPT,
         user_prompt: JSON.stringify({
           creative_brief: input.brief,
           language: input.language ?? 'zh-CN',
           target_duration_seconds: input.target_duration_seconds ?? 180,
+          required_schema: {
+            title: 'string',
+            logline: 'string',
+            synopsis: 'string',
+            genre: 'string',
+            theme: 'string',
+            tone: 'string',
+            screenplay: 'string',
+          },
         }),
-        temperature: 0.8,
+        temperature: 0.6,
         max_tokens: 8_000,
       },
       generatedStorySchema,

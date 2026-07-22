@@ -108,9 +108,15 @@ export interface ShotDTO {
 
 export interface MediaDTO {
   id: string;
+  project_id?: string;
   url: string;
   thumbnail_url?: string;
   name?: string;
+  media_type?: string;
+  mime_type?: string;
+  source?: string;
+  tags?: string[];
+  created_at?: string;
 }
 
 export interface AssetDTO {
@@ -203,6 +209,14 @@ export interface VisualRequirementDTO {
   status: 'pending' | 'generating' | 'review' | 'approved' | 'rejected';
   candidate_media_ids: string[];
   approved_media_id?: string | null;
+  generation_prompt?: string | null;
+  asset?: {
+    id: string;
+    name: string;
+    description: string;
+    appearance_summary?: string | null;
+    type?: string;
+  } | null;
 }
 
 export interface WorkflowMediaDTO {
@@ -242,4 +256,36 @@ export interface GenerationTaskDTO {
   started_at?: string | null;
   completed_at?: string | null;
   error_code?: string | null;
+}
+
+export type ProviderId = 'mock' | 'deepseek' | 'siliconflow';
+
+export interface ProviderModelsDTO {
+  llm: string;
+  image: string;
+  video: string;
+  audio: string;
+}
+
+export interface ProviderCatalogDTO {
+  selection: {
+    llm: ProviderId;
+    image: ProviderId;
+    video: ProviderId;
+    audio: ProviderId;
+  };
+  models: ProviderModelsDTO;
+  providers: Array<{
+    id: ProviderId;
+    label: string;
+    modalities: Array<'llm' | 'image' | 'video' | 'audio'>;
+    configured: boolean;
+    default_model?: string;
+    default_models?: Partial<ProviderModelsDTO>;
+    base_url?: string;
+  }>;
+  runtime_override?: {
+    selection?: Partial<ProviderCatalogDTO['selection']>;
+    models?: Partial<ProviderModelsDTO>;
+  };
 }
