@@ -1,8 +1,4 @@
-import type {
-  AudioSpeechAdapter,
-  AudioSpeechRequest,
-  AudioSpeechResult,
-} from '../ports/media.js';
+import type { AudioSpeechAdapter, AudioSpeechRequest, AudioSpeechResult } from '../ports/media.js';
 
 export interface SiliconFlowAudioAdapterOptions {
   apiKey: string;
@@ -40,9 +36,7 @@ export class SiliconFlowAudioAdapter implements AudioSpeechAdapter {
         // CosyVoice expects `model:voice`; OpenAI-compatible voices use short names.
         voice:
           request.voice ??
-          (request.model.includes('CosyVoice')
-            ? `${request.model}:alex`
-            : 'alloy'),
+          (request.model.includes('CosyVoice') ? `${request.model}:alex` : 'alloy'),
         response_format: 'mp3',
         sample_rate: 32_000,
         ...(request.speed !== undefined ? { speed: request.speed } : {}),

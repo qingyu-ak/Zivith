@@ -8,11 +8,15 @@ function parseUserPrompt(request: CompletionRequest): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+function asText(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
 export function mockAgentResponder(request: CompletionRequest): unknown {
   const input = parseUserPrompt(request);
 
   if (request.system_prompt.includes('STORY_AGENT')) {
-    const brief = String(input.creative_brief ?? '未命名故事');
+    const brief = asText(input.creative_brief, '未命名故事');
     const title = brief.replace(/[。！？.!?].*$/s, '').slice(0, 30) || '未命名故事';
     return {
       title,
@@ -34,7 +38,7 @@ export function mockAgentResponder(request: CompletionRequest): unknown {
       input.story && typeof input.story === 'object'
         ? (input.story as Record<string, unknown>)
         : {};
-    const title = String(story.title ?? '未命名故事');
+    const title = asText(story.title, '未命名故事');
     return {
       scenes: [
         {

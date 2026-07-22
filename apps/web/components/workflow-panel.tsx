@@ -60,7 +60,9 @@ const automationStages = [
 ] as const;
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 
 function stepOutput(run: WorkflowRunDTO, name: WorkflowStepName): Record<string, unknown> {
@@ -155,7 +157,9 @@ function canApproveArtifacts(
   return true;
 }
 
-function readAutomation(form: FormData): Record<(typeof automationStages)[number][0], AutomationLevel> {
+function readAutomation(
+  form: FormData,
+): Record<(typeof automationStages)[number][0], AutomationLevel> {
   const allowed = new Set<string>(Object.keys(automationLabels));
   const result = {} as Record<(typeof automationStages)[number][0], AutomationLevel>;
   for (const [key] of automationStages) {
@@ -254,7 +258,10 @@ export function WorkflowPanel({
           buffer = chunks.pop() ?? '';
           for (const chunk of chunks) {
             const lines = chunk.split('\n');
-            const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim();
+            const event = lines
+              .find((line) => line.startsWith('event:'))
+              ?.slice(6)
+              .trim();
             const dataLine = lines.find((line) => line.startsWith('data:'));
             if (!dataLine) continue;
             try {
@@ -431,9 +438,7 @@ export function WorkflowPanel({
                   source: 'missing',
                   created_at: '',
                 },
-                issue: promptId
-                  ? `找不到提示词版本 ${promptId.slice(0, 8)}…`
-                  : '缺少提示词版本',
+                issue: promptId ? `找不到提示词版本 ${promptId.slice(0, 8)}…` : '缺少提示词版本',
               } satisfies PromptReviewItem;
             }
             const shotPositive = shot.prompt?.positive?.trim() ?? '';
@@ -617,9 +622,7 @@ export function WorkflowPanel({
       setRun(updated);
       setFeedback('');
       setArtifactWarning('');
-      setNotice(
-        action === 'approve' ? '审核已通过，工作流继续推进。' : '已按反馈重新排队生成。',
-      );
+      setNotice(action === 'approve' ? '审核已通过，工作流继续推进。' : '已按反馈重新排队生成。');
       await onArtifactsChanged();
     } catch (reason) {
       setError(errorMessage(reason));
@@ -780,7 +783,11 @@ export function WorkflowPanel({
               <Field
                 key={key}
                 label={`${label}自动化`}
-                hint={key === 'prompt' || key === 'visual_assets' ? '强制人工审核，全自动也会停闸' : undefined}
+                hint={
+                  key === 'prompt' || key === 'visual_assets'
+                    ? '强制人工审核，全自动也会停闸'
+                    : undefined
+                }
               >
                 <Select name={`automation.${key}`} defaultValue="assisted">
                   {(Object.keys(automationLabels) as AutomationLevel[]).map((level) => (
@@ -805,9 +812,7 @@ export function WorkflowPanel({
           <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
             {run.steps.map((step) => {
               const selectable =
-                step.status === 'completed' ||
-                step.status === 'running' ||
-                step.name === review;
+                step.status === 'completed' || step.status === 'running' || step.name === review;
               const selected = selectedStep === step.name;
               return (
                 <button
@@ -935,7 +940,8 @@ export function WorkflowPanel({
               ) : (
                 visualItems.map(({ requirement, media, sceneTitle, issue }) => {
                   const imageSrc = media?.access_url || media?.url || '';
-                  const typeLabel = requirement.asset_type === 'character' ? '角色关键图' : '地点参考';
+                  const typeLabel =
+                    requirement.asset_type === 'character' ? '角色关键图' : '地点参考';
                   const draft = promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '';
                   return (
                     <div

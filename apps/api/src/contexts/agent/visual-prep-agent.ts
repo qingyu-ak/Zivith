@@ -36,7 +36,8 @@ export class VisualPrepAgent implements Agent<VisualPrepAgentInput, VisualPrepOu
   readonly id = 'visual_prep';
   readonly name = 'Visual Prep Agent';
 
-  validate(input: VisualPrepAgentInput, _context: AgentContext): ValidationResult {
+  validate(input: VisualPrepAgentInput, context: AgentContext): ValidationResult {
+    void context;
     if (input.scenes.length === 0) {
       return {
         valid: false,
@@ -46,14 +47,16 @@ export class VisualPrepAgent implements Agent<VisualPrepAgentInput, VisualPrepOu
     return validAgentInput();
   }
 
-  estimate(input: VisualPrepAgentInput, _context: AgentContext): CostEstimate {
+  estimate(input: VisualPrepAgentInput, context: AgentContext): CostEstimate {
+    void context;
     return { model: 'mock-visual-prep-v1', estimated_tokens: input.scenes.length * 100 };
   }
 
-  async execute(
+  execute(
     input: VisualPrepAgentInput,
-    _context: AgentContext,
+    context: AgentContext,
   ): Promise<AgentResult<VisualPrepOutput>> {
+    void context;
     const requirements = input.scenes.flatMap((scene) => [
       {
         scene_id: scene.scene_id,
@@ -72,7 +75,7 @@ export class VisualPrepAgent implements Agent<VisualPrepAgentInput, VisualPrepOu
         reason: `场景“${scene.title}”中的实体角色需要已审核关键图`,
       })),
     ]);
-    return {
+    return Promise.resolve({
       status: 'success',
       data: { requirements },
       warnings: [],
@@ -83,6 +86,6 @@ export class VisualPrepAgent implements Agent<VisualPrepAgentInput, VisualPrepOu
         duration_ms: 0,
         timestamp: new Date().toISOString(),
       },
-    };
+    });
   }
 }

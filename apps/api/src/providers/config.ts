@@ -53,9 +53,7 @@ export function loadProviderModels(): ProviderModels {
 }
 
 /** Defaults favor real providers when keys exist; otherwise mock. */
-export function loadProviderSelection(
-  override?: Partial<ProviderSelection>,
-): ProviderSelection {
+export function loadProviderSelection(override?: Partial<ProviderSelection>): ProviderSelection {
   const credentials = loadProviderCredentials();
   const defaults: ProviderSelection = {
     llm: credentials.deepseekApiKey ? 'deepseek' : 'mock',

@@ -7,13 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Badge, Button, Card, Field, Input, Select, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormList, getOptionalFormText } from '@/lib/form-data';
-import type {
-  AssetDTO,
-  OutputDTO,
-  PromptVersionDTO,
-  ShotCharacterDTO,
-  ShotDTO,
-} from '@/lib/types';
+import type { AssetDTO, OutputDTO, PromptVersionDTO, ShotCharacterDTO, ShotDTO } from '@/lib/types';
 
 const option = (value: string, label: string) => (
   <option key={value} value={value}>
@@ -317,9 +311,7 @@ export default function ShotEditorPage() {
         `/shots/${shotId}/generate-audio`,
         { method: 'POST', body: {} },
       );
-      setNotice(
-        `对白音频已生成（${result.provider ?? 'provider'} / ${result.model ?? 'model'}）`,
-      );
+      setNotice(`对白音频已生成（${result.provider ?? 'provider'} / ${result.model ?? 'model'}）`);
       await load();
     } catch (reason) {
       setError(errorMessage(reason));

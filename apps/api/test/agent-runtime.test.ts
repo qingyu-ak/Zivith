@@ -48,7 +48,11 @@ describe('Agent Runtime with mock agents', () => {
         throw new Error('Model should not be called');
       },
     });
-    const result = await new AgentRuntime().execute(new StoryAgent(llm), { brief: '太短' }, context);
+    const result = await new AgentRuntime().execute(
+      new StoryAgent(llm),
+      { brief: '太短' },
+      context,
+    );
 
     expect(result.status).toBe('failed');
     expect(result.warnings[0]?.code).toBe('BRIEF_TOO_SHORT');
@@ -108,12 +112,12 @@ describe('Agent Runtime with mock agents', () => {
     );
 
     expect(shotResult.data?.shots).toHaveLength(2);
-    expect(shotResult.data?.shots[0]).toMatchObject({
-      camera: expect.any(Object),
-      lighting: expect.any(Object),
-      action: expect.any(Object),
-      characters: expect.any(Array),
-    });
+    const firstShot = shotResult.data?.shots[0];
+    expect(firstShot).toBeDefined();
+    expect(firstShot?.camera && typeof firstShot.camera === 'object').toBe(true);
+    expect(firstShot?.lighting && typeof firstShot.lighting === 'object').toBe(true);
+    expect(firstShot?.action && typeof firstShot.action === 'object').toBe(true);
+    expect(Array.isArray(firstShot?.characters)).toBe(true);
     const shot = shotResult.data?.shots[1];
     if (!shot) throw new Error('Expected generated shot');
 

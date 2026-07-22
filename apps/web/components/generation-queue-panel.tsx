@@ -95,13 +95,10 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
         <p className="mt-5 text-sm text-zinc-500">尚无视频生成任务。</p>
       ) : (
         <div className="mt-5 grid gap-2">
-          {active && (
-            <p className="text-xs text-amber-200">有任务进行中，列表每 3 秒自动刷新。</p>
-          )}
+          {active && <p className="text-xs text-amber-200">有任务进行中，列表每 3 秒自动刷新。</p>}
           {tasks.map((task) => {
             const payload = task.payload ?? {};
-            const shotId =
-              typeof payload.shot_id === 'string' ? payload.shot_id.slice(0, 8) : '—';
+            const shotId = typeof payload.shot_id === 'string' ? payload.shot_id.slice(0, 8) : '—';
             const canCancel = task.status === 'queued' || task.status === 'running';
             return (
               <div

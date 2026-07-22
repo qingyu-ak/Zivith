@@ -19,12 +19,7 @@ const generateBody = z
   })
   .strict();
 
-async function requireShotMember(
-  db: PrismaClient,
-  shotId: string,
-  userId: string,
-  write = false,
-) {
+async function requireShotMember(db: PrismaClient, shotId: string, userId: string, write = false) {
   const shot = await db.shot.findFirst({
     where: { id: shotId, deletedAt: null },
     select: { id: true, projectId: true },

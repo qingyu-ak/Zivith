@@ -25,7 +25,8 @@ export class AssetAgent implements Agent<AssetAgentInput, GeneratedAssetDraft> {
   readonly id = 'asset';
   readonly name = 'Asset Agent';
 
-  validate(input: AssetAgentInput, _context: AgentContext): ValidationResult {
+  validate(input: AssetAgentInput, context: AgentContext): ValidationResult {
+    void context;
     if (!input.name.trim()) {
       return {
         valid: false,
@@ -35,16 +36,19 @@ export class AssetAgent implements Agent<AssetAgentInput, GeneratedAssetDraft> {
     return validAgentInput();
   }
 
-  estimate(_input: AssetAgentInput, _context: AgentContext): CostEstimate {
+  estimate(input: AssetAgentInput, context: AgentContext): CostEstimate {
+    void input;
+    void context;
     return { model: 'mock-asset-v1', estimated_tokens: 200 };
   }
 
-  async execute(
+  execute(
     input: AssetAgentInput,
-    _context: AgentContext,
+    context: AgentContext,
   ): Promise<AgentResult<GeneratedAssetDraft>> {
+    void context;
     const kind = input.asset_type === 'character' ? '角色' : '地点';
-    return {
+    return Promise.resolve({
       status: 'success',
       data: {
         asset_type: input.asset_type,
@@ -64,6 +68,6 @@ export class AssetAgent implements Agent<AssetAgentInput, GeneratedAssetDraft> {
         duration_ms: 0,
         timestamp: new Date().toISOString(),
       },
-    };
+    });
   }
 }

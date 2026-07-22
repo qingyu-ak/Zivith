@@ -19,9 +19,7 @@ function asText(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim()) return value.trim();
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (Array.isArray(value)) {
-    const parts = value
-      .map((item) => asText(item))
-      .filter((item): item is string => Boolean(item));
+    const parts = value.map((item) => asText(item)).filter((item): item is string => Boolean(item));
     if (parts.length > 0) return parts.join('；');
   }
   return undefined;
@@ -43,7 +41,9 @@ function scenesToScreenplay(scenes: unknown): string | undefined {
         asText(item.action) ??
         '';
       const location = asText(item.location_name) ?? asText(item.location);
-      const header = location ? `## Scene ${order}: ${title}（${location}）` : `## Scene ${order}: ${title}`;
+      const header = location
+        ? `## Scene ${order}: ${title}（${location}）`
+        : `## Scene ${order}: ${title}`;
       return `${header}\n${body}`.trim();
     })
     .join('\n\n');
@@ -54,9 +54,7 @@ export function normalizeGeneratedStoryInput(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const obj = raw as Record<string, unknown>;
   const theme = asText(obj.theme) ?? asText(obj.themes);
-  const combinedSynopsis = [asText(obj.logline), asText(obj.ending)]
-    .filter(Boolean)
-    .join('\n\n');
+  const combinedSynopsis = [asText(obj.logline), asText(obj.ending)].filter(Boolean).join('\n\n');
   const synopsis =
     asText(obj.synopsis) ??
     asText(obj.summary) ??
@@ -136,7 +134,8 @@ export class StoryAgent implements Agent<StoryAgentInput, GeneratedStory> {
     private readonly model = 'mock-text-v1',
   ) {}
 
-  validate(input: StoryAgentInput, _context: AgentContext): ValidationResult {
+  validate(input: StoryAgentInput, context: AgentContext): ValidationResult {
+    void context;
     if (input.brief.trim().length < 10) {
       return {
         valid: false,
@@ -146,7 +145,8 @@ export class StoryAgent implements Agent<StoryAgentInput, GeneratedStory> {
     return validAgentInput();
   }
 
-  estimate(input: StoryAgentInput, _context: AgentContext): CostEstimate {
+  estimate(input: StoryAgentInput, context: AgentContext): CostEstimate {
+    void context;
     return {
       model: this.model,
       estimated_tokens: Math.ceil(input.brief.length / 4) + 2_000,

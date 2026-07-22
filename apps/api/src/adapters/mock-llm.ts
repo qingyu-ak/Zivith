@@ -6,7 +6,7 @@ import type {
   StructuredCompletionResult,
 } from '../ports/llm.js';
 
-export type MockLLMResponder = (request: CompletionRequest) => unknown | Promise<unknown>;
+export type MockLLMResponder = (request: CompletionRequest) => unknown;
 
 export interface MockLLMAdapterOptions {
   responder: MockLLMResponder;

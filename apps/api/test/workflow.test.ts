@@ -48,9 +48,9 @@ describe('workflow recovery', () => {
   it('requeues interrupted runs and preserves completed steps', async () => {
     const workflowStepUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     const workflowRunUpdate = vi.fn().mockResolvedValue({ id: 'run-1' });
-    const transaction = vi.fn().mockImplementation(async (operations: Promise<unknown>[]) =>
-      Promise.all(operations),
-    );
+    const transaction = vi
+      .fn()
+      .mockImplementation(async (operations: Promise<unknown>[]) => Promise.all(operations));
     const db = {
       workflowRun: {
         findMany: vi.fn().mockResolvedValue([{ id: 'run-1' }]),

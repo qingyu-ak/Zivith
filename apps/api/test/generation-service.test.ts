@@ -83,11 +83,12 @@ function database(currentShot = shot()) {
     startedAt: null as Date | null,
   };
 
+  const shotUpdate = vi.fn().mockResolvedValue({});
   const db = {
     shot: {
       findFirst: vi.fn().mockResolvedValue(currentShot),
       findUnique: vi.fn().mockResolvedValue({ prompt: currentShot.prompt }),
-      update: vi.fn().mockResolvedValue({}),
+      update: shotUpdate,
     },
     promptVersion: {
       findFirst: vi.fn().mockResolvedValue({
@@ -97,19 +98,21 @@ function database(currentShot = shot()) {
       }),
     },
     output: {
-      findUnique: vi.fn().mockImplementation(async ({ where }: { where: { id?: string; idempotencyKey?: string } }) => {
-        if (where.idempotencyKey) return null;
-        return outputState;
-      }),
-      findUniqueOrThrow: vi.fn().mockImplementation(async () => outputState),
-      create: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      findUnique: vi
+        .fn()
+        .mockImplementation(({ where }: { where: { id?: string; idempotencyKey?: string } }) => {
+          if (where.idempotencyKey) return Promise.resolve(null);
+          return Promise.resolve(outputState);
+        }),
+      findUniqueOrThrow: vi.fn().mockImplementation(() => Promise.resolve(outputState)),
+      create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
         outputState = { ...outputState, ...data, status: 'queued' };
-        return outputState;
+        return Promise.resolve(outputState);
       }),
-      update: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      update: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
         outputState = { ...outputState, ...data };
         if (data.status === 'completed') Object.assign(outputState, completedOutput);
-        return outputState;
+        return Promise.resolve(outputState);
       }),
     },
     task: {
@@ -119,20 +122,22 @@ function database(currentShot = shot()) {
     },
     $transaction: vi
       .fn()
-      .mockImplementation(async (operations: Promise<unknown>[]) => Promise.all(operations)),
+      .mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations)),
   } as unknown as PrismaClient;
-  return { db, getOutput: () => outputState };
+  return { db, getOutput: () => outputState, shotUpdate };
 }
+
+const generate = vi.fn().mockResolvedValue({
+  job_id: 'mock-job-1',
+  status: 'completed',
+  video_url: 'https://example.test/mock.mp4',
+  metadata: { is_mock: true },
+});
 
 const adapter: VideoGenerationAdapter = {
   provider: 'mock',
   supportedModels: [{ id: 'mock-v1', name: 'Mock' }],
-  generate: vi.fn().mockResolvedValue({
-    job_id: 'mock-job-1',
-    status: 'completed',
-    video_url: 'https://example.test/mock.mp4',
-    metadata: { is_mock: true },
-  }),
+  generate,
   getStatus: vi.fn(),
   cancel: vi.fn(),
   getCapabilities: vi.fn().mockReturnValue({
@@ -145,21 +150,23 @@ const adapter: VideoGenerationAdapter = {
 
 describe('GenerationService', () => {
   it('persists a completed Mock output and moves the Shot to review', async () => {
-    const { db } = database();
+    const { db, shotUpdate } = database();
     const output = await new GenerationService(db, adapter).generate(
       '11111111-1111-4111-8111-111111111111',
       { requestId: 'request-1' },
     );
 
     expect(output.status).toBe('completed');
-    expect(adapter.generate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'mock-v1',
-        positive_prompt: 'cinematic robot finds a seed',
-        reference_image_urls: ['media-1'],
-      }),
-    );
-    expect(db.shot.update).toHaveBeenCalledWith({
+    expect(generate).toHaveBeenCalledTimes(1);
+    const generateArg = generate.mock.calls[0]?.[0] as {
+      model?: string;
+      positive_prompt?: string;
+      reference_image_urls?: string[];
+    };
+    expect(generateArg.model).toBe('mock-v1');
+    expect(generateArg.positive_prompt).toBe('cinematic robot finds a seed');
+    expect(generateArg.reference_image_urls).toEqual(['media-1']);
+    expect(shotUpdate).toHaveBeenCalledWith({
       where: { id: '11111111-1111-4111-8111-111111111111' },
       data: { state: 'review' },
     });
@@ -176,8 +183,9 @@ describe('GenerationService', () => {
     vi.clearAllMocks();
     const { db } = database();
     const service = new GenerationService(db, adapter);
+    const enqueue = vi.fn().mockResolvedValue({ job_id: 'mock-video:request-1' });
     const memory = {
-      enqueue: vi.fn().mockResolvedValue({ job_id: 'mock-video:request-1' }),
+      enqueue,
       cancel: vi.fn(),
     };
     service.attachQueue(memory);
@@ -186,9 +194,9 @@ describe('GenerationService', () => {
       async: true,
     });
     expect(output.status).toBe('queued');
-    expect(memory.enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'video_generate' }),
-    );
-    expect(adapter.generate).not.toHaveBeenCalled();
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    const enqueueArg = enqueue.mock.calls[0]?.[0] as { type?: string };
+    expect(enqueueArg.type).toBe('video_generate');
+    expect(generate).not.toHaveBeenCalled();
   });
 });

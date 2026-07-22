@@ -74,7 +74,8 @@ export class SceneAgent implements Agent<SceneAgentInput, GeneratedScenes> {
     private readonly model = 'mock-text-v1',
   ) {}
 
-  validate(input: SceneAgentInput, _context: AgentContext): ValidationResult {
+  validate(input: SceneAgentInput, context: AgentContext): ValidationResult {
+    void context;
     if (!input.story.screenplay.trim()) {
       return {
         valid: false,
@@ -90,7 +91,8 @@ export class SceneAgent implements Agent<SceneAgentInput, GeneratedScenes> {
     return validAgentInput();
   }
 
-  estimate(input: SceneAgentInput, _context: AgentContext): CostEstimate {
+  estimate(input: SceneAgentInput, context: AgentContext): CostEstimate {
+    void context;
     return {
       model: this.model,
       estimated_tokens: Math.ceil(input.story.screenplay.length / 4) + 2_000,

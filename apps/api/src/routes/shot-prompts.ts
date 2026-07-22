@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { Prisma, type PrismaClient } from '@zivith/database';
+import type { Prisma, PrismaClient } from '@zivith/database';
 import { asId, type AgentContext } from '@zivith/domain';
 import { z } from 'zod';
 import { AgentRuntime } from '../contexts/agent/runtime.js';
 import { PromptAgent, type PromptAgentInput } from '../contexts/agent/prompt-agent.js';
-import { assertPromptApprovedForGeneration } from '../contexts/generation/service.js';
 import { ApiError } from '../errors.js';
 
 const shotParams = z.object({ id: z.string().uuid() });

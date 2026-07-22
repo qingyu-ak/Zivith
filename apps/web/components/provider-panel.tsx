@@ -114,7 +114,10 @@ export function ProviderPanel() {
           <p className="text-xs font-medium uppercase tracking-widest text-accent">Phase 2.5</p>
           <h2 className="mt-1 text-lg font-semibold">模型提供商</h2>
           {!open && (
-            <p className="mt-1 truncate text-sm text-zinc-500" title={summaryLine(selection, models)}>
+            <p
+              className="mt-1 truncate text-sm text-zinc-500"
+              title={summaryLine(selection, models)}
+            >
               {summaryLine(selection, models)}
             </p>
           )}
@@ -144,14 +147,14 @@ export function ProviderPanel() {
           {error}
         </p>
       )}
-      {notice && !open && (
-        <p className="mt-3 text-sm text-emerald-300">{notice}</p>
-      )}
+      {notice && !open && <p className="mt-3 text-sm text-emerald-300">{notice}</p>}
 
       {open && (
         <>
           {notice && (
-            <p className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-300">{notice}</p>
+            <p className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-300">
+              {notice}
+            </p>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
             {catalog?.providers.map((provider) => (
@@ -163,7 +166,10 @@ export function ProviderPanel() {
           </div>
           <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={(event) => void save(event)}>
             {(Object.keys(modalityLabels) as Modality[]).map((modality) => (
-              <div key={modality} className="grid gap-3 rounded-lg border border-line bg-ink/40 p-4">
+              <div
+                key={modality}
+                className="grid gap-3 rounded-lg border border-line bg-ink/40 p-4"
+              >
                 <Field label={modalityLabels[modality]}>
                   <Select
                     value={selection[modality]}

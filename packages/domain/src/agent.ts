@@ -26,8 +26,7 @@ export interface ValidationIssue {
 }
 
 export type ValidationResult =
-  | { valid: true; issues: [] }
-  | { valid: false; issues: ValidationIssue[] };
+  { valid: true; issues: [] } | { valid: false; issues: ValidationIssue[] };
 
 export interface CostEstimate {
   model: string;

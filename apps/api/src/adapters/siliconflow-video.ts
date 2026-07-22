@@ -70,7 +70,11 @@ export class SiliconFlowVideoAdapter implements VideoGenerationAdapter {
     const started = Date.now();
     while (Date.now() - started < this.timeoutMs) {
       const status = await this.getStatus(jobId);
-      if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
+      if (
+        status.status === 'completed' ||
+        status.status === 'failed' ||
+        status.status === 'cancelled'
+      ) {
         return status;
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
@@ -115,8 +119,10 @@ export class SiliconFlowVideoAdapter implements VideoGenerationAdapter {
     };
   }
 
-  async cancel(_jobId: string): Promise<void> {
+  cancel(_jobId: string): Promise<void> {
+    void _jobId;
     // SiliconFlow public API does not expose cancel for video jobs yet.
+    return Promise.resolve();
   }
 
   private mapStatus(status: string): GenerationJobStatus['status'] {

@@ -6,10 +6,7 @@ import { ApiError } from '../errors.js';
 import { createProviderBundle } from '../providers/registry.js';
 import type { StoragePort } from '../ports/index.js';
 import { authenticate } from './auth.js';
-import {
-  getRuntimeModelOverride,
-  getRuntimeProviderOverride,
-} from './providers.js';
+import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 
 const shotParams = z.object({ id: z.string().uuid() });
 const bodySchema = z
@@ -52,10 +49,7 @@ export function registerAudioRoutes(
       throw new ApiError(422, 'AUDIO_TEXT_REQUIRED', '请提供对白文本或填写镜头对白');
     }
 
-    const providers = createProviderBundle(
-      getRuntimeProviderOverride(),
-      getRuntimeModelOverride(),
-    );
+    const providers = createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride());
     const result = await providers.audio.synthesize({
       request_id: randomUUID(),
       model: body.model ?? providers.audioModel,

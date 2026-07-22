@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma, type PrismaClient } from '@zivith/database';
+import type { Prisma } from '@zivith/database';
+import { type PrismaClient } from '@zivith/database';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
 import {
   mergeVisualPromptIntoAssetData,
@@ -88,9 +89,7 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
   const updatedAsset = await input.db.asset.update({
     where: { id: asset.id },
     data: {
-      data: json(
-        mergeVisualPromptIntoAssetData(asset.data, requirement.variantKey, prompt),
-      ),
+      data: json(mergeVisualPromptIntoAssetData(asset.data, requirement.variantKey, prompt)),
     },
   });
 
@@ -119,7 +118,6 @@ export function resolveRequirementPrompt(
   fallbackParts: string[],
 ): string {
   return (
-    readVisualPromptFromAssetData(assetData, variantKey) ??
-    fallbackParts.filter(Boolean).join(', ')
+    readVisualPromptFromAssetData(assetData, variantKey) ?? fallbackParts.filter(Boolean).join(', ')
   );
 }

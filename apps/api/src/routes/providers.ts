@@ -4,7 +4,6 @@ import {
   listProviderCatalog,
   loadProviderModels,
   loadProviderSelection,
-  type ProviderId,
   type ProviderModels,
   type ProviderSelection,
 } from '../providers/config.js';
@@ -49,7 +48,7 @@ export function resetRuntimeProviderState(): void {
 export function registerProviderRoutes(app: FastifyInstance): void {
   app.addHook('preHandler', authenticate);
 
-  app.get('/providers', async () => {
+  app.get('/providers', () => {
     const catalog = listProviderCatalog();
     return {
       ...catalog,
@@ -62,14 +61,14 @@ export function registerProviderRoutes(app: FastifyInstance): void {
     };
   });
 
-  app.put('/providers/selection', async (request) => {
+  app.put('/providers/selection', (request) => {
     const body = selectionBody.parse(request.body ?? {});
     runtimeSelection = {
       ...runtimeSelection,
-      ...(body.llm ? { llm: body.llm as ProviderId } : {}),
-      ...(body.image ? { image: body.image as ProviderId } : {}),
-      ...(body.video ? { video: body.video as ProviderId } : {}),
-      ...(body.audio ? { audio: body.audio as ProviderId } : {}),
+      ...(body.llm ? { llm: body.llm } : {}),
+      ...(body.image ? { image: body.image } : {}),
+      ...(body.video ? { video: body.video } : {}),
+      ...(body.audio ? { audio: body.audio } : {}),
     };
     if (body.models) {
       runtimeModels = {

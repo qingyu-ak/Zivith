@@ -12,23 +12,24 @@ export class InMemoryQueueAdapter implements QueuePort {
     this.processors.set(type, processor);
   }
 
-  async enqueue<T>(job: QueueJob<T>): Promise<{ job_id: string }> {
+  enqueue<T>(job: QueueJob<T>): Promise<{ job_id: string }> {
     this.cancelled.delete(job.idempotency_key);
-    this.jobs.set(job.idempotency_key, job as QueueJob);
+    this.jobs.set(job.idempotency_key, job);
     const processor = this.processors.get(job.type);
     if (processor) {
       // Defer one macrotask so cancel() in the same turn can win before work starts.
       setTimeout(() => {
         if (this.cancelled.has(job.idempotency_key)) return;
-        void processor(job as QueueJob).catch(() => undefined);
+        void processor(job).catch(() => undefined);
       }, 0);
     }
-    return { job_id: job.idempotency_key };
+    return Promise.resolve({ job_id: job.idempotency_key });
   }
 
-  async cancel(jobId: string): Promise<void> {
+  cancel(jobId: string): Promise<void> {
     this.cancelled.add(jobId);
     this.jobs.delete(jobId);
+    return Promise.resolve();
   }
 
   isCancelled(jobId: string): boolean {

@@ -22,15 +22,16 @@ describe('DeepSeekLLMAdapter', () => {
   it('parses chat completions and structured JSON', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        model: 'deepseek-chat',
-        choices: [{ message: { content: '{"title":"种子"}' } }],
-        usage: { prompt_tokens: 10, completion_tokens: 5 },
-      }),
+      json: () =>
+        Promise.resolve({
+          model: 'deepseek-chat',
+          choices: [{ message: { content: '{"title":"种子"}' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        }),
     });
     const adapter = new DeepSeekLLMAdapter({
       apiKey: 'test-key',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl: fetchImpl,
     });
 
     const structured = await adapter.completeStructured(
@@ -52,11 +53,11 @@ describe('SiliconFlow adapters', () => {
   it('maps image generation URLs', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ images: [{ url: 'https://cdn.example/a.png' }] }),
+      json: () => Promise.resolve({ images: [{ url: 'https://cdn.example/a.png' }] }),
     });
     const adapter = new SiliconFlowImageAdapter({
       apiKey: 'sf',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl: fetchImpl,
     });
     const result = await adapter.generate({
       request_id: 'img-1',
@@ -71,22 +72,23 @@ describe('SiliconFlow adapters', () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ requestId: 'job-1' }),
+        json: () => Promise.resolve({ requestId: 'job-1' }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ status: 'InProgress' }),
+        json: () => Promise.resolve({ status: 'InProgress' }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          status: 'Succeed',
-          results: [{ url: 'https://cdn.example/v.mp4' }],
-        }),
+        json: () =>
+          Promise.resolve({
+            status: 'Succeed',
+            results: [{ url: 'https://cdn.example/v.mp4' }],
+          }),
       });
     const adapter = new SiliconFlowVideoAdapter({
       apiKey: 'sf',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl: fetchImpl,
       pollIntervalMs: 1,
       timeoutMs: 1_000,
     });
@@ -106,11 +108,11 @@ describe('SiliconFlow adapters', () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       headers: { get: () => 'audio/mpeg' },
-      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1, 2, 3]).buffer),
     });
     const adapter = new SiliconFlowAudioAdapter({
       apiKey: 'sf',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl: fetchImpl,
     });
     const result = await adapter.synthesize({
       request_id: 'aud-1',
