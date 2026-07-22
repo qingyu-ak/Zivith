@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@zivith/database';
+import { GenerationService } from '../src/contexts/generation/service.js';
 import { MockWorkflowRunner } from '../src/contexts/workflow/mock-runner.js';
 import type { WorkflowOrchestrator } from '../src/contexts/workflow/orchestrator.js';
+
+function createRunner(db: PrismaClient, orchestrator: WorkflowOrchestrator) {
+  return new MockWorkflowRunner(db, orchestrator, new GenerationService(db));
+}
 
 const run = (steps: Array<Record<string, unknown>>) => ({
   id: '11111111-1111-4111-8111-111111111111',
@@ -41,6 +46,7 @@ describe('MockWorkflowRunner', () => {
     ]);
 
     const storyUpsert = vi.fn().mockResolvedValue({ id: 'generated-story' });
+    const completeStep = vi.fn().mockResolvedValue({});
     const db = {
       workflowRun: {
         findUnique: vi
@@ -59,31 +65,28 @@ describe('MockWorkflowRunner', () => {
         .fn()
         .mockResolvedValueOnce({ kind: 'step', step: { name: 'story', order: 0 } })
         .mockResolvedValueOnce({ kind: 'awaiting_review', step: 'story_review' }),
-      completeStep: vi.fn().mockResolvedValue({}),
+      completeStep,
     } as unknown as WorkflowOrchestrator;
 
-    const result = await new MockWorkflowRunner(db, orchestrator).runUntilGate(
+    const result = await createRunner(db, orchestrator).runUntilGate(
       queued.id,
       '33333333-3333-4333-8333-333333333333',
     );
 
     expect(result.steps[1]?.status).toBe('running');
-    expect(storyUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          id: expect.stringMatching(/^[0-9a-f-]{36}$/),
-          state: 'draft',
-        }),
-        update: expect.objectContaining({ state: 'draft' }),
-      }),
-    );
-    expect(orchestrator.completeStep).toHaveBeenCalledWith(
-      queued.id,
-      'story',
-      expect.objectContaining({
-        story_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
-      }),
-    );
+    const upsertArg = storyUpsert.mock.calls[0]?.[0] as {
+      create?: { id?: string; state?: string };
+      update?: { state?: string };
+    };
+    expect(upsertArg.create?.state).toBe('draft');
+    expect(upsertArg.update?.state).toBe('draft');
+    expect(upsertArg.create?.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(completeStep).toHaveBeenCalledTimes(1);
+    const completeArg = completeStep.mock.calls[0];
+    expect(completeArg?.[0]).toBe(queued.id);
+    expect(completeArg?.[1]).toBe('story');
+    const completePayload = completeArg?.[2] as { story_id?: string } | undefined;
+    expect(completePayload?.story_id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('blocks workflow approval while required visual assets remain unapproved', async () => {
@@ -100,18 +103,17 @@ describe('MockWorkflowRunner', () => {
       workflowRun: { findUnique: vi.fn().mockResolvedValue(visualReview) },
       visualAssetRequirement: { count: vi.fn().mockResolvedValue(1) },
     } as unknown as PrismaClient;
-    const orchestrator = {
-      review: vi.fn(),
-    } as unknown as WorkflowOrchestrator;
+    const review = vi.fn();
+    const orchestrator = { review } as unknown as WorkflowOrchestrator;
 
     await expect(
-      new MockWorkflowRunner(db, orchestrator).submitReview(
+      createRunner(db, orchestrator).submitReview(
         visualReview.id,
         '33333333-3333-4333-8333-333333333333',
         { step: 'visual_assets_review', action: 'approve' },
       ),
     ).rejects.toMatchObject({ code: 'VISUAL_ASSETS_NOT_APPROVED' });
-    expect(orchestrator.review).not.toHaveBeenCalled();
+    expect(review).not.toHaveBeenCalled();
   });
 
   it('blocks prompt_review approve when prompt versions are not approved', async () => {
@@ -141,16 +143,17 @@ describe('MockWorkflowRunner', () => {
         ]),
       },
     } as unknown as PrismaClient;
-    const orchestrator = { review: vi.fn() } as unknown as WorkflowOrchestrator;
+    const review = vi.fn();
+    const orchestrator = { review } as unknown as WorkflowOrchestrator;
 
     await expect(
-      new MockWorkflowRunner(db, orchestrator).submitReview(
+      createRunner(db, orchestrator).submitReview(
         promptReview.id,
         '33333333-3333-4333-8333-333333333333',
         { step: 'prompt_review', action: 'approve_all' },
       ),
     ).rejects.toMatchObject({ code: 'PROMPTS_NOT_APPROVED' });
-    expect(orchestrator.review).not.toHaveBeenCalled();
+    expect(review).not.toHaveBeenCalled();
   });
 
   it('accepts prompt_review after matching approved prompt versions', async () => {
@@ -199,22 +202,22 @@ describe('MockWorkflowRunner', () => {
       output: { updateMany: vi.fn() },
       $transaction: vi.fn().mockResolvedValue([]),
     } as unknown as PrismaClient;
+    const review = vi.fn().mockResolvedValue(afterReview);
     const orchestrator = {
-      review: vi.fn().mockResolvedValue(afterReview),
+      review,
       beginNextStep: vi.fn().mockResolvedValue({ kind: 'completed' }),
     } as unknown as WorkflowOrchestrator;
 
-    const result = await new MockWorkflowRunner(db, orchestrator).submitReview(
+    const result = await createRunner(db, orchestrator).submitReview(
       promptReview.id,
       '33333333-3333-4333-8333-333333333333',
       { step: 'prompt_review', action: 'approve' },
     );
 
-    expect(orchestrator.review).toHaveBeenCalledWith(
-      promptReview.id,
-      '33333333-3333-4333-8333-333333333333',
-      { step: 'prompt_review', action: 'approve' },
-    );
+    expect(review).toHaveBeenCalledWith(promptReview.id, '33333333-3333-4333-8333-333333333333', {
+      step: 'prompt_review',
+      action: 'approve',
+    });
     expect(result.status).toBe('completed');
   });
 
@@ -244,20 +247,18 @@ describe('MockWorkflowRunner', () => {
     };
     const db = {
       workflowRun: {
-        findUnique: vi
-          .fn()
-          .mockResolvedValueOnce(queuedAgain)
-          .mockResolvedValueOnce(awaitingAgain),
+        findUnique: vi.fn().mockResolvedValueOnce(queuedAgain).mockResolvedValueOnce(awaitingAgain),
       },
     } as unknown as PrismaClient;
+    const review = vi.fn().mockResolvedValue(queuedAgain);
     const orchestrator = {
-      review: vi.fn().mockResolvedValue(queuedAgain),
+      review,
       beginNextStep: vi
         .fn()
         .mockResolvedValueOnce({ kind: 'awaiting_review', step: 'prompt_review' }),
     } as unknown as WorkflowOrchestrator;
 
-    const result = await new MockWorkflowRunner(db, orchestrator).submitReview(
+    const result = await createRunner(db, orchestrator).submitReview(
       promptReview.id,
       '33333333-3333-4333-8333-333333333333',
       {
@@ -267,36 +268,34 @@ describe('MockWorkflowRunner', () => {
       },
     );
 
-    expect(orchestrator.review).toHaveBeenCalledWith(
-      promptReview.id,
-      '33333333-3333-4333-8333-333333333333',
-      {
-        step: 'prompt_review',
-        action: 'retry_with_feedback',
-        feedback: '加强暖色晨光与角色特写。',
-      },
-    );
+    expect(review).toHaveBeenCalledWith(promptReview.id, '33333333-3333-4333-8333-333333333333', {
+      step: 'prompt_review',
+      action: 'retry_with_feedback',
+      feedback: '加强暖色晨光与角色特写。',
+    });
     expect(result.steps.find((step) => step.name === 'prompt_review')?.status).toBe('running');
   });
 
   it('converges to completed after the final review step', async () => {
-    const terminalPending = { ...run([{ name: 'video_review', status: 'completed' }]), status: 'queued' };
+    const terminalPending = {
+      ...run([{ name: 'video_review', status: 'completed' }]),
+      status: 'queued',
+    };
     const completed = { ...terminalPending, status: 'completed' };
     const db = {
       workflowRun: {
         findUnique: vi.fn().mockResolvedValueOnce(terminalPending).mockResolvedValueOnce(completed),
       },
     } as unknown as PrismaClient;
-    const orchestrator = {
-      beginNextStep: vi.fn().mockResolvedValue({ kind: 'completed' }),
-    } as unknown as WorkflowOrchestrator;
+    const beginNextStep = vi.fn().mockResolvedValue({ kind: 'completed' });
+    const orchestrator = { beginNextStep } as unknown as WorkflowOrchestrator;
 
-    const result = await new MockWorkflowRunner(db, orchestrator).runUntilGate(
+    const result = await createRunner(db, orchestrator).runUntilGate(
       terminalPending.id,
       '33333333-3333-4333-8333-333333333333',
     );
 
     expect(result.status).toBe('completed');
-    expect(orchestrator.beginNextStep).toHaveBeenCalledWith(terminalPending.id);
+    expect(beginNextStep).toHaveBeenCalledWith(terminalPending.id);
   });
 });

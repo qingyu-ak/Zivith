@@ -105,6 +105,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     new MockWorkflowRunner(
       db,
       orchestrator,
+      generationService,
       createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
     );
 

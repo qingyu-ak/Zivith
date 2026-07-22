@@ -3,6 +3,7 @@ import type { PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { MockWorkflowRunner } from '../contexts/workflow/mock-runner.js';
 import { WorkflowOrchestrator } from '../contexts/workflow/orchestrator.js';
+import { GenerationService } from '../contexts/generation/service.js';
 import { ApiError } from '../errors.js';
 
 const automationLevel = z.enum(['full_manual', 'assisted', 'semi_auto', 'full_auto']);
@@ -67,12 +68,7 @@ async function requireProjectMember(
   }
 }
 
-async function getRunForMember(
-  db: PrismaClient,
-  userId: string,
-  runId: string,
-  write = false,
-) {
+async function getRunForMember(db: PrismaClient, userId: string, runId: string, write = false) {
   const run = await db.workflowRun.findUnique({
     where: { id: runId },
     include: { steps: { orderBy: { order: 'asc' } } },
@@ -86,9 +82,8 @@ export function registerWorkflowRoutes(
   app: FastifyInstance,
   db: PrismaClient,
   orchestrator = new WorkflowOrchestrator(db),
-  runnerOrFactory:
-    | MockWorkflowRunner
-    | (() => MockWorkflowRunner) = () => new MockWorkflowRunner(db, orchestrator),
+  runnerOrFactory: MockWorkflowRunner | (() => MockWorkflowRunner) = () =>
+    new MockWorkflowRunner(db, orchestrator, new GenerationService(db)),
 ): void {
   const runner = () =>
     typeof runnerOrFactory === 'function' ? runnerOrFactory() : runnerOrFactory;

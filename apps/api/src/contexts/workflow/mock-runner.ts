@@ -6,7 +6,7 @@ import {
   type StageAutomation,
 } from '@zivith/domain';
 import { Prisma, type PrismaClient } from '@zivith/database';
-import { GenerationService } from '../generation/service.js';
+import type { GenerationService } from '../generation/service.js';
 import { ApiError } from '../../errors.js';
 import { AgentRuntime } from '../agent/runtime.js';
 import { AssetAgent } from '../agent/asset-agent.js';
@@ -15,14 +15,11 @@ import { SceneAgent, type GeneratedScenes } from '../agent/scene-agent.js';
 import { ShotAgent, type ShotAgentScene, type ShotAgentOutput } from '../agent/shot-agent.js';
 import { StoryAgent, type GeneratedStory } from '../agent/story-agent.js';
 import { VisualPrepAgent, type VisualPrepScene } from '../agent/visual-prep-agent.js';
-import {
-  enrichVisualAssetTraits,
-  mergeVisualPromptIntoAssetData,
-} from '../agent/visual-trait.js';
+import { enrichVisualAssetTraits, mergeVisualPromptIntoAssetData } from '../agent/visual-trait.js';
 import { createProviderBundle, type ProviderBundle } from '../../providers/registry.js';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
 import type { LLMAdapter } from '../../ports/llm.js';
-import { WorkflowOrchestrator, type SubmitReviewInput } from './orchestrator.js';
+import type { SubmitReviewInput, WorkflowOrchestrator } from './orchestrator.js';
 
 type WorkflowWithSteps = Awaited<ReturnType<MockWorkflowRunner['getRun']>>;
 
@@ -39,6 +36,10 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function asText(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
 }
 
 function json(value: unknown): Prisma.InputJsonValue {
@@ -70,12 +71,13 @@ export class MockWorkflowRunner {
   constructor(
     private readonly db: PrismaClient,
     private readonly orchestrator: WorkflowOrchestrator,
+    generationService: GenerationService,
     providers: ProviderBundle = createProviderBundle(),
   ) {
     this.providers = providers;
     this.storyAgent = new StoryAgent(providers.llm, providers.llmModel);
     this.sceneAgent = new SceneAgent(providers.llm, providers.llmModel);
-    this.generationService = new GenerationService(db, providers.video);
+    this.generationService = generationService;
     this.imageAdapter = providers.image;
     this.imageModel = providers.imageModel;
     this.llm = providers.llm;
@@ -188,7 +190,7 @@ export class MockWorkflowRunner {
         );
       }
     }
-    const run = await this.orchestrator.review(runId, userId, input);
+    await this.orchestrator.review(runId, userId, input);
     if (approving) {
       await this.approveArtifacts(runId, input.step);
       return this.runUntilGate(runId, userId);
@@ -210,7 +212,7 @@ export class MockWorkflowRunner {
     const result = await this.runtime.execute(
       this.storyAgent,
       {
-        brief: String(input.brief ?? ''),
+        brief: asText(input.brief),
         ...(typeof input.language === 'string' ? { language: input.language } : {}),
       },
       this.context(run, userId, 'story'),
@@ -299,12 +301,12 @@ export class MockWorkflowRunner {
     for (const [index, scene] of scenes.entries()) {
       const sceneId = sceneIds[index];
       if (!sceneId) continue;
-      const title = String(scene.title ?? `场景 ${index + 1}`);
+      const title = asText(scene.title, `场景 ${index + 1}`);
       const locationId = await this.ensureAsset(
         run,
         userId,
         'location',
-        String(scene.location_name ?? `${title}地点`),
+        asText(scene.location_name, `${title}地点`),
         title,
       );
       const characterNames = Array.isArray(scene.character_names)
@@ -324,9 +326,7 @@ export class MockWorkflowRunner {
         title,
         location_asset_id: locationId,
         character_asset_ids: characterIds,
-        variant_key: `${String(scene.time_of_day ?? 'default')}_${String(
-          scene.mood ?? 'neutral',
-        )}`,
+        variant_key: `${asText(scene.time_of_day, 'default')}_${asText(scene.mood, 'neutral')}`,
       });
     }
 
@@ -358,7 +358,7 @@ export class MockWorkflowRunner {
       const mediaId = deterministicUuid(`${requirementId}:candidate`);
       const asset = await this.db.asset.findUniqueOrThrow({ where: { id: requirement.asset_id } });
       const sceneMeta = scenes[sceneIds.indexOf(requirement.scene_id)] ?? {};
-      const sceneTitle = String(sceneMeta.title ?? requirement.reason);
+      const sceneTitle = asText(sceneMeta.title, requirement.reason);
 
       let generationPrompt = [
         asset.name,
@@ -567,9 +567,11 @@ export class MockWorkflowRunner {
     for (const scene of scenes) {
       const assets = await this.db.asset.findMany({
         where: {
-          id: { in: [scene.locationId, ...scene.characterIds].filter(
-            (id): id is string => typeof id === 'string',
-          ) },
+          id: {
+            in: [scene.locationId, ...scene.characterIds].filter(
+              (id): id is string => typeof id === 'string',
+            ),
+          },
           deletedAt: null,
         },
         select: { id: true, type: true, name: true },
@@ -826,7 +828,8 @@ export class MockWorkflowRunner {
         weather: shot.scene.weather,
         location_name: location?.name ?? null,
       },
-      style: Object.keys(record(shot.style)).length > 0 ? record(shot.style) : record(defaults.style),
+      style:
+        Object.keys(record(shot.style)).length > 0 ? record(shot.style) : record(defaults.style),
       project_negative_prompt:
         typeof defaults.negative_prompt === 'string' ? defaults.negative_prompt : null,
       shot_negative_prompt: typeof prompt.negative === 'string' ? prompt.negative : null,
