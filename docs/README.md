@@ -46,6 +46,7 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | [Shot Specification](Shot-Specification.md) | Complete Shot schema, lifecycle, prompt construction |
 | [Asset Model](Asset-Model.md) | Asset taxonomy (Characters, Locations, Styles, etc.) |
 | [AI Agent Collaboration](AI-Agent-Collaboration.md) | Agent architecture, required review gates, and Visual Prep workflow |
+| [Architecture Principles](architecture/architecture-principles.md) | Long-term architectural constitution guiding all future ADRs and RFCs |
 | [Technical Architecture](Technical-Architecture.md) | System design, adapters, APIs, queues, BYOK, and data storage |
 | [Implementation Plan](Implementation-Plan.md) | Phased roadmap with live progress checkboxes |
 | [Next Tasks](Next-Tasks.md) | Current engineering backlog (stabilize → finish Phase 2 → 2.5) |
