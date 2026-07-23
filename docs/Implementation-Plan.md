@@ -26,10 +26,10 @@ This document defines the phased implementation roadmap for Zivith.
 | 1 Core Domain | ~90% | Full creative CRUD + inheritance + Character/Location assets |
 | 2 AI Agent + Mock Gen | ~95% | Mock Story→Video E2E (A1) + WorkflowPanel gates/SSE/queue/recover |
 | 2.5 First Providers | ~80% | DeepSeek + SiliconFlow adapters + provider UI; BYOK/usage later |
-| **V0.4 (interlude)** | ~45% | W2 + W1 + W3 StorySegment landed; next W4 scoped recompute. Remaining: candidate sets, prompt externalization, usage records — see [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) |
+| **V0.4 (interlude)** | ~55% | W2 + W1 + W3 + W4 scoped recompute landed; next W5 candidate sets. Remaining: prompt externalization, usage records — see [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) |
 | 3–5 | 0% | Not started |
 
-**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track F** (V0.4 plan, W2 → W1 → W3 → W4 → W5 → W6 → W7). The Looser Creative Flow RFC is Accepted (0.2); Slices A/B/C map to W4/W2/W3. V0.4 W1 (reference-image injection) also front-loads the Phase 3 “Character Consistency Strategy” — image conditioning moves from Phase 3 promise to V0.4 implementation.
+**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track F** (V0.4 plan, W2 → W1 → W3 → W4 → W5 → W6 → W7). The Looser Creative Flow RFC is Accepted (0.2); Slices A/B/C map to W4/W2/W3. V0.4 W1 (reference-image injection) also front-loads the Phase 3 “Character Consistency Strategy” — image conditioning moves from Phase 3 promise to V0.4 implementation. W4 Slice A scoped recompute is Done.
 
 Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not started.
 

@@ -14,9 +14,16 @@ import {
 } from '@zivith/domain';
 import { Prisma, type PrismaClient } from '@zivith/database';
 import { ApiError } from '../../errors.js';
+import { scopedLockKey } from './scoped-recompute.js';
 
 const json = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+
+function recordJson(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
 function parseState(value: Prisma.JsonValue): StoryToVideoWorkflowState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -260,6 +267,203 @@ export class WorkflowOrchestrator {
       ]);
     }
     return interrupted.length;
+  }
+
+  /**
+   * Resolve the latest story-to-video run for a project that matches the story
+   * (when storyId provided) and owns the named step.
+   */
+  async findScopedRun(projectId: string, stepName: string, storyId?: string) {
+    const runs = await this.db.workflowRun.findMany({
+      where: {
+        projectId,
+        type: 'story_to_video',
+        status: { notIn: ['cancelled', 'failed'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: { steps: { orderBy: { order: 'asc' } } },
+    });
+    for (const run of runs) {
+      const step = run.steps.find((item) => item.name === stepName);
+      if (!step) continue;
+      if (storyId) {
+        const storyOutput = recordJson(run.steps.find((item) => item.name === 'story')?.output);
+        const runStoryId =
+          typeof storyOutput.story_id === 'string' ? storyOutput.story_id : undefined;
+        if (runStoryId !== storyId) continue;
+      }
+      return { run, step };
+    }
+    return null;
+  }
+
+  async beginScopedRecompute(input: {
+    projectId: string;
+    stepName: 'visual_prep' | 'prompt' | 'video';
+    entityType: 'scene' | 'shot';
+    entityId: string;
+    inputHash: string;
+    actorId: string;
+    storyId?: string;
+    usage?: unknown;
+  }) {
+    const resolved = await this.findScopedRun(input.projectId, input.stepName, input.storyId);
+    if (!resolved) {
+      throw new ApiError(
+        409,
+        'WORKFLOW_STEP_NOT_READY',
+        '尚未找到可局部重跑的工作流步骤，请先启动故事到视频工作流',
+      );
+    }
+    const { run, step } = resolved;
+    if (step.status === 'queued' && step.order > 0) {
+      const priorIncomplete = run.steps.some(
+        (item) => item.order < step.order && item.status !== 'completed',
+      );
+      if (priorIncomplete) {
+        throw new ApiError(
+          409,
+          'WORKFLOW_STEP_NOT_READY',
+          `步骤「${input.stepName}」尚未执行，无法局部重跑`,
+        );
+      }
+    }
+
+    const lockKey = scopedLockKey(input.stepName, input.entityType, input.entityId);
+    const result = await this.db.$transaction(async (tx) => {
+      const fresh = await tx.workflowRun.findUniqueOrThrow({ where: { id: run.id } });
+      const raw = recordJson(fresh.state);
+      const locks = recordJson(raw.scoped_locks);
+      if (typeof locks[lockKey] === 'string') {
+        throw new ApiError(
+          409,
+          'RECOMPUTE_IN_PROGRESS',
+          '该实体已有进行中的局部重跑，请稍后再试',
+        );
+      }
+      const last = await tx.workflowStepAttempt.findFirst({
+        where: { workflowStepId: step.id },
+        orderBy: { attempt: 'desc' },
+        select: { attempt: true },
+      });
+      const attemptNumber = (last?.attempt ?? 0) + 1;
+      const attempt = await tx.workflowStepAttempt.create({
+        data: {
+          workflowStepId: step.id,
+          attempt: attemptNumber,
+          status: 'running',
+          inputHash: input.inputHash,
+          usage: json({
+            scope: {
+              entity_type: input.entityType,
+              entity_id: input.entityId,
+              kind: input.stepName,
+            },
+            ...(input.usage && typeof input.usage === 'object' ? input.usage : {}),
+          }),
+          startedAt: new Date(),
+        },
+      });
+      await tx.workflowRun.update({
+        where: { id: run.id },
+        data: {
+          state: json({
+            ...raw,
+            scoped_locks: { ...locks, [lockKey]: attempt.id },
+          }),
+        },
+      });
+      return { run: fresh, step, attempt, lockKey };
+    });
+
+    await this.audit(
+      input.actorId,
+      input.projectId,
+      run.id,
+      `workflow.recompute.${input.stepName}.begin`,
+      undefined,
+      {
+        attempt_id: result.attempt.id,
+        entity_type: input.entityType,
+        entity_id: input.entityId,
+        input_hash: input.inputHash,
+      },
+    );
+    return result;
+  }
+
+  async finishScopedRecompute(input: {
+    runId: string;
+    attemptId: string;
+    lockKey: string;
+    status: 'completed' | 'failed';
+    provider?: string | undefined;
+    model?: string | undefined;
+    usage?: unknown;
+    errorCode?: string | undefined;
+    errorMessage?: string | undefined;
+  }) {
+    await this.db.$transaction(async (tx) => {
+      const attempt = await tx.workflowStepAttempt.findUnique({
+        where: { id: input.attemptId },
+      });
+      if (!attempt) return;
+      const existingUsage = recordJson(attempt.usage);
+      await tx.workflowStepAttempt.update({
+        where: { id: input.attemptId },
+        data: {
+          status: input.status,
+          finishedAt: new Date(),
+          ...(input.provider !== undefined ? { provider: input.provider } : {}),
+          ...(input.model !== undefined ? { model: input.model } : {}),
+          ...(input.errorCode !== undefined ? { errorCode: input.errorCode } : {}),
+          ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
+          usage: json({
+            ...existingUsage,
+            ...(input.usage && typeof input.usage === 'object'
+              ? (input.usage as Record<string, unknown>)
+              : {}),
+          }),
+        },
+      });
+      const run = await tx.workflowRun.findUnique({ where: { id: input.runId } });
+      if (!run) return;
+      const raw = recordJson(run.state);
+      const locks = { ...recordJson(raw.scoped_locks) };
+      if (locks[input.lockKey] === input.attemptId) {
+        delete locks[input.lockKey];
+      }
+      await tx.workflowRun.update({
+        where: { id: input.runId },
+        data: { state: json({ ...raw, scoped_locks: locks }) },
+      });
+    });
+  }
+
+  /** Merge entity-scoped ids into an existing completed step output without advancing the run. */
+  async mergeStepOutput(runId: string, stepName: string, patch: Record<string, unknown>) {
+    const run = await this.db.workflowRun.findUnique({
+      where: { id: runId },
+      include: { steps: true },
+    });
+    if (!run) throw new ApiError(404, 'WORKFLOW_NOT_FOUND', '工作流不存在');
+    const step = run.steps.find((item) => item.name === stepName);
+    if (!step) throw new ApiError(404, 'WORKFLOW_STEP_NOT_FOUND', '工作流步骤不存在');
+    const current = recordJson(step.output);
+    const merged: Record<string, unknown> = { ...current, ...patch };
+    for (const key of Object.keys(patch)) {
+      const next = patch[key];
+      const prev = current[key];
+      if (Array.isArray(next) && Array.isArray(prev)) {
+        merged[key] = [...new Set([...prev, ...next])];
+      }
+    }
+    await this.db.workflowStep.update({
+      where: { id: step.id },
+      data: { output: json(merged) },
+    });
+    return merged;
   }
 
   private async audit(

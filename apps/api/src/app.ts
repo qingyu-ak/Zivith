@@ -26,6 +26,7 @@ import { registerShotPromptRoutes } from './routes/shot-prompts.js';
 import { registerStorySegmentRoutes } from './routes/story-segments.js';
 import { registerStubRoutes } from './routes/stubs.js';
 import { registerVisualRequirementRoutes } from './routes/visual-requirements.js';
+import { registerRecomputeRoutes } from './routes/recompute.js';
 import { registerWorkflowEventRoutes } from './routes/workflow-events.js';
 import { registerWorkflowRoutes } from './routes/workflows.js';
 
@@ -126,6 +127,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         registerAppearanceVariantRoutes(protectedApi, db, storage);
         registerShotPromptRoutes(protectedApi, db);
         registerVisualRequirementRoutes(protectedApi, db);
+        registerRecomputeRoutes(protectedApi, db, createRunner);
         registerWorkflowRoutes(protectedApi, db, orchestrator, createRunner);
         registerWorkflowEventRoutes(protectedApi, db);
         registerProviderRoutes(protectedApi);

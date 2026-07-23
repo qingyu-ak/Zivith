@@ -302,6 +302,36 @@ export default function ShotEditorPage() {
     }
   }
 
+  async function recomputePrompt() {
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/recompute-prompt`, { method: 'POST' });
+      setNotice('已局部重跑本镜头提示词（工作流 attempt 已记录）');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function recomputeVideo() {
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/recompute-video`, { method: 'POST' });
+      setNotice('已局部重跑本镜头视频（工作流 attempt 已记录）');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   async function generateAudio() {
     setGenerating(true);
     setError('');
@@ -866,10 +896,26 @@ export default function ShotEditorPage() {
                 </Button>
                 <Button
                   type="button"
+                  variant="secondary"
+                  disabled={generating}
+                  onClick={() => void recomputePrompt()}
+                >
+                  重跑本镜头提示词
+                </Button>
+                <Button
+                  type="button"
                   disabled={generating || !promptVersions.some((item) => item.approved_at)}
                   onClick={() => void generateVideo()}
                 >
                   生成视频
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={generating || !promptVersions.some((item) => item.approved_at)}
+                  onClick={() => void recomputeVideo()}
+                >
+                  重跑本镜头视频
                 </Button>
               </div>
             </div>

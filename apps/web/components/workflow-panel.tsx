@@ -220,6 +220,7 @@ export function WorkflowPanel({
   const [selectedStep, setSelectedStep] = useState<WorkflowStepName | null>(null);
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [recomputingKey, setRecomputingKey] = useState<string | null>(null);
 
   const clearArtifacts = useCallback(() => {
     setStory(null);
@@ -807,6 +808,58 @@ export function WorkflowPanel({
     }
   }
 
+  async function recomputeSceneVisual(sceneId: string) {
+    setRecomputingKey(`visual:${sceneId}`);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/scenes/${sceneId}/recompute-visual-prep`, { method: 'POST' });
+      setNotice('已局部重跑该场景视觉准备');
+      await refresh();
+      await onArtifactsChanged();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setRecomputingKey(null);
+    }
+  }
+
+  async function recomputeShotPrompt(shotId: string) {
+    setRecomputingKey(`prompt:${shotId}`);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/recompute-prompt`, { method: 'POST' });
+      setNotice('已局部重跑该镜头提示词');
+      await refresh();
+      await onArtifactsChanged();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setRecomputingKey(null);
+    }
+  }
+
+  async function recomputeShotVideo(shotId: string) {
+    setRecomputingKey(`video:${shotId}`);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/recompute-video`, { method: 'POST' });
+      setNotice('已局部重跑该镜头视频');
+      await refresh();
+      await onArtifactsChanged();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setRecomputingKey(null);
+    }
+  }
+
+  const visualSceneIds = [
+    ...new Set(visualItems.map((item) => item.requirement.scene_id).filter(Boolean)),
+  ];
+
   return (
     <Card className="mb-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -939,7 +992,7 @@ export function WorkflowPanel({
 
           {selectedStep && !isLiveReview && (
             <p className="mt-3 text-xs text-zinc-500">
-              只读回看历史产物。要改内容请回到当前审核闸使用「按反馈重新生成」，或取消后重新开始。任意步骤时间旅行回退尚未立项。
+              只读回看历史产物。局部重跑请用实体页或下方按钮；整步重做请回到当前审核闸使用「按反馈重新生成」。任意步骤时间旅行回退尚未立项。
             </p>
           )}
 
@@ -1074,7 +1127,30 @@ export function WorkflowPanel({
           )}
 
           {viewKind === 'visual' && !loadingArtifacts && (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid gap-3">
+              {visualSceneIds.length > 0 && (
+                <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
+                  {visualSceneIds.map((sceneId) => {
+                    const title = scenes.find((scene) => scene.id === sceneId)?.title;
+                    return (
+                      <Button
+                        key={sceneId}
+                        type="button"
+                        variant="secondary"
+                        disabled={busy || recomputingKey === `visual:${sceneId}`}
+                        onClick={() => void recomputeSceneVisual(sceneId)}
+                      >
+                        {recomputingKey === `visual:${sceneId}`
+                          ? '重跑中…'
+                          : title
+                            ? `重跑本场景视觉准备（${title}）`
+                            : '重跑本场景视觉准备'}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {visualItems.length === 0 ? (
                 <p className="text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">
                   没有可展示的视觉材料。
@@ -1171,6 +1247,7 @@ export function WorkflowPanel({
                   );
                 })
               )}
+              </div>
             </div>
           )}
 
@@ -1188,7 +1265,17 @@ export function WorkflowPanel({
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium">{shot.label || '未命名镜头'}</p>
-                      <ShotEditorLink projectId={projectId} shot={shot} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={busy || recomputingKey === `prompt:${shot.id}`}
+                          onClick={() => void recomputeShotPrompt(shot.id)}
+                        >
+                          {recomputingKey === `prompt:${shot.id}` ? '重跑中…' : '重跑本镜头提示词'}
+                        </Button>
+                        <ShotEditorLink projectId={projectId} shot={shot} />
+                      </div>
                     </div>
                     <p className="mt-2 text-xs leading-5 text-zinc-400">
                       {prompt.positive || '暂无正向提示词'}
@@ -1229,7 +1316,17 @@ export function WorkflowPanel({
                     )}
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium">{shot.label || '未命名镜头'}</p>
-                      <ShotEditorLink projectId={projectId} shot={shot} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={busy || recomputingKey === `video:${shot.id}`}
+                          onClick={() => void recomputeShotVideo(shot.id)}
+                        >
+                          {recomputingKey === `video:${shot.id}` ? '重跑中…' : '重跑本镜头视频'}
+                        </Button>
+                        <ShotEditorLink projectId={projectId} shot={shot} />
+                      </div>
                     </div>
                     {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
                   </div>

@@ -430,19 +430,40 @@ model WorkflowRun {
 }
 
 model WorkflowStep {
-  id            String      @id @default(uuid())
-  workflowRunId String      @map("workflow_run_id")
+  id            String                @id @default(uuid())
+  workflowRunId String                @map("workflow_run_id")
   name          String
-  status        JobStatus   @default(queued)
+  status        JobStatus             @default(queued)
   input         Json
   output        Json?
   order         Int
-  startedAt     DateTime?   @map("started_at")
-  completedAt   DateTime?   @map("completed_at")
-  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  startedAt     DateTime?             @map("started_at")
+  completedAt   DateTime?             @map("completed_at")
+  workflowRun   WorkflowRun           @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  attempts      WorkflowStepAttempt[]
 
   @@unique([workflowRunId, order])
   @@map("workflow_steps")
+}
+
+model WorkflowStepAttempt {
+  id             String       @id @default(uuid())
+  workflowStepId String       @map("workflow_step_id")
+  attempt        Int
+  status         JobStatus    @default(queued)
+  provider       String?
+  model          String?
+  inputHash      String       @map("input_hash")
+  usage          Json?
+  errorCode      String?      @map("error_code")
+  errorMessage   String?      @map("error_message")
+  startedAt      DateTime     @default(now()) @map("started_at")
+  finishedAt     DateTime?    @map("finished_at")
+  workflowStep   WorkflowStep @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowStepId, attempt])
+  @@index([workflowStepId, status])
+  @@map("workflow_step_attempts")
 }
 
 model AuditLog {

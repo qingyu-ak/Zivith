@@ -219,13 +219,37 @@ Docs already describe partial regen and Asset Agent outside the main pipeline; t
 
 ---
 
-## 14. When to expand this RFC
+## 14. Slice A — Scoped recompute (implemented V0.4 W4)
 
-Before or during Slice A implementation, expand with:
+### API shapes
 
-- Exact Orchestrator API shapes for scoped plans  
-- Stale-propagation matrix (tests)  
-- Conflict rules if two recomputes hit the same Shot  
-- UI copy and placement on Scene / Shot / Asset pages  
+| Method | Path | Scope | Effect |
+|--------|------|-------|--------|
+| `POST` | `/scenes/:id/recompute-visual-prep` | One Scene | Mark non-approved requirements pending; rerun Visual Prep for that Scene; record `workflow_step_attempts` |
+| `POST` | `/shots/:id/recompute-prompt` | One Shot | Rerun Prompt Agent; leave approved shots alone (409); record attempt |
+| `POST` | `/shots/:id/recompute-video` | One Shot | Rerun video generation if prompt approved; leave approved shots alone (409); record attempt |
 
-Until acceptance of Slice A scope, treat this document as a **scope lock**, not a build ticket dump.
+Orchestrator: `beginScopedRecompute` / `finishScopedRecompute` / `mergeStepOutput` — does **not** advance `current_step_index`. Linear `runUntilGate` remains SoT for newcomer path.
+
+### Stale-propagation matrix
+
+| Trigger | Marks stale | Untouched |
+|---------|-------------|-----------|
+| Scene visual recompute | That Scene’s non-`approved` `VisualAssetRequirement` → `pending`; non-approved Shots in Scene → `prompting` + clear unapproved prompt approvals | Approved requirements; approved Shots |
+| Shot prompt recompute | Target Shot → `prompting` (if not approved) | Approved Shot (rejected) |
+| Shot video recompute | New Output only | Approved Shot (rejected); prior Media/Output history |
+
+### Conflict rules
+
+Lock key in run `state.scoped_locks`: `{kind}:{entity_type}:{entity_id}`.
+
+If a second scoped recompute hits the same key while an attempt is `running` → **409 `RECOMPUTE_IN_PROGRESS`**.
+
+Identical `input_hash` across completed attempts is recorded on the new attempt’s `usage.identical_input_attempt` (recognizable; skip optimization optional later).
+
+### UI copy (Chinese)
+
+- Scene / WorkflowPanel visual gate:「重跑本场景视觉准备」
+- Shot / WorkflowPanel prompt|video:「重跑本镜头提示词」/「重跑本镜头视频」
+
+Until further slices, treat remaining RFC sections as scope lock for B/C only.

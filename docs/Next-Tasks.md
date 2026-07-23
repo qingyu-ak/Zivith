@@ -101,7 +101,7 @@ Default linear Story→Video **stays**. No node canvas; no gate time-travel (D4)
 | ID | Task | Notes | Status |
 |----|------|-------|--------|
 | E0 | Accept / revise Looser Creative Flow RFC | Scope lock + ramp (A→B→C) | Done 2026-07-23 (Accepted 0.2) |
-| E1 | Slice A: scoped Scene/Shot/visual recompute via Orchestrator | Implemented as [V0.4 plan](V0.4-Modification-Plan.md) **W4** | Open — via Track F |
+| E1 | Slice A: scoped Scene/Shot/visual recompute via Orchestrator | Implemented as [V0.4 plan](V0.4-Modification-Plan.md) **W4** | Done 2026-07-23 |
 | E2 | Slice B: asset-library image generate + Visual Prep reuse | Asset side = V0.4 **W2** (appearance variants + asset-page generate) | Done 2026-07-23 (W2); W1 injects anchors |
 | E3 | Slice C: story segments (ordered Scene groupings) | Domain ADR done: [ADR-0006](architecture/adr/0006-story-segments-are-ordered-scene-groupings.md); implemented as V0.4 **W3** | Done 2026-07-23 |
 
@@ -118,7 +118,7 @@ Source of truth: [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) (from th
 | F1 | W2 Character appearance variants (`asset_appearance_variants`) | Review A1 / RFC Slice B | P0 | Done 2026-07-23 |
 | F2 | W1 Reference-image injection pipeline (ports + adapters + prompt contract) | Review A2 — biggest consistency gap | P0 | Done 2026-07-23 |
 | F3 | W3 StorySegment: segmented story draft + per-segment review + Scene grouping | ADR-0006 / RFC Slice C | P1 | Done 2026-07-23 |
-| F4 | W4 Scoped recompute APIs + `workflow_step_attempts` persistence | RFC Slice A / Review A3 | P1 | Open |
+| F4 | W4 Scoped recompute APIs + `workflow_step_attempts` persistence | RFC Slice A / Review A3 | P1 | Done 2026-07-23 |
 | F5 | W5 Candidate sets (count>1 generate + pick + no `previous*` fields) | Review A5 | P2 | Open |
 | F6 | W6 Externalized versioned agent prompts (`{knowledge_context}` slot) | Review A7 | P2 | Open |
 | F7 | W7 Usage records (first pass of C8; freeze/limits second pass) | Review A6 / C8 | P3 | Open |

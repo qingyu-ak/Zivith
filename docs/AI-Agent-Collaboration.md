@@ -391,6 +391,14 @@ The pipeline supports partial regeneration from any stage.
 | User changes Project Style | All non-approved Shots in Project | Re-runs Prompt Agent → Generation Agent for all affected Shots |
 | User edits a prompt directly | That Shot only | Re-runs Generation Agent for that Shot |
 
+**Operator APIs (V0.4 W4):** scoped recompute without cancel+restart —
+
+- `POST /scenes/:id/recompute-visual-prep`
+- `POST /shots/:id/recompute-prompt`
+- `POST /shots/:id/recompute-video`
+
+Each call records a `workflow_step_attempts` row (`input_hash`, provider/model, usage). Concurrent recomputes on the same entity return `409 RECOMPUTE_IN_PROGRESS`. See [Looser-Creative-Flow-RFC.md §14](architecture/rfc/Looser-Creative-Flow-RFC.md).
+
 ## 4.2 Change Propagation
 
 ```

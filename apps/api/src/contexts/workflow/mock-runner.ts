@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID as cryptoRandomUuid } from 'node:crypto';
 import {
   asId,
   type AgentContext,
@@ -28,6 +28,15 @@ import { createProviderBundle, type ProviderBundle } from '../../providers/regis
 import type { ImageGenerationAdapter } from '../../ports/media.js';
 import type { LLMAdapter } from '../../ports/llm.js';
 import type { SubmitReviewInput, WorkflowOrchestrator } from './orchestrator.js';
+import {
+  markSceneDownstreamPromptsStale,
+  markSceneVisualsStale,
+  markShotPromptStale,
+  sceneVisualInputSnapshot,
+  shotPromptInputSnapshot,
+  shotVideoInputSnapshot,
+  stableInputHash,
+} from './scoped-recompute.js';
 
 type WorkflowWithSteps = Awaited<ReturnType<MockWorkflowRunner['getRun']>>;
 
@@ -223,6 +232,251 @@ export class MockWorkflowRunner {
     });
     if (!run) throw new ApiError(404, 'WORKFLOW_NOT_FOUND', '工作流不存在');
     return run;
+  }
+
+  async recomputeVisualPrep(sceneId: string, userId: string) {
+    const scene = await this.db.scene.findFirst({
+      where: { id: sceneId, deletedAt: null },
+      include: { story: { select: { id: true, projectId: true } } },
+    });
+    if (!scene) throw new ApiError(404, 'SCENE_NOT_FOUND', '场景不存在');
+    await this.assertProjectEditor(scene.story.projectId, userId);
+
+    const inputHash = stableInputHash(sceneVisualInputSnapshot(scene));
+    const staleRequirements = await markSceneVisualsStale(this.db, sceneId);
+    const staleShots = await markSceneDownstreamPromptsStale(this.db, sceneId);
+
+    const scoped = await this.orchestrator.beginScopedRecompute({
+      projectId: scene.story.projectId,
+      stepName: 'visual_prep',
+      entityType: 'scene',
+      entityId: sceneId,
+      inputHash,
+      actorId: userId,
+      storyId: scene.story.id,
+      usage: { stale_requirements: staleRequirements, stale_shots: staleShots },
+    });
+
+    try {
+      const run = await this.getRun(scoped.run.id);
+      const result = await this.executeVisualPrep(run, userId, {
+        sceneIds: [sceneId],
+        advance: false,
+        preserveApproved: true,
+      });
+      await this.orchestrator.finishScopedRecompute({
+        runId: scoped.run.id,
+        attemptId: scoped.attempt.id,
+        lockKey: scoped.lockKey,
+        status: 'completed',
+        provider: this.providers.selection.image,
+        model: this.imageModel,
+        usage: {
+          requirement_ids: result.requirementIds,
+          input_hash: inputHash,
+          identical_input_attempt: await this.findIdenticalAttempt(
+            scoped.step.id,
+            inputHash,
+            scoped.attempt.id,
+          ),
+        },
+      });
+      return {
+        run_id: scoped.run.id,
+        attempt_id: scoped.attempt.id,
+        attempt: scoped.attempt.attempt,
+        input_hash: inputHash,
+        requirement_ids: result.requirementIds,
+        stale_requirements: staleRequirements,
+        stale_shots: staleShots,
+      };
+    } catch (error) {
+      await this.orchestrator.finishScopedRecompute({
+        runId: scoped.run.id,
+        attemptId: scoped.attempt.id,
+        lockKey: scoped.lockKey,
+        status: 'failed',
+        provider: this.providers.selection.image,
+        model: this.imageModel,
+        errorCode: error instanceof ApiError ? error.code : 'RECOMPUTE_FAILED',
+        errorMessage: error instanceof Error ? error.message.slice(0, 500) : String(error),
+      });
+      throw error;
+    }
+  }
+
+  async recomputePrompt(shotId: string, userId: string) {
+    const shot = await this.db.shot.findFirst({
+      where: { id: shotId, deletedAt: null },
+      include: {
+        scene: { include: { story: { select: { id: true, projectId: true } } } },
+      },
+    });
+    if (!shot) throw new ApiError(404, 'SHOT_NOT_FOUND', '镜头不存在');
+    await this.assertProjectEditor(shot.scene.story.projectId, userId);
+    if (shot.state === 'approved') {
+      throw new ApiError(409, 'SHOT_APPROVED', '已批准镜头的提示词不可局部重跑，请先解冻');
+    }
+
+    const inputHash = stableInputHash(shotPromptInputSnapshot(shot));
+    await markShotPromptStale(this.db, shotId);
+
+    const scoped = await this.orchestrator.beginScopedRecompute({
+      projectId: shot.scene.story.projectId,
+      stepName: 'prompt',
+      entityType: 'shot',
+      entityId: shotId,
+      inputHash,
+      actorId: userId,
+      storyId: shot.scene.story.id,
+    });
+
+    try {
+      const run = await this.getRun(scoped.run.id);
+      const result = await this.executePrompts(run, userId, {
+        shotIds: [shotId],
+        advance: false,
+      });
+      await this.orchestrator.finishScopedRecompute({
+        runId: scoped.run.id,
+        attemptId: scoped.attempt.id,
+        lockKey: scoped.lockKey,
+        status: 'completed',
+        provider: this.providers.selection.llm,
+        model: this.llmModel,
+        usage: {
+          prompt_version_ids: result.promptVersionIds,
+          input_hash: inputHash,
+          identical_input_attempt: await this.findIdenticalAttempt(
+            scoped.step.id,
+            inputHash,
+            scoped.attempt.id,
+          ),
+        },
+      });
+      return {
+        run_id: scoped.run.id,
+        attempt_id: scoped.attempt.id,
+        attempt: scoped.attempt.attempt,
+        input_hash: inputHash,
+        prompt_version_ids: result.promptVersionIds,
+      };
+    } catch (error) {
+      await this.orchestrator.finishScopedRecompute({
+        runId: scoped.run.id,
+        attemptId: scoped.attempt.id,
+        lockKey: scoped.lockKey,
+        status: 'failed',
+        provider: this.providers.selection.llm,
+        model: this.llmModel,
+        errorCode: error instanceof ApiError ? error.code : 'RECOMPUTE_FAILED',
+        errorMessage: error instanceof Error ? error.message.slice(0, 500) : String(error),
+      });
+      throw error;
+    }
+  }
+
+  async recomputeVideo(shotId: string, userId: string) {
+    const shot = await this.db.shot.findFirst({
+      where: { id: shotId, deletedAt: null },
+      include: {
+        scene: { include: { story: { select: { id: true, projectId: true } } } },
+      },
+    });
+    if (!shot) throw new ApiError(404, 'SHOT_NOT_FOUND', '镜头不存在');
+    await this.assertProjectEditor(shot.scene.story.projectId, userId);
+    if (shot.state === 'approved') {
+      throw new ApiError(409, 'SHOT_APPROVED', '已批准镜头不可局部重跑视频，请先解冻');
+    }
+
+    const approvedPrompt = await this.db.promptVersion.findFirst({
+      where: { shotId, approvedAt: { not: null } },
+      orderBy: { approvedAt: 'desc' },
+    });
+    if (!approvedPrompt) {
+      throw new ApiError(409, 'PROMPT_NOT_APPROVED', '请先审核通过提示词再重跑视频');
+    }
+
+    const inputHash = stableInputHash(shotVideoInputSnapshot(shot));
+    const scoped = await this.orchestrator.beginScopedRecompute({
+      projectId: shot.scene.story.projectId,
+      stepName: 'video',
+      entityType: 'shot',
+      entityId: shotId,
+      inputHash,
+      actorId: userId,
+      storyId: shot.scene.story.id,
+    });
+
+    try {
+      const run = await this.getRun(scoped.run.id);
+      const result = await this.executeVideos(run, {
+        shotIds: [shotId],
+        advance: false,
+      });
+      await this.orchestrator.finishScopedRecompute({
+        runId: scoped.run.id,
+        attemptId: scoped.attempt.id,
+        lockKey: scoped.lockKey,
+        status: 'completed',
+        provider: this.providers.selection.video,
+        model: this.providers.videoModel,
+        usage: {
+          output_ids: result.outputIds,
+          input_hash: inputHash,
+          identical_input_attempt: await this.findIdenticalAttempt(
+            scoped.step.id,
+            inputHash,
+            scoped.attempt.id,
+          ),
+        },
+      });
+      return {
+        run_id: scoped.run.id,
+        attempt_id: scoped.attempt.id,
+        attempt: scoped.attempt.attempt,
+        input_hash: inputHash,
+        output_ids: result.outputIds,
+      };
+    } catch (error) {
+      await this.orchestrator.finishScopedRecompute({
+        runId: scoped.run.id,
+        attemptId: scoped.attempt.id,
+        lockKey: scoped.lockKey,
+        status: 'failed',
+        provider: this.providers.selection.video,
+        model: this.providers.videoModel,
+        errorCode: error instanceof ApiError ? error.code : 'RECOMPUTE_FAILED',
+        errorMessage: error instanceof Error ? error.message.slice(0, 500) : String(error),
+      });
+      throw error;
+    }
+  }
+
+  private async findIdenticalAttempt(
+    stepId: string,
+    inputHash: string,
+    excludeAttemptId: string,
+  ): Promise<string | null> {
+    const prior = await this.db.workflowStepAttempt.findFirst({
+      where: {
+        workflowStepId: stepId,
+        inputHash,
+        status: 'completed',
+        id: { not: excludeAttemptId },
+      },
+      orderBy: { attempt: 'desc' },
+      select: { id: true },
+    });
+    return prior?.id ?? null;
+  }
+
+  private async assertProjectEditor(projectId: string, userId: string): Promise<void> {
+    const member = await this.db.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+    });
+    if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
+    if (member.role === 'viewer') throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
   }
 
   private async executeStory(run: WorkflowWithSteps, userId: string): Promise<void> {
@@ -489,18 +743,57 @@ export class MockWorkflowRunner {
     });
   }
 
-  private async executeVisualPrep(run: WorkflowWithSteps, userId: string): Promise<void> {
+  private async executeVisualPrep(
+    run: WorkflowWithSteps,
+    userId: string,
+    options?: {
+      sceneIds?: string[];
+      advance?: boolean;
+      preserveApproved?: boolean;
+    },
+  ): Promise<{ requirementIds: string[]; assetIds: string[] }> {
     const sceneStep = run.steps.find((step) => step.name === 'scene');
     const output = record(sceneStep?.output);
-    const sceneIds = Array.isArray(output.scene_ids)
+    let sceneIds = Array.isArray(output.scene_ids)
       ? output.scene_ids.filter((id): id is string => typeof id === 'string')
       : [];
-    const scenes = Array.isArray(output.scenes)
+    let scenes = Array.isArray(output.scenes)
       ? output.scenes.filter(
           (scene): scene is Record<string, unknown> =>
             Boolean(scene) && typeof scene === 'object' && !Array.isArray(scene),
         )
       : [];
+
+    if (options?.sceneIds?.length) {
+      const wanted = new Set(options.sceneIds);
+      const filtered: Array<{ id: string; meta: Record<string, unknown> }> = [];
+      for (const [index, sceneId] of sceneIds.entries()) {
+        if (!wanted.has(sceneId)) continue;
+        filtered.push({ id: sceneId, meta: scenes[index] ?? {} });
+      }
+      for (const sceneId of options.sceneIds) {
+        if (filtered.some((item) => item.id === sceneId)) continue;
+        const dbScene = await this.db.scene.findFirst({
+          where: { id: sceneId, deletedAt: null },
+        });
+        if (!dbScene) throw new ApiError(404, 'SCENE_NOT_FOUND', '场景不存在');
+        filtered.push({
+          id: sceneId,
+          meta: {
+            title: dbScene.title,
+            summary: dbScene.description,
+            description: dbScene.description,
+            time_of_day: dbScene.time,
+            mood: dbScene.mood,
+            character_names: [],
+            location_name: null,
+          },
+        });
+      }
+      sceneIds = filtered.map((item) => item.id);
+      scenes = filtered.map((item) => item.meta);
+    }
+
     if (sceneIds.length === 0 || sceneIds.length !== scenes.length) {
       throw new ApiError(409, 'SCENE_OUTPUT_MISSING', 'Scene Agent 尚未生成可用场景');
     }
@@ -563,9 +856,19 @@ export class MockWorkflowRunner {
     const requirementIds: string[] = [];
     const enrichedAssetIds = new Set<string>();
     for (const requirement of result.data.requirements) {
+      if (options?.sceneIds && !options.sceneIds.includes(requirement.scene_id)) continue;
       const requirementId = deterministicUuid(
         `${run.id}:requirement:${requirement.scene_id}:${requirement.asset_type}:${requirement.asset_id}:${requirement.variant_key}`,
       );
+      if (options?.preserveApproved) {
+        const existing = await this.db.visualAssetRequirement.findFirst({
+          where: { id: requirementId, deletedAt: null },
+        });
+        if (existing?.status === 'approved') {
+          requirementIds.push(requirementId);
+          continue;
+        }
+      }
       const mediaId = deterministicUuid(`${requirementId}:candidate`);
       const asset = await this.db.asset.findUniqueOrThrow({ where: { id: requirement.asset_id } });
       const sceneMeta = scenes[sceneIds.indexOf(requirement.scene_id)] ?? {};
@@ -756,12 +1059,18 @@ export class MockWorkflowRunner {
       });
       requirementIds.push(requirementId);
     }
-    await this.orchestrator.completeStep(run.id, 'visual_prep', {
+    const payload = {
       requirement_ids: requirementIds,
       asset_ids: [...assetIds],
       agent_metadata: result.metadata,
       image_provider: this.providers.selection.image,
-    });
+    };
+    if (options?.advance === false) {
+      await this.orchestrator.mergeStepOutput(run.id, 'visual_prep', payload);
+    } else {
+      await this.orchestrator.completeStep(run.id, 'visual_prep', payload);
+    }
+    return { requirementIds, assetIds: [...assetIds] };
   }
 
   private async executeShots(run: WorkflowWithSteps, userId: string): Promise<void> {
@@ -838,11 +1147,18 @@ export class MockWorkflowRunner {
     });
   }
 
-  private async executePrompts(run: WorkflowWithSteps, userId: string): Promise<void> {
+  private async executePrompts(
+    run: WorkflowWithSteps,
+    userId: string,
+    options?: { shotIds?: string[]; advance?: boolean },
+  ): Promise<{ promptVersionIds: string[]; shotIds: string[] }> {
     const shotOutput = record(run.steps.find((step) => step.name === 'shot')?.output);
-    const shotIds = Array.isArray(shotOutput.shot_ids)
+    let shotIds = Array.isArray(shotOutput.shot_ids)
       ? shotOutput.shot_ids.filter((id): id is string => typeof id === 'string')
       : [];
+    if (options?.shotIds?.length) {
+      shotIds = options.shotIds;
+    }
     if (shotIds.length === 0) {
       throw new ApiError(409, 'SHOT_OUTPUT_MISSING', 'Shot Agent 尚未生成可用镜头');
     }
@@ -851,6 +1167,9 @@ export class MockWorkflowRunner {
       include: { scene: { include: { story: { include: { project: true } } } } },
       orderBy: [{ sceneId: 'asc' }, { order: 'asc' }],
     });
+    if (shots.length === 0) {
+      throw new ApiError(404, 'SHOT_NOT_FOUND', '镜头不存在');
+    }
     const promptVersionIds: string[] = [];
     for (const shot of shots) {
       const promptInput = await this.promptInput(shot);
@@ -868,7 +1187,14 @@ export class MockWorkflowRunner {
         );
       }
       const generated = result.data;
-      const promptVersionId = deterministicUuid(`${run.id}:prompt:${shot.id}`);
+      const approved = await this.db.promptVersion.findFirst({
+        where: { shotId: shot.id, approvedAt: { not: null } },
+        orderBy: { approvedAt: 'desc' },
+      });
+      const promptVersionId =
+        options?.advance === false && approved
+          ? cryptoRandomUuid()
+          : deterministicUuid(`${run.id}:prompt:${shot.id}`);
       await this.db.$transaction([
         this.db.promptVersion.upsert({
           where: { id: promptVersionId },
@@ -889,41 +1215,62 @@ export class MockWorkflowRunner {
         this.db.shot.update({
           where: { id: shot.id },
           data: {
-            state: 'prompting',
+            state: shot.state === 'approved' ? 'approved' : 'prompting',
             prompt: json(generated),
           },
         }),
       ]);
       promptVersionIds.push(promptVersionId);
     }
-    await this.orchestrator.completeStep(run.id, 'prompt', {
+    const payload = {
       shot_ids: shots.map((shot) => shot.id),
       prompt_version_ids: promptVersionIds,
-    });
+    };
+    if (options?.advance === false) {
+      await this.orchestrator.mergeStepOutput(run.id, 'prompt', payload);
+    } else {
+      await this.orchestrator.completeStep(run.id, 'prompt', payload);
+    }
+    return { promptVersionIds, shotIds: shots.map((shot) => shot.id) };
   }
 
-  private async executeVideos(run: WorkflowWithSteps): Promise<void> {
+  private async executeVideos(
+    run: WorkflowWithSteps,
+    options?: { shotIds?: string[]; advance?: boolean },
+  ): Promise<{ outputIds: string[]; shotIds: string[] }> {
     const promptOutput = record(run.steps.find((step) => step.name === 'prompt')?.output);
-    const shotIds = Array.isArray(promptOutput.shot_ids)
+    let shotIds = Array.isArray(promptOutput.shot_ids)
       ? promptOutput.shot_ids.filter((id): id is string => typeof id === 'string')
       : [];
+    if (options?.shotIds?.length) {
+      shotIds = options.shotIds;
+    }
     if (shotIds.length === 0) {
       throw new ApiError(409, 'PROMPT_OUTPUT_MISSING', 'Prompt Agent 尚未生成可用提示词');
     }
     const outputs = await Promise.all(
       shotIds.map((shotId) =>
         this.generationService.generate(shotId, {
-          requestId: `${run.id}:${shotId}`,
+          requestId:
+            options?.advance === false
+              ? `${run.id}:${shotId}:recompute:${Date.now()}`
+              : `${run.id}:${shotId}`,
           model: this.providers.videoModel,
         }),
       ),
     );
-    await this.orchestrator.completeStep(run.id, 'video', {
+    const payload = {
       shot_ids: shotIds,
       output_ids: outputs.map((output) => output.id),
       provider: this.providers.selection.video,
       model: this.providers.videoModel,
-    });
+    };
+    if (options?.advance === false) {
+      await this.orchestrator.mergeStepOutput(run.id, 'video', payload);
+    } else {
+      await this.orchestrator.completeStep(run.id, 'video', payload);
+    }
+    return { outputIds: outputs.map((output) => output.id), shotIds };
   }
 
   private async persistShots(

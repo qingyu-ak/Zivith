@@ -26,6 +26,7 @@ export default function StoryEditorPage() {
   const [editing, setEditing] = useState(false);
   const [addingScene, setAddingScene] = useState(false);
   const [error, setError] = useState('');
+  const [recomputingSceneId, setRecomputingSceneId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -134,6 +135,19 @@ export default function StoryEditorPage() {
       await load();
     } catch (reason) {
       setError(errorMessage(reason));
+    }
+  }
+
+  async function recomputeVisualPrep(scene: SceneDTO) {
+    setRecomputingSceneId(scene.id);
+    setError('');
+    try {
+      await api(`/scenes/${scene.id}/recompute-visual-prep`, { method: 'POST' });
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setRecomputingSceneId(null);
     }
   }
 
@@ -306,6 +320,15 @@ export default function StoryEditorPage() {
                     }}
                   >
                     添加镜头
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={recomputingSceneId === scene.id}
+                    onClick={() => {
+                      void recomputeVisualPrep(scene);
+                    }}
+                  >
+                    {recomputingSceneId === scene.id ? '重跑中…' : '重跑本场景视觉准备'}
                   </Button>
                   <Button
                     variant="danger"
