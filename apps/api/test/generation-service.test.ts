@@ -55,7 +55,7 @@ function database(currentShot = shot()) {
     shotId: currentShot.id,
     status: 'completed' as const,
     videoUrl: 'https://example.test/mock.mp4',
-    idempotencyKey: 'mock-video:request-1',
+    idempotencyKey: 'mock-video__request-1',
     model: 'mock-v1',
     promptSnapshot: currentShot.prompt,
     visualMediaIds: ['media-1'],
@@ -64,14 +64,14 @@ function database(currentShot = shot()) {
     id: 'output-1',
     shotId: currentShot.id,
     status: 'queued',
-    idempotencyKey: 'mock-video:request-1',
+    idempotencyKey: 'mock-video__request-1',
     model: 'mock-v1',
     promptSnapshot: currentShot.prompt,
     visualMediaIds: ['media-1'],
   };
   const taskState = {
     id: 'task-1',
-    idempotencyKey: 'mock-video:request-1',
+    idempotencyKey: 'mock-video__request-1',
     payload: {
       shot_id: currentShot.id,
       output_id: 'output-1',
@@ -183,7 +183,7 @@ describe('GenerationService', () => {
     vi.clearAllMocks();
     const { db } = database();
     const service = new GenerationService(db, adapter);
-    const enqueue = vi.fn().mockResolvedValue({ job_id: 'mock-video:request-1' });
+    const enqueue = vi.fn().mockResolvedValue({ job_id: 'mock-video__request-1' });
     const memory = {
       enqueue,
       cancel: vi.fn(),

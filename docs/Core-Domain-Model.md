@@ -97,6 +97,8 @@ Each layer has a different responsibility.
 
 The hierarchy represents the filmmaking process rather than the generation pipeline.
 
+**Story segmentation ([ADR-0006](architecture/adr/0006-story-segments-are-ordered-scene-groupings.md), V0.4):** inside a Story, Scenes may be organized into ordered **StorySegments** (章/幕). A segment is a grouping with its own title, draft text, order, and approval state — it is *not* a hierarchy node: Scenes remain owned by the Story, and a Story with no segments is fully valid. Segments exist so story drafting and review can proceed chapter-by-chapter and so scoped recompute can address one narrative slice.
+
 ---
 
 # 4. Core Domain Objects
@@ -175,6 +177,7 @@ Story is responsible for:
 Story owns:
 
 - Scenes
+- StorySegments (optional ordered Scene groupings — [ADR-0006](architecture/adr/0006-story-segments-are-ordered-scene-groupings.md), V0.4)
 
 Story never owns Characters or Assets.
 

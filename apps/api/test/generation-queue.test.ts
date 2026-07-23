@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@zivith/database';
+import { toBullJobId } from '../src/adapters/bullmq.js';
 import { InMemoryQueueAdapter } from '../src/adapters/memory-queue.js';
 import { createGenerationQueueRuntime } from '../src/contexts/generation/queue-runtime.js';
 import { GenerationService } from '../src/contexts/generation/service.js';
+
+describe('toBullJobId', () => {
+  it('leaves ids without colon unchanged', () => {
+    expect(toBullJobId('job-1')).toBe('job-1');
+  });
+
+  it('replaces colon in non-legacy ids so BullMQ accepts them', () => {
+    expect(toBullJobId('uuid:story-agent')).toBe('uuid__story-agent');
+    expect(toBullJobId('mock-video:req-1')).toBe('mock-video__req-1');
+  });
+
+  it('keeps legacy three-segment repeatable job ids', () => {
+    expect(toBullJobId('repeat:foo:bar')).toBe('repeat:foo:bar');
+  });
+});
 
 describe('generation queue runtime', () => {
   it('falls back to in-memory queue when REDIS_URL is unset', () => {
@@ -30,6 +46,21 @@ describe('generation queue runtime', () => {
       Promise.resolve({ ok: true }),
     );
     expect(image).toEqual({ ok: true });
+    if (previous === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = previous;
+  });
+
+  it('accepts logical keys that contain colons', async () => {
+    const previous = process.env.REDIS_URL;
+    delete process.env.REDIS_URL;
+    const service = new GenerationService({} as PrismaClient);
+    const runtime = createGenerationQueueRuntime(service);
+    const value = await runtime.workBridge.run(
+      'workflow_step',
+      '11111111-1111-4111-8111-111111111111:story-agent',
+      () => Promise.resolve('ok'),
+    );
+    expect(value).toBe('ok');
     if (previous === undefined) delete process.env.REDIS_URL;
     else process.env.REDIS_URL = previous;
   });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@zivith/database';
 import { type PrismaClient } from '@zivith/database';
+import { ApiError } from '../../errors.js';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
 import {
   mergeVisualPromptIntoAssetData,
@@ -24,6 +25,8 @@ export interface GenerateRequirementImageInput {
   imageModel: string;
   prompt: string;
   requestId?: string;
+  /** When false, provider failures throw instead of writing an SVG placeholder. */
+  allowFallback?: boolean;
 }
 
 export async function generateRequirementImage(input: GenerateRequirementImageInput) {
@@ -44,9 +47,11 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
   if (!scene) return null;
 
   const prompt = input.prompt.trim();
+  const allowFallback = input.allowFallback !== false;
   let imageUrl = svgPlaceholderDataUrl(asset.name);
   let provider = input.image.provider;
   let isMock = provider === 'mock';
+  let generationError: string | undefined;
   try {
     const generated = await input.image.generate({
       request_id: input.requestId ?? randomUUID(),
@@ -56,12 +61,14 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
     if (generated.image_url) imageUrl = generated.image_url;
     isMock = Boolean(generated.metadata.is_mock);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!allowFallback) {
+      throw new ApiError(502, 'IMAGE_GENERATION_FAILED', `生图失败：${message.slice(0, 300)}`);
+    }
     provider = 'mock-fallback';
     isMock = true;
-    console.warn(
-      '[visual-requirement] image generation failed, using placeholder',
-      error instanceof Error ? error.message : error,
-    );
+    generationError = message.slice(0, 500);
+    console.warn('[visual-requirement] image generation failed, using placeholder', message);
   }
 
   const mediaId = randomUUID();
@@ -81,6 +88,7 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
         model: input.imageModel,
         generation_prompt: prompt,
         requirement_id: requirement.id,
+        ...(generationError ? { generation_error: generationError } : {}),
       }),
       tags: ['generated', requirement.assetType],
     },

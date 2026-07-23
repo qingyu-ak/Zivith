@@ -198,9 +198,19 @@ export function ProviderPanel() {
                     onChange={(event) =>
                       setModels((current) => ({ ...current, [modality]: event.target.value }))
                     }
-                    placeholder="留空则使用环境默认"
+                    placeholder={
+                      modality === 'image'
+                        ? '例如 black-forest-labs/FLUX.1-schnell'
+                        : '留空则使用环境默认'
+                    }
                   />
                 </Field>
+                {modality === 'image' && /image-edit|img2img/i.test(models.image) && (
+                  <p className="text-xs text-amber-300">
+                    当前模型名像是「图片编辑」而非文生图，视觉准备容易失败。请换成 FLUX / SD 等
+                    text-to-image 模型。
+                  </p>
+                )}
               </div>
             ))}
             <div className="flex flex-wrap gap-3 md:col-span-2">

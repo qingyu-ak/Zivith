@@ -75,6 +75,22 @@ The most complex Asset type. Characters must maintain visual consistency across 
 | `appearance.distinguishing_features` | `string` | No | Unique identifying features (scars, tattoos, etc.) |
 | `appearance.custom` | `string` | No | Free-text override for anything not captured above |
 
+### Appearance Variants (V0.4 — accepted, implementation pending)
+
+Consistency is anchored per **character × narrative state**, not per character. A Character owns an ordered list of `AppearanceVariant`s (see [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) W2, adopted from the [waoowaoo review](architecture/review/Zivith-Architecture-Review-Based-on-waoowaoo.md) A1):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | `string` | Yes | Stable semantic key, unique per Character, e.g. `default`, `wounded`, `young` |
+| `title` | `string` | Yes | Display name (Chinese UI) |
+| `change_reason` | `string` | No | Narrative reason for the appearance change |
+| `description` | `string` | No | Appearance delta, merged over the Character's base `appearance` at read time |
+| `anchor_media_id` | `MediaId` | No | The approved anchor image for this variant — the reference injected at image generation |
+| `candidate_media_ids[]` | `MediaId[]` | No | Generated candidates awaiting selection |
+| `state` | `enum` | Yes | Approval state (same enum as other reviewable entities) |
+
+Every character receives a `default` variant. Reference-image injection (plan W1) resolves: Scene approved binding → matching variant `anchor_media_id` → project-level `reference_images[0]`.
+
 ## 2.3 Location
 
 A Location represents a physical place. Locations provide shared environmental context for all Shots within a Scene that references them.
@@ -166,7 +182,7 @@ Media assets are binary files uploaded to or generated within the Project.
 | `scene_id` | `SceneId` | Yes | Owning Scene |
 | `asset_type` | `enum` | Yes | `character` or `location` in the first release; Props are excluded from visual preparation |
 | `asset_id` | `AssetId` | Yes | Referenced Character or Location |
-| `variant_key` | `string` | Yes | Stable Scene variant key, e.g. `default`, `midnight_moonlight`, or `attic_corridor` |
+| `variant_key` | `string` | Yes | Stable Scene variant key, e.g. `default`, `midnight_moonlight`, or `attic_corridor`. From V0.4 (plan W2): when the key matches a Character `AppearanceVariant.key`, that variant's anchor image is the preferred generation reference; unmatched free-form keys stay valid for backward compatibility |
 | `required` | `boolean` | Yes | Whether this is a prerequisite for generating the Scene's Shots |
 | `reason` | `string` | Yes | Why the image must be generated, reused, or regenerated |
 | `status` | `enum` | Yes | `pending`, `generating`, `review`, `approved`, or `rejected` |

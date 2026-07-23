@@ -214,26 +214,36 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
       data: { status: 'generating' },
     });
 
-    const result = await generateRequirementImage({
-      db,
-      requirementId: rid,
-      image: providers.image,
-      imageModel: providers.imageModel,
-      prompt,
-      requestId: randomUUID(),
-    });
-    if (!result) throw new ApiError(404, 'VISUAL_REQUIREMENT_NOT_FOUND', '视觉需求不存在');
+    try {
+      const result = await generateRequirementImage({
+        db,
+        requirementId: rid,
+        image: providers.image,
+        imageModel: providers.imageModel,
+        prompt,
+        requestId: randomUUID(),
+        // Manual regenerate must fail loudly so operators can fix model/provider settings.
+        allowFallback: false,
+      });
+      if (!result) throw new ApiError(404, 'VISUAL_REQUIREMENT_NOT_FOUND', '视觉需求不存在');
 
-    return reply.status(201).send({
-      ...(await enrichRequirement(db, result.requirement)),
-      media: {
-        id: result.media.id,
-        url: result.media.url,
-        access_url: result.media.url,
-      },
-      provider: providers.selection.image,
-      model: providers.imageModel,
-    });
+      return reply.status(201).send({
+        ...(await enrichRequirement(db, result.requirement)),
+        media: {
+          id: result.media.id,
+          url: result.media.url,
+          access_url: result.media.url,
+        },
+        provider: providers.selection.image,
+        model: providers.imageModel,
+      });
+    } catch (error) {
+      await db.visualAssetRequirement.update({
+        where: { id: rid },
+        data: { status: 'review' },
+      });
+      throw error;
+    }
   });
 
   app.post('/scenes/:id/visual-requirements/:rid/approve', async (request) => {

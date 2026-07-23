@@ -223,6 +223,13 @@ export interface WorkflowMediaDTO {
   id: string;
   access_url?: string | null;
   url?: string | null;
+  generation_metadata?: {
+    is_mock?: boolean;
+    provider?: string;
+    model?: string;
+    generation_error?: string;
+    generation_prompt?: string;
+  } | null;
 }
 
 export interface OutputDTO {

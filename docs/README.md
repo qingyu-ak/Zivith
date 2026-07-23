@@ -4,9 +4,9 @@
 >
 > Version: 0.1.0-pre
 >
-> Status: Implementation — Phase 2 (Mock pipeline) in progress
+> Status: Implementation — Phase 2 closed for Track A–D core; Phase 2.5 providers in use
 >
-> Last Progress Sync: 2026-07-21
+> Last Progress Sync: 2026-07-22
 
 ---
 
@@ -51,8 +51,11 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | [RFC Guide](architecture/rfc-guide.md) | Proposal, review, risk, migration, and acceptance process for significant changes |
 | [Technical Architecture](Technical-Architecture.md) | System design, adapters, APIs, queues, BYOK, and data storage |
 | [Implementation Plan](Implementation-Plan.md) | Phased roadmap with live progress checkboxes |
-| [Next Tasks](Next-Tasks.md) | Current engineering backlog (stabilize → finish Phase 2 → 2.5) |
+| [Next Tasks](Next-Tasks.md) | Current engineering backlog (active: Track F = V0.4 plan) |
+| [V0.4 Modification Plan](V0.4-Modification-Plan.md) | **Active implementation source** — workstreams W1–W7 from the waoowaoo review + ADR-0006 |
 | [Director Copilot RFC (thin)](architecture/rfc/Director-Copilot-RFC.md) | Project sidebar co-pilot scope lock (Phase 3+; not a chatbot) |
+| [Looser Creative Flow RFC (thin)](architecture/rfc/Looser-Creative-Flow-RFC.md) | Partial recompute / asset-first visuals / story segmentation ramp |
+| [Architecture Review: waoowaoo](architecture/review/Zivith-Architecture-Review-Based-on-waoowaoo.md) | Peer open-source project review; A1–A7 adoption list feeding V0.4 planning |
 | [Code Agent Design Guide](Code-Agent-Design-Guide.md) | Implementation conventions for AI code agents |
 
 ### Historical
@@ -90,19 +93,19 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 
 ---
 
-## Project Status (2026-07-21)
+## Project Status (2026-07-22)
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 0 Foundation | ~95% done | BullMQ wired when REDIS_URL set; no staging deploy |
 | Phase 1 Core Domain | ~90% done | Inheritance is read-time resolve; Character/Location only |
-| Phase 2 AI Agent + Mock Gen | ~85% done | Queue + SSE + recover landed; mock providers remain |
-| Phase 2.5 First Providers | In progress | DeepSeek + SiliconFlow (image/video/audio); Mock fallback |
+| Phase 2 AI Agent + Mock Gen | ~95% done | A1 E2E gates pass; queue + SSE + recover landed |
+| Phase 2.5 First Providers | ~80% done | DeepSeek + SiliconFlow; BYOK/usage later (C7/C8) |
 | Phase 3–5 | Not started | — |
 
 **Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
 **Strategy:** B-Line — Agent pipeline first, video generation mocked.  
-**Near-term focus:** Phase 2.5 providers (DeepSeek + SiliconFlow). See [Next Tasks](Next-Tasks.md).
+**Near-term focus:** V0.4 Modification Plan (Track F): W2 appearance variants → W1 reference-image injection → W3 StorySegment (ADR-0006) → W4 scoped recompute → W5/W6 → W7 usage records. See [V0.4 Modification Plan](V0.4-Modification-Plan.md) and [Next Tasks](Next-Tasks.md).
 
 ---
 

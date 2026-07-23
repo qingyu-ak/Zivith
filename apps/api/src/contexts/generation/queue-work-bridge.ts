@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { InMemoryQueueAdapter } from '../../adapters/memory-queue.js';
 import type { QueueJob, QueueJobType, QueuePort } from '../../ports/index.js';
 
@@ -35,6 +36,7 @@ export class QueueWorkBridge {
         waiter.resolve(await waiter.run());
       } catch (error) {
         waiter.reject(error);
+        throw error;
       }
     };
   }
@@ -44,26 +46,29 @@ export class QueueWorkBridge {
     idempotencyKey: string,
     work: () => Promise<T>,
   ): Promise<T> {
+    // Unique per attempt so BullMQ does not reject re-runs of the same logical step.
+    // Avoid ':' — BullMQ custom jobIds cannot contain it (except 3-segment legacy form).
+    const jobKey = `${idempotencyKey.replaceAll(':', '__')}__${randomUUID()}`;
     return new Promise<T>((resolve, reject) => {
-      this.waiters.set(idempotencyKey, {
+      this.waiters.set(jobKey, {
         run: work,
         resolve: (value) => resolve(value as T),
         reject,
       });
       void this.queue
         .enqueue({
-          id: idempotencyKey,
+          id: jobKey,
           type,
-          idempotency_key: idempotencyKey,
-          payload: { kind: type },
+          idempotency_key: jobKey,
+          payload: { kind: type, idempotency_key: jobKey },
         })
         .then(async () => {
           if (this.queue instanceof InMemoryQueueAdapter) {
-            await this.queue.processNow(idempotencyKey);
+            await this.queue.processNow(jobKey);
           }
         })
         .catch((error: unknown) => {
-          this.waiters.delete(idempotencyKey);
+          this.waiters.delete(jobKey);
           reject(error instanceof Error ? error : new Error(String(error)));
         });
     });

@@ -126,6 +126,16 @@ interface VideoReviewItem {
   issue?: string;
 }
 
+function mediaMeta(media?: WorkflowMediaDTO): NonNullable<WorkflowMediaDTO['generation_metadata']> {
+  return media?.generation_metadata && typeof media.generation_metadata === 'object'
+    ? media.generation_metadata
+    : {};
+}
+
+function isFailedPlaceholder(media?: WorkflowMediaDTO): boolean {
+  return mediaMeta(media).provider === 'mock-fallback';
+}
+
 function canApproveArtifacts(
   review: WorkflowStepName | null | undefined,
   visualItems: VisualReviewItem[],
@@ -145,7 +155,12 @@ function canApproveArtifacts(
       (item) =>
         !item.requirement.required ||
         item.requirement.status === 'approved' ||
-        Boolean(item.media && item.requirement.candidate_media_ids[0] && !item.issue),
+        Boolean(
+          item.media &&
+          item.requirement.candidate_media_ids[0] &&
+          !item.issue &&
+          !isFailedPlaceholder(item.media),
+        ),
     );
   }
   if (review === 'prompt_review') {
@@ -383,6 +398,17 @@ export function WorkflowPanel({
             if (!mediaId) return { requirement, sceneTitle } satisfies VisualReviewItem;
             try {
               const media = await api<WorkflowMediaDTO>(`/media/${mediaId}`);
+              if (isFailedPlaceholder(media)) {
+                const detail = mediaMeta(media).generation_error;
+                return {
+                  requirement,
+                  media,
+                  sceneTitle,
+                  issue: detail
+                    ? `生图失败（占位图）：${detail.slice(0, 160)}`
+                    : '生图失败，当前仅为占位图。请检查图像模型后点击「按提示词生成」',
+                } satisfies VisualReviewItem;
+              }
               return { requirement, media, sceneTitle } satisfies VisualReviewItem;
             } catch {
               return {
@@ -669,6 +695,8 @@ export function WorkflowPanel({
   const terminal = Boolean(run && ['completed', 'failed', 'cancelled'].includes(run.status));
   const viewKind = selectedStep ? stepArtifactKind(selectedStep) : null;
   const isLiveReview = Boolean(review && selectedStep === review);
+  // Visual prep + visual assets review share the same cards; allow generate while that gate is open.
+  const canEditVisual = review === 'visual_assets_review' && viewKind === 'visual' && !terminal;
 
   async function regenerateVisual(requirement: VisualRequirementDTO) {
     const prompt = (promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '').trim();
@@ -940,6 +968,7 @@ export function WorkflowPanel({
               ) : (
                 visualItems.map(({ requirement, media, sceneTitle, issue }) => {
                   const imageSrc = media?.access_url || media?.url || '';
+                  const failedPlaceholder = isFailedPlaceholder(media);
                   const typeLabel =
                     requirement.asset_type === 'character' ? '角色关键图' : '地点参考';
                   const draft = promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '';
@@ -956,13 +985,24 @@ export function WorkflowPanel({
                           src={imageSrc}
                           alt={requirement.reason}
                           onError={(event) => {
-                            event.currentTarget.style.display = 'none';
+                            event.currentTarget.replaceWith(
+                              Object.assign(document.createElement('div'), {
+                                className:
+                                  'mb-3 flex aspect-video items-center justify-center rounded-md bg-zinc-900 text-xs text-zinc-600',
+                                textContent: '图片加载失败',
+                              }),
+                            );
                           }}
                         />
                       ) : (
                         <div className="mb-3 flex aspect-video items-center justify-center rounded-md bg-zinc-900 text-xs text-zinc-600">
                           暂无预览
                         </div>
+                      )}
+                      {failedPlaceholder && (
+                        <p className="mb-2 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+                          占位图（生图未成功）· 请检查图像模型后重新生成
+                        </p>
                       )}
                       <p className="text-sm font-medium">
                         {sceneTitle ? `场景「${sceneTitle}」` : '场景'} · {typeLabel}
@@ -979,7 +1019,7 @@ export function WorkflowPanel({
                       <Field label="生图提示词">
                         <Textarea
                           value={draft}
-                          disabled={!isLiveReview || busy || regeneratingId === requirement.id}
+                          disabled={!canEditVisual || busy || regeneratingId === requirement.id}
                           onChange={(event) =>
                             setPromptDrafts((current) => ({
                               ...current,
@@ -988,7 +1028,7 @@ export function WorkflowPanel({
                           }
                         />
                       </Field>
-                      {isLiveReview && (
+                      {canEditVisual && (
                         <div className="mt-2">
                           <Button
                             type="button"
@@ -996,7 +1036,11 @@ export function WorkflowPanel({
                             disabled={busy || regeneratingId === requirement.id}
                             onClick={() => void regenerateVisual(requirement)}
                           >
-                            {regeneratingId === requirement.id ? '生成中…' : '按提示词重生成'}
+                            {regeneratingId === requirement.id
+                              ? '生成中…'
+                              : failedPlaceholder || !imageSrc
+                                ? '按提示词生成'
+                                : '按提示词重生成'}
                           </Button>
                         </div>
                       )}

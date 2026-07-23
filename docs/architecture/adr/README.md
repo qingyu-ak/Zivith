@@ -11,6 +11,7 @@
 | [0003](0003-local-infrastructure-docker-compose.md) | Provide local infrastructure through Docker Compose | Accepted | 2026-07-20 |
 | [0004](0004-environment-templates-and-external-secrets.md) | Commit environment templates only; keep secrets external | Accepted | 2026-07-20 |
 | [0005](0005-single-portable-ci-quality-gate.md) | Run one portable CI quality gate | Accepted | 2026-07-20 |
+| [0006](0006-story-segments-are-ordered-scene-groupings.md) | Story segments are ordered Scene groupings inside a Story | Accepted | 2026-07-23 |
 
 ADR-0001 through 0005 were migrated from the root `ARCHITECTURE-DECISIONS.md` and predate
 the [Architecture Constitution](../architecture-principles.md); new ADRs must follow the

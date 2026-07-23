@@ -469,6 +469,7 @@ export class MockWorkflowRunner {
       let imageUrl = svgPlaceholderDataUrl(asset.name);
       let provider = this.imageAdapter.provider;
       let isMock = provider === 'mock';
+      let generationError: string | undefined;
       try {
         const generated = await this.queueWork.run(
           'image_generate',
@@ -485,11 +486,17 @@ export class MockWorkflowRunner {
       } catch (error) {
         provider = 'mock-fallback';
         isMock = true;
-        console.warn(
-          '[visual-prep] image generation failed, using placeholder',
-          error instanceof Error ? error.message : error,
-        );
+        generationError = error instanceof Error ? error.message.slice(0, 500) : String(error);
+        console.warn('[visual-prep] image generation failed, using placeholder', generationError);
       }
+      const generationMetadata = {
+        is_mock: isMock,
+        provider,
+        model: this.imageModel,
+        workflow_run_id: run.id,
+        generation_prompt: generationPrompt,
+        ...(generationError ? { generation_error: generationError } : {}),
+      };
       await this.db.media.upsert({
         where: { id: mediaId },
         create: {
@@ -501,25 +508,13 @@ export class MockWorkflowRunner {
           storageKey: `visual-assets/${mediaId}.png`,
           url: imageUrl,
           source: 'generated',
-          generationMetadata: {
-            is_mock: isMock,
-            provider,
-            model: this.imageModel,
-            workflow_run_id: run.id,
-            generation_prompt: generationPrompt,
-          },
+          generationMetadata,
           tags: ['generated', requirement.asset_type],
         },
         update: {
           deletedAt: null,
           url: imageUrl,
-          generationMetadata: {
-            is_mock: isMock,
-            provider,
-            model: this.imageModel,
-            workflow_run_id: run.id,
-            generation_prompt: generationPrompt,
-          },
+          generationMetadata,
         },
       });
       await this.db.visualAssetRequirement.upsert({

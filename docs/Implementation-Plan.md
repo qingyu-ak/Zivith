@@ -2,9 +2,9 @@
 
 > Zivith 实施计划
 >
-> Version: 2.1
+> Version: 2.2
 >
-> Status: Active — progress synced 2026-07-21
+> Status: Active — progress synced 2026-07-23 (V0.4 Modification Plan inserted before Phase 3)
 >
 > Strategy: B-Line — AI Agent Pipeline First, Video Gen Mocked
 >
@@ -18,17 +18,18 @@ This document defines the phased implementation roadmap for Zivith.
 
 **Strategy decision (2026-07):** The MVP follows B-Line — the AI Agent creative pipeline is built first, while real video generation uses a Mock Adapter. This prioritizes demonstrating the "AI as creative partner" workflow over video quality, and defers video model selection to a later phase when the provider landscape is clearer.
 
-### Live progress (2026-07-21)
+### Live progress (2026-07-23)
 
 | Phase | Progress | Summary |
 |-------|----------|---------|
-| 0 Foundation | ~90% | Monorepo, auth, Compose, CI done; BullMQ not wired; no staging deploy |
+| 0 Foundation | ~95% | Monorepo, auth, Compose, CI, BullMQ wired; no staging deploy |
 | 1 Core Domain | ~90% | Full creative CRUD + inheritance + Character/Location assets |
-| 2 AI Agent + Mock Gen | ~70% | Mock Story→Video E2E + WorkflowPanel landed; SSE/queue/recover UX open |
-| 2.5 First Providers | 0% | Not started |
+| 2 AI Agent + Mock Gen | ~95% | Mock Story→Video E2E (A1) + WorkflowPanel gates/SSE/queue/recover |
+| 2.5 First Providers | ~80% | DeepSeek + SiliconFlow adapters + provider UI; BYOK/usage later |
+| **V0.4 (interlude)** | 0% | [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md): reference-image injection, appearance variants, StorySegment (ADR-0006), scoped recompute + attempts, candidate sets, prompt externalization, usage records |
 | 3–5 | 0% | Not started |
 
-**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) (stabilize Workflow UI first).
+**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track F** (V0.4 plan, W2 → W1 → W3 → W4 → W5 → W6 → W7). The Looser Creative Flow RFC is Accepted (0.2); Slices A/B/C map to W4/W2/W3. V0.4 W1 (reference-image injection) also front-loads the Phase 3 “Character Consistency Strategy” — image conditioning moves from Phase 3 promise to V0.4 implementation.
 
 Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not started.
 
@@ -207,10 +208,10 @@ The placeholder video displays the Shot's structured data as text overlay, allow
 | Individual Agents | Story, Scene, Shot, Prompt, Asset, Visual Prep | Done (Mock) |
 | Orchestrator | Workflow DAG executor with review gates | Done |
 | Workflow UI | Project-page `WorkflowPanel` + shot prompt/output flows | Done (stabilize) |
-| Automation Settings | Per-stage automation level on start payload | Done (UI hardcodes assisted) |
+| Automation Settings | Per-stage automation level on start payload | Done |
 | Asset Agent UI | Character/Location AI-assisted flows | Partial via workflow |
 | Mock Adapter | Placeholder video generation | Done |
-| Generation Queue UI | Real-time progress with mock timing | Partial |
+| Generation Queue UI | Project-page `GenerationQueuePanel` | Done |
 
 ### Completion Criteria
 

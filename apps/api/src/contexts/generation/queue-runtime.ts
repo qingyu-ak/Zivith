@@ -73,11 +73,16 @@ export function createGenerationQueueRuntime(
     queueName,
     async (bullJob) => {
       const type = bullJob.name as QueueJobType;
+      const data = (bullJob.data ?? {}) as Record<string, unknown>;
+      const idempotencyKey =
+        typeof data.idempotency_key === 'string'
+          ? data.idempotency_key
+          : String(bullJob.id ?? bullJob.opts.jobId ?? bullJob.id);
       const job: QueueJob = {
         id: String(bullJob.id ?? bullJob.name),
         type,
-        payload: bullJob.data as QueueJob['payload'],
-        idempotency_key: String(bullJob.id ?? bullJob.opts.jobId ?? bullJob.id),
+        payload: data,
+        idempotency_key: idempotencyKey,
       };
       if (type === 'video_generate') {
         await processVideo(job);

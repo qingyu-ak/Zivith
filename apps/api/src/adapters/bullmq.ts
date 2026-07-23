@@ -1,12 +1,27 @@
 import type { Queue } from 'bullmq';
 import type { QueueJob, QueuePort } from '../ports/index.js';
 
+/**
+ * BullMQ custom jobIds may only contain ':' when they have exactly three
+ * colon-separated segments (legacy repeatable jobs). Replace ':' otherwise.
+ */
+export function toBullJobId(idempotencyKey: string): string {
+  if (!idempotencyKey.includes(':')) return idempotencyKey;
+  if (idempotencyKey.split(':').length === 3) return idempotencyKey;
+  return idempotencyKey.replaceAll(':', '__');
+}
+
 export class BullMqQueueAdapter implements QueuePort {
   constructor(private readonly queue: Queue) {}
 
   async enqueue<T>(job: QueueJob<T>): Promise<{ job_id: string }> {
-    const queued = await this.queue.add(job.type, job.payload, {
-      jobId: job.idempotency_key,
+    const jobId = toBullJobId(job.idempotency_key);
+    const payload =
+      job.payload && typeof job.payload === 'object' && !Array.isArray(job.payload)
+        ? { ...(job.payload as Record<string, unknown>), idempotency_key: job.idempotency_key }
+        : { value: job.payload, idempotency_key: job.idempotency_key };
+    const queued = await this.queue.add(job.type, payload, {
+      jobId,
       attempts: job.type === 'review_analysis' ? 1 : 3,
       removeOnComplete: 1000,
       backoff: { type: 'exponential', delay: 1000 },
@@ -15,7 +30,8 @@ export class BullMqQueueAdapter implements QueuePort {
   }
 
   async cancel(jobId: string): Promise<void> {
-    const job = await this.queue.getJob(jobId);
+    const sanitized = toBullJobId(jobId);
+    const job = (await this.queue.getJob(sanitized)) ?? (await this.queue.getJob(jobId));
     if (job) await job.remove();
   }
 }

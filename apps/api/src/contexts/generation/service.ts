@@ -173,7 +173,7 @@ export class GenerationService {
     const positive = typeof prompt.positive === 'string' ? prompt.positive : '';
     const negative = typeof prompt.negative === 'string' ? prompt.negative : undefined;
     const requestId = options.requestId ?? randomUUID();
-    const idempotencyKey = `mock-video:${requestId}`;
+    const idempotencyKey = `mock-video__${requestId}`;
     const existing = await this.db.output.findUnique({ where: { idempotencyKey } });
     if (existing) return existing;
 
