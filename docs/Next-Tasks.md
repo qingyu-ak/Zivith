@@ -119,7 +119,7 @@ Source of truth: [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) (from th
 | F2 | W1 Reference-image injection pipeline (ports + adapters + prompt contract) | Review A2 — biggest consistency gap | P0 | Done 2026-07-23 |
 | F3 | W3 StorySegment: segmented story draft + per-segment review + Scene grouping | ADR-0006 / RFC Slice C | P1 | Done 2026-07-23 |
 | F4 | W4 Scoped recompute APIs + `workflow_step_attempts` persistence | RFC Slice A / Review A3 | P1 | Done 2026-07-23 |
-| F5 | W5 Candidate sets (count>1 generate + pick + no `previous*` fields) | Review A5 | P2 | Open |
+| F5 | W5 Candidate sets (count>1 generate + pick + no `previous*` fields) | Review A5 | P2 | Done 2026-07-23 |
 | F6 | W6 Externalized versioned agent prompts (`{knowledge_context}` slot) | Review A7 | P2 | Open |
 | F7 | W7 Usage records (first pass of C8; freeze/limits second pass) | Review A6 / C8 | P3 | Open |
 

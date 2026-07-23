@@ -110,6 +110,7 @@ function defaultSelectedStep(run: WorkflowRunDTO): WorkflowStepName | null {
 interface VisualReviewItem {
   requirement: VisualRequirementDTO;
   media?: WorkflowMediaDTO;
+  candidates?: WorkflowMediaDTO[];
   sceneTitle?: string;
   issue?: string;
 }
@@ -221,6 +222,8 @@ export function WorkflowPanel({
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [recomputingKey, setRecomputingKey] = useState<string | null>(null);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Record<string, string>>({});
+  const [candidateCount, setCandidateCount] = useState(2);
 
   const clearArtifacts = useCallback(() => {
     setStory(null);
@@ -399,41 +402,74 @@ export function WorkflowPanel({
         const items = await Promise.all(
           requirements.map(async (requirement) => {
             const sceneTitle = sceneTitleById.get(requirement.scene_id);
-            const mediaId = requirement.candidate_media_ids[0];
-            if (requirement.required && !mediaId) {
+            const candidateIds = requirement.candidate_media_ids;
+            if (requirement.required && candidateIds.length === 0) {
               return {
                 requirement,
                 sceneTitle,
+                candidates: [],
                 issue: '必需视觉需求缺少候选图片，无法通过审核',
               } satisfies VisualReviewItem;
             }
-            if (!mediaId) return { requirement, sceneTitle } satisfies VisualReviewItem;
-            try {
-              const media = await api<WorkflowMediaDTO>(`/media/${mediaId}`);
-              if (isFailedPlaceholder(media)) {
-                const detail = mediaMeta(media).generation_error;
-                return {
-                  requirement,
-                  media,
-                  sceneTitle,
-                  issue: detail
-                    ? `生图失败（占位图）：${detail.slice(0, 160)}`
-                    : '生图失败，当前仅为占位图。请检查图像模型后点击「按提示词生成」',
-                } satisfies VisualReviewItem;
-              }
-              return { requirement, media, sceneTitle } satisfies VisualReviewItem;
-            } catch {
+            if (candidateIds.length === 0) {
+              return { requirement, sceneTitle, candidates: [] } satisfies VisualReviewItem;
+            }
+            const candidates = await Promise.all(
+              candidateIds.map(async (mediaId) => {
+                try {
+                  return await api<WorkflowMediaDTO>(`/media/${mediaId}`);
+                } catch {
+                  return null;
+                }
+              }),
+            );
+            const loaded = candidates.filter((item): item is WorkflowMediaDTO => Boolean(item));
+            const preferredId =
+              requirement.approved_media_id &&
+              candidateIds.includes(requirement.approved_media_id)
+                ? requirement.approved_media_id
+                : candidateIds[0];
+            const media = loaded.find((item) => item.id === preferredId) ?? loaded[0];
+            if (requirement.required && loaded.length === 0) {
               return {
                 requirement,
                 sceneTitle,
-                issue: `候选图片 ${mediaId.slice(0, 8)}… 无法加载`,
+                candidates: [],
+                issue: `候选图片无法加载`,
               } satisfies VisualReviewItem;
             }
+            if (media && isFailedPlaceholder(media) && loaded.every(isFailedPlaceholder)) {
+              const detail = mediaMeta(media).generation_error;
+              return {
+                requirement,
+                media,
+                candidates: loaded,
+                sceneTitle,
+                issue: detail
+                  ? `生图失败（占位图）：${detail.slice(0, 160)}`
+                  : '生图失败，当前仅为占位图。请检查图像模型后点击「按提示词生成」',
+              } satisfies VisualReviewItem;
+            }
+            return { requirement, media, candidates: loaded, sceneTitle } satisfies VisualReviewItem;
           }),
         );
         const blocked = items.filter((item) => item.issue);
         if (active) {
           setVisualItems(items);
+          setSelectedCandidateIds((current) => {
+            const next = { ...current };
+            for (const item of items) {
+              const preferred =
+                item.requirement.approved_media_id &&
+                item.requirement.candidate_media_ids.includes(item.requirement.approved_media_id)
+                  ? item.requirement.approved_media_id
+                  : item.requirement.candidate_media_ids[0];
+              if (preferred && !next[item.requirement.id]) {
+                next[item.requirement.id] = preferred;
+              }
+            }
+            return next;
+          });
           setPromptDrafts(
             Object.fromEntries(
               items.map((item) => [item.requirement.id, item.requirement.generation_prompt ?? '']),
@@ -613,13 +649,18 @@ export function WorkflowPanel({
 
   async function approveRequiredArtifacts(review: WorkflowStepName) {
     if (review === 'visual_assets_review') {
-      for (const { requirement, media, issue } of visualItems) {
+      for (const { requirement, media, candidates, issue } of visualItems) {
         if (requirement.status === 'approved' || !requirement.required) continue;
-        if (issue || !media) {
+        if (issue || (!media && !(candidates && candidates.length > 0))) {
           throw new Error(issue ?? `视觉需求「${requirement.variant_key}」缺少候选图片`);
         }
-        const mediaId = requirement.candidate_media_ids[0];
-        if (!mediaId) throw new Error(`视觉需求「${requirement.variant_key}」缺少候选图片`);
+        const mediaId =
+          selectedCandidateIds[requirement.id] ??
+          requirement.approved_media_id ??
+          requirement.candidate_media_ids[0];
+        if (!mediaId || !requirement.candidate_media_ids.includes(mediaId)) {
+          throw new Error(`视觉需求「${requirement.variant_key}」请先选择一张候选图`);
+        }
         await api(`/scenes/${requirement.scene_id}/visual-requirements/${requirement.id}/approve`, {
           method: 'POST',
           body: { media_id: mediaId },
@@ -763,44 +804,20 @@ export function WorkflowPanel({
     try {
       await api(`/scenes/${requirement.scene_id}/visual-requirements/${requirement.id}/generate`, {
         method: 'POST',
-        body: { prompt },
+        body: { prompt, count: candidateCount },
       });
-      setNotice('已按当前提示词重新生成候选图');
-      // Force reload by toggling selected step dependency
-      setSelectedStep((current) => current);
-      const sceneIds = stringArray(stepOutput(run!, 'scene').scene_ids);
-      const scenesLoaded = await Promise.all(
-        sceneIds.map((sceneId) => api<SceneDTO>(`/scenes/${sceneId}`)),
+      setNotice(
+        candidateCount > 1
+          ? `已生成 ${candidateCount} 张候选图，请选择后再审核通过`
+          : '已按当前提示词重新生成候选图',
       );
-      const sceneTitleById = new Map(scenesLoaded.map((scene) => [scene.id, scene.title] as const));
-      const groups = await Promise.all(
-        sceneIds.map((sceneId) =>
-          api<VisualRequirementDTO[]>(`/scenes/${sceneId}/visual-requirements`),
-        ),
-      );
-      const requirements = groups.flat();
-      const items = await Promise.all(
-        requirements.map(async (item) => {
-          const sceneTitle = sceneTitleById.get(item.scene_id);
-          const mediaId = item.candidate_media_ids[0];
-          if (!mediaId) return { requirement: item, sceneTitle } satisfies VisualReviewItem;
-          try {
-            const media = await api<WorkflowMediaDTO>(`/media/${mediaId}`);
-            return { requirement: item, media, sceneTitle } satisfies VisualReviewItem;
-          } catch {
-            return {
-              requirement: item,
-              sceneTitle,
-              issue: `候选图片 ${mediaId.slice(0, 8)}… 无法加载`,
-            } satisfies VisualReviewItem;
-          }
-        }),
-      );
-      setVisualItems(items);
       setPromptDrafts((current) => ({
         ...current,
         [requirement.id]: prompt,
       }));
+      const step = selectedStep;
+      setSelectedStep(null);
+      window.setTimeout(() => setSelectedStep(step), 0);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -1156,9 +1173,16 @@ export function WorkflowPanel({
                   没有可展示的视觉材料。
                 </p>
               ) : (
-                visualItems.map(({ requirement, media, sceneTitle, issue }) => {
-                  const imageSrc = media?.access_url || media?.url || '';
-                  const failedPlaceholder = isFailedPlaceholder(media);
+                visualItems.map(({ requirement, media, candidates, sceneTitle, issue }) => {
+                  const gallery = candidates && candidates.length > 0 ? candidates : media ? [media] : [];
+                  const selectedId =
+                    selectedCandidateIds[requirement.id] ??
+                    requirement.approved_media_id ??
+                    gallery[0]?.id;
+                  const selectedMedia =
+                    gallery.find((item) => item.id === selectedId) ?? gallery[0] ?? media;
+                  const imageSrc = selectedMedia?.access_url || selectedMedia?.url || '';
+                  const failedPlaceholder = isFailedPlaceholder(selectedMedia);
                   const typeLabel =
                     requirement.asset_type === 'character' ? '角色关键图' : '地点参考';
                   const draft = promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '';
@@ -1189,15 +1213,54 @@ export function WorkflowPanel({
                           暂无预览
                         </div>
                       )}
+                      {gallery.length > 1 && (
+                        <div className="mb-3 grid grid-cols-3 gap-2">
+                          {gallery.map((candidate, index) => {
+                            const src = candidate.access_url || candidate.url || '';
+                            const selected = candidate.id === selectedId;
+                            return (
+                              <button
+                                key={candidate.id}
+                                type="button"
+                                disabled={!canEditVisual || busy}
+                                title={`候选 ${index + 1}`}
+                                className={`overflow-hidden rounded-md border ${
+                                  selected
+                                    ? 'border-accent ring-1 ring-accent/50'
+                                    : 'border-transparent hover:border-accent/40'
+                                }`}
+                                onClick={() =>
+                                  setSelectedCandidateIds((current) => ({
+                                    ...current,
+                                    [requirement.id]: candidate.id,
+                                  }))
+                                }
+                              >
+                                {src ? (
+                                  <img
+                                    className="aspect-square w-full object-cover"
+                                    src={src}
+                                    alt={`候选 ${index + 1}`}
+                                  />
+                                ) : (
+                                  <div className="grid aspect-square place-items-center bg-zinc-900 text-[10px] text-zinc-600">
+                                    无图
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                       {failedPlaceholder && (
                         <p className="mb-2 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
                           占位图（生图未成功）· 请检查图像模型后重新生成
                         </p>
                       )}
-                      {referenceInjectionSkipped(media) && (
+                      {referenceInjectionSkipped(selectedMedia) && (
                         <p className="mb-2 rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-300">
                           本次未注入参考图
-                          {mediaMeta(media).reference_injection === 'skipped_unsupported'
+                          {mediaMeta(selectedMedia).reference_injection === 'skipped_unsupported'
                             ? '（当前模型不支持）'
                             : ''}
                         </p>
@@ -1227,7 +1290,24 @@ export function WorkflowPanel({
                         />
                       </Field>
                       {canEditVisual && (
-                        <div className="mt-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <label className="flex items-center gap-1 text-xs text-zinc-400">
+                            候选数
+                            <select
+                              className="rounded border border-line bg-ink px-2 py-1 text-xs text-zinc-200"
+                              value={candidateCount}
+                              disabled={busy || regeneratingId === requirement.id}
+                              onChange={(event) =>
+                                setCandidateCount(Number(event.target.value) || 1)
+                              }
+                            >
+                              {[1, 2, 3, 4].map((value) => (
+                                <option key={value} value={value}>
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <Button
                             type="button"
                             variant="secondary"

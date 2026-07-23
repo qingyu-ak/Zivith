@@ -34,6 +34,7 @@ const rejectBody = z.object({ reason: z.string().trim().max(10_000).optional() }
 const generateBody = z
   .object({
     prompt: z.string().trim().min(1).max(5_000).optional(),
+    count: z.number().int().min(1).max(4).optional().default(1),
   })
   .strict();
 
@@ -223,6 +224,7 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
         imageModel: providers.imageModel,
         prompt,
         requestId: randomUUID(),
+        count: body.count,
         // Manual regenerate must fail loudly so operators can fix model/provider settings.
         allowFallback: false,
       });
@@ -235,6 +237,11 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
           url: result.media.url,
           access_url: result.media.url,
         },
+        medias: result.medias.map((item) => ({
+          id: item.id,
+          url: item.url,
+          access_url: item.url,
+        })),
         provider: providers.selection.image,
         model: providers.imageModel,
       });

@@ -82,7 +82,14 @@ export interface GenerateAppearanceVariantImageInput {
   imageModel: string;
   prompt: string;
   requestId?: string;
+  /** Candidate count 1–4 (default 1). */
+  count?: number;
   allowFallback?: boolean;
+}
+
+function clampCandidateCount(count: number | undefined): number {
+  if (count === undefined) return 1;
+  return Math.min(4, Math.max(1, Math.trunc(count)));
 }
 
 export async function generateAppearanceVariantImage(input: GenerateAppearanceVariantImageInput) {
@@ -102,70 +109,88 @@ export async function generateAppearanceVariantImage(input: GenerateAppearanceVa
   const refs = await resolveAppearanceVariantReferenceImages(input.db, asset, variant.key);
   const prompt = withReferencePromptClauses(basePrompt, refs.length > 0);
   const allowFallback = input.allowFallback !== false;
-  let imageUrl = svgPlaceholderDataUrl(`${asset.name}:${variant.key}`);
-  let provider = input.image.provider;
-  let isMock = provider === 'mock';
-  let generationError: string | undefined;
-  let adapterMeta: Record<string, string | number | boolean> = {};
+  const count = clampCandidateCount(input.count);
+  const baseRequestId = input.requestId ?? randomUUID();
+  const medias: Array<{ id: string; url: string }> = [];
+  const newMediaIds: string[] = [];
 
-  try {
-    const generated = await input.image.generate({
-      request_id: input.requestId ?? randomUUID(),
-      model: input.imageModel,
-      prompt,
-      ...(refs.length ? { reference_images: toImageReferencePayload(refs) } : {}),
-    });
-    if (generated.image_url) imageUrl = generated.image_url;
-    isMock = Boolean(generated.metadata.is_mock);
-    adapterMeta = generated.metadata;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!allowFallback) {
-      throw new ApiError(502, 'IMAGE_GENERATION_FAILED', `生图失败：${message.slice(0, 300)}`);
-    }
-    provider = 'mock-fallback';
-    isMock = true;
-    generationError = message.slice(0, 500);
-    adapterMeta = {
-      reference_injection: refs.length > 0 ? 'skipped_error' : 'none',
-    };
-    console.warn('[appearance-variant] image generation failed, using placeholder', message);
-  }
+  for (let index = 0; index < count; index += 1) {
+    let imageUrl = svgPlaceholderDataUrl(`${asset.name}:${variant.key}`);
+    let provider = input.image.provider;
+    let isMock = provider === 'mock';
+    let generationError: string | undefined;
+    let adapterMeta: Record<string, string | number | boolean> = {};
 
-  const mediaId = randomUUID();
-  const media = await input.db.media.create({
-    data: {
-      id: mediaId,
-      projectId: asset.projectId,
-      name: `${asset.name} · ${variant.title}`,
-      mediaType: 'image',
-      mimeType: 'image/png',
-      storageKey: `appearance-variants/${mediaId}.png`,
-      url: imageUrl,
-      source: 'generated',
-      generationMetadata: json({
-        is_mock: isMock,
-        provider,
+    try {
+      const generated = await input.image.generate({
+        request_id: count === 1 ? baseRequestId : `${baseRequestId}:${index + 1}`,
         model: input.imageModel,
-        generation_prompt: prompt,
-        appearance_variant_id: variant.id,
-        appearance_variant_key: variant.key,
-        ...referenceInjectionMetadata(refs, adapterMeta),
-        ...(generationError ? { generation_error: generationError } : {}),
-      }),
-      tags: ['generated', 'appearance_variant', asset.type],
-    },
-  });
+        prompt,
+        count,
+        ...(refs.length ? { reference_images: toImageReferencePayload(refs) } : {}),
+      });
+      if (generated.image_url) imageUrl = generated.image_url;
+      isMock = Boolean(generated.metadata.is_mock);
+      adapterMeta = generated.metadata;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!allowFallback) {
+        throw new ApiError(502, 'IMAGE_GENERATION_FAILED', `生图失败：${message.slice(0, 300)}`);
+      }
+      provider = 'mock-fallback';
+      isMock = true;
+      generationError = message.slice(0, 500);
+      adapterMeta = {
+        reference_injection: refs.length > 0 ? 'skipped_error' : 'none',
+      };
+      console.warn('[appearance-variant] image generation failed, using placeholder', message);
+    }
+
+    const mediaId = randomUUID();
+    const media = await input.db.media.create({
+      data: {
+        id: mediaId,
+        projectId: asset.projectId,
+        name:
+          count > 1
+            ? `${asset.name} · ${variant.title} ${index + 1}/${count}`
+            : `${asset.name} · ${variant.title}`,
+        mediaType: 'image',
+        mimeType: 'image/png',
+        storageKey: `appearance-variants/${mediaId}.png`,
+        url: imageUrl,
+        source: 'generated',
+        generationMetadata: json({
+          is_mock: isMock,
+          provider,
+          model: input.imageModel,
+          generation_prompt: prompt,
+          appearance_variant_id: variant.id,
+          appearance_variant_key: variant.key,
+          candidate_index: index + 1,
+          candidate_count: count,
+          ...referenceInjectionMetadata(refs, adapterMeta),
+          ...(generationError ? { generation_error: generationError } : {}),
+        }),
+        tags: ['generated', 'appearance_variant', asset.type],
+      },
+    });
+    medias.push({ id: media.id, url: media.url });
+    newMediaIds.push(media.id);
+  }
 
   const updated = await input.db.assetAppearanceVariant.update({
     where: { id: variant.id },
     data: {
       state: 'review',
-      candidateMediaIds: [mediaId, ...variant.candidateMediaIds.filter((id) => id !== mediaId)],
+      candidateMediaIds: [
+        ...newMediaIds,
+        ...variant.candidateMediaIds.filter((id) => !newMediaIds.includes(id)),
+      ],
     },
   });
 
-  return { variant: updated, media, asset };
+  return { variant: updated, media: medias[0]!, medias, asset };
 }
 
 export async function nextAppearanceVariantOrder(

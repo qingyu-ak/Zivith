@@ -392,6 +392,8 @@ interface ImageGenerationRequest {
   negative_prompt?: string;
   width?: number;
   height?: number;
+  /** Desired candidate count 1–4 (default 1). Callers may loop; adapters may ignore (V0.4 W5). */
+  count?: number;
   /** Optional labeled references for identity/style conditioning (V0.4 W1). */
   reference_images?: Array<{
     media_id: string;

@@ -27,6 +27,7 @@ const variantParams = z.object({
 const generateBody = z
   .object({
     prompt: z.string().trim().min(1).max(5_000).optional(),
+    count: z.number().int().min(1).max(4).optional().default(1),
   })
   .strict();
 const approveBody = z.object({ media_id: z.string().uuid().optional() }).strict();
@@ -264,6 +265,7 @@ export function registerAppearanceVariantRoutes(
       imageModel: providers.imageModel,
       prompt,
       requestId: randomUUID(),
+      count: body.count,
       // Asset-library generate is operator-driven; fail loudly like manual visual regenerate.
       allowFallback: false,
     });
@@ -275,6 +277,11 @@ export function registerAppearanceVariantRoutes(
         url: result.media.url,
         access_url: result.media.url,
       },
+      medias: result.medias.map((item) => ({
+        id: item.id,
+        url: item.url,
+        access_url: item.url,
+      })),
       provider: providers.selection.image,
       model: providers.imageModel,
     });

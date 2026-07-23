@@ -17,6 +17,11 @@ export interface ImageGenerationRequest {
   negative_prompt?: string;
   width?: number;
   height?: number;
+  /**
+   * Desired candidate count (1–4, default 1). Adapters may ignore this and return a
+   * single image; callers loop to produce a candidate set (V0.4 W5).
+   */
+  count?: number;
   /** Optional labeled reference images for identity / style conditioning (V0.4 W1). */
   reference_images?: ImageReferenceImage[];
 }

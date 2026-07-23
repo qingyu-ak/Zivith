@@ -52,6 +52,10 @@ export default function AssetsPage() {
   const [newVariantReason, setNewVariantReason] = useState('');
   const [newVariantDescription, setNewVariantDescription] = useState('');
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
+  const [selectedCandidateByVariant, setSelectedCandidateByVariant] = useState<
+    Record<string, string>
+  >({});
+  const [candidateCount, setCandidateCount] = useState(2);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +76,17 @@ export default function AssetsPage() {
     try {
       const value = await api<AppearanceVariantDTO[]>(`/assets/${assetId}/appearance-variants`);
       setVariants(value);
+      setSelectedCandidateByVariant((current) => {
+        const next = { ...current };
+        for (const variant of value) {
+          const preferred =
+            variant.anchor_media_id && variant.candidate_media_ids.includes(variant.anchor_media_id)
+              ? variant.anchor_media_id
+              : variant.candidate_media_ids[0];
+          if (preferred && !next[variant.key]) next[variant.key] = preferred;
+        }
+        return next;
+      });
     } catch (reason) {
       setError(errorMessage(reason));
       setVariants([]);
@@ -216,6 +231,7 @@ export default function AssetsPage() {
         method: 'POST',
         body: {
           prompt: (promptDrafts[variant.key] ?? '').trim() || undefined,
+          count: candidateCount,
         },
       });
       await loadVariants(selected.id);
@@ -230,9 +246,11 @@ export default function AssetsPage() {
     if (!selected) return;
     setVariantBusyKey(variant.key);
     try {
+      const chosen =
+        mediaId ?? selectedCandidateByVariant[variant.key] ?? variant.candidate_media_ids[0];
       await api(`/assets/${selected.id}/appearance-variants/${variant.key}/approve`, {
         method: 'POST',
-        body: mediaId ? { media_id: mediaId } : {},
+        body: chosen ? { media_id: chosen } : {},
       });
       await loadVariants(selected.id);
       await load();
@@ -548,22 +566,38 @@ export default function AssetsPage() {
                           )}
                           {!!variant.candidate_media?.length && (
                             <div className="mb-3 grid grid-cols-3 gap-2">
-                              {variant.candidate_media.map((media) => (
-                                <button
-                                  key={media.id}
-                                  type="button"
-                                  className="overflow-hidden rounded-md border border-transparent hover:border-accent/60"
-                                  disabled={busy}
-                                  onClick={() => void approveVariant(variant, media.id)}
-                                  title="选为锚定图"
-                                >
-                                  <img
-                                    className="aspect-square w-full object-cover"
-                                    src={imageUrl(media)}
-                                    alt="候选图"
-                                  />
-                                </button>
-                              ))}
+                              {variant.candidate_media.map((media) => {
+                                const selectedId =
+                                  selectedCandidateByVariant[variant.key] ??
+                                  variant.anchor_media_id ??
+                                  variant.candidate_media_ids[0];
+                                const isSelected = media.id === selectedId;
+                                return (
+                                  <button
+                                    key={media.id}
+                                    type="button"
+                                    className={`overflow-hidden rounded-md border ${
+                                      isSelected
+                                        ? 'border-accent ring-1 ring-accent/50'
+                                        : 'border-transparent hover:border-accent/60'
+                                    }`}
+                                    disabled={busy}
+                                    onClick={() =>
+                                      setSelectedCandidateByVariant((current) => ({
+                                        ...current,
+                                        [variant.key]: media.id,
+                                      }))
+                                    }
+                                    title="选中候选图"
+                                  >
+                                    <img
+                                      className="aspect-square w-full object-cover"
+                                      src={imageUrl(media)}
+                                      alt="候选图"
+                                    />
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                           <Field label="生图提示词">
@@ -578,22 +612,40 @@ export default function AssetsPage() {
                               }
                             />
                           </Field>
-                          <div className="mt-2 flex flex-wrap gap-2">
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <label className="flex items-center gap-1 text-xs text-zinc-400">
+                              候选数
+                              <select
+                                className="rounded border border-line bg-ink px-2 py-1 text-xs text-zinc-200"
+                                value={candidateCount}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  setCandidateCount(Number(event.target.value) || 1)
+                                }
+                              >
+                                {[1, 2, 3, 4].map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
                             <Button
                               type="button"
                               variant="secondary"
                               disabled={busy}
                               onClick={() => void generateVariant(variant)}
                             >
-                              {busy ? '处理中…' : '生成锚定图'}
+                              {busy ? '处理中…' : '生成候选图'}
                             </Button>
-                            {variant.candidate_media_ids[0] && (
+                            {(selectedCandidateByVariant[variant.key] ||
+                              variant.candidate_media_ids[0]) && (
                               <Button
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void approveVariant(variant)}
                               >
-                                批准当前候选
+                                批准选中候选
                               </Button>
                             )}
                             {variant.key !== 'default' && (
