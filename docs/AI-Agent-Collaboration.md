@@ -203,30 +203,25 @@ constraints:
 story:
   title: "The Last Seed"
   logline: "A maintenance robot on a dead Earth discovers the planet's final living seed."
-  structure:
-    - act: 1
-      title: "The Gray World"
-      summary: "Robot R-7 performs routine maintenance in an abandoned city..."
-      estimated_duration_seconds: 45
-    - act: 2
-      title: "Discovery"
-      summary: "R-7 finds a glowing seedling in a collapsed greenhouse..."
-      estimated_duration_seconds: 70
-    - act: 3
-      title: "Guardian"
-      summary: "R-7 protects the seedling from a scavenger drone..."
-      estimated_duration_seconds: 65
-  characters_involved:
-    - character_id: "char_r7"
-      role: "protagonist"
-    - character_id: "char_scavenger"
-      role: "antagonist"
-  locations_involved:
-    - location_id: "loc_city"
-    - location_id: "loc_greenhouse"
+  synopsis: "..."
+  genre: "science_fiction"
+  theme: "hope"
+  tone: "contemplative"
+  screenplay: "INT. DEAD CITY - DAY\n..."
+  # Optional (ADR-0006 / V0.4 W3): persisted StorySegment drafts for chapter-wise review
+  segments:
+    - title: "The Gray World"
+      synopsis: "Robot R-7 performs routine maintenance in an abandoned city."
+      draft: "INT. DEAD CITY - DAY\nR-7 sweeps dust from silent solar panels."
+    - title: "Discovery"
+      synopsis: "R-7 finds a glowing seedling in a collapsed greenhouse."
+      draft: "INT. GREENHOUSE - DAY\nA single green shoot breaks through concrete."
+    - title: "Guardian"
+      synopsis: "R-7 protects the seedling from a scavenger drone."
+      draft: "EXT. GREENHOUSE ROOF - DUSK\nR-7 raises a welding torch as a shield."
 ```
 
-**Review gate:** User reviews story structure, logline, and acts. Can edit, approve, or request regeneration.
+**Review gate:** User reviews story structure, logline, and (when present) each persisted StorySegment. Segments can be approved or rewritten independently; the story gate completes only after every segment is approved (or when the story has zero segments — legacy single-block review).
 
 ### Stage 2: Scene Decomposition
 

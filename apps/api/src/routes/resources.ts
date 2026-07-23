@@ -64,6 +64,7 @@ export const sceneBodySchema = z.object({
   description: z.string().max(50_000).nullable().optional(),
   time_of_day: z.string().max(200).nullable().optional(),
   location_id: z.string().uuid().nullable().optional(),
+  segment_id: z.string().uuid().nullable().optional(),
   time: z.string().max(200).nullable().optional(),
   weather: z.string().max(200).nullable().optional(),
   mood: z.string().max(200).nullable().optional(),
@@ -452,9 +453,14 @@ export function registerResourceRoutes(
     await requireMember(db, request.user.sub, await projectOfStory(db, id));
     const story = await db.story.findUnique({
       where: { id },
-      include: { scenes: { where: { deletedAt: null }, orderBy: { order: 'asc' } } },
+      include: {
+        scenes: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
+        segments: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
+      },
     });
-    return story ? { ...story, scenes: story.scenes.map(sceneDto) } : null;
+    return story
+      ? { ...story, scenes: story.scenes.map(sceneDto), segments: story.segments }
+      : null;
   });
   app.patch('/stories/:id', async (request) => {
     const { id } = idParams.parse(request.params);
@@ -504,6 +510,13 @@ export function registerResourceRoutes(
     const projectId = await projectOfStory(db, sid);
     await requireMember(db, request.user.sub, projectId, true);
     const body = sceneBodySchema.parse(request.body);
+    if (body.segment_id) {
+      const segment = await db.storySegment.findFirst({
+        where: { id: body.segment_id, storyId: sid, deletedAt: null },
+        select: { id: true },
+      });
+      if (!segment) throw new ApiError(400, 'INVALID_SEGMENT', '段落不存在或不属于该故事');
+    }
     const count = await db.scene.count({ where: { storyId: sid, deletedAt: null } });
     const scene = await db.scene.create({
       data: clean({
@@ -513,6 +526,7 @@ export function registerResourceRoutes(
         title: body.title,
         description: body.summary !== undefined ? body.summary : body.description,
         locationId: body.location_id,
+        segmentId: body.segment_id,
         time: body.time_of_day !== undefined ? body.time_of_day : body.time,
         weather: body.weather,
         mood: body.mood,
@@ -539,6 +553,18 @@ export function registerResourceRoutes(
     const projectId = await projectOfScene(db, id);
     await requireMember(db, request.user.sub, projectId, true);
     const body = sceneBodySchema.partial().parse(request.body);
+    if (body.segment_id) {
+      const scene = await db.scene.findFirst({
+        where: { id, deletedAt: null },
+        select: { storyId: true },
+      });
+      if (!scene) throw new ApiError(404, 'SCENE_NOT_FOUND', '场景不存在');
+      const segment = await db.storySegment.findFirst({
+        where: { id: body.segment_id, storyId: scene.storyId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!segment) throw new ApiError(400, 'INVALID_SEGMENT', '段落不存在或不属于该故事');
+    }
     return db.$transaction(async (tx) => {
       const updated = await tx.scene.update({
         where: { id },
@@ -546,6 +572,7 @@ export function registerResourceRoutes(
           title: body.title,
           description: body.summary !== undefined ? body.summary : body.description,
           locationId: body.location_id,
+          segmentId: body.segment_id,
           time: body.time_of_day !== undefined ? body.time_of_day : body.time,
           weather: body.weather,
           mood: body.mood,

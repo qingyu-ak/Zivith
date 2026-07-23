@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   asId,
+  assertSegmentSceneOrderConsistent,
   mergeInherited,
   resolveAppearanceVariantAnchor,
   resolveAppearanceWithVariant,
@@ -228,5 +229,33 @@ describe('appearance variants', () => {
         'missing',
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('story segment scene order', () => {
+  it('accepts contiguous segment membership in global order', () => {
+    expect(() =>
+      assertSegmentSceneOrderConsistent(
+        [
+          { id: 'a', order: 1, segment_id: 'seg-1' },
+          { id: 'b', order: 2, segment_id: 'seg-1' },
+          { id: 'c', order: 3, segment_id: 'seg-2' },
+        ],
+        'seg-1',
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects non-contiguous segment membership', () => {
+    expect(() =>
+      assertSegmentSceneOrderConsistent(
+        [
+          { id: 'a', order: 1, segment_id: 'seg-1' },
+          { id: 'b', order: 2, segment_id: 'seg-2' },
+          { id: 'c', order: 3, segment_id: 'seg-1' },
+        ],
+        'seg-1',
+      ),
+    ).toThrow(/连续/);
   });
 });

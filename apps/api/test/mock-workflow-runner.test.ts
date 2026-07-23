@@ -47,6 +47,7 @@ describe('MockWorkflowRunner', () => {
 
     const storyUpsert = vi.fn().mockResolvedValue({ id: 'generated-story' });
     const completeStep = vi.fn().mockResolvedValue({});
+    const segmentUpsert = vi.fn().mockResolvedValue({});
     const db = {
       workflowRun: {
         findUnique: vi
@@ -59,6 +60,25 @@ describe('MockWorkflowRunner', () => {
         count: vi.fn().mockResolvedValue(0),
         upsert: storyUpsert,
       },
+      storySegment: {
+        upsert: segmentUpsert,
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      scene: {
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      $transaction: vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          storySegment: {
+            upsert: segmentUpsert,
+            updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          },
+          scene: {
+            updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          },
+        };
+        return fn(tx);
+      }),
     } as unknown as PrismaClient;
     const orchestrator = {
       beginNextStep: vi

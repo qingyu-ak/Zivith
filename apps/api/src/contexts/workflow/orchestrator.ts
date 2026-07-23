@@ -51,6 +51,8 @@ export interface SubmitReviewInput {
   step: ReviewStep;
   action: WorkflowReviewAction;
   feedback?: string | undefined;
+  /** When set on story_review, approve/retry applies to one StorySegment only. */
+  segment_id?: string | undefined;
 }
 
 export class WorkflowOrchestrator {

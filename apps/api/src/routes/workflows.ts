@@ -41,6 +41,7 @@ const reviewSchema = z
     ]),
     action: z.enum(['approve', 'approve_all', 'reject', 'retry', 'retry_with_feedback']),
     feedback: z.string().trim().min(1).max(20_000).optional(),
+    segment_id: z.string().uuid().optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -49,6 +50,13 @@ const reviewSchema = z
         code: z.ZodIssueCode.custom,
         path: ['feedback'],
         message: '带反馈重试时必须填写反馈',
+      });
+    }
+    if (value.segment_id && value.step !== 'story_review') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['segment_id'],
+        message: 'segment_id 仅用于故事审核闸',
       });
     }
   });

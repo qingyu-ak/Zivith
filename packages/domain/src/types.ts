@@ -10,6 +10,7 @@ import type {
   SceneId,
   ShotId,
   StoryId,
+  StorySegmentId,
   StyleId,
   UserId,
   VisualAssetRequirementId,
@@ -76,10 +77,25 @@ export interface Story {
   deleted_at?: Date | null;
 }
 
+/** Ordered Scene grouping inside a Story (ADR-0006). Not part of inheritance. */
+export interface StorySegment {
+  id: StorySegmentId;
+  story_id: StoryId;
+  order: number;
+  title: string;
+  synopsis?: string | null;
+  draft?: string | null;
+  state: ApprovalState;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at?: Date | null;
+}
+
 export interface Scene {
   id: SceneId;
   story_id: StoryId;
   project_id: ProjectId;
+  segment_id?: StorySegmentId | null;
   title: string;
   summary?: string | null;
   description?: string | null;

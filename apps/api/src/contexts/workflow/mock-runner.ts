@@ -147,7 +147,14 @@ export class MockWorkflowRunner {
     userId: string,
     input: SubmitReviewInput,
   ): Promise<WorkflowWithSteps> {
+    if (input.step === 'story_review' && input.segment_id) {
+      return this.submitStorySegmentReview(runId, userId, input);
+    }
+
     const approving = input.action === 'approve' || input.action === 'approve_all';
+    if (approving && input.step === 'story_review') {
+      await this.assertStorySegmentsApproved(runId);
+    }
     if (approving && input.step === 'visual_assets_review') {
       const before = await this.getRun(runId);
       const requirementIds = record(
@@ -249,11 +256,166 @@ export class MockWorkflowRunner {
       },
       update: this.storyData(result.data),
     });
+    const segmentIds = await this.persistStorySegments(storyId, result.data.segments);
     await this.orchestrator.completeStep(run.id, 'story', {
       story_id: storyId,
       story: result.data,
+      segment_ids: segmentIds,
       agent_metadata: result.metadata,
     });
+  }
+
+  private async persistStorySegments(
+    storyId: string,
+    segments: GeneratedStory['segments'] | undefined,
+  ): Promise<string[]> {
+    if (!segments || segments.length === 0) {
+      // Ungrouped stories: soft-delete any leftover draft segments from prior runs.
+      await this.db.storySegment.updateMany({
+        where: { storyId, deletedAt: null, state: { not: 'approved' } },
+        data: { deletedAt: new Date() },
+      });
+      return [];
+    }
+
+    const ids: string[] = [];
+    await this.db.$transaction(async (tx) => {
+      for (const [index, segment] of segments.entries()) {
+        const id = deterministicUuid(`${storyId}:segment:${index + 1}`);
+        ids.push(id);
+        await tx.storySegment.upsert({
+          where: { id },
+          create: {
+            id,
+            storyId,
+            order: index + 1,
+            title: segment.title,
+            synopsis: segment.synopsis ?? null,
+            draft: segment.draft,
+            state: 'review',
+          },
+          update: {
+            order: index + 1,
+            title: segment.title,
+            synopsis: segment.synopsis ?? null,
+            draft: segment.draft,
+            state: 'review',
+            deletedAt: null,
+          },
+        });
+      }
+      await tx.storySegment.updateMany({
+        where: { storyId, id: { notIn: ids }, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+      await tx.scene.updateMany({
+        where: { storyId, segmentId: { notIn: ids }, deletedAt: null },
+        data: { segmentId: null },
+      });
+    });
+    return ids;
+  }
+
+  private async assertStorySegmentsApproved(runId: string): Promise<void> {
+    const run = await this.getRun(runId);
+    const storyId = record(run.steps.find((step) => step.name === 'story')?.output).story_id;
+    if (typeof storyId !== 'string') return;
+    const segments = await this.db.storySegment.findMany({
+      where: { storyId, deletedAt: null },
+      select: { id: true, state: true },
+    });
+    if (segments.length === 0) return;
+    const pending = segments.filter((item) => item.state !== 'approved');
+    if (pending.length > 0) {
+      throw new ApiError(
+        409,
+        'STORY_SEGMENTS_NOT_APPROVED',
+        '请先逐段审核通过全部故事段落，再继续',
+        { segment_ids: pending.map((item) => item.id) },
+      );
+    }
+  }
+
+  private async submitStorySegmentReview(
+    runId: string,
+    userId: string,
+    input: SubmitReviewInput,
+  ): Promise<WorkflowWithSteps> {
+    const run = await this.getRun(runId);
+    const storyId = record(run.steps.find((step) => step.name === 'story')?.output).story_id;
+    if (typeof storyId !== 'string' || !input.segment_id) {
+      throw new ApiError(409, 'STORY_OUTPUT_MISSING', '故事或段落材料缺失');
+    }
+    const segment = await this.db.storySegment.findFirst({
+      where: { id: input.segment_id, storyId, deletedAt: null },
+    });
+    if (!segment) throw new ApiError(404, 'STORY_SEGMENT_NOT_FOUND', '故事段落不存在');
+
+    if (input.action === 'approve' || input.action === 'approve_all') {
+      await this.db.storySegment.update({
+        where: { id: segment.id },
+        data: { state: 'approved' },
+      });
+      return this.getRun(runId);
+    }
+
+    if (input.action === 'retry_with_feedback' || input.action === 'retry' || input.action === 'reject') {
+      const segments = await this.db.storySegment.findMany({
+        where: { storyId, deletedAt: null },
+        orderBy: { order: 'asc' },
+      });
+      const story = await this.db.story.findUnique({ where: { id: storyId } });
+      if (!story) throw new ApiError(404, 'STORY_NOT_FOUND', '故事不存在');
+
+      const result = await this.queueWork.run(
+        'workflow_step',
+        `${run.id}:story-segment-rewrite:${segment.id}`,
+        () =>
+          this.runtime.execute(
+            this.storyAgent,
+            {
+              brief: asText(record(run.input).brief),
+              rewrite_segment_order: segment.order,
+              rewrite_feedback: input.feedback ?? '请按审核意见重写本段',
+              existing_segments: segments.map((item) => ({
+                title: item.title,
+                ...(item.synopsis ? { synopsis: item.synopsis } : {}),
+                draft: item.draft ?? '',
+              })),
+            },
+            this.context(run, userId, 'story'),
+          ),
+      );
+      if (!result.data || result.status === 'failed') {
+        throw new ApiError(
+          422,
+          'STORY_AGENT_FAILED',
+          result.warnings[0]?.message ?? '故事段落重写失败',
+        );
+      }
+      const rewritten = result.data.segments?.[segment.order - 1] ?? result.data.segments?.[0];
+      if (!rewritten) {
+        throw new ApiError(422, 'STORY_SEGMENT_REWRITE_EMPTY', '段落重写未返回内容');
+      }
+      await this.db.$transaction([
+        this.db.storySegment.update({
+          where: { id: segment.id },
+          data: {
+            title: rewritten.title,
+            synopsis: rewritten.synopsis ?? null,
+            draft: rewritten.draft,
+            state: 'review',
+          },
+        }),
+        this.db.story.update({
+          where: { id: storyId },
+          data: this.storyData(result.data),
+        }),
+      ]);
+      return this.getRun(runId);
+    }
+
+    throw new ApiError(400, 'INVALID_SEGMENT_REVIEW_ACTION', '不支持的段落审核动作');
   }
 
   private async executeScenes(run: WorkflowWithSteps, userId: string): Promise<void> {
@@ -266,6 +428,10 @@ export class MockWorkflowRunner {
     if (!story || !story.screenplay) {
       throw new ApiError(409, 'STORY_OUTPUT_MISSING', 'Story Agent 尚未生成可用故事');
     }
+    const approvedSegments = await this.db.storySegment.findMany({
+      where: { storyId, deletedAt: null, state: 'approved' },
+      orderBy: { order: 'asc' },
+    });
     const generatedStory: GeneratedStory = {
       title: story.title,
       logline: story.logline ?? '',
@@ -274,11 +440,32 @@ export class MockWorkflowRunner {
       theme: story.theme ?? '',
       tone: story.tone ?? '',
       screenplay: story.screenplay,
+      ...(approvedSegments.length > 0
+        ? {
+            segments: approvedSegments.map((segment) => ({
+              title: segment.title,
+              ...(segment.synopsis ? { synopsis: segment.synopsis } : {}),
+              draft: segment.draft ?? '',
+            })),
+          }
+        : {}),
     };
     const result = await this.queueWork.run('workflow_step', `${run.id}:scene-agent`, () =>
       this.runtime.execute(
         this.sceneAgent,
-        { story: generatedStory },
+        {
+          story: generatedStory,
+          ...(approvedSegments.length > 0
+            ? {
+                segments: approvedSegments.map((segment) => ({
+                  order: segment.order,
+                  title: segment.title,
+                  synopsis: segment.synopsis,
+                  draft: segment.draft ?? '',
+                })),
+              }
+            : {}),
+        },
         this.context(run, userId, 'scene'),
       ),
     );
@@ -286,7 +473,14 @@ export class MockWorkflowRunner {
       throw new ApiError(422, 'SCENE_AGENT_FAILED', result.warnings[0]?.message ?? '场景生成失败');
     }
 
-    const sceneIds = await this.persistScenes(run.id, run.projectId, storyId, result.data);
+    const segmentIdByOrder = new Map(approvedSegments.map((item) => [item.order, item.id]));
+    const sceneIds = await this.persistScenes(
+      run.id,
+      run.projectId,
+      storyId,
+      result.data,
+      segmentIdByOrder,
+    );
     await this.orchestrator.completeStep(run.id, 'scene', {
       story_id: storyId,
       scene_ids: sceneIds,
@@ -880,12 +1074,17 @@ export class MockWorkflowRunner {
     projectId: string,
     storyId: string,
     output: GeneratedScenes,
+    segmentIdByOrder: Map<number, string> = new Map(),
   ): Promise<string[]> {
     const ids = output.scenes.map((scene) => deterministicUuid(`${runId}:scene:${scene.order}`));
     await this.db.$transaction(async (tx) => {
       for (const [index, scene] of output.scenes.entries()) {
         const id = ids[index];
         if (!id) continue;
+        const segmentId =
+          scene.segment_order !== undefined
+            ? (segmentIdByOrder.get(scene.segment_order) ?? null)
+            : null;
         await tx.scene.upsert({
           where: { id },
           create: {
@@ -899,6 +1098,7 @@ export class MockWorkflowRunner {
             weather: scene.weather,
             mood: scene.mood,
             characterIds: [],
+            segmentId,
           },
           update: {
             order: scene.order,
@@ -907,6 +1107,7 @@ export class MockWorkflowRunner {
             time: scene.time_of_day,
             weather: scene.weather,
             mood: scene.mood,
+            segmentId,
             deletedAt: null,
           },
         });
@@ -988,7 +1189,13 @@ export class MockWorkflowRunner {
     if (reviewStep === 'story_review') {
       const storyId = record(run.steps.find((step) => step.name === 'story')?.output).story_id;
       if (typeof storyId === 'string') {
-        await this.db.story.update({ where: { id: storyId }, data: { state: 'approved' } });
+        await this.db.$transaction([
+          this.db.story.update({ where: { id: storyId }, data: { state: 'approved' } }),
+          this.db.storySegment.updateMany({
+            where: { storyId, deletedAt: null },
+            data: { state: 'approved' },
+          }),
+        ]);
       }
     }
     if (reviewStep === 'scene_review') {

@@ -5,6 +5,7 @@ export type ProjectId = Brand<string, 'ProjectId'>;
 export type StoryId = Brand<string, 'StoryId'>;
 export type SceneId = Brand<string, 'SceneId'>;
 export type ShotId = Brand<string, 'ShotId'>;
+export type StorySegmentId = Brand<string, 'StorySegmentId'>;
 export type CharacterId = Brand<string, 'CharacterId'>;
 export type LocationId = Brand<string, 'LocationId'>;
 export type PropId = Brand<string, 'PropId'>;

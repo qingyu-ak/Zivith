@@ -47,4 +47,22 @@ describe('generatedStorySchema', () => {
     expect(story.genre).toBe('剧情');
     expect(story.tone).toBe('克制而温暖');
   });
+
+  it('accepts optional story segments and derives screenplay when needed', () => {
+    const story = generatedStorySchema.parse({
+      title: '分段故事',
+      logline: '按章推进。',
+      synopsis: '三段式。',
+      genre: '剧情',
+      theme: '成长',
+      tone: '克制',
+      segments: [
+        { title: '上', draft: '上段正文' },
+        { title: '中', synopsis: '中段概要', draft: '中段正文' },
+        { title: '下', draft: '下段正文' },
+      ],
+    });
+    expect(story.segments).toHaveLength(3);
+    expect(story.screenplay).toContain('上段正文');
+  });
 });

@@ -49,6 +49,25 @@ function scenesToScreenplay(scenes: unknown): string | undefined {
     .join('\n\n');
 }
 
+function segmentsToScreenplay(
+  segments: Array<{ title: string; synopsis?: string; draft: string }>,
+): string {
+  return segments
+    .map(
+      (segment, index) =>
+        `## 第${index + 1}段：${segment.title}\n${segment.synopsis ? `${segment.synopsis}\n\n` : ''}${segment.draft}`.trim(),
+    )
+    .join('\n\n');
+}
+
+const generatedSegmentShape = z
+  .object({
+    title: z.string().trim().min(1).max(300),
+    synopsis: z.string().trim().max(50_000).optional(),
+    draft: z.string().trim().min(1).max(200_000),
+  })
+  .strict();
+
 /** Map common LLM shape variants into the canonical story payload. */
 export function normalizeGeneratedStoryInput(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
@@ -60,10 +79,28 @@ export function normalizeGeneratedStoryInput(raw: unknown): unknown {
     asText(obj.summary) ??
     asText(obj.overview) ??
     (combinedSynopsis || undefined);
+  const rawSegments = Array.isArray(obj.segments) ? obj.segments : undefined;
+  const segments = rawSegments
+    ?.map((item) => {
+      const row = record(item);
+      const title = asText(row.title);
+      const draft =
+        asText(row.draft) ?? asText(row.screenplay) ?? asText(row.content) ?? asText(row.body);
+      if (!title || !draft) return null;
+      const segmentSynopsis = asText(row.synopsis) ?? asText(row.summary);
+      return {
+        title,
+        ...(segmentSynopsis ? { synopsis: segmentSynopsis } : {}),
+        draft,
+      };
+    })
+    .filter((item): item is { title: string; synopsis?: string; draft: string } => Boolean(item));
+
   const screenplay =
     asText(obj.screenplay) ??
     asText(obj.script) ??
     asText(obj.screen_play) ??
+    (segments && segments.length > 0 ? segmentsToScreenplay(segments) : undefined) ??
     scenesToScreenplay(obj.scenes) ??
     synopsis;
   const genre = asText(obj.genre) ?? asText(obj.genres) ?? '剧情';
@@ -79,6 +116,7 @@ export function normalizeGeneratedStoryInput(raw: unknown): unknown {
     theme: theme ?? '待定',
     tone,
     screenplay,
+    ...(segments && segments.length > 0 ? { segments } : {}),
   };
 }
 
@@ -91,6 +129,7 @@ const generatedStoryShape = z
     theme: z.string().trim().min(1).max(2_000),
     tone: z.string().trim().min(1).max(2_000),
     screenplay: z.string().trim().min(1).max(500_000),
+    segments: z.array(generatedSegmentShape).min(1).max(50).optional(),
   })
   .strict();
 
@@ -100,28 +139,29 @@ export const generatedStorySchema = z.preprocess(
 ) as z.ZodType<GeneratedStory>;
 
 export type GeneratedStory = z.infer<typeof generatedStoryShape>;
+export type GeneratedStorySegment = z.infer<typeof generatedSegmentShape>;
 
 export interface StoryAgentInput {
   brief: string;
   language?: string;
   target_duration_seconds?: number;
+  /** When set, rewrite only this segment (by 1-based order) using feedback. */
+  rewrite_segment_order?: number;
+  rewrite_feedback?: string;
+  existing_segments?: GeneratedStorySegment[];
 }
 
 const STORY_SYSTEM_PROMPT = `You are STORY_AGENT for an AI film studio.
-Return ONLY one JSON object. No markdown fences. No extra keys.
+Return ONLY one JSON object. No markdown fences.
 
-Required keys (all strings):
-- title
-- logline
-- synopsis
-- genre
-- theme
-- tone
-- screenplay
+Required keys (all strings unless noted):
+- title, logline, synopsis, genre, theme, tone, screenplay
+- segments (optional array): [{ "title": string, "synopsis"?: string, "draft": string }]
 
 Rules:
 - language follows the creative brief (default zh-CN)
-- screenplay must be a continuous screenplay text (scene headings + action + dialogue), NOT a scenes array
+- Prefer 2–4 narrative segments (章/幕) when the brief supports chapter-wise drafting
+- When segments are present, each draft is the segment's screenplay text; also provide a combined screenplay
 - theme is a single string (not "themes")
 - do not include scenes, ending, themes, cast, or other extra fields`;
 
@@ -166,6 +206,9 @@ export class StoryAgent implements Agent<StoryAgentInput, GeneratedStory> {
           creative_brief: input.brief,
           language: input.language ?? 'zh-CN',
           target_duration_seconds: input.target_duration_seconds ?? 180,
+          rewrite_segment_order: input.rewrite_segment_order,
+          rewrite_feedback: input.rewrite_feedback,
+          existing_segments: input.existing_segments,
           required_schema: {
             title: 'string',
             logline: 'string',
@@ -174,6 +217,7 @@ export class StoryAgent implements Agent<StoryAgentInput, GeneratedStory> {
             theme: 'string',
             tone: 'string',
             screenplay: 'string',
+            segments: 'optional array of {title, synopsis?, draft}',
           },
         }),
         temperature: 0.6,

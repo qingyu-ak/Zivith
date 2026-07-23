@@ -28,11 +28,23 @@ export interface StoryDTO {
   target_audience?: string | null;
   status?: string;
   scene_count?: number;
+  segments?: StorySegmentDTO[];
+}
+
+export interface StorySegmentDTO {
+  id: string;
+  story_id: string;
+  order: number;
+  title: string;
+  synopsis?: string | null;
+  draft?: string | null;
+  state: 'draft' | 'review' | 'approved';
 }
 
 export interface SceneDTO {
   id: string;
   story_id: string;
+  segment_id?: string | null;
   order: number;
   title: string;
   summary?: string | null;

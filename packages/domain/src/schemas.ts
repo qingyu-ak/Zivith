@@ -220,6 +220,25 @@ export const appearanceVariantCreateSchema = appearanceVariantSchema
 
 export const appearanceVariantPatchSchema = appearanceVariantCreateSchema.partial().strict();
 
+export const storySegmentSchema = z
+  .object({
+    title: z.string().trim().min(1).max(300),
+    synopsis: z.string().trim().max(50_000).nullable().optional(),
+    draft: z.string().trim().max(200_000).nullable().optional(),
+    order: z.number().int().positive().optional(),
+    state: z.enum(['draft', 'review', 'approved']).optional(),
+  })
+  .strict();
+
+export const storySegmentCreateSchema = storySegmentSchema
+  .omit({ state: true })
+  .extend({
+    title: z.string().trim().min(1).max(300),
+  })
+  .strict();
+
+export const storySegmentPatchSchema = storySegmentSchema.partial().strict();
+
 export const characterSchema = z
   .object({
     name: z.string().trim().min(1).max(200),

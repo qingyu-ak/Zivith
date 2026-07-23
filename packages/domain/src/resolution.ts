@@ -17,6 +17,30 @@ import { DomainError } from './shot-state.js';
 export const DEFAULT_APPEARANCE_VARIANT_KEY = 'default';
 export const DEFAULT_APPEARANCE_VARIANT_TITLE = '默认形象';
 
+/**
+ * Scenes belonging to a segment must form a contiguous block in story-global order
+ * (ADR-0006 single source of truth — no separate segment-local order).
+ */
+export function assertSegmentSceneOrderConsistent(
+  scenesInGlobalOrder: readonly { id: string; order: number; segment_id?: string | null }[],
+  segmentId: string,
+): void {
+  const sorted = [...scenesInGlobalOrder].sort((a, b) => a.order - b.order);
+  const flags = sorted.map((scene) => scene.segment_id === segmentId);
+  const first = flags.indexOf(true);
+  const last = flags.lastIndexOf(true);
+  if (first === -1) return;
+  for (let index = first; index <= last; index += 1) {
+    if (!flags[index]) {
+      throw new DomainError(
+        'SEGMENT_SCENE_ORDER_INCONSISTENT',
+        '段落内场景必须在故事全局 order 中连续，且与全局顺序一致',
+        { segment_id: segmentId },
+      );
+    }
+  }
+}
+
 type PlainObject = Record<string, unknown>;
 
 function isObject(value: unknown): value is PlainObject {

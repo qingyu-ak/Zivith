@@ -17,6 +17,7 @@ export const generatedScenesSchema = z
         z
           .object({
             order: z.number().int().positive(),
+            segment_order: z.number().int().positive().optional(),
             title: z.string().trim().min(1).max(300),
             summary: z.string().trim().min(1).max(50_000),
             description: z.string().trim().min(1).max(50_000),
@@ -37,6 +38,8 @@ export type GeneratedScenes = z.infer<typeof generatedScenesSchema>;
 
 export interface SceneAgentInput {
   story: GeneratedStory;
+  /** Approved story segments (ADR-0006); when present, scenes should carry segment_order. */
+  segments?: Array<{ order: number; title: string; synopsis?: string | null; draft: string }>;
   max_scenes?: number;
 }
 
@@ -48,6 +51,7 @@ Shape:
   "scenes": [
     {
       "order": 1,
+      "segment_order": 1,
       "title": "string",
       "summary": "string",
       "description": "string",
@@ -61,7 +65,8 @@ Shape:
 }
 
 Rules:
-- scenes must be ordered cinematic units derived from the screenplay
+- scenes must be ordered cinematic units derived from the screenplay / approved segments
+- when segments are provided, set segment_order to the matching segment.order and expand each segment into one or more scenes
 - use the exact key names above
 - character_names is an array of character display names`;
 
@@ -110,6 +115,7 @@ export class SceneAgent implements Agent<SceneAgentInput, GeneratedScenes> {
         system_prompt: SCENE_SYSTEM_PROMPT,
         user_prompt: JSON.stringify({
           story: input.story,
+          segments: input.segments,
           max_scenes: input.max_scenes ?? 20,
         }),
         temperature: 0.5,

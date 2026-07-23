@@ -12,6 +12,7 @@ import type {
   SceneDTO,
   ShotDTO,
   StoryDTO,
+  StorySegmentDTO,
   VisualRequirementDTO,
   WorkflowMediaDTO,
   WorkflowRunDTO,
@@ -151,7 +152,12 @@ function canApproveArtifacts(
   shots: ShotDTO[],
 ): boolean {
   if (!review) return false;
-  if (review === 'story_review') return Boolean(story);
+  if (review === 'story_review') {
+    if (!story) return false;
+    const segments = story.segments ?? [];
+    if (segments.length === 0) return true;
+    return segments.every((segment) => segment.state === 'approved');
+  }
   if (review === 'scene_review') return scenes.length > 0;
   if (review === 'shot_review') return shots.length > 0;
   if (review === 'visual_assets_review') {
@@ -662,6 +668,47 @@ export function WorkflowPanel({
     }
   }
 
+  async function submitSegmentReview(
+    segment: StorySegmentDTO,
+    action: 'approve' | 'retry_with_feedback',
+  ) {
+    if (!run?.state.awaiting_review || run.state.awaiting_review !== 'story_review') return;
+    if (action === 'retry_with_feedback' && !feedback.trim()) {
+      setError('请先填写本段反馈');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await api<WorkflowRunDTO>(`/workflows/${run.id}/review`, {
+        method: 'POST',
+        body: {
+          step: 'story_review',
+          action,
+          segment_id: segment.id,
+          ...(action === 'retry_with_feedback' ? { feedback } : {}),
+        },
+      });
+      const storyId = textField(stepOutput(run, 'story').story_id);
+      if (storyId) {
+        const loaded = await api<StoryDTO>(`/stories/${storyId}`);
+        setStory(loaded);
+      }
+      setFeedback('');
+      setNotice(
+        action === 'approve'
+          ? `段落「${segment.title}」已通过`
+          : `段落「${segment.title}」已按反馈重写`,
+      );
+      await onArtifactsChanged();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function cancel() {
     if (!run || !window.confirm('确定取消当前 AI 工作流吗？')) return;
     setBusy(true);
@@ -899,18 +946,80 @@ export function WorkflowPanel({
           {loadingArtifacts && <Spinner label="正在加载材料…" />}
 
           {viewKind === 'story' && !loadingArtifacts && story && (
-            <div className="mt-5 rounded-lg border border-line bg-ink p-4">
-              <p className="text-sm font-medium">{story.title}</p>
-              {story.logline && (
-                <p className="mt-2 text-xs leading-5 text-zinc-400">{story.logline}</p>
-              )}
-              {story.synopsis && (
-                <p className="mt-3 text-xs leading-6 text-zinc-500">{story.synopsis}</p>
-              )}
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
-                {story.genre && <Badge tone="neutral">{story.genre}</Badge>}
-                {story.theme && <Badge tone="neutral">{story.theme}</Badge>}
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-lg border border-line bg-ink p-4">
+                <p className="text-sm font-medium">{story.title}</p>
+                {story.logline && (
+                  <p className="mt-2 text-xs leading-5 text-zinc-400">{story.logline}</p>
+                )}
+                {story.synopsis && (
+                  <p className="mt-3 text-xs leading-6 text-zinc-500">{story.synopsis}</p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
+                  {story.genre && <Badge tone="neutral">{story.genre}</Badge>}
+                  {story.theme && <Badge tone="neutral">{story.theme}</Badge>}
+                </div>
               </div>
+              {(story.segments ?? []).length > 0 ? (
+                (story.segments ?? []).map((segment) => (
+                  <div key={segment.id} className="rounded-lg border border-line bg-ink p-4">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium">
+                        #{segment.order} {segment.title}
+                      </p>
+                      <Badge
+                        tone={
+                          segment.state === 'approved'
+                            ? 'success'
+                            : segment.state === 'review'
+                              ? 'warning'
+                              : 'neutral'
+                        }
+                      >
+                        {segment.state === 'approved'
+                          ? '已通过'
+                          : segment.state === 'review'
+                            ? '待审'
+                            : '草稿'}
+                      </Badge>
+                    </div>
+                    {segment.synopsis && (
+                      <p className="text-xs leading-5 text-zinc-400">{segment.synopsis}</p>
+                    )}
+                    {segment.draft && (
+                      <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-zinc-500">
+                        {segment.draft}
+                      </p>
+                    )}
+                    {isLiveReview && review === 'story_review' && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={busy || segment.state === 'approved'}
+                          onClick={() => void submitSegmentReview(segment, 'approve')}
+                        >
+                          {segment.state === 'approved' ? '本段已通过' : '通过本段'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={busy || !feedback.trim()}
+                          onClick={() =>
+                            void submitSegmentReview(segment, 'retry_with_feedback')
+                          }
+                        >
+                          按反馈重写本段
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-zinc-500">
+                  本故事未分段（无持久化 StorySegment），沿用整块审核。
+                </p>
+              )}
             </div>
           )}
 

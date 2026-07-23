@@ -23,6 +23,7 @@ import {
 } from './routes/providers.js';
 import { registerResourceRoutes } from './routes/resources.js';
 import { registerShotPromptRoutes } from './routes/shot-prompts.js';
+import { registerStorySegmentRoutes } from './routes/story-segments.js';
 import { registerStubRoutes } from './routes/stubs.js';
 import { registerVisualRequirementRoutes } from './routes/visual-requirements.js';
 import { registerWorkflowEventRoutes } from './routes/workflow-events.js';
@@ -121,6 +122,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         protectedApi.addHook('preHandler', authenticate);
         registerGenerationRoutes(protectedApi, db, generationService);
         registerResourceRoutes(protectedApi, db, storage);
+        registerStorySegmentRoutes(protectedApi, db);
         registerAppearanceVariantRoutes(protectedApi, db, storage);
         registerShotPromptRoutes(protectedApi, db);
         registerVisualRequirementRoutes(protectedApi, db);
