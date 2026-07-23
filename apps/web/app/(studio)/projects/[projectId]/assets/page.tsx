@@ -16,10 +16,24 @@ import {
 } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormList, getFormText, getOptionalFormText } from '@/lib/form-data';
-import type { AssetDTO, AssetType, MediaDTO } from '@/lib/types';
+import type {
+  AppearanceVariantDTO,
+  AppearanceVariantMediaDTO,
+  AssetDTO,
+  AssetType,
+  MediaDTO,
+} from '@/lib/types';
 
-function imageUrl(image: string | MediaDTO) {
-  return typeof image === 'string' ? image : (image.thumbnail_url ?? image.url);
+function imageUrl(image: string | MediaDTO | AppearanceVariantMediaDTO) {
+  if (typeof image === 'string') return image;
+  const accessUrl = 'access_url' in image ? image.access_url : undefined;
+  return accessUrl ?? image.thumbnail_url ?? image.url ?? '';
+}
+
+function stateLabel(state: AppearanceVariantDTO['state']) {
+  if (state === 'approved') return '已批准';
+  if (state === 'review') return '待选择';
+  return '草稿';
 }
 
 export default function AssetsPage() {
@@ -30,6 +44,14 @@ export default function AssetsPage() {
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [variants, setVariants] = useState<AppearanceVariantDTO[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [variantBusyKey, setVariantBusyKey] = useState('');
+  const [newVariantKey, setNewVariantKey] = useState('');
+  const [newVariantTitle, setNewVariantTitle] = useState('');
+  const [newVariantReason, setNewVariantReason] = useState('');
+  const [newVariantDescription, setNewVariantDescription] = useState('');
+  const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,10 +67,32 @@ export default function AssetsPage() {
     }
   }, [projectId, type]);
 
+  const loadVariants = useCallback(async (assetId: string) => {
+    setVariantsLoading(true);
+    try {
+      const value = await api<AppearanceVariantDTO[]>(`/assets/${assetId}/appearance-variants`);
+      setVariants(value);
+    } catch (reason) {
+      setError(errorMessage(reason));
+      setVariants([]);
+    } finally {
+      setVariantsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     setSelected(null);
+    setVariants([]);
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (selected && type === 'character' && !creating) {
+      void loadVariants(selected.id);
+    } else {
+      setVariants([]);
+    }
+  }, [selected, type, creating, loadVariants]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -135,6 +179,78 @@ export default function AssetsPage() {
       };
       setSelected(withUploadedMedia);
       setAssets((items) => items.map((item) => (item.id === asset.id ? withUploadedMedia : item)));
+      if (type === 'character') await loadVariants(asset.id);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  async function createVariant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    try {
+      await api(`/assets/${selected.id}/appearance-variants`, {
+        method: 'POST',
+        body: {
+          key: newVariantKey.trim(),
+          title: newVariantTitle.trim(),
+          change_reason: newVariantReason.trim() || null,
+          description: newVariantDescription.trim() || null,
+        },
+      });
+      setNewVariantKey('');
+      setNewVariantTitle('');
+      setNewVariantReason('');
+      setNewVariantDescription('');
+      await loadVariants(selected.id);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  async function generateVariant(variant: AppearanceVariantDTO) {
+    if (!selected) return;
+    setVariantBusyKey(variant.key);
+    try {
+      await api(`/assets/${selected.id}/appearance-variants/${variant.key}/generate`, {
+        method: 'POST',
+        body: {
+          prompt: (promptDrafts[variant.key] ?? '').trim() || undefined,
+        },
+      });
+      await loadVariants(selected.id);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setVariantBusyKey('');
+    }
+  }
+
+  async function approveVariant(variant: AppearanceVariantDTO, mediaId?: string) {
+    if (!selected) return;
+    setVariantBusyKey(variant.key);
+    try {
+      await api(`/assets/${selected.id}/appearance-variants/${variant.key}/approve`, {
+        method: 'POST',
+        body: mediaId ? { media_id: mediaId } : {},
+      });
+      await loadVariants(selected.id);
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setVariantBusyKey('');
+    }
+  }
+
+  async function removeVariant(variant: AppearanceVariantDTO) {
+    if (!selected || variant.key === 'default') return;
+    if (!confirm(`确定删除形象「${variant.title}」吗？`)) return;
+    try {
+      await api(`/assets/${selected.id}/appearance-variants/${variant.key}`, {
+        method: 'DELETE',
+      });
+      await loadVariants(selected.id);
     } catch (reason) {
       setError(errorMessage(reason));
     }
@@ -365,6 +481,165 @@ export default function AssetsPage() {
                   />
                   <Button type="submit" variant="secondary">
                     上传参考图
+                  </Button>
+                </form>
+              </div>
+            )}
+            {selected && type === 'character' && (
+              <div className="mt-6 border-t border-line pt-5">
+                <h3 className="mb-1 font-medium">形象变体</h3>
+                <p className="mb-4 text-xs text-zinc-500">
+                  按剧情状态维护多套形象（默认 / 受伤 / 年幼等），可独立生成并批准锚定图。
+                </p>
+                {variantsLoading ? (
+                  <Spinner label="正在加载形象…" />
+                ) : (
+                  <div className="grid gap-4">
+                    {variants.map((variant) => {
+                      const anchorSrc = variant.anchor_media
+                        ? imageUrl(variant.anchor_media)
+                        : '';
+                      const busy = variantBusyKey === variant.key;
+                      return (
+                        <div
+                          key={variant.id}
+                          className="rounded-lg border border-line/80 bg-zinc-950/40 p-3"
+                        >
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-medium">
+                                {variant.title}{' '}
+                                <span className="text-xs font-normal text-zinc-500">
+                                  ({variant.key})
+                                </span>
+                              </p>
+                              {variant.change_reason && (
+                                <p className="mt-1 text-xs text-zinc-400">
+                                  变化原因：{variant.change_reason}
+                                </p>
+                              )}
+                            </div>
+                            <Badge>{stateLabel(variant.state)}</Badge>
+                          </div>
+                          {anchorSrc ? (
+                            <img
+                              className="mb-3 aspect-square w-full rounded-md object-cover"
+                              src={anchorSrc}
+                              alt={`${variant.title}锚定图`}
+                            />
+                          ) : (
+                            <div className="mb-3 grid aspect-video place-items-center rounded-md bg-zinc-900 text-xs text-zinc-600">
+                              尚无锚定图
+                            </div>
+                          )}
+                          {variant.description && (
+                            <p className="mb-2 text-xs text-zinc-400">{variant.description}</p>
+                          )}
+                          {!!variant.candidate_media?.length && (
+                            <div className="mb-3 grid grid-cols-3 gap-2">
+                              {variant.candidate_media.map((media) => (
+                                <button
+                                  key={media.id}
+                                  type="button"
+                                  className="overflow-hidden rounded-md border border-transparent hover:border-accent/60"
+                                  disabled={busy}
+                                  onClick={() => void approveVariant(variant, media.id)}
+                                  title="选为锚定图"
+                                >
+                                  <img
+                                    className="aspect-square w-full object-cover"
+                                    src={imageUrl(media)}
+                                    alt="候选图"
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <Field label="生图提示词">
+                            <Textarea
+                              value={promptDrafts[variant.key] ?? ''}
+                              placeholder="留空则用角色外观 + 形象描述自动拼接"
+                              onChange={(event) =>
+                                setPromptDrafts((current) => ({
+                                  ...current,
+                                  [variant.key]: event.target.value,
+                                }))
+                              }
+                            />
+                          </Field>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={busy}
+                              onClick={() => void generateVariant(variant)}
+                            >
+                              {busy ? '处理中…' : '生成锚定图'}
+                            </Button>
+                            {variant.candidate_media_ids[0] && (
+                              <Button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void approveVariant(variant)}
+                              >
+                                批准当前候选
+                              </Button>
+                            )}
+                            {variant.key !== 'default' && (
+                              <Button
+                                type="button"
+                                variant="danger"
+                                disabled={busy}
+                                onClick={() => void removeVariant(variant)}
+                              >
+                                删除
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <form
+                  className="mt-5 grid gap-3 border-t border-line/60 pt-4"
+                  onSubmit={(event) => {
+                    void createVariant(event);
+                  }}
+                >
+                  <h4 className="text-sm font-medium">新增形象</h4>
+                  <Field label="形象键" hint="英文 slug，如 wounded / young">
+                    <Input
+                      value={newVariantKey}
+                      onChange={(event) => setNewVariantKey(event.target.value)}
+                      placeholder="wounded"
+                      required
+                    />
+                  </Field>
+                  <Field label="展示名">
+                    <Input
+                      value={newVariantTitle}
+                      onChange={(event) => setNewVariantTitle(event.target.value)}
+                      placeholder="受伤形象"
+                      required
+                    />
+                  </Field>
+                  <Field label="变化原因">
+                    <Input
+                      value={newVariantReason}
+                      onChange={(event) => setNewVariantReason(event.target.value)}
+                      placeholder="战斗后"
+                    />
+                  </Field>
+                  <Field label="外观增量描述">
+                    <Textarea
+                      value={newVariantDescription}
+                      onChange={(event) => setNewVariantDescription(event.target.value)}
+                      placeholder="衣衫破损，左臂绷带"
+                    />
+                  </Field>
+                  <Button type="submit" variant="secondary">
+                    添加形象
                   </Button>
                 </form>
               </div>

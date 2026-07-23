@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   asId,
   mergeInherited,
+  resolveAppearanceVariantAnchor,
+  resolveAppearanceWithVariant,
   resolveCharacter,
   resolveShotContext,
+  resolveVisualMedia,
   SHOT_TRANSITIONS,
   transitionShot,
   unfreezeShot,
   type Character,
+  type MediaId,
   type Project,
   type ProjectId,
   type Scene,
@@ -172,5 +176,57 @@ describe('character resolution', () => {
     const resolved = resolveCharacter(child, (id) => (id === base.id ? base : undefined));
     expect(resolved.appearance).toEqual({ hair: 'white', eyes: 'blue' });
     expect(resolved.default_outfit).toBe('uniform');
+  });
+});
+
+describe('appearance variants', () => {
+  it('merges variant description over character appearance.custom', () => {
+    expect(
+      resolveAppearanceWithVariant({ hair: 'black', custom: 'base look' }, {
+        description: 'bloodstained cloak',
+      }),
+    ).toEqual({ hair: 'black', custom: 'bloodstained cloak' });
+  });
+
+  it('resolves variant anchor by key before asset reference_images', () => {
+    const character: Character = {
+      id: asId('char_1'),
+      project_id: asId('project_1'),
+      name: 'Hero',
+      aliases: [],
+      description: 'Hero',
+      state: 'active',
+      appearance: {},
+      reference_images: [asId<MediaId>('media_fallback')],
+      tags: [],
+    };
+    const media = resolveVisualMedia(character, [], {
+      variant_key: 'wounded',
+      appearance_variants: [
+        {
+          key: 'default',
+          anchor_media_id: asId<MediaId>('media_default'),
+          state: 'approved',
+        },
+        {
+          key: 'wounded',
+          anchor_media_id: asId<MediaId>('media_wounded'),
+          state: 'approved',
+        },
+      ],
+    });
+    expect(media).toBe('media_wounded');
+    expect(
+      resolveAppearanceVariantAnchor(
+        [
+          {
+            key: 'young',
+            anchor_media_id: asId<MediaId>('media_young'),
+            state: 'approved',
+          },
+        ],
+        'missing',
+      ),
+    ).toBeUndefined();
   });
 });

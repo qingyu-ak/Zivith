@@ -17,6 +17,7 @@ import { ShotAgent, type ShotAgentScene, type ShotAgentOutput } from '../agent/s
 import { StoryAgent, type GeneratedStory } from '../agent/story-agent.js';
 import { VisualPrepAgent, type VisualPrepScene } from '../agent/visual-prep-agent.js';
 import { enrichVisualAssetTraits, mergeVisualPromptIntoAssetData } from '../agent/visual-trait.js';
+import { ensureDefaultAppearanceVariant } from '../visual/appearance-variants.js';
 import { createProviderBundle, type ProviderBundle } from '../../providers/registry.js';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
 import type { LLMAdapter } from '../../ports/llm.js';
@@ -913,9 +914,13 @@ export class MockWorkflowRunner {
         name: { equals: name, mode: 'insensitive' },
         deletedAt: null,
       },
-      select: { id: true },
     });
-    if (existing) return existing.id;
+    if (existing) {
+      if (assetType === 'character') {
+        await ensureDefaultAppearanceVariant(this.db, existing);
+      }
+      return existing.id;
+    }
 
     const result = await this.queueWork.run(
       'workflow_step',
@@ -933,7 +938,7 @@ export class MockWorkflowRunner {
     const id = deterministicUuid(
       `${run.projectId}:asset:${assetType}:${name.trim().toLocaleLowerCase()}`,
     );
-    await this.db.asset.upsert({
+    const asset = await this.db.asset.upsert({
       where: { id },
       create: {
         id,
@@ -953,6 +958,9 @@ export class MockWorkflowRunner {
         tags: result.data.tags,
       },
     });
+    if (assetType === 'character') {
+      await ensureDefaultAppearanceVariant(this.db, asset);
+    }
     return id;
   }
 

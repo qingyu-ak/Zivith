@@ -9,6 +9,7 @@ import {
   shotPatchSchema,
 } from '@zivith/domain';
 import { z } from 'zod';
+import { ensureDefaultAppearanceVariant } from '../contexts/visual/appearance-variants.js';
 import { ApiError } from '../errors.js';
 import { authenticate } from './auth.js';
 import type { StoragePort } from '../ports/index.js';
@@ -947,6 +948,9 @@ export function registerResourceRoutes(
               },
             });
           })();
+    if (asset.type === 'character') {
+      await ensureDefaultAppearanceVariant(db, asset);
+    }
     return reply.status(201).send(assetDto(asset));
   });
   app.get('/assets/:id', async (request) => {

@@ -1,4 +1,5 @@
 import type {
+  AppearanceVariant,
   Character,
   CharacterAppearance,
   InheritableContext,
@@ -12,6 +13,9 @@ import type {
 } from './types.js';
 import type { MediaId } from './ids.js';
 import { DomainError } from './shot-state.js';
+
+export const DEFAULT_APPEARANCE_VARIANT_KEY = 'default';
+export const DEFAULT_APPEARANCE_VARIANT_TITLE = '默认形象';
 
 type PlainObject = Record<string, unknown>;
 
@@ -105,9 +109,40 @@ export interface ResolvedCharacterReference {
   visual_media_id?: MediaId;
 }
 
+/**
+ * Merges a variant's free-text description over the character's base appearance
+ * (variant description wins on `custom`; other appearance fields stay from the base).
+ */
+export function resolveAppearanceWithVariant(
+  appearance: CharacterAppearance,
+  variant?: Pick<AppearanceVariant, 'description'> | null,
+): CharacterAppearance {
+  const description = variant?.description?.trim();
+  if (!description) return appearance;
+  return mergeInherited<CharacterAppearance>(appearance, { custom: description });
+}
+
+/** Prefer matching appearance-variant anchor when `variant_key` hits a known variant. */
+export function resolveAppearanceVariantAnchor(
+  variants: readonly Pick<AppearanceVariant, 'key' | 'anchor_media_id' | 'deleted_at' | 'state'>[],
+  variantKey: string,
+): MediaId | undefined {
+  const match = variants.find(
+    (item) => item.key === variantKey && !item.deleted_at && item.anchor_media_id,
+  );
+  return match?.anchor_media_id ?? undefined;
+}
+
 export function resolveVisualMedia(
   asset: Character | Location,
   requirements: readonly VisualAssetRequirement[],
+  options?: {
+    variant_key?: string;
+    appearance_variants?: readonly Pick<
+      AppearanceVariant,
+      'key' | 'anchor_media_id' | 'deleted_at' | 'state'
+    >[];
+  },
 ): MediaId | undefined {
   const binding = requirements.find(
     (item) =>
@@ -115,7 +150,15 @@ export function resolveVisualMedia(
       item.status === 'approved' &&
       item.approved_media_id,
   );
-  return binding?.approved_media_id ?? asset.reference_images[0];
+  if (binding?.approved_media_id) return binding.approved_media_id;
+
+  const variantKey = options?.variant_key;
+  if (variantKey && options?.appearance_variants?.length) {
+    const fromVariant = resolveAppearanceVariantAnchor(options.appearance_variants, variantKey);
+    if (fromVariant) return fromVariant;
+  }
+
+  return asset.reference_images[0];
 }
 
 export function resolveCharacterReference(

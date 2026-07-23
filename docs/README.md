@@ -105,7 +105,7 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 
 **Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
 **Strategy:** B-Line — Agent pipeline first, video generation mocked.  
-**Near-term focus:** V0.4 Modification Plan (Track F): W2 appearance variants → W1 reference-image injection → W3 StorySegment (ADR-0006) → W4 scoped recompute → W5/W6 → W7 usage records. See [V0.4 Modification Plan](V0.4-Modification-Plan.md) and [Next Tasks](Next-Tasks.md).
+**Near-term focus:** V0.4 Modification Plan (Track F): W2 appearance variants **done** → next **W1** reference-image injection → W3 StorySegment (ADR-0006) → W4 scoped recompute → W5/W6 → W7 usage records. See [V0.4 Modification Plan](V0.4-Modification-Plan.md) and [Next Tasks](Next-Tasks.md).
 
 ---
 

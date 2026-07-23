@@ -92,6 +92,18 @@ character:
   default_outfit: "白色T恤、牛仔裤、深色外套"
   reference_images: []             # 需要 AI 生成或上传角色设定图
   tags: ["protagonist", "female", "young_adult", "horror"]
+  # V0.4 W2: every Character auto-has a default appearance variant;
+  # additional narrative states are first-class variants (not separate Characters).
+  appearance_variants:
+    - key: default
+      title: 默认形象
+      state: approved
+      anchor_media_id: null          # filled after asset-library or Visual Prep approve
+    - key: night_fear
+      title: 夜半惊惧
+      change_reason: 阁楼异响后
+      description: 脸色发白，外套敞开，短发微乱
+      state: draft
 ```
 
 ## 4.2 阁楼女人 / 阿秀 (The Attic Woman)

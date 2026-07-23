@@ -7,6 +7,7 @@ import {
   mergeVisualPromptIntoAssetData,
   readVisualPromptFromAssetData,
 } from '../contexts/agent/visual-trait.js';
+import { syncVariantAnchorFromRequirement } from '../contexts/visual/appearance-variants.js';
 import { generateRequirementImage } from '../contexts/visual/generate-requirement-image.js';
 import { omitUndefined } from '../lib/omit-undefined.js';
 import { createProviderBundle } from '../providers/registry.js';
@@ -275,6 +276,13 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
         },
       }),
     ]);
+    if (asset.type === 'character') {
+      await syncVariantAnchorFromRequirement(db, {
+        assetId: asset.id,
+        variantKey: requirement.variantKey,
+        mediaId,
+      });
+    }
     return enrichRequirement(db, approved);
   });
 

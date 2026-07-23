@@ -150,6 +150,34 @@ export interface AssetDTO {
   reference_images?: Array<string | MediaDTO>;
 }
 
+export interface AppearanceVariantMediaDTO {
+  id: string;
+  url?: string | null;
+  access_url?: string | null;
+  thumbnail_url?: string | null;
+  generation_metadata?: {
+    is_mock?: boolean;
+    provider?: string;
+    generation_error?: string;
+  } | null;
+}
+
+export interface AppearanceVariantDTO {
+  id: string;
+  asset_id: string;
+  key: string;
+  title: string;
+  change_reason?: string | null;
+  description?: string | null;
+  anchor_media_id?: string | null;
+  candidate_media_ids: string[];
+  state: 'draft' | 'review' | 'approved';
+  order: number;
+  resolved_appearance?: AssetDTO['appearance'];
+  anchor_media?: AppearanceVariantMediaDTO | null;
+  candidate_media?: AppearanceVariantMediaDTO[];
+}
+
 export interface ApiList<T> {
   data?: T[];
   items?: T[];

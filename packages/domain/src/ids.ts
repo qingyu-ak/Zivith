@@ -13,6 +13,7 @@ export type AssetId = Brand<string, 'AssetId'>;
 export type MediaId = Brand<string, 'MediaId'>;
 export type OutputId = Brand<string, 'OutputId'>;
 export type VisualAssetRequirementId = Brand<string, 'VisualAssetRequirementId'>;
+export type AppearanceVariantId = Brand<string, 'AppearanceVariantId'>;
 export type ImageGenerationJobId = Brand<string, 'ImageGenerationJobId'>;
 export type VideoGenerationJobId = Brand<string, 'VideoGenerationJobId'>;
 export type WorkflowRunId = Brand<string, 'WorkflowRunId'>;

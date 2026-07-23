@@ -12,6 +12,7 @@ import { WorkflowOrchestrator } from './contexts/workflow/orchestrator.js';
 import { registerErrorHandler } from './errors.js';
 import type { StoragePort } from './ports/index.js';
 import { createProviderBundle } from './providers/registry.js';
+import { registerAppearanceVariantRoutes } from './routes/appearance-variants.js';
 import { registerAudioRoutes } from './routes/audio.js';
 import { authenticate, registerAuthRoutes } from './routes/auth.js';
 import { registerGenerationRoutes } from './routes/generation.js';
@@ -120,6 +121,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         protectedApi.addHook('preHandler', authenticate);
         registerGenerationRoutes(protectedApi, db, generationService);
         registerResourceRoutes(protectedApi, db, storage);
+        registerAppearanceVariantRoutes(protectedApi, db, storage);
         registerShotPromptRoutes(protectedApi, db);
         registerVisualRequirementRoutes(protectedApi, db);
         registerWorkflowRoutes(protectedApi, db, orchestrator, createRunner);

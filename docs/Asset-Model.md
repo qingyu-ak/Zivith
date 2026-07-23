@@ -75,9 +75,9 @@ The most complex Asset type. Characters must maintain visual consistency across 
 | `appearance.distinguishing_features` | `string` | No | Unique identifying features (scars, tattoos, etc.) |
 | `appearance.custom` | `string` | No | Free-text override for anything not captured above |
 
-### Appearance Variants (V0.4 — accepted, implementation pending)
+### Appearance Variants (V0.4 W2 — implemented)
 
-Consistency is anchored per **character × narrative state**, not per character. A Character owns an ordered list of `AppearanceVariant`s (see [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) W2, adopted from the [waoowaoo review](architecture/review/Zivith-Architecture-Review-Based-on-waoowaoo.md) A1):
+Consistency is anchored per **character × narrative state**, not per character. A Character owns an ordered list of `AppearanceVariant`s (table `asset_appearance_variants`; see [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) W2, adopted from the [waoowaoo review](architecture/review/Zivith-Architecture-Review-Based-on-waoowaoo.md) A1):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -89,7 +89,7 @@ Consistency is anchored per **character × narrative state**, not per character.
 | `candidate_media_ids[]` | `MediaId[]` | No | Generated candidates awaiting selection |
 | `state` | `enum` | Yes | Approval state (same enum as other reviewable entities) |
 
-Every character receives a `default` variant. Reference-image injection (plan W1) resolves: Scene approved binding → matching variant `anchor_media_id` → project-level `reference_images[0]`.
+Every character receives a `default` variant on create (existing characters backfilled by migration). Asset-library APIs: `GET/POST /assets/:id/appearance-variants`, `PATCH/DELETE …/:key`, `POST …/:key/generate`, `POST …/:key/approve`. Visual Prep approve syncs `variant_key` → matching variant `anchor_media_id` when the key exists. Reference-image **injection into provider requests** remains plan W1: Scene approved binding → matching variant `anchor_media_id` → project-level `reference_images[0]`.
 
 ## 2.3 Location
 

@@ -15,6 +15,7 @@ enum MemberRole {
 
 enum ApprovalState {
   draft
+  review
   approved
 }
 
@@ -232,26 +233,49 @@ model Shot {
 }
 
 model Asset {
-  id              String      @id @default(uuid())
-  projectId       String      @map("project_id")
-  type            AssetType
-  state           AssetState  @default(draft)
-  name            String
-  description     String
-  aliases         String[]    @default([])
-  baseCharacterId String?     @map("base_character_id")
-  appearance      Json?
-  data            Json        @default("{}")
-  referenceImages String[]    @default([]) @map("reference_images")
-  tags            String[]    @default([])
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
-  deletedAt       DateTime?   @map("deleted_at")
-  project         Project     @relation(fields: [projectId], references: [id])
+  id                 String                   @id @default(uuid())
+  projectId          String                   @map("project_id")
+  type               AssetType
+  state              AssetState               @default(draft)
+  name               String
+  description        String
+  aliases            String[]                 @default([])
+  baseCharacterId    String?                  @map("base_character_id")
+  appearance         Json?
+  data               Json                     @default("{}")
+  referenceImages    String[]                 @default([]) @map("reference_images")
+  tags               String[]                 @default([])
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+  deletedAt          DateTime?                @map("deleted_at")
+  project            Project                  @relation(fields: [projectId], references: [id])
+  appearanceVariants AssetAppearanceVariant[]
 
   @@index([projectId, type, state, deletedAt])
   @@index([baseCharacterId])
   @@map("assets")
+}
+
+/// Character × narrative appearance state (V0.4 W2). Character assets only in v1.
+model AssetAppearanceVariant {
+  id                String        @id @default(uuid())
+  assetId           String        @map("asset_id")
+  key               String
+  title             String
+  changeReason      String?       @map("change_reason")
+  description       String?
+  anchorMediaId     String?       @map("anchor_media_id")
+  candidateMediaIds String[]      @default([]) @map("candidate_media_ids")
+  state             ApprovalState @default(draft)
+  order             Int           @default(0)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+  asset             Asset         @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, key])
+  @@index([assetId, order, deletedAt])
+  @@map("asset_appearance_variants")
 }
 
 model Media {

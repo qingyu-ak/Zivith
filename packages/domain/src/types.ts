@@ -1,4 +1,5 @@
 import type {
+  AppearanceVariantId,
   AssetId,
   CharacterId,
   ImageGenerationJobId,
@@ -17,7 +18,7 @@ import type {
 
 export type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-export type ApprovalState = 'draft' | 'approved';
+export type ApprovalState = 'draft' | 'review' | 'approved';
 export type ShotState = 'draft' | 'prompting' | 'generating' | 'review' | 'approved';
 export type AssetState = 'draft' | 'active' | 'archived';
 
@@ -252,6 +253,23 @@ export interface CharacterAppearance {
   eyes?: string | null;
   distinguishing_features?: string | null;
   custom?: string | null;
+}
+
+/** Character × narrative appearance state (V0.4 W2). */
+export interface AppearanceVariant {
+  id: AppearanceVariantId;
+  asset_id: AssetId;
+  key: string;
+  title: string;
+  change_reason?: string | null;
+  description?: string | null;
+  anchor_media_id?: MediaId | null;
+  candidate_media_ids: MediaId[];
+  state: 'draft' | 'review' | 'approved';
+  order: number;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at?: Date | null;
 }
 
 export interface Character {

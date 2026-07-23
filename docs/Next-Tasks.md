@@ -102,7 +102,7 @@ Default linear Story→Video **stays**. No node canvas; no gate time-travel (D4)
 |----|------|-------|--------|
 | E0 | Accept / revise Looser Creative Flow RFC | Scope lock + ramp (A→B→C) | Done 2026-07-23 (Accepted 0.2) |
 | E1 | Slice A: scoped Scene/Shot/visual recompute via Orchestrator | Implemented as [V0.4 plan](V0.4-Modification-Plan.md) **W4** | Open — via Track F |
-| E2 | Slice B: asset-library image generate + Visual Prep reuse | Asset side = V0.4 **W2** (appearance variants + asset-page generate) | Open — via Track F |
+| E2 | Slice B: asset-library image generate + Visual Prep reuse | Asset side = V0.4 **W2** (appearance variants + asset-page generate) | Done 2026-07-23 (W2); W1 injects anchors |
 | E3 | Slice C: story segments (ordered Scene groupings) | Domain ADR done: [ADR-0006](architecture/adr/0006-story-segments-are-ordered-scene-groupings.md); implemented as V0.4 **W3** | Open — via Track F |
 
 **Exit criteria for Track E Slice A:** operator can recompute one Scene’s visual prep (or one Shot prompt/video) without cancel+restart; linear newcomer path still works.
@@ -115,7 +115,7 @@ Source of truth: [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) (from th
 
 | ID | Workstream | Source | Priority | Status |
 |----|------------|--------|----------|--------|
-| F1 | W2 Character appearance variants (`asset_appearance_variants`) | Review A1 / RFC Slice B | P0 | Open |
+| F1 | W2 Character appearance variants (`asset_appearance_variants`) | Review A1 / RFC Slice B | P0 | Done 2026-07-23 |
 | F2 | W1 Reference-image injection pipeline (ports + adapters + prompt contract) | Review A2 — biggest consistency gap | P0 | Open |
 | F3 | W3 StorySegment: segmented story draft + per-segment review + Scene grouping | ADR-0006 / RFC Slice C | P1 | Open |
 | F4 | W4 Scoped recompute APIs + `workflow_step_attempts` persistence | RFC Slice A / Review A3 | P1 | Open |
