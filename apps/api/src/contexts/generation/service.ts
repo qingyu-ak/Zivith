@@ -6,6 +6,7 @@ import { ApiError } from '../../errors.js';
 import type { QueuePort } from '../../ports/index.js';
 import type { VideoGenerationAdapter } from '../../ports/generation.js';
 import { resolveMediaUrls } from '../visual/reference-images.js';
+import { withUsageContext } from '../usage/context.js';
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -316,15 +317,19 @@ export class GenerationService {
     ]);
 
     try {
-      const result = await this.adapter.generate({
-        request_id: requestId,
-        model: output.model,
-        positive_prompt: positive,
-        ...(negative ? { negative_prompt: negative } : {}),
-        shot: this.domainShot(shot),
-        reference_image_urls: referenceImageUrls,
-        parameters: { output_id: outputId, visual_media_ids: visualMediaIds },
-      });
+      const result = await withUsageContext(
+        { projectId: shot.projectId, taskType: 'video_generate' },
+        () =>
+          this.adapter.generate({
+            request_id: requestId,
+            model: output.model,
+            positive_prompt: positive,
+            ...(negative ? { negative_prompt: negative } : {}),
+            shot: this.domainShot(shot),
+            reference_image_urls: referenceImageUrls,
+            parameters: { output_id: outputId, visual_media_ids: visualMediaIds },
+          }),
+      );
 
       const latestTask = await this.db.task.findFirst({ where: { id: task.id } });
       if (latestTask?.status === 'cancelled') {

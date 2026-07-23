@@ -11,6 +11,7 @@ import type { ProjectDTO, StoryDTO } from '@/lib/types';
 import { WorkflowPanel } from '@/components/workflow-panel';
 import { GenerationQueuePanel } from '@/components/generation-queue-panel';
 import { ProviderPanel } from '@/components/provider-panel';
+import { UsageSummaryCard } from '@/components/usage-summary-card';
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -140,6 +141,7 @@ export default function ProjectPage() {
         </Card>
       )}
       <ProviderPanel />
+      <UsageSummaryCard projectId={projectId} />
       <WorkflowPanel projectId={projectId} onArtifactsChanged={load} />
       <GenerationQueuePanel projectId={projectId} />
       {stories.length === 0 ? (

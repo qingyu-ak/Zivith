@@ -37,6 +37,7 @@ import {
   shotVideoInputSnapshot,
   stableInputHash,
 } from './scoped-recompute.js';
+import { withUsageContext } from '../usage/context.js';
 
 type WorkflowWithSteps = Awaited<ReturnType<MockWorkflowRunner['getRun']>>;
 
@@ -105,6 +106,13 @@ export class MockWorkflowRunner {
   }
 
   async runUntilGate(runId: string, userId: string): Promise<WorkflowWithSteps> {
+    const seed = await this.getRun(runId);
+    return withUsageContext({ projectId: seed.projectId }, () =>
+      this.runUntilGateInner(runId, userId),
+    );
+  }
+
+  private async runUntilGateInner(runId: string, userId: string): Promise<WorkflowWithSteps> {
     for (let iteration = 0; iteration < 20; iteration += 1) {
       const run = await this.getRun(runId);
       const nextQueued = run.steps.find((step) => step.status === 'queued');
@@ -241,7 +249,27 @@ export class MockWorkflowRunner {
     });
     if (!scene) throw new ApiError(404, 'SCENE_NOT_FOUND', '场景不存在');
     await this.assertProjectEditor(scene.story.projectId, userId);
+    return withUsageContext({ projectId: scene.story.projectId, taskType: 'image_generate' }, () =>
+      this.recomputeVisualPrepInner(scene, userId),
+    );
+  }
 
+  private async recomputeVisualPrepInner(
+    scene: {
+      id: string;
+      title: string;
+      description: string | null;
+      time: string | null;
+      weather: string | null;
+      mood: string | null;
+      locationId: string | null;
+      characterIds: string[];
+      overrides: unknown;
+      story: { id: string; projectId: string };
+    },
+    userId: string,
+  ) {
+    const sceneId = scene.id;
     const inputHash = stableInputHash(sceneVisualInputSnapshot(scene));
     const staleRequirements = await markSceneVisualsStale(this.db, sceneId);
     const staleShots = await markSceneDownstreamPromptsStale(this.db, sceneId);
@@ -317,7 +345,30 @@ export class MockWorkflowRunner {
     if (shot.state === 'approved') {
       throw new ApiError(409, 'SHOT_APPROVED', '已批准镜头的提示词不可局部重跑，请先解冻');
     }
+    return withUsageContext({ projectId: shot.scene.story.projectId, taskType: 'llm' }, () =>
+      this.recomputePromptInner(shot, userId),
+    );
+  }
 
+  private async recomputePromptInner(
+    shot: {
+      id: string;
+      state: string;
+      camera: unknown;
+      composition: unknown;
+      lighting: unknown;
+      color: unknown;
+      mood: string | null;
+      characters: unknown;
+      dialogue: unknown;
+      action: unknown;
+      style: unknown;
+      prompt: unknown;
+      scene: { story: { id: string; projectId: string } };
+    },
+    userId: string,
+  ) {
+    const shotId = shot.id;
     const inputHash = stableInputHash(shotPromptInputSnapshot(shot));
     await markShotPromptStale(this.db, shotId);
 
@@ -397,6 +448,21 @@ export class MockWorkflowRunner {
       throw new ApiError(409, 'PROMPT_NOT_APPROVED', '请先审核通过提示词再重跑视频');
     }
 
+    return withUsageContext(
+      { projectId: shot.scene.story.projectId, taskType: 'video_generate' },
+      () => this.recomputeVideoInner(shot, userId),
+    );
+  }
+
+  private async recomputeVideoInner(
+    shot: {
+      id: string;
+      prompt: unknown;
+      scene: { story: { id: string; projectId: string } };
+    },
+    userId: string,
+  ) {
+    const shotId = shot.id;
     const inputHash = stableInputHash(shotVideoInputSnapshot(shot));
     const scoped = await this.orchestrator.beginScopedRecompute({
       projectId: shot.scene.story.projectId,

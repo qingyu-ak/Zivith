@@ -12,6 +12,7 @@ import { WorkflowOrchestrator } from './contexts/workflow/orchestrator.js';
 import { registerErrorHandler } from './errors.js';
 import type { StoragePort } from './ports/index.js';
 import { createProviderBundle } from './providers/registry.js';
+import { instrumentProviderBundle } from './contexts/usage/instrument.js';
 import { assertAllPromptTemplatesValid } from './contexts/agent/prompt-loader.js';
 import { registerAppearanceVariantRoutes } from './routes/appearance-variants.js';
 import { registerAudioRoutes } from './routes/audio.js';
@@ -26,6 +27,7 @@ import { registerResourceRoutes } from './routes/resources.js';
 import { registerShotPromptRoutes } from './routes/shot-prompts.js';
 import { registerStorySegmentRoutes } from './routes/story-segments.js';
 import { registerStubRoutes } from './routes/stubs.js';
+import { registerUsageRoutes } from './routes/usage.js';
 import { registerVisualRequirementRoutes } from './routes/visual-requirements.js';
 import { registerRecomputeRoutes } from './routes/recompute.js';
 import { registerWorkflowEventRoutes } from './routes/workflow-events.js';
@@ -76,8 +78,11 @@ function storageFromEnvironment(): StoragePort | undefined {
   return new S3StorageAdapter(client, bucket, process.env.S3_PUBLIC_BASE_URL);
 }
 
-function resolveVideoAdapter() {
-  return createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()).video;
+function resolveVideoAdapter(db: PrismaClient) {
+  return instrumentProviderBundle(
+    db,
+    createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+  ).video;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -85,7 +90,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: options.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
   const db = options.db ?? prisma;
   const generationService =
-    options.generationService ?? new GenerationService(db, resolveVideoAdapter);
+    options.generationService ?? new GenerationService(db, () => resolveVideoAdapter(db));
   const jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET;
   if (!jwtSecret || jwtSecret.length < 32)
     throw new Error('JWT_SECRET must contain at least 32 characters');
@@ -113,7 +118,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       db,
       orchestrator,
       generationService,
-      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+      instrumentProviderBundle(
+        db,
+        createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+      ),
       options.queueWork,
     );
 
@@ -130,6 +138,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         registerShotPromptRoutes(protectedApi, db);
         registerVisualRequirementRoutes(protectedApi, db);
         registerRecomputeRoutes(protectedApi, db, createRunner);
+        registerUsageRoutes(protectedApi, db);
         registerWorkflowRoutes(protectedApi, db, orchestrator, createRunner);
         registerWorkflowEventRoutes(protectedApi, db);
         registerProviderRoutes(protectedApi);

@@ -11,6 +11,8 @@ import { syncVariantAnchorFromRequirement } from '../contexts/visual/appearance-
 import { generateRequirementImage } from '../contexts/visual/generate-requirement-image.js';
 import { omitUndefined } from '../lib/omit-undefined.js';
 import { createProviderBundle } from '../providers/registry.js';
+import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
+import { withUsageContext } from '../contexts/usage/context.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 
 function json(value: unknown): Prisma.InputJsonValue {
@@ -195,7 +197,7 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
 
   app.post('/scenes/:id/visual-requirements/:rid/generate', async (request, reply) => {
     const { id, rid } = requirementParams.parse(request.params);
-    await sceneForMember(db, id, request.user.sub, true);
+    const scene = await sceneForMember(db, id, request.user.sub, true);
     const requirement = await requirementForScene(db, id, rid);
     const body = generateBody.parse(request.body ?? {});
     const asset = await db.asset.findFirst({
@@ -210,24 +212,31 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
         .filter(Boolean)
         .join(', ');
 
-    const providers = createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride());
+    const providers = instrumentProviderBundle(
+      db,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
     await db.visualAssetRequirement.update({
       where: { id: rid },
       data: { status: 'generating' },
     });
 
     try {
-      const result = await generateRequirementImage({
-        db,
-        requirementId: rid,
-        image: providers.image,
-        imageModel: providers.imageModel,
-        prompt,
-        requestId: randomUUID(),
-        count: body.count,
-        // Manual regenerate must fail loudly so operators can fix model/provider settings.
-        allowFallback: false,
-      });
+      const result = await withUsageContext(
+        { projectId: scene.projectId, taskType: 'image_generate' },
+        () =>
+          generateRequirementImage({
+            db,
+            requirementId: rid,
+            image: providers.image,
+            imageModel: providers.imageModel,
+            prompt,
+            requestId: randomUUID(),
+            count: body.count,
+            // Manual regenerate must fail loudly so operators can fix model/provider settings.
+            allowFallback: false,
+          }),
+      );
       if (!result) throw new ApiError(404, 'VISUAL_REQUIREMENT_NOT_FOUND', '视觉需求不存在');
 
       return reply.status(201).send({

@@ -4,6 +4,8 @@ import type { PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { createProviderBundle } from '../providers/registry.js';
+import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
+import { withUsageContext } from '../contexts/usage/context.js';
 import type { StoragePort } from '../ports/index.js';
 import { authenticate } from './auth.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
@@ -49,13 +51,20 @@ export function registerAudioRoutes(
       throw new ApiError(422, 'AUDIO_TEXT_REQUIRED', '请提供对白文本或填写镜头对白');
     }
 
-    const providers = createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride());
-    const result = await providers.audio.synthesize({
-      request_id: randomUUID(),
-      model: body.model ?? providers.audioModel,
-      input: text,
-      ...(body.voice ? { voice: body.voice } : {}),
-    });
+    const providers = instrumentProviderBundle(
+      db,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+    const result = await withUsageContext(
+      { projectId: shot.projectId, taskType: 'audio_tts' },
+      () =>
+        providers.audio.synthesize({
+          request_id: randomUUID(),
+          model: body.model ?? providers.audioModel,
+          input: text,
+          ...(body.voice ? { voice: body.voice } : {}),
+        }),
+    );
 
     let url = result.audio_url ?? '';
     let storageKey = `audio/${shot.projectId}/${shot.id}/${randomUUID()}.mp3`;

@@ -105,7 +105,7 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 
 **Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
 **Strategy:** B-Line — Agent pipeline first, video generation mocked.  
-**Near-term focus:** V0.4 Modification Plan (Track F): W2–W6 **done** → next **W7** usage records. See [V0.4 Modification Plan](V0.4-Modification-Plan.md) and [Next Tasks](Next-Tasks.md).
+**Near-term focus:** V0.4 Modification Plan (Track F) **W1–W7 first-pass done**. Remaining later: usage freeze/limits (C8 second pass), Phase 3 consistency/timeline. See [V0.4 Modification Plan](V0.4-Modification-Plan.md) and [Next Tasks](Next-Tasks.md).
 
 ---
 

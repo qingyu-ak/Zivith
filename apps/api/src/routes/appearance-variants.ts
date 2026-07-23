@@ -16,6 +16,8 @@ import {
 } from '../contexts/visual/appearance-variants.js';
 import { ApiError } from '../errors.js';
 import { createProviderBundle } from '../providers/registry.js';
+import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
+import { withUsageContext } from '../contexts/usage/context.js';
 import type { StoragePort } from '../ports/index.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 
@@ -256,19 +258,26 @@ export function registerAppearanceVariantRoutes(
         .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
         .join(', ');
 
-    const providers = createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride());
-    const result = await generateAppearanceVariantImage({
+    const providers = instrumentProviderBundle(
       db,
-      assetId: asset.id,
-      variantKey: variant.key,
-      image: providers.image,
-      imageModel: providers.imageModel,
-      prompt,
-      requestId: randomUUID(),
-      count: body.count,
-      // Asset-library generate is operator-driven; fail loudly like manual visual regenerate.
-      allowFallback: false,
-    });
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+    const result = await withUsageContext(
+      { projectId: asset.projectId, taskType: 'image_generate' },
+      () =>
+        generateAppearanceVariantImage({
+          db,
+          assetId: asset.id,
+          variantKey: variant.key,
+          image: providers.image,
+          imageModel: providers.imageModel,
+          prompt,
+          requestId: randomUUID(),
+          count: body.count,
+          // Asset-library generate is operator-driven; fail loudly like manual visual regenerate.
+          allowFallback: false,
+        }),
+    );
 
     return reply.status(201).send({
       ...result.variant,
