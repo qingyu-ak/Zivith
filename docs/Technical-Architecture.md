@@ -122,11 +122,13 @@ The domain is divided into eight bounded contexts. Each context owns its data an
 - Parallel execution management
 - Review gate management
 - Workflow state persistence and recovery
+- Versioned agent system prompts under `apps/api/prompts/<agent>/system.{zh,en}.md` with `{placeholder}` fill (loader validates at API boot; `{knowledge_context}` reserved for P8)
 
 ### Prompt Context
 - Prompt template management
 - Prompt construction from resolved Shot data
 - Prompt versioning
+- LLM agent system prompts (Story / Scene / Visual Trait) loaded from files — not embedded multi-line strings in TypeScript
 
 ### Generation Context
 - External AI model adapter

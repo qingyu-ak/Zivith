@@ -8,6 +8,7 @@ import {
   type ValidationResult,
 } from '@zivith/domain';
 import type { LLMAdapter } from '../../ports/llm.js';
+import { loadAgentSystemPrompt } from './prompt-loader.js';
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -151,20 +152,6 @@ export interface StoryAgentInput {
   existing_segments?: GeneratedStorySegment[];
 }
 
-const STORY_SYSTEM_PROMPT = `You are STORY_AGENT for an AI film studio.
-Return ONLY one JSON object. No markdown fences.
-
-Required keys (all strings unless noted):
-- title, logline, synopsis, genre, theme, tone, screenplay
-- segments (optional array): [{ "title": string, "synopsis"?: string, "draft": string }]
-
-Rules:
-- language follows the creative brief (default zh-CN)
-- Prefer 2–4 narrative segments (章/幕) when the brief supports chapter-wise drafting
-- When segments are present, each draft is the segment's screenplay text; also provide a combined screenplay
-- theme is a single string (not "themes")
-- do not include scenes, ending, themes, cast, or other extra fields`;
-
 export class StoryAgent implements Agent<StoryAgentInput, GeneratedStory> {
   readonly id = 'story';
   readonly name = 'Story Agent';
@@ -201,7 +188,7 @@ export class StoryAgent implements Agent<StoryAgentInput, GeneratedStory> {
       {
         request_id: `${context.workflow_run_id}:story`,
         model: this.model,
-        system_prompt: STORY_SYSTEM_PROMPT,
+        system_prompt: loadAgentSystemPrompt('story', 'en', { knowledge_context: '' }),
         user_prompt: JSON.stringify({
           creative_brief: input.brief,
           language: input.language ?? 'zh-CN',

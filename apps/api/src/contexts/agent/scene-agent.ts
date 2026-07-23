@@ -9,6 +9,7 @@ import {
 } from '@zivith/domain';
 import type { LLMAdapter } from '../../ports/llm.js';
 import type { GeneratedStory } from './story-agent.js';
+import { loadAgentSystemPrompt } from './prompt-loader.js';
 
 export const generatedScenesSchema = z
   .object({
@@ -42,33 +43,6 @@ export interface SceneAgentInput {
   segments?: Array<{ order: number; title: string; synopsis?: string | null; draft: string }>;
   max_scenes?: number;
 }
-
-const SCENE_SYSTEM_PROMPT = `You are SCENE_AGENT for an AI film studio.
-Return ONLY one JSON object. No markdown fences. No extra top-level keys besides "scenes".
-
-Shape:
-{
-  "scenes": [
-    {
-      "order": 1,
-      "segment_order": 1,
-      "title": "string",
-      "summary": "string",
-      "description": "string",
-      "location_name": "string",
-      "time_of_day": "string",
-      "weather": "string|null",
-      "mood": "string",
-      "character_names": ["string"]
-    }
-  ]
-}
-
-Rules:
-- scenes must be ordered cinematic units derived from the screenplay / approved segments
-- when segments are provided, set segment_order to the matching segment.order and expand each segment into one or more scenes
-- use the exact key names above
-- character_names is an array of character display names`;
 
 export class SceneAgent implements Agent<SceneAgentInput, GeneratedScenes> {
   readonly id = 'scene';
@@ -112,7 +86,7 @@ export class SceneAgent implements Agent<SceneAgentInput, GeneratedScenes> {
       {
         request_id: `${context.workflow_run_id}:scene`,
         model: this.model,
-        system_prompt: SCENE_SYSTEM_PROMPT,
+        system_prompt: loadAgentSystemPrompt('scene', 'en', { knowledge_context: '' }),
         user_prompt: JSON.stringify({
           story: input.story,
           segments: input.segments,

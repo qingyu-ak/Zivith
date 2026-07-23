@@ -12,6 +12,7 @@ import { WorkflowOrchestrator } from './contexts/workflow/orchestrator.js';
 import { registerErrorHandler } from './errors.js';
 import type { StoragePort } from './ports/index.js';
 import { createProviderBundle } from './providers/registry.js';
+import { assertAllPromptTemplatesValid } from './contexts/agent/prompt-loader.js';
 import { registerAppearanceVariantRoutes } from './routes/appearance-variants.js';
 import { registerAudioRoutes } from './routes/audio.js';
 import { authenticate, registerAuthRoutes } from './routes/auth.js';
@@ -80,6 +81,7 @@ function resolveVideoAdapter() {
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
+  assertAllPromptTemplatesValid();
   const app = Fastify({ logger: options.logger ?? false, bodyLimit: 2 * 1024 * 1024 });
   const db = options.db ?? prisma;
   const generationService =

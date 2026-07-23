@@ -76,6 +76,8 @@ Video Generation Model
   └─ The Prompt Agent must detect model provider and translate accordingly
 ```
 
+**Source of truth (V0.4 W6):** versioned files at `apps/api/prompts/<agent>/system.{zh,en}.md`. Loader fills `{placeholder}` (always include empty `{knowledge_context}` for P8). API boot runs placeholder lint. Runtime currently loads `en` for Story/Scene/VisualTrait to keep mock E2E markers (`STORY_AGENT` / `SCENE_AGENT` / `VISUAL_TRAIT_AGENT`) behavior-equivalent; switch locale by provider later per the matrix above.
+
 ## 3.3 Prompt Translation Flow
 
 ```
