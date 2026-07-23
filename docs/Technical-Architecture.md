@@ -373,26 +373,40 @@ All external AI model interactions are isolated behind capability-specific adapt
 | Video | Kling, Vidu, Veo | **Kling** |
 
 ```typescript
-interface VideoGenerationAdapter {
-  readonly provider: string;
-  readonly supportedModels: ModelInfo[];
-
-  generate(request: GenerationRequest): Promise<GenerationResult>;
-  getStatus(jobId: string): Promise<JobStatus>;
-  cancel(jobId: string): Promise<void>;
-  getCapabilities(): ModelCapabilities;
-}
-
 interface ImageGenerationAdapter {
   readonly provider: string;
   readonly supportedModels: ModelInfo[];
+  /** Capability bit (ports/adapters only — never a domain/provider field). */
+  readonly supportsReferenceImages: boolean;
 
   generate(request: ImageGenerationRequest): Promise<ImageGenerationResult>;
   getStatus(jobId: string): Promise<JobStatus>;
   cancel(jobId: string): Promise<void>;
   getCapabilities(): ImageModelCapabilities;
 }
+
+interface ImageGenerationRequest {
+  request_id: string;
+  model: string;
+  prompt: string;
+  negative_prompt?: string;
+  width?: number;
+  height?: number;
+  /** Optional labeled references for identity/style conditioning (V0.4 W1). */
+  reference_images?: Array<{
+    media_id: string;
+    label: string;
+    role: 'character' | 'location' | 'style';
+    url?: string;
+  }>;
+}
+
+interface ImageModelCapabilities {
+  supports_reference_images: boolean;
+}
 ```
+
+When references are supplied but the selected model cannot condition on them, adapters must not fail silently: they generate without injection and set `metadata.reference_injection = 'skipped_unsupported'`. Successful injection sets `applied` and callers persist `reference_media_ids[]` on Media `generation_metadata`.
 
 ## 6.2 Provider Abstraction
 

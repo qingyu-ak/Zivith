@@ -532,6 +532,17 @@ export default function AssetsPage() {
                               尚无锚定图
                             </div>
                           )}
+                          {(variant.anchor_media?.generation_metadata?.reference_injection ===
+                            'skipped_unsupported' ||
+                            variant.candidate_media?.some(
+                              (item) =>
+                                item.generation_metadata?.reference_injection ===
+                                'skipped_unsupported',
+                            )) && (
+                            <p className="mb-2 rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-300">
+                              本次未注入参考图（当前模型不支持）
+                            </p>
+                          )}
                           {variant.description && (
                             <p className="mb-2 text-xs text-zinc-400">{variant.description}</p>
                           )}

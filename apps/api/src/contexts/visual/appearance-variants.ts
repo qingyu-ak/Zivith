@@ -6,6 +6,12 @@ import {
 } from '@zivith/domain';
 import { ApiError } from '../../errors.js';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
+import {
+  referenceInjectionMetadata,
+  resolveAppearanceVariantReferenceImages,
+  toImageReferencePayload,
+  withReferencePromptClauses,
+} from './reference-images.js';
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -90,23 +96,28 @@ export async function generateAppearanceVariantImage(input: GenerateAppearanceVa
   });
   if (!variant) throw new ApiError(404, 'APPEARANCE_VARIANT_NOT_FOUND', '形象不存在');
 
-  const prompt = input.prompt.trim();
-  if (!prompt) throw new ApiError(400, 'PROMPT_REQUIRED', '请提供生图提示词');
+  const basePrompt = input.prompt.trim();
+  if (!basePrompt) throw new ApiError(400, 'PROMPT_REQUIRED', '请提供生图提示词');
 
+  const refs = await resolveAppearanceVariantReferenceImages(input.db, asset, variant.key);
+  const prompt = withReferencePromptClauses(basePrompt, refs.length > 0);
   const allowFallback = input.allowFallback !== false;
   let imageUrl = svgPlaceholderDataUrl(`${asset.name}:${variant.key}`);
   let provider = input.image.provider;
   let isMock = provider === 'mock';
   let generationError: string | undefined;
+  let adapterMeta: Record<string, string | number | boolean> = {};
 
   try {
     const generated = await input.image.generate({
       request_id: input.requestId ?? randomUUID(),
       model: input.imageModel,
       prompt,
+      ...(refs.length ? { reference_images: toImageReferencePayload(refs) } : {}),
     });
     if (generated.image_url) imageUrl = generated.image_url;
     isMock = Boolean(generated.metadata.is_mock);
+    adapterMeta = generated.metadata;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!allowFallback) {
@@ -115,6 +126,9 @@ export async function generateAppearanceVariantImage(input: GenerateAppearanceVa
     provider = 'mock-fallback';
     isMock = true;
     generationError = message.slice(0, 500);
+    adapterMeta = {
+      reference_injection: refs.length > 0 ? 'skipped_error' : 'none',
+    };
     console.warn('[appearance-variant] image generation failed, using placeholder', message);
   }
 
@@ -136,6 +150,7 @@ export async function generateAppearanceVariantImage(input: GenerateAppearanceVa
         generation_prompt: prompt,
         appearance_variant_id: variant.id,
         appearance_variant_key: variant.key,
+        ...referenceInjectionMetadata(refs, adapterMeta),
         ...(generationError ? { generation_error: generationError } : {}),
       }),
       tags: ['generated', 'appearance_variant', asset.type],

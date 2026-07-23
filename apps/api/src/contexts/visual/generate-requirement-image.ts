@@ -7,6 +7,12 @@ import {
   mergeVisualPromptIntoAssetData,
   readVisualPromptFromAssetData,
 } from '../agent/visual-trait.js';
+import {
+  referenceInjectionMetadata,
+  resolveVisualPrepReferenceImages,
+  toImageReferencePayload,
+  withReferencePromptClauses,
+} from './reference-images.js';
 
 function svgPlaceholderDataUrl(label: string, size = 1024): string {
   const text = label.slice(0, 18).replace(/[<>&'"]/g, '');
@@ -46,20 +52,28 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
   });
   if (!scene) return null;
 
-  const prompt = input.prompt.trim();
+  const refs = await resolveVisualPrepReferenceImages(
+    input.db,
+    asset,
+    requirement.variantKey,
+  );
+  const prompt = withReferencePromptClauses(input.prompt.trim(), refs.length > 0);
   const allowFallback = input.allowFallback !== false;
   let imageUrl = svgPlaceholderDataUrl(asset.name);
   let provider = input.image.provider;
   let isMock = provider === 'mock';
   let generationError: string | undefined;
+  let adapterMeta: Record<string, string | number | boolean> = {};
   try {
     const generated = await input.image.generate({
       request_id: input.requestId ?? randomUUID(),
       model: input.imageModel,
       prompt,
+      ...(refs.length ? { reference_images: toImageReferencePayload(refs) } : {}),
     });
     if (generated.image_url) imageUrl = generated.image_url;
     isMock = Boolean(generated.metadata.is_mock);
+    adapterMeta = generated.metadata;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!allowFallback) {
@@ -68,6 +82,9 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
     provider = 'mock-fallback';
     isMock = true;
     generationError = message.slice(0, 500);
+    adapterMeta = {
+      reference_injection: refs.length > 0 ? 'skipped_error' : 'none',
+    };
     console.warn('[visual-requirement] image generation failed, using placeholder', message);
   }
 
@@ -88,6 +105,7 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
         model: input.imageModel,
         generation_prompt: prompt,
         requirement_id: requirement.id,
+        ...referenceInjectionMetadata(refs, adapterMeta),
         ...(generationError ? { generation_error: generationError } : {}),
       }),
       tags: ['generated', requirement.assetType],

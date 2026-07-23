@@ -85,6 +85,11 @@ function database(currentShot = shot()) {
 
   const shotUpdate = vi.fn().mockResolvedValue({});
   const db = {
+    media: {
+      findMany: vi.fn().mockResolvedValue([
+        { id: 'media-1', url: 'https://example.test/ref-1.png' },
+      ]),
+    },
     shot: {
       findFirst: vi.fn().mockResolvedValue(currentShot),
       findUnique: vi.fn().mockResolvedValue({ prompt: currentShot.prompt }),
@@ -165,7 +170,7 @@ describe('GenerationService', () => {
     };
     expect(generateArg.model).toBe('mock-v1');
     expect(generateArg.positive_prompt).toBe('cinematic robot finds a seed');
-    expect(generateArg.reference_image_urls).toEqual(['media-1']);
+    expect(generateArg.reference_image_urls).toEqual(['https://example.test/ref-1.png']);
     expect(shotUpdate).toHaveBeenCalledWith({
       where: { id: '11111111-1111-4111-8111-111111111111' },
       data: { state: 'review' },

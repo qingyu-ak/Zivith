@@ -159,6 +159,7 @@ export interface AppearanceVariantMediaDTO {
     is_mock?: boolean;
     provider?: string;
     generation_error?: string;
+    reference_injection?: string;
   } | null;
 }
 
@@ -257,6 +258,9 @@ export interface WorkflowMediaDTO {
     model?: string;
     generation_error?: string;
     generation_prompt?: string;
+    reference_injection?: 'none' | 'applied' | 'skipped_unsupported' | 'skipped_error' | string;
+    reference_media_ids?: string[];
+    reference_labels?: string[];
   } | null;
 }
 

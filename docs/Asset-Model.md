@@ -89,7 +89,7 @@ Consistency is anchored per **character × narrative state**, not per character.
 | `candidate_media_ids[]` | `MediaId[]` | No | Generated candidates awaiting selection |
 | `state` | `enum` | Yes | Approval state (same enum as other reviewable entities) |
 
-Every character receives a `default` variant on create (existing characters backfilled by migration). Asset-library APIs: `GET/POST /assets/:id/appearance-variants`, `PATCH/DELETE …/:key`, `POST …/:key/generate`, `POST …/:key/approve`. Visual Prep approve syncs `variant_key` → matching variant `anchor_media_id` when the key exists. Reference-image **injection into provider requests** remains plan W1: Scene approved binding → matching variant `anchor_media_id` → project-level `reference_images[0]`.
+Every character receives a `default` variant on create (existing characters backfilled by migration). Asset-library APIs: `GET/POST /assets/:id/appearance-variants`, `PATCH/DELETE …/:key`, `POST …/:key/generate`, `POST …/:key/approve`. Visual Prep approve syncs `variant_key` → matching variant `anchor_media_id` when the key exists. Reference-image injection (plan W1) resolves: matching variant `anchor_media_id` → project-level `reference_images[0]`, with adapter-level skip metadata when the model cannot condition on images.
 
 ## 2.3 Location
 
@@ -197,6 +197,8 @@ Media assets are binary files uploaded to or generated within the Project.
 2. Only when the Scene has no approved binding may it fall back to the Character or Location Asset's project-level primary `reference_images[]`.
 3. `voice_only` and `implied` characters do not create character bindings. In the first release, important Props remain prompt context only and do not create bindings.
 4. Changes to a Scene's Location, time, weather, mood, participating characters, or location sub-area return affected bindings to `pending`. Approved Shots and existing Outputs retain their creation-time Media snapshots.
+
+**Reference-image injection (V0.4 W1 — implemented):** Image generation requests may carry labeled `reference_images` resolved as AppearanceVariant `anchor_media_id` (when `variant_key` matches) → else Asset `reference_images[0]`. Adapters declare `supportsReferenceImages`; when the selected model cannot condition on images, generation continues without injection and `generation_metadata.reference_injection` is set to `skipped_unsupported` (UI shows「本次未注入参考图」). Applied injections record `reference_media_ids[]` on Media metadata. Video image-to-video uses Scene approved binding Media URLs (rule 1), not raw Media IDs.
 
 ## 2.8 Knowledge
 

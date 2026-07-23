@@ -136,6 +136,11 @@ function isFailedPlaceholder(media?: WorkflowMediaDTO): boolean {
   return mediaMeta(media).provider === 'mock-fallback';
 }
 
+function referenceInjectionSkipped(media?: WorkflowMediaDTO): boolean {
+  const injection = mediaMeta(media).reference_injection;
+  return injection === 'skipped_unsupported' || injection === 'skipped_error';
+}
+
 function canApproveArtifacts(
   review: WorkflowStepName | null | undefined,
   visualItems: VisualReviewItem[],
@@ -1002,6 +1007,14 @@ export function WorkflowPanel({
                       {failedPlaceholder && (
                         <p className="mb-2 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
                           占位图（生图未成功）· 请检查图像模型后重新生成
+                        </p>
+                      )}
+                      {referenceInjectionSkipped(media) && (
+                        <p className="mb-2 rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-300">
+                          本次未注入参考图
+                          {mediaMeta(media).reference_injection === 'skipped_unsupported'
+                            ? '（当前模型不支持）'
+                            : ''}
                         </p>
                       )}
                       <p className="text-sm font-medium">

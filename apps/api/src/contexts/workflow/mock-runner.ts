@@ -18,6 +18,12 @@ import { StoryAgent, type GeneratedStory } from '../agent/story-agent.js';
 import { VisualPrepAgent, type VisualPrepScene } from '../agent/visual-prep-agent.js';
 import { enrichVisualAssetTraits, mergeVisualPromptIntoAssetData } from '../agent/visual-trait.js';
 import { ensureDefaultAppearanceVariant } from '../visual/appearance-variants.js';
+import {
+  referenceInjectionMetadata,
+  resolveVisualPrepReferenceImages,
+  toImageReferencePayload,
+  withReferencePromptClauses,
+} from '../visual/reference-images.js';
 import { createProviderBundle, type ProviderBundle } from '../../providers/registry.js';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
 import type { LLMAdapter } from '../../ports/llm.js';
@@ -471,6 +477,13 @@ export class MockWorkflowRunner {
       let provider = this.imageAdapter.provider;
       let isMock = provider === 'mock';
       let generationError: string | undefined;
+      let adapterMeta: Record<string, string | number | boolean> = {};
+      const refs = await resolveVisualPrepReferenceImages(
+        this.db,
+        asset,
+        requirement.variant_key,
+      );
+      const promptForModel = withReferencePromptClauses(generationPrompt, refs.length > 0);
       try {
         const generated = await this.queueWork.run(
           'image_generate',
@@ -479,15 +492,20 @@ export class MockWorkflowRunner {
             this.imageAdapter.generate({
               request_id: `${run.id}:${requirementId}`,
               model: this.imageModel,
-              prompt: generationPrompt,
+              prompt: promptForModel,
+              ...(refs.length ? { reference_images: toImageReferencePayload(refs) } : {}),
             }),
         );
         if (generated.image_url) imageUrl = generated.image_url;
         isMock = Boolean(generated.metadata.is_mock);
+        adapterMeta = generated.metadata;
       } catch (error) {
         provider = 'mock-fallback';
         isMock = true;
         generationError = error instanceof Error ? error.message.slice(0, 500) : String(error);
+        adapterMeta = {
+          reference_injection: refs.length > 0 ? 'skipped_error' : 'none',
+        };
         console.warn('[visual-prep] image generation failed, using placeholder', generationError);
       }
       const generationMetadata = {
@@ -495,7 +513,8 @@ export class MockWorkflowRunner {
         provider,
         model: this.imageModel,
         workflow_run_id: run.id,
-        generation_prompt: generationPrompt,
+        generation_prompt: promptForModel,
+        ...referenceInjectionMetadata(refs, adapterMeta),
         ...(generationError ? { generation_error: generationError } : {}),
       };
       await this.db.media.upsert({

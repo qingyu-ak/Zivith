@@ -5,6 +5,7 @@ import { MockGenerationAdapter } from '../../adapters/mock-generation.js';
 import { ApiError } from '../../errors.js';
 import type { QueuePort } from '../../ports/index.js';
 import type { VideoGenerationAdapter } from '../../ports/generation.js';
+import { resolveMediaUrls } from '../visual/reference-images.js';
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -298,6 +299,10 @@ export class GenerationService {
       ? payload.visual_media_ids.filter((id): id is string => typeof id === 'string')
       : output.visualMediaIds;
 
+    // Asset-Model §2.7: scene approved bindings are already encoded in visual_media_ids.
+    // Resolve Media rows to URLs for image-to-video adapters.
+    const referenceImageUrls = await resolveMediaUrls(this.db, visualMediaIds);
+
     await this.db.$transaction([
       this.db.output.update({ where: { id: outputId }, data: { status: 'generating' } }),
       this.db.task.update({
@@ -317,8 +322,8 @@ export class GenerationService {
         positive_prompt: positive,
         ...(negative ? { negative_prompt: negative } : {}),
         shot: this.domainShot(shot),
-        reference_image_urls: visualMediaIds,
-        parameters: { output_id: outputId },
+        reference_image_urls: referenceImageUrls,
+        parameters: { output_id: outputId, visual_media_ids: visualMediaIds },
       });
 
       const latestTask = await this.db.task.findFirst({ where: { id: task.id } });
