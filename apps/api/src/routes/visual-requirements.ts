@@ -7,7 +7,10 @@ import {
   mergeVisualPromptIntoAssetData,
   readVisualPromptFromAssetData,
 } from '../contexts/agent/visual-trait.js';
-import { syncVariantAnchorFromRequirement } from '../contexts/visual/appearance-variants.js';
+import {
+  removeRequirementCandidate,
+  syncVariantAnchorFromRequirement,
+} from '../contexts/visual/appearance-variants.js';
 import { generateRequirementImage } from '../contexts/visual/generate-requirement-image.js';
 import { omitUndefined } from '../lib/omit-undefined.js';
 import { createProviderBundle } from '../providers/registry.js';
@@ -230,6 +233,7 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
             requirementId: rid,
             image: providers.image,
             imageModel: providers.imageModel,
+            imageI2iModel: providers.imageI2iModel,
             prompt,
             requestId: randomUUID(),
             count: body.count,
@@ -274,6 +278,22 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
     }
     const media = await db.media.findFirst({ where: { id: mediaId, deletedAt: null } });
     if (!media) throw new ApiError(404, 'MEDIA_NOT_FOUND', '候选图片不存在');
+    const generationMeta =
+      media.generationMetadata &&
+      typeof media.generationMetadata === 'object' &&
+      !Array.isArray(media.generationMetadata)
+        ? (media.generationMetadata as Record<string, unknown>)
+        : {};
+    if (
+      typeof generationMeta.generation_error === 'string' ||
+      generationMeta.provider === 'mock-fallback'
+    ) {
+      throw new ApiError(
+        409,
+        'FAILED_PLACEHOLDER_NOT_APPROVABLE',
+        '生图失败占位图不可批准，请修改提示词后重新生成',
+      );
+    }
     const asset = await db.asset.findFirst({
       where: { id: requirement.assetId, deletedAt: null },
     });
@@ -313,4 +333,24 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
     });
     return enrichRequirement(db, rejected);
   });
+
+  app.delete(
+    '/scenes/:id/visual-requirements/:rid/candidates/:mediaId',
+    async (request, reply) => {
+      const params = z
+        .object({
+          id: z.string().uuid(),
+          rid: z.string().uuid(),
+          mediaId: z.string().uuid(),
+        })
+        .parse(request.params);
+      await sceneForMember(db, params.id, request.user.sub, true);
+      await requirementForScene(db, params.id, params.rid);
+      await removeRequirementCandidate(db, {
+        requirementId: params.rid,
+        mediaId: params.mediaId,
+      });
+      return reply.status(204).send();
+    },
+  );
 }

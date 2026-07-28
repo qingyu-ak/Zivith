@@ -17,6 +17,50 @@ import { DomainError } from './shot-state.js';
 export const DEFAULT_APPEARANCE_VARIANT_KEY = 'default';
 export const DEFAULT_APPEARANCE_VARIANT_TITLE = '默认形象';
 
+/** Primary orthographic sheet: one T2I image with multiple viewpoints. */
+export const CHARACTER_SHEET_TURNAROUND_KEY = 'sheet_turnaround';
+
+/**
+ * Reserved sheet slots for the asset library (not workflow scene keyframes).
+ * Multi-view is a single turnaround image — not four separate generations.
+ */
+export const CHARACTER_SHEET_VARIANTS = [
+  {
+    key: CHARACTER_SHEET_TURNAROUND_KEY,
+    title: '角色设定表（多视角）',
+    order: 10,
+    prompt_clause:
+      'character model sheet on ONE image, 2x2 panel layout REQUIRED: (1) full-body front view (2) full-body side profile (3) full-body back view (4) large head-and-shoulders FACE CLOSE-UP portrait filling its own panel with clear eyes nose mouth and expression, NOT a tiny corner crop, identical identity outfit and colors across all four panels, clean white background, even studio lighting, consistent proportions, no text no labels no watermark no logos',
+  },
+] as const;
+
+/** Legacy per-view slots (deprecated; still recognized for old data). */
+export const LEGACY_CHARACTER_SHEET_VARIANT_KEYS = [
+  'sheet_front',
+  'sheet_side',
+  'sheet_back',
+  'sheet_face',
+] as const;
+
+export type CharacterSheetVariantKey = (typeof CHARACTER_SHEET_VARIANTS)[number]['key'];
+
+export function isCharacterSheetVariantKey(key: string): boolean {
+  return (
+    CHARACTER_SHEET_VARIANTS.some((item) => item.key === key) ||
+    (LEGACY_CHARACTER_SHEET_VARIANT_KEYS as readonly string[]).includes(key)
+  );
+}
+
+export function isPrimaryCharacterSheetKey(key: string): boolean {
+  return key === CHARACTER_SHEET_TURNAROUND_KEY;
+}
+
+/** Location design sheet stored on Asset.data.visual.generation_prompts[key]. */
+export const LOCATION_SHEET_KEY = 'location_sheet';
+
+export const LOCATION_SHEET_PROMPT_CLAUSE =
+  'environment design sheet on ONE image, multi-angle layout: main establishing wide shot plus complementary side/entrance angle and a detail inset of the same place, consistent architecture materials and lighting, cinematic, no text no labels no watermark no logos';
+
 /**
  * Scenes belonging to a segment must form a contiguous block in story-global order
  * (ADR-0006 single source of truth — no separate segment-local order).

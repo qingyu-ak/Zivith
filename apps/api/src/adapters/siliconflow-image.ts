@@ -13,7 +13,54 @@ export interface SiliconFlowImageAdapterOptions {
 
 /** Models known to accept an image conditioning input on SiliconFlow. */
 export function siliconFlowModelSupportsReferenceImages(model: string): boolean {
-  return /img2img|image-edit|i2i|ip-adapter|pulid|faceid|instantid|kolors/i.test(model);
+  return /img2img|image-edit|i2i|ip-adapter|pulid|faceid|instantid|kolors|qwen-image-edit/i.test(
+    model,
+  );
+}
+
+/**
+ * Canonicalize known SiliconFlow image model ids (API is case-sensitive).
+ * Invalid casing previously returned 20012 "Model does not exist".
+ */
+export function resolveSiliconFlowImageModel(requested: string): string {
+  const raw = requested.trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes('z-image-turbo') || lower === 'tongyi-mai/z-image-turbo') {
+    return 'Tongyi-MAI/Z-Image-Turbo';
+  }
+  if (lower.includes('flux.1-schnell') || lower.includes('flux-1-schnell')) {
+    return 'black-forest-labs/FLUX.1-schnell';
+  }
+  if (lower.includes('flux.1-dev') || lower.includes('flux-1-dev')) {
+    return 'black-forest-labs/FLUX.1-dev';
+  }
+  if (lower.includes('qwen-image-edit')) {
+    return 'Qwen/Qwen-Image-Edit';
+  }
+  if (lower === 'qwen/qwen-image' || lower.endsWith('/qwen-image')) {
+    return 'Qwen/Qwen-Image';
+  }
+  return raw;
+}
+
+/** Qwen-Image T2I prefers 1328; Edit / others keep safer defaults. */
+export function resolveSiliconFlowImageSize(
+  model: string,
+  width?: number,
+  height?: number,
+): string {
+  if (width && height) return `${width}x${height}`;
+  if (/qwen-image-edit/i.test(model)) return '1024x1024';
+  if (/qwen\/qwen-image(?!-edit)/i.test(model) || /\/qwen-image$/i.test(model)) {
+    return '1328x1328';
+  }
+  return '1024x1024';
+}
+
+function truncatePrompt(prompt: string, max = 2_500): string {
+  const trimmed = prompt.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max - 1).trim()}…`;
 }
 
 export class SiliconFlowImageAdapter implements ImageGenerationAdapter {
@@ -29,18 +76,28 @@ export class SiliconFlowImageAdapter implements ImageGenerationAdapter {
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? 'https://api.siliconflow.cn/v1').replace(/\/$/, '');
     this.fetchImpl = options.fetchImpl ?? fetch;
-    const model = options.defaultModel ?? 'black-forest-labs/FLUX.1-schnell';
+    const model = options.defaultModel ?? 'Tongyi-MAI/Z-Image-Turbo';
     this.supportedModels = [{ id: model, name: 'SiliconFlow Image', version: '1' }];
   }
 
   getCapabilities() {
-    return { supports_reference_images: true as const };
+    return {
+      supports_reference_images: siliconFlowModelSupportsReferenceImages(this.supportedModels[0]?.id ?? '')
+        ? (true as const)
+        : (false as const),
+    };
   }
 
   async generate(request: ImageGenerationRequest): Promise<ImageGenerationResult> {
+    const model = resolveSiliconFlowImageModel(request.model);
     const refs = request.reference_images ?? [];
-    const usableRefs = refs.filter((item) => typeof item.url === 'string' && item.url.length > 0);
-    const modelSupports = siliconFlowModelSupportsReferenceImages(request.model);
+    const usableRefs = refs.filter((item) => {
+      if (typeof item.url !== 'string' || !item.url.length) return false;
+      // Prefer public URLs; reject svg/data placeholders that break edit models.
+      if (/^https?:\/\//i.test(item.url)) return true;
+      return /^data:image\/(png|jpeg|jpg|webp);/i.test(item.url);
+    });
+    const modelSupports = siliconFlowModelSupportsReferenceImages(model);
     const canInject = usableRefs.length > 0 && modelSupports;
     const referenceInjection = (() => {
       if (refs.length === 0) return 'none';
@@ -49,14 +106,20 @@ export class SiliconFlowImageAdapter implements ImageGenerationAdapter {
     })();
 
     const body: Record<string, unknown> = {
-      model: request.model,
-      prompt: request.prompt,
-      ...(request.negative_prompt ? { negative_prompt: request.negative_prompt } : {}),
-      image_size: `${request.width ?? 1024}x${request.height ?? 1024}`,
+      model,
+      prompt: truncatePrompt(request.prompt),
+      ...(request.negative_prompt
+        ? { negative_prompt: truncatePrompt(request.negative_prompt, 1_000) }
+        : {}),
+      image_size: resolveSiliconFlowImageSize(model, request.width, request.height),
     };
     if (canInject) {
       // SiliconFlow image-to-image / edit models accept a primary `image` input.
       body.image = usableRefs[0]?.url;
+    } else if (/image-edit|img2img|i2i/i.test(model)) {
+      throw new Error(
+        `模型 ${model} 需要参考图（image），但当前没有可用的 http(s) 参考图 URL`,
+      );
     }
 
     const response = await this.fetchImpl(`${this.baseUrl}/images/generations`, {

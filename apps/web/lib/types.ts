@@ -53,6 +53,7 @@ export interface SceneDTO {
   weather?: string | null;
   mood?: string | null;
   shot_count?: number;
+  state?: 'draft' | 'review' | 'approved';
 }
 
 export interface ShotCharacterDTO {
@@ -160,6 +161,10 @@ export interface AssetDTO {
   floor_plan_url?: string;
   tags?: string[];
   reference_images?: Array<string | MediaDTO>;
+  /** Resolved cover (sheet / first reference) with usable URL */
+  cover_image?: MediaDTO | null;
+  /** Location design-sheet prompt draft */
+  location_sheet_prompt?: string;
 }
 
 export interface AppearanceVariantMediaDTO {
@@ -302,6 +307,7 @@ export interface GenerationTaskDTO {
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   provider?: string | null;
   payload?: Record<string, unknown>;
+  result?: Record<string, unknown> | null;
   attempts: number;
   created_at: string;
   started_at?: string | null;
@@ -313,8 +319,14 @@ export type ProviderId = 'mock' | 'deepseek' | 'siliconflow';
 
 export interface ProviderModelsDTO {
   llm: string;
+  /** 文生图 T2I */
   image: string;
+  /** 文图生图 I2I */
+  image_i2i: string;
+  /** 文生视频 T2V */
   video: string;
+  /** 文图生视频 I2V */
+  video_i2v: string;
   audio: string;
 }
 

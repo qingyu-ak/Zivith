@@ -60,6 +60,8 @@ export interface SubmitReviewInput {
   feedback?: string | undefined;
   /** When set on story_review, approve/retry applies to one StorySegment only. */
   segment_id?: string | undefined;
+  /** When set on scene_review, approve applies to one Scene only. */
+  scene_id?: string | undefined;
 }
 
 export class WorkflowOrchestrator {

@@ -100,16 +100,25 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
             const payload = task.payload ?? {};
             const shotId = typeof payload.shot_id === 'string' ? payload.shot_id.slice(0, 8) : '—';
             const canCancel = task.status === 'queued' || task.status === 'running';
+            const failDetail =
+              typeof task.result?.message === 'string'
+                ? task.result.message
+                : task.error_code
+                  ? task.error_code
+                  : '';
             return (
               <div
                 key={task.id}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ink px-4 py-3"
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">镜头 {shotId}…</p>
                   <p className="mt-1 text-xs text-zinc-500">
                     {task.provider ?? 'mock'} · 尝试 {task.attempts}
                   </p>
+                  {task.status === 'failed' && failDetail && (
+                    <p className="mt-1 text-xs text-red-300/80 break-words">{failDetail}</p>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge

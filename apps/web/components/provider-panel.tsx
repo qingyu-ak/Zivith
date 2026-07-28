@@ -15,18 +15,31 @@ const modalityLabels = {
 
 type Modality = keyof typeof modalityLabels;
 
+const emptyModels: ProviderModelsDTO = {
+  llm: '',
+  image: '',
+  image_i2i: '',
+  video: '',
+  video_i2v: '',
+  audio: '',
+};
+
 function optionsFor(modality: Modality, catalog: ProviderCatalogDTO | null) {
   if (!catalog) return [];
   return catalog.providers.filter((provider) => provider.modalities.includes(modality));
 }
 
 function summaryLine(selection: Record<Modality, ProviderId>, models: ProviderModelsDTO) {
-  return (Object.keys(modalityLabels) as Modality[])
-    .map((modality) => {
-      const model = models[modality]?.trim();
-      return `${modalityLabels[modality]}: ${selection[modality]}${model ? ` (${model})` : ''}`;
-    })
-    .join(' · ');
+  return [
+    `${modalityLabels.llm}: ${selection.llm}${models.llm ? ` (${models.llm})` : ''}`,
+    `${modalityLabels.image}: ${selection.image}${models.image ? ` T2I=${models.image}` : ''}${
+      models.image_i2i ? ` / I2I=${models.image_i2i}` : ''
+    }`,
+    `${modalityLabels.video}: ${selection.video}${models.video ? ` T2V=${models.video}` : ''}${
+      models.video_i2v ? ` / I2V=${models.video_i2v}` : ''
+    }`,
+    `${modalityLabels.audio}: ${selection.audio}${models.audio ? ` (${models.audio})` : ''}`,
+  ].join(' · ');
 }
 
 export function ProviderPanel() {
@@ -38,12 +51,7 @@ export function ProviderPanel() {
     video: 'mock',
     audio: 'mock',
   });
-  const [models, setModels] = useState<ProviderModelsDTO>({
-    llm: '',
-    image: '',
-    video: '',
-    audio: '',
-  });
+  const [models, setModels] = useState<ProviderModelsDTO>(emptyModels);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -54,7 +62,7 @@ export function ProviderPanel() {
       const value = await api<ProviderCatalogDTO>('/providers');
       setCatalog(value);
       setSelection(value.selection);
-      setModels(value.models);
+      setModels({ ...emptyModels, ...value.models });
       setError('');
     } catch (reason) {
       setError(errorMessage(reason));
@@ -88,7 +96,7 @@ export function ProviderPanel() {
         },
       });
       setSelection(result.selection);
-      setModels(result.models);
+      setModels({ ...emptyModels, ...result.models });
       setNotice(result.note ?? '已保存提供商选择');
       setOpen(false);
       await load();
@@ -123,7 +131,7 @@ export function ProviderPanel() {
           )}
           {open && (
             <p className="mt-1 text-sm text-zinc-500">
-              选择 LLM / 图像 / 视频 / 音频供应商与模型；未配置密钥时自动回退 Mock。
+              文生图 / 文图生图 / 文生视频 / 文图生视频分槽配置；有参考图时自动走 I2I / I2V。
             </p>
           )}
         </div>
@@ -192,25 +200,80 @@ export function ProviderPanel() {
                     ))}
                   </Select>
                 </Field>
-                <Field label="模型 ID（可自定义）">
-                  <Input
-                    value={models[modality]}
-                    onChange={(event) =>
-                      setModels((current) => ({ ...current, [modality]: event.target.value }))
-                    }
-                    placeholder={
-                      modality === 'image'
-                        ? '例如 black-forest-labs/FLUX.1-schnell'
-                        : '留空则使用环境默认'
-                    }
-                  />
-                </Field>
-                {modality === 'image' && /image-edit|img2img/i.test(models.image) && (
-                  <p className="text-xs text-amber-300">
-                    当前模型名像是「图片编辑」而非文生图，视觉准备容易失败。请换成 FLUX / SD 等
-                    text-to-image 模型。
-                  </p>
-                )}
+
+                {modality === 'llm' || modality === 'audio' ? (
+                  <Field label="模型 ID（可自定义）">
+                    <Input
+                      value={models[modality]}
+                      onChange={(event) =>
+                        setModels((current) => ({ ...current, [modality]: event.target.value }))
+                      }
+                      placeholder="留空则使用环境默认"
+                    />
+                  </Field>
+                ) : null}
+
+                {modality === 'image' ? (
+                  <>
+                    <Field label="文生图 T2I（首张角色/场景）">
+                      <Input
+                        value={models.image}
+                        onChange={(event) =>
+                          setModels((current) => ({ ...current, image: event.target.value }))
+                        }
+                        placeholder="例如 Qwen/Qwen-Image"
+                      />
+                    </Field>
+                    <Field label="文图生图 I2I（有参考图时）">
+                      <Input
+                        value={models.image_i2i}
+                        onChange={(event) =>
+                          setModels((current) => ({ ...current, image_i2i: event.target.value }))
+                        }
+                        placeholder="例如 Qwen/Qwen-Image-Edit"
+                      />
+                    </Field>
+                    <p className="text-xs text-zinc-500">
+                      流程：首次设定用 T2I；侧/背/脸、变化后形象与场景关键帧用 I2I 锁一致性。
+                    </p>
+                    {/image-edit|img2img/i.test(models.image) && (
+                      <p className="text-xs text-amber-300">
+                        T2I 槽位不宜填编辑模型，请把 Image-Edit 放到 I2I。
+                      </p>
+                    )}
+                  </>
+                ) : null}
+
+                {modality === 'video' ? (
+                  <>
+                    <Field label="文生视频 T2V">
+                      <Input
+                        value={models.video}
+                        onChange={(event) =>
+                          setModels((current) => ({ ...current, video: event.target.value }))
+                        }
+                        placeholder="例如 Wan-AI/Wan2.2-T2V-A14B"
+                      />
+                    </Field>
+                    <Field label="文图生视频 I2V（有参考帧时）">
+                      <Input
+                        value={models.video_i2v}
+                        onChange={(event) =>
+                          setModels((current) => ({ ...current, video_i2v: event.target.value }))
+                        }
+                        placeholder="例如 Wan-AI/Wan2.2-I2V-A14B"
+                      />
+                    </Field>
+                    <p className="text-xs text-zinc-500">
+                      有可访问的 http(s) 关键帧时自动走 I2V，否则走 T2V。
+                    </p>
+                    {/Wan2\.1/i.test(models.video) || /Wan2\.1/i.test(models.video_i2v) ? (
+                      <p className="text-xs text-amber-300">
+                        Wan2.1 已在 SiliconFlow 下线，请改用 Wan2.2 T2V / I2V。
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
             ))}
             <div className="flex flex-wrap gap-3 md:col-span-2">

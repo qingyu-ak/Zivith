@@ -35,7 +35,9 @@ app.log.info(
     models: {
       llm: providers.llmModel,
       image: providers.imageModel,
+      image_i2i: providers.imageI2iModel,
       video: providers.videoModel,
+      video_i2v: providers.videoI2vModel,
       audio: providers.audioModel,
     },
   },

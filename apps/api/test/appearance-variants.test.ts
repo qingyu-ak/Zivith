@@ -10,6 +10,7 @@ describe('appearance variant contracts', () => {
   it('accepts stable slug keys and Chinese titles', () => {
     expect(appearanceVariantKeySchema.parse('default')).toBe('default');
     expect(appearanceVariantKeySchema.parse('wounded')).toBe('wounded');
+    expect(appearanceVariantKeySchema.parse('sheet_front')).toBe('sheet_front');
     expect(() => appearanceVariantKeySchema.parse('受伤')).toThrow();
     expect(() => appearanceVariantKeySchema.parse('1bad')).toThrow();
 

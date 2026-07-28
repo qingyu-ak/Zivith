@@ -1,6 +1,8 @@
 import { createHash, randomUUID as cryptoRandomUuid } from 'node:crypto';
 import {
   asId,
+  CHARACTER_SHEET_TURNAROUND_KEY,
+  CHARACTER_SHEET_VARIANTS,
   type AgentContext,
   type AutomationLevel,
   type StageAutomation,
@@ -17,15 +19,11 @@ import { ShotAgent, type ShotAgentScene, type ShotAgentOutput } from '../agent/s
 import { StoryAgent, type GeneratedStory } from '../agent/story-agent.js';
 import { VisualPrepAgent, type VisualPrepScene } from '../agent/visual-prep-agent.js';
 import { enrichVisualAssetTraits, mergeVisualPromptIntoAssetData } from '../agent/visual-trait.js';
-import { ensureDefaultAppearanceVariant } from '../visual/appearance-variants.js';
 import {
-  referenceInjectionMetadata,
-  resolveVisualPrepReferenceImages,
-  toImageReferencePayload,
-  withReferencePromptClauses,
-} from '../visual/reference-images.js';
+  ensureCharacterSheetVariants,
+  ensureDefaultAppearanceVariant,
+} from '../visual/appearance-variants.js';
 import { createProviderBundle, type ProviderBundle } from '../../providers/registry.js';
-import type { ImageGenerationAdapter } from '../../ports/media.js';
 import type { LLMAdapter } from '../../ports/llm.js';
 import type { SubmitReviewInput, WorkflowOrchestrator } from './orchestrator.js';
 import {
@@ -57,18 +55,11 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 function asText(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback;
+  return typeof value === 'string' && value.trim() ? value : fallback;
 }
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
-/** Local SVG placeholder — avoids placehold.co which is often blocked in CN. */
-function svgPlaceholderDataUrl(label: string, size = 1024): string {
-  const text = label.slice(0, 18).replace(/[<>&'"]/g, '');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect fill="#141414" width="100%" height="100%"/><text x="50%" y="50%" fill="#a3e635" font-family="sans-serif" font-size="42" text-anchor="middle" dominant-baseline="middle">${text}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 export class MockWorkflowRunner {
@@ -80,7 +71,6 @@ export class MockWorkflowRunner {
   private readonly shotAgent = new ShotAgent();
   private readonly promptAgent = new PromptAgent();
   private readonly generationService: GenerationService;
-  private readonly imageAdapter: ImageGenerationAdapter;
   private readonly imageModel: string;
   private readonly llm: LLMAdapter;
   private readonly llmModel: string;
@@ -98,7 +88,6 @@ export class MockWorkflowRunner {
     this.storyAgent = new StoryAgent(providers.llm, providers.llmModel);
     this.sceneAgent = new SceneAgent(providers.llm, providers.llmModel);
     this.generationService = generationService;
-    this.imageAdapter = providers.image;
     this.imageModel = providers.imageModel;
     this.llm = providers.llm;
     this.llmModel = providers.llmModel;
@@ -167,10 +156,16 @@ export class MockWorkflowRunner {
     if (input.step === 'story_review' && input.segment_id) {
       return this.submitStorySegmentReview(runId, userId, input);
     }
+    if (input.step === 'scene_review' && input.scene_id) {
+      return this.submitSceneReview(runId, userId, input);
+    }
 
     const approving = input.action === 'approve' || input.action === 'approve_all';
     if (approving && input.step === 'story_review') {
       await this.assertStorySegmentsApproved(runId);
+    }
+    if (approving && input.step === 'scene_review') {
+      await this.assertScenesApproved(runId);
     }
     if (approving && input.step === 'visual_assets_review') {
       const before = await this.getRun(runId);
@@ -636,6 +631,66 @@ export class MockWorkflowRunner {
     return ids;
   }
 
+  private async assertScenesApproved(runId: string): Promise<void> {
+    const run = await this.getRun(runId);
+    const sceneIds = Array.isArray(
+      record(run.steps.find((step) => step.name === 'scene')?.output).scene_ids,
+    )
+      ? (
+          record(run.steps.find((step) => step.name === 'scene')?.output).scene_ids as unknown[]
+        ).filter((id): id is string => typeof id === 'string')
+      : [];
+    if (sceneIds.length === 0) return;
+    const scenes = await this.db.scene.findMany({
+      where: { id: { in: sceneIds }, deletedAt: null },
+      select: { id: true, state: true, title: true },
+    });
+    const pending = scenes.filter((item) => item.state !== 'approved');
+    if (pending.length > 0) {
+      throw new ApiError(409, 'SCENES_NOT_APPROVED', '请先逐条审核通过全部场景，再继续', {
+        scene_ids: pending.map((item) => item.id),
+      });
+    }
+  }
+
+  private async submitSceneReview(
+    runId: string,
+    userId: string,
+    input: SubmitReviewInput,
+  ): Promise<WorkflowWithSteps> {
+    void userId;
+    const run = await this.getRun(runId);
+    const sceneIds = Array.isArray(
+      record(run.steps.find((step) => step.name === 'scene')?.output).scene_ids,
+    )
+      ? (
+          record(run.steps.find((step) => step.name === 'scene')?.output).scene_ids as unknown[]
+        ).filter((id): id is string => typeof id === 'string')
+      : [];
+    if (!input.scene_id || !sceneIds.includes(input.scene_id)) {
+      throw new ApiError(404, 'SCENE_NOT_FOUND', '场景不存在或不属于本工作流');
+    }
+    const scene = await this.db.scene.findFirst({
+      where: { id: input.scene_id, deletedAt: null },
+    });
+    if (!scene) throw new ApiError(404, 'SCENE_NOT_FOUND', '场景不存在');
+
+    if (input.action === 'approve' || input.action === 'approve_all') {
+      await this.db.scene.update({
+        where: { id: scene.id },
+        data: { state: 'approved' },
+      });
+      return this.getRun(runId);
+    }
+
+    // Per-scene rewrite is not yet a first-class Scene Agent path; mark review + keep gate open.
+    await this.db.scene.update({
+      where: { id: scene.id },
+      data: { state: 'review' },
+    });
+    return this.getRun(runId);
+  }
+
   private async assertStorySegmentsApproved(runId: string): Promise<void> {
     const run = await this.getRun(runId);
     const storyId = record(run.steps.find((step) => step.name === 'story')?.output).story_id;
@@ -919,6 +974,83 @@ export class MockWorkflowRunner {
         result.warnings[0]?.message ?? '视觉准备失败',
       );
     }
+
+    // Consistency: draft multi-view character sheet prompts from screenplay for user review.
+    // Do NOT call T2I here — operator reviews then generates one turnaround image in the asset library.
+    const characterIdsForSheets = [
+      ...new Set(
+        result.data.requirements
+          .filter((item) => item.asset_type === 'character')
+          .map((item) => item.asset_id),
+      ),
+    ];
+    for (const characterId of characterIdsForSheets) {
+      const character = await this.db.asset.findFirst({
+        where: { id: characterId, deletedAt: null, type: 'character' },
+      });
+      if (!character) continue;
+      await ensureDefaultAppearanceVariant(this.db, character);
+      await ensureCharacterSheetVariants(this.db, character.id);
+      const sheetMeta = CHARACTER_SHEET_VARIANTS[0];
+      const variant = await this.db.assetAppearanceVariant.findFirst({
+        where: { assetId: character.id, key: CHARACTER_SHEET_TURNAROUND_KEY, deletedAt: null },
+      });
+      if (!variant) continue;
+      if (variant.anchorMediaId || variant.candidateMediaIds.length > 0) continue;
+      const existingPrompt = variant.description?.trim() ?? '';
+      // Keep operator/LLM draft; re-draft only when empty or still the raw template clause.
+      if (existingPrompt && existingPrompt !== sheetMeta.prompt_clause) continue;
+      const appearance = record(character.appearance);
+      const appearanceBits = Object.values(appearance)
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .join(', ');
+      try {
+        const traits = await this.queueWork.run(
+          'workflow_step',
+          `${run.id}:sheet-prompt:${character.id}`,
+          () =>
+            enrichVisualAssetTraits(this.llm, this.llmModel, `${run.id}:sheet-prompt:${character.id}`, {
+              asset_type: 'character',
+              asset_name: character.name,
+              variant_key: CHARACTER_SHEET_TURNAROUND_KEY,
+              purpose: 'character_sheet',
+              scene_title: 'character reference sheet',
+              story_title: story?.title,
+              story_synopsis: story?.synopsis ?? undefined,
+              story_screenplay_excerpt: storyScreenplay,
+              existing_description: character.description,
+              appearance_bits: appearanceBits,
+            }),
+        );
+        await this.db.assetAppearanceVariant.update({
+          where: { id: variant.id },
+          data: {
+            description: traits.generation_prompt,
+            state: variant.state === 'approved' ? variant.state : 'draft',
+          },
+        });
+        await this.db.asset.update({
+          where: { id: character.id },
+          data: {
+            data: json(
+              mergeVisualPromptIntoAssetData(
+                character.data,
+                CHARACTER_SHEET_TURNAROUND_KEY,
+                traits.generation_prompt,
+                traits.appearance_summary,
+              ),
+            ),
+          },
+        });
+      } catch (error) {
+        console.warn(
+          '[visual-prep] character sheet prompt draft failed',
+          character.name,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
     const requirementIds: string[] = [];
     const enrichedAssetIds = new Set<string>();
     for (const requirement of result.data.requirements) {
@@ -935,7 +1067,6 @@ export class MockWorkflowRunner {
           continue;
         }
       }
-      const mediaId = deterministicUuid(`${requirementId}:candidate`);
       const asset = await this.db.asset.findUniqueOrThrow({ where: { id: requirement.asset_id } });
       const sceneMeta = scenes[sceneIds.indexOf(requirement.scene_id)] ?? {};
       const sceneTitle = asText(sceneMeta.title, requirement.reason);
@@ -959,6 +1090,8 @@ export class MockWorkflowRunner {
               asset_type: requirement.asset_type,
               asset_name: asset.name,
               variant_key: requirement.variant_key,
+              purpose:
+                requirement.asset_type === 'location' ? 'location_sheet' : 'keyframe',
               scene_title: sceneTitle,
               scene_context: [
                 typeof sceneMeta.summary === 'string' ? sceneMeta.summary : '',
@@ -1036,70 +1169,8 @@ export class MockWorkflowRunner {
         }
       }
 
-      let imageUrl = svgPlaceholderDataUrl(asset.name);
-      let provider = this.imageAdapter.provider;
-      let isMock = provider === 'mock';
-      let generationError: string | undefined;
-      let adapterMeta: Record<string, string | number | boolean> = {};
-      const refs = await resolveVisualPrepReferenceImages(
-        this.db,
-        asset,
-        requirement.variant_key,
-      );
-      const promptForModel = withReferencePromptClauses(generationPrompt, refs.length > 0);
-      try {
-        const generated = await this.queueWork.run(
-          'image_generate',
-          `${run.id}:image:${requirementId}`,
-          () =>
-            this.imageAdapter.generate({
-              request_id: `${run.id}:${requirementId}`,
-              model: this.imageModel,
-              prompt: promptForModel,
-              ...(refs.length ? { reference_images: toImageReferencePayload(refs) } : {}),
-            }),
-        );
-        if (generated.image_url) imageUrl = generated.image_url;
-        isMock = Boolean(generated.metadata.is_mock);
-        adapterMeta = generated.metadata;
-      } catch (error) {
-        provider = 'mock-fallback';
-        isMock = true;
-        generationError = error instanceof Error ? error.message.slice(0, 500) : String(error);
-        adapterMeta = {
-          reference_injection: refs.length > 0 ? 'skipped_error' : 'none',
-        };
-        console.warn('[visual-prep] image generation failed, using placeholder', generationError);
-      }
-      const generationMetadata = {
-        is_mock: isMock,
-        provider,
-        model: this.imageModel,
-        workflow_run_id: run.id,
-        generation_prompt: promptForModel,
-        ...referenceInjectionMetadata(refs, adapterMeta),
-        ...(generationError ? { generation_error: generationError } : {}),
-      };
-      await this.db.media.upsert({
-        where: { id: mediaId },
-        create: {
-          id: mediaId,
-          projectId: run.projectId,
-          name: `${asset.name} Key Image`,
-          mediaType: 'image',
-          mimeType: 'image/png',
-          storageKey: `visual-assets/${mediaId}.png`,
-          url: imageUrl,
-          source: 'generated',
-          generationMetadata,
-          tags: ['generated', requirement.asset_type],
-        },
-        update: {
-          deletedAt: null,
-          url: imageUrl,
-          generationMetadata,
-        },
-      });
+      // Cost control: do NOT auto-generate scene keyframes here.
+      // Persist prompts only; operator generates one card at a time in visual review.
       await this.db.visualAssetRequirement.upsert({
         where: { id: requirementId },
         create: {
@@ -1110,17 +1181,33 @@ export class MockWorkflowRunner {
           variantKey: requirement.variant_key,
           required: true,
           reason: requirement.reason,
-          status: 'review',
-          candidateMediaIds: [mediaId],
+          status: 'pending',
+          candidateMediaIds: [],
         },
         update: {
           required: true,
           reason: requirement.reason,
-          status: 'review',
-          candidateMediaIds: [mediaId],
+          status: 'pending',
+          candidateMediaIds: [],
           approvedMediaId: null,
           deletedAt: null,
           version: { increment: 1 },
+        },
+      });
+      // Keep generation prompt on the asset for the review UI / regenerate endpoint.
+      const refreshedForPrompt = await this.db.asset.findUniqueOrThrow({
+        where: { id: asset.id },
+      });
+      await this.db.asset.update({
+        where: { id: asset.id },
+        data: {
+          data: json(
+            mergeVisualPromptIntoAssetData(
+              refreshedForPrompt.data,
+              requirement.variant_key,
+              generationPrompt,
+            ),
+          ),
         },
       });
       requirementIds.push(requirementId);
@@ -1314,29 +1401,36 @@ export class MockWorkflowRunner {
     if (shotIds.length === 0) {
       throw new ApiError(409, 'PROMPT_OUTPUT_MISSING', 'Prompt Agent 尚未生成可用提示词');
     }
-    const outputs = await Promise.all(
-      shotIds.map((shotId) =>
-        this.generationService.generate(shotId, {
-          requestId:
-            options?.advance === false
-              ? `${run.id}:${shotId}:recompute:${Date.now()}`
-              : `${run.id}:${shotId}`,
+    // Cost control: do not auto-enqueue every shot. Operator generates one video at a time
+    // from the video review cards ("重跑本镜头视频" / generate).
+    if (options?.shotIds?.length && options.advance === false) {
+      const outputs = [];
+      for (const shotId of shotIds) {
+        const output = await this.generationService.generate(shotId, {
+          requestId: `${run.id}:${shotId}:recompute:${Date.now()}`,
           model: this.providers.videoModel,
-        }),
-      ),
-    );
+        });
+        outputs.push(output);
+      }
+      const payload = {
+        shot_ids: shotIds,
+        output_ids: outputs.map((output) => output.id),
+        provider: this.providers.selection.video,
+        model: this.providers.videoModel,
+      };
+      await this.orchestrator.mergeStepOutput(run.id, 'video', payload);
+      return { outputIds: outputs.map((output) => output.id), shotIds };
+    }
+
     const payload = {
       shot_ids: shotIds,
-      output_ids: outputs.map((output) => output.id),
+      output_ids: [] as string[],
+      deferred_generation: true,
       provider: this.providers.selection.video,
       model: this.providers.videoModel,
     };
-    if (options?.advance === false) {
-      await this.orchestrator.mergeStepOutput(run.id, 'video', payload);
-    } else {
-      await this.orchestrator.completeStep(run.id, 'video', payload);
-    }
-    return { outputIds: outputs.map((output) => output.id), shotIds };
+    await this.orchestrator.completeStep(run.id, 'video', payload);
+    return { outputIds: [], shotIds };
   }
 
   private async persistShots(
@@ -1512,6 +1606,7 @@ export class MockWorkflowRunner {
             mood: scene.mood,
             characterIds: [],
             segmentId,
+            state: 'review',
           },
           update: {
             order: scene.order,
@@ -1521,6 +1616,7 @@ export class MockWorkflowRunner {
             weather: scene.weather,
             mood: scene.mood,
             segmentId,
+            state: 'review',
             deletedAt: null,
           },
         });

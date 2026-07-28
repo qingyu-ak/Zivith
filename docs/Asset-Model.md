@@ -2,11 +2,11 @@
 
 > Zivith 素材与资源模型
 >
-> Version: 1.0
+> Version: 1.1
 >
-> Status: Draft
+> Status: Active — synced 2026-07-28 (turnaround sheet, location sheet, provider matrix, cover resolution)
 >
-> Related: Core-Domain-Model.md, Design-Philosophy.md, Shot-Specification.md
+> Related: Core-Domain-Model.md, Design-Philosophy.md, Shot-Specification.md, architecture/entity-state-timeline-track.md, Next-Tasks.md
 
 ---
 
@@ -89,7 +89,46 @@ Consistency is anchored per **character × narrative state**, not per character.
 | `candidate_media_ids[]` | `MediaId[]` | No | Generated candidates awaiting selection |
 | `state` | `enum` | Yes | Approval state (same enum as other reviewable entities) |
 
-Every character receives a `default` variant on create (existing characters backfilled by migration). Asset-library APIs: `GET/POST /assets/:id/appearance-variants`, `PATCH/DELETE …/:key`, `POST …/:key/generate`, `POST …/:key/approve`. Visual Prep approve syncs `variant_key` → matching variant `anchor_media_id` when the key exists. Reference-image injection (plan W1) resolves: matching variant `anchor_media_id` → project-level `reference_images[0]`, with adapter-level skip metadata when the model cannot condition on images.
+Every character receives a `default` variant on create (existing characters backfilled by migration), plus a reserved **multi-view design sheet** slot `sheet_turnaround`.
+
+### Character design sheet (`sheet_turnaround`)
+
+| Rule | Detail |
+|------|--------|
+| Shape | **One T2I image**, not four API calls — required **2×2** layout: full-body front / side / back + a **dedicated large head-and-shoulders face close-up** panel (not a tiny corner crop) |
+| Prompt flow | Visual Prep / asset page **drafts** English prompt from screenplay + description → operator **reviews** → then T2I |
+| Generation | Always **T2I** for the primary sheet (no I2I conditioning on placeholders) |
+| Cover | Successful generate prepends the sheet Media to Asset `reference_images[]`; list/detail APIs expose resolved `cover_image` with usable `url` / `access_url` |
+| Legacy | Keys `sheet_front` / `sheet_side` / `sheet_back` / `sheet_face` remain readable but are **deprecated** |
+
+**Asset-library APIs (character):**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET/POST` | `/assets/:id/appearance-variants` | List / create narrative variants |
+| `PATCH/DELETE` | `/assets/:id/appearance-variants/:key` | Update / soft-delete |
+| `POST` | `/assets/:id/appearance-variants/:key/generate` | Generate candidates for one variant |
+| `POST` | `/assets/:id/appearance-variants/:key/approve` | Approve selected candidate as anchor |
+| `POST` | `/assets/:id/appearance-variants/draft-sheet-prompt` | LLM drafts `sheet_turnaround` prompt only |
+| `POST` | `/assets/:id/appearance-variants/generate-sheet` | Single turnaround T2I; sets cover |
+| `DELETE` | `/assets/:id/appearance-variants/:key/candidates/:mediaId` | Soft-delete one history candidate |
+
+**UI:** List at `/projects/:pid/assets` → click opens detail `/projects/:pid/assets/:assetId` (no side panel). Sheet controls live on the character detail page.
+
+Visual Prep **drafts** sheet + scene prompts from screenplay and **does not** auto-call image APIs. Operator generates sheets in the asset library, then generates scene keyframes one card at a time in WorkflowPanel. Visual Prep approve syncs `variant_key` → matching variant `anchor_media_id` when the key exists. Regenerating appends to `candidate_media_ids` and does not remove prior Media unless the user deletes a candidate. Reference-image injection prefers `sheet_turnaround` then legacy sheet anchors, then `reference_images[0]` (http(s) URLs only).
+
+**Note:** Story-to-video workflow「角色关键图」are **scene-context keyframes** under Visual Prep, not the asset-library design sheet. Generate the multi-view sheet on the Character **detail** page first for identity consistency.
+
+### Provider model matrix (SiliconFlow — implemented)
+
+| Slot | Env / models field | Default | When used |
+|------|--------------------|---------|-----------|
+| Text-to-image (T2I) | `SILICONFLOW_IMAGE_MODEL` / `image` | `Qwen/Qwen-Image` | First sheet / keyframe without usable refs |
+| Text+image-to-image (I2I) | `SILICONFLOW_IMAGE_I2I_MODEL` / `image_i2i` | `Qwen/Qwen-Image-Edit` | Has http(s) reference; **falls back to T2I** on provider 4xx/5xx (e.g. 50507) |
+| Text-to-video (T2V) | `SILICONFLOW_VIDEO_MODEL` / `video` | `Wan-AI/Wan2.2-T2V-A14B` | No http(s) reference frame |
+| Image-to-video (I2V) | `SILICONFLOW_VIDEO_I2V_MODEL` / `video_i2v` | `Wan-AI/Wan2.2-I2V-A14B` | Has http(s) reference frame |
+
+Runtime Provider panel exposes the four image/video slots. Rebuild `@zivith/domain` after changing exported sheet constants.
 
 ## 2.3 Location
 
@@ -108,9 +147,22 @@ A Location represents a physical place. Locations provide shared environmental c
 | `weather_default` | `string` | No | Default weather, e.g. `sunny`, `rainy`, `foggy` |
 | `lighting_default` | `string` | No | Default lighting, e.g. `natural_daylight`, `candlelit` |
 | `mood_default` | `string` | No | Default atmosphere |
-| `reference_images[]` | `MediaId[]` | No | Reference images |
+| `reference_images[]` | `MediaId[]` | No | Reference images; list/detail APIs **resolve** them to Media DTOs with `url` / `access_url` (bare IDs are not valid `<img src>`) |
 | `floor_plan_url` | `string` | No | Optional floor plan for interior locations |
 | `tags[]` | `string[]` | No | Searchable tags |
+
+### Location design sheet (`location_sheet`)
+
+Locations do **not** use `AppearanceVariant` slots. The design sheet is a single multi-angle T2I image stored as the asset cover / first `reference_images[]` entry; the draft prompt lives at `asset.data.visual.generation_prompts.location_sheet`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/assets/:id/location-sheet/draft-prompt` | LLM drafts multi-angle environment prompt |
+| `POST` | `/assets/:id/location-sheet/generate` | T2I once; prepends Media to `reference_images` as cover |
+
+**UI:** Location detail page「地点设定表」— draft → review → generate (same pattern as character turnaround).
+
+**List / detail cover:** `GET /projects/:pid/assets` and `GET /assets/:id` return `cover_image` (preferred sheet or first reference) plus resolved `reference_images[]` Media objects.
 
 ## 2.4 Prop
 
@@ -198,7 +250,7 @@ Media assets are binary files uploaded to or generated within the Project.
 3. `voice_only` and `implied` characters do not create character bindings. In the first release, important Props remain prompt context only and do not create bindings.
 4. Changes to a Scene's Location, time, weather, mood, participating characters, or location sub-area return affected bindings to `pending`. Approved Shots and existing Outputs retain their creation-time Media snapshots.
 
-**Reference-image injection (V0.4 W1 — implemented):** Image generation requests may carry labeled `reference_images` resolved as AppearanceVariant `anchor_media_id` (when `variant_key` matches) → else Asset `reference_images[0]`. Adapters declare `supportsReferenceImages`; when the selected model cannot condition on images, generation continues without injection and `generation_metadata.reference_injection` is set to `skipped_unsupported` (UI shows「本次未注入参考图」). Applied injections record `reference_media_ids[]` on Media metadata. Video image-to-video uses Scene approved binding Media URLs (rule 1), not raw Media IDs.
+**Reference-image injection (V0.4 W1 — implemented):** Image generation requests may carry labeled `reference_images` resolved as AppearanceVariant `anchor_media_id` (when `variant_key` matches) → prefer `sheet_turnaround` → else Asset `reference_images[0]` (**http(s) only**; `data:` / SVG placeholders are skipped). Adapters declare `supportsReferenceImages`; when the selected model cannot condition on images, generation continues without injection and `generation_metadata.reference_injection` is set to `skipped_unsupported` (UI shows「本次未注入参考图」). When I2I is selected but the provider returns 4xx/5xx (e.g. SiliconFlow `50507`), the pipeline **retries T2I** and records `skipped_i2i_error`. Applied injections record `reference_media_ids[]` on Media metadata. Video image-to-video uses Scene approved binding Media URLs (rule 1), not raw Media IDs.
 
 ## 2.8 Knowledge
 
@@ -285,6 +337,8 @@ When an Asset is modified:
 | `active` Asset modified | All non-approved Shots automatically reflect the change on next generation |
 | `active` Asset modified | Approved Shots are unaffected (they are frozen) |
 | `archived` Asset | Existing references continue to resolve; new references are blocked |
+
+Under the proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) architecture, an Asset or AppearanceVariant update on `main` also creates an immutable revision and timeline fact. A branch Track may hold a proposed Asset/AppearanceVariant state without modifying the current Asset row. Merging that branch into `main` must mark affected, non-frozen VisualAssetRequirements and Shots as stale; approved Shots and existing Outputs continue to use their creation-time snapshots. This capability is designed but not yet implemented.
 
 ---
 

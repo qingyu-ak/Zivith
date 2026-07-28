@@ -92,7 +92,8 @@ export function createGenerationQueueRuntime(
         await workflowProcessor(job);
       }
     },
-    { connection, concurrency: Number(process.env.GENERATION_WORKER_CONCURRENCY ?? 2) },
+    // Default 1 so SiliconFlow video/image calls do not fan out in parallel.
+    { connection, concurrency: Number(process.env.GENERATION_WORKER_CONCURRENCY ?? 1) },
   );
 
   worker.on('failed', (job, error) => {

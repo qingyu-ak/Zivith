@@ -201,9 +201,11 @@ describe('MockWorkflowRunner', () => {
       workflowRun: {
         findUnique: vi
           .fn()
-          .mockResolvedValueOnce(promptReview)
-          .mockResolvedValueOnce(afterReview)
-          .mockResolvedValueOnce(completed),
+          .mockResolvedValueOnce(promptReview) // submitReview gate check
+          .mockResolvedValueOnce(afterReview) // approveArtifacts
+          .mockResolvedValueOnce(afterReview) // runUntilGate seed (usage context)
+          .mockResolvedValueOnce(afterReview) // runUntilGateInner loop
+          .mockResolvedValueOnce(completed), // after beginNextStep
       },
       promptVersion: {
         findMany: vi.fn().mockResolvedValue([
@@ -304,7 +306,11 @@ describe('MockWorkflowRunner', () => {
     const completed = { ...terminalPending, status: 'completed' };
     const db = {
       workflowRun: {
-        findUnique: vi.fn().mockResolvedValueOnce(terminalPending).mockResolvedValueOnce(completed),
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(terminalPending) // runUntilGate seed
+          .mockResolvedValueOnce(terminalPending) // runUntilGateInner
+          .mockResolvedValueOnce(completed), // after beginNextStep
       },
     } as unknown as PrismaClient;
     const beginNextStep = vi.fn().mockResolvedValue({ kind: 'completed' });

@@ -2,11 +2,11 @@
 
 > Zivith 技术架构
 >
-> Version: 1.0
+> Version: 1.1
 >
-> Status: Draft
+> Status: Active — synced 2026-07-28 (SiliconFlow modality slots + I2I fallback)
 >
-> Related: Core-Domain-Model.md, AI-Agent-Collaboration.md, Shot-Specification.md
+> Related: Core-Domain-Model.md, AI-Agent-Collaboration.md, Shot-Specification.md, Asset-Model.md, architecture/entity-state-timeline-track.md, architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md
 
 ---
 
@@ -147,6 +147,14 @@ The domain is divided into eight bounded contexts. Each context owns its data an
 - User preferences
 - Project membership
 
+### Creative History Context (cross-cutting; proposed)
+- Immutable Entity revisions and Project Timeline queries
+- Project-scoped CreativeTrack lifecycle, comparison, and explicit merge
+- Optimistic revision checks, command idempotency, and committed-fact recording
+- Dependency-staleness propagation after accepted `main` changes
+
+This context is specified in [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) but is not yet implemented. It does not own Story, Shot, Asset, Workflow, or Generation current state; each existing bounded context remains responsible for its dedicated tables and domain transitions.
+
 ## 3.3 Context Communication Patterns
 
 | Pattern | Use Case |
@@ -250,6 +258,20 @@ The public API follows REST conventions. Real-time updates use Server-Sent Event
 | `POST` | `/workflows/{runId}/cancel` | Cancel workflow |
 | `GET` | `/workflows/{runId}/events` | SSE stream for real-time progress |
 
+### Creative History and Tracks (proposed)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/projects/{pid}/timeline` | Cursor-paginated committed Project facts |
+| `GET` | `/projects/{pid}/entities/{type}/{id}/revisions` | List immutable Entity revisions |
+| `GET` | `/projects/{pid}/tracks` | List CreativeTracks |
+| `POST` | `/projects/{pid}/tracks` | Fork a CreativeTrack |
+| `POST` | `/projects/{pid}/tracks/{trackId}/compare` | Compare branch, base, and target heads |
+| `POST` | `/projects/{pid}/tracks/{trackId}/merge` | Explicitly merge confirmed states into `main` |
+| `POST` | `/projects/{pid}/tracks/{trackId}/abandon` | Make a branch read-only without changing `main` |
+
+These endpoints are design contracts, not currently available routes. Writes carry `expected_revision` and an idempotency key; revision conflicts return HTTP 409.
+
 ### Generation
 
 | Method | Path | Description |
@@ -323,6 +345,8 @@ Only specified fields are updated. `null` values reset a field to inherit from p
 | **Job Queue** | Async task management | Generation jobs, workflow steps, notifications |
 | **Cache** | Frequently accessed, rarely changed data | Resolved Asset data, prompt templates, model capabilities |
 
+The proposed history layer also stores `CreativeTrack`, `EntityRevision`, `TrackHead`, and `TimelineEvent` in PostgreSQL. Dedicated business tables remain the current `main` read model; revisions/events are the history authority. Large snapshots use object-storage references plus canonical hashes rather than copying binary or provider payloads into PostgreSQL.
+
 ## 5.2 Primary Database — Entity-Relationship Overview
 
 ```
@@ -337,6 +361,10 @@ Scene N──M Character (via scene_characters join)
 Shot N──1 Location (reference)
 Shot N──1 Style (reference)
 WorkflowRun 1──N WorkflowStep
+Project 1──N CreativeTrack (proposed)
+CreativeTrack 1──N TrackHead (proposed)
+Entity 1──N EntityRevision (logical reference; proposed)
+Project 1──N TimelineEvent (proposed)
 ```
 
 ## 5.3 Key Schema Decisions
@@ -358,7 +386,9 @@ All entities support soft delete (`deleted_at` timestamp). Hard deletes require 
 
 ### Audit Trail
 
-All state transitions on Shot and WorkflowRun are logged to an `audit_log` table for traceability.
+Current implementation records selected Shot and Workflow actions in `audit_logs`; coverage is not complete and the table is not an event store.
+
+The proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) migration introduces append-only `EntityRevision` and `TimelineEvent` records in the same transaction as current-state writes. `AuditLog` remains during migration, may be temporarily dual-written, and is retired only after query, retention, permission, and backfill equivalence is verified. Workflow attempts and queue progress remain in their dedicated tables; only committed business facts enter the Project Timeline.
 
 ---
 
@@ -371,8 +401,22 @@ All external AI model interactions are isolated behind capability-specific adapt
 | Capability | Supported providers | First integration set |
 |------------|---------------------|-----------------------|
 | Text | DeepSeek, Qwen, GPT, Claude | **DeepSeek** |
-| Image | Tongyi Wanxiang, GPT Image, FLUX | **Tongyi Wanxiang** |
-| Video | Kling, Vidu, Veo | **Kling** |
+| Image | SiliconFlow (Qwen-Image / Edit, Z-Image, FLUX, Kolors, …) | **SiliconFlow** |
+| Video | SiliconFlow (Wan2.2 T2V / I2V), Kling, Vidu, Veo | **SiliconFlow Wan2.2** |
+| Audio | SiliconFlow (CosyVoice / Moss-TTSD, …) | **SiliconFlow** |
+
+### 6.1.1 SiliconFlow modality model slots (implemented)
+
+Runtime catalog (`GET/PUT /providers`) and env defaults expose **separate** model IDs per modality path:
+
+| Slot | Config key | Typical default | Selection rule |
+|------|------------|-----------------|----------------|
+| T2I | `SILICONFLOW_IMAGE_MODEL` / `models.image` | `Qwen/Qwen-Image` | No usable reference image |
+| I2I | `SILICONFLOW_IMAGE_I2I_MODEL` / `models.image_i2i` | `Qwen/Qwen-Image-Edit` | http(s) reference present; **fallback to T2I** on provider error |
+| T2V | `SILICONFLOW_VIDEO_MODEL` / `models.video` | `Wan-AI/Wan2.2-T2V-A14B` | No http(s) reference frame |
+| I2V | `SILICONFLOW_VIDEO_I2V_MODEL` / `models.video_i2v` | `Wan-AI/Wan2.2-I2V-A14B` | http(s) reference frame |
+
+Qwen T2I prefers `image_size` `1328x1328`; Edit uses `1024x1024`. Character primary sheets (`sheet_turnaround`) always call T2I. See [Asset-Model.md](Asset-Model.md) and `.env.example`.
 
 ```typescript
 interface ImageGenerationAdapter {
@@ -410,7 +454,7 @@ interface ImageModelCapabilities {
 }
 ```
 
-When references are supplied but the selected model cannot condition on them, adapters must not fail silently: they generate without injection and set `metadata.reference_injection = 'skipped_unsupported'`. Successful injection sets `applied` and callers persist `reference_media_ids[]` on Media `generation_metadata`.
+When references are supplied but the selected model cannot condition on them, adapters must not fail silently: they generate without injection and set `metadata.reference_injection = 'skipped_unsupported'`. Successful injection sets `applied` and callers persist `reference_media_ids[]` on Media `generation_metadata`. I2I path failures may set `skipped_i2i_error` after T2I retry.
 
 ## 6.2 Provider Abstraction
 
@@ -425,8 +469,8 @@ Generation Context
 └──────┬───────────┘
        │
        ├──▶ LLM: DeepSeekAdapter (first), QwenAdapter, GPTAdapter, ClaudeAdapter
-       ├──▶ Image: TongyiWanxiangAdapter (first), GPTImageAdapter, FluxAdapter
-       └──▶ Video: KlingAdapter (first), ViduAdapter, VeoAdapter
+       ├──▶ Image: SiliconFlowImageAdapter (first; T2I/I2I model slots), FluxAdapter, …
+       └──▶ Video: SiliconFlowVideoAdapter (first; T2V/I2V slots), KlingAdapter, ViduAdapter, VeoAdapter
 ```
 
 The adapter registry maps capability plus provider to an adapter instance. Adding a provider means implementing the appropriate adapter, with no domain-logic changes.

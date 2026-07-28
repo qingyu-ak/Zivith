@@ -1,19 +1,29 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import type { PrismaClient } from '@zivith/database';
+import { Prisma, type PrismaClient } from '@zivith/database';
 import {
   appearanceVariantCreateSchema,
   appearanceVariantKeySchema,
   appearanceVariantPatchSchema,
+  CHARACTER_SHEET_TURNAROUND_KEY,
+  CHARACTER_SHEET_VARIANTS,
   DEFAULT_APPEARANCE_VARIANT_KEY,
+  isCharacterSheetVariantKey,
   resolveAppearanceWithVariant,
+  type CharacterAppearance,
 } from '@zivith/domain';
 import { z } from 'zod';
 import {
+  ensureCharacterSheetVariants,
   ensureDefaultAppearanceVariant,
   generateAppearanceVariantImage,
   nextAppearanceVariantOrder,
+  removeAppearanceVariantCandidate,
 } from '../contexts/visual/appearance-variants.js';
+import {
+  enrichVisualAssetTraits,
+  mergeVisualPromptIntoAssetData,
+} from '../contexts/agent/visual-trait.js';
 import { ApiError } from '../errors.js';
 import { createProviderBundle } from '../providers/registry.js';
 import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
@@ -90,6 +100,8 @@ export function registerAppearanceVariantRoutes(
   app.get('/assets/:id/appearance-variants', async (request) => {
     const { id } = assetParams.parse(request.params);
     const asset = await characterAssetForMember(db, id, request.user.sub);
+    await ensureDefaultAppearanceVariant(db, asset);
+    await ensureCharacterSheetVariants(db, asset.id);
     const variants = await db.assetAppearanceVariant.findMany({
       where: { assetId: asset.id, deletedAt: null },
       orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
@@ -138,8 +150,12 @@ export function registerAppearanceVariantRoutes(
     const { id } = assetParams.parse(request.params);
     const asset = await characterAssetForMember(db, id, request.user.sub, true);
     const body = appearanceVariantCreateSchema.parse(request.body ?? {});
-    if (body.key === DEFAULT_APPEARANCE_VARIANT_KEY) {
-      throw new ApiError(409, 'DEFAULT_VARIANT_EXISTS', '默认形象已自动创建，请编辑现有项');
+    if (body.key === DEFAULT_APPEARANCE_VARIANT_KEY || isCharacterSheetVariantKey(body.key)) {
+      throw new ApiError(
+        409,
+        'RESERVED_VARIANT_KEY',
+        '默认形象与参考图槽位（正/侧/后/面部）已预留，请编辑现有项或使用其他键名',
+      );
     }
     const order = body.order ?? (await nextAppearanceVariantOrder(db, asset.id));
     try {
@@ -167,6 +183,154 @@ export function registerAppearanceVariantRoutes(
       }
       throw error;
     }
+  });
+
+  // Must register before /:key routes so these paths are not captured as keys.
+  app.post('/assets/:id/appearance-variants/draft-sheet-prompt', async (request) => {
+    const { id } = assetParams.parse(request.params);
+    const asset = await characterAssetForMember(db, id, request.user.sub, true);
+    await ensureDefaultAppearanceVariant(db, asset);
+    await ensureCharacterSheetVariants(db, asset.id);
+    const sheet = CHARACTER_SHEET_VARIANTS[0];
+    const variant = await variantForAsset(db, asset.id, CHARACTER_SHEET_TURNAROUND_KEY);
+    const providers = instrumentProviderBundle(
+      db,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+    const appearance = appearanceFromAsset(asset.appearance);
+    const appearanceBits = Object.values(appearance)
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .join(', ');
+
+    const traits = await withUsageContext({ projectId: asset.projectId, taskType: 'llm' }, () =>
+      enrichVisualAssetTraits(providers.llm, providers.llmModel, randomUUID(), {
+        asset_type: 'character',
+        asset_name: asset.name,
+        variant_key: CHARACTER_SHEET_TURNAROUND_KEY,
+        purpose: 'character_sheet',
+        scene_title: 'character reference sheet',
+        existing_description: asset.description,
+        appearance_bits: appearanceBits,
+      }),
+    );
+
+    const updated = await db.assetAppearanceVariant.update({
+      where: { id: variant.id },
+      data: { description: traits.generation_prompt, state: 'draft' },
+    });
+    await db.asset.update({
+      where: { id: asset.id },
+      data: {
+        data: JSON.parse(
+          JSON.stringify(
+            mergeVisualPromptIntoAssetData(
+              asset.data,
+              CHARACTER_SHEET_TURNAROUND_KEY,
+              traits.generation_prompt,
+              traits.appearance_summary,
+            ),
+          ),
+        ) as Prisma.InputJsonValue,
+      },
+    });
+
+    return {
+      asset_id: asset.id,
+      key: sheet.key,
+      title: sheet.title,
+      generation_prompt: traits.generation_prompt,
+      appearance_summary: traits.appearance_summary,
+      description: traits.description,
+      variant: updated,
+      provider: providers.selection.llm,
+      model: providers.llmModel,
+      note: '仅起草提示词，未调用生图。审核后请「按提示词生成设定表」。',
+    };
+  });
+
+  app.post('/assets/:id/appearance-variants/generate-sheet', async (request, reply) => {
+    const { id } = assetParams.parse(request.params);
+    const asset = await characterAssetForMember(db, id, request.user.sub, true);
+    await ensureDefaultAppearanceVariant(db, asset);
+    await ensureCharacterSheetVariants(db, asset.id);
+    const body = generateBody.parse(request.body ?? {});
+    const sheet = CHARACTER_SHEET_VARIANTS[0];
+    const variant = await variantForAsset(db, asset.id, CHARACTER_SHEET_TURNAROUND_KEY);
+    const providers = instrumentProviderBundle(
+      db,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+    const appearance = appearanceFromAsset(asset.appearance);
+    const appearanceBits = Object.values(appearance)
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .join(', ');
+
+    const prompt =
+      body.prompt?.trim() ||
+      variant.description?.trim() ||
+      [asset.name, sheet.title, sheet.prompt_clause, appearanceBits, asset.description]
+        .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+        .join(', ');
+
+    const item = await withUsageContext(
+      { projectId: asset.projectId, taskType: 'image_generate' },
+      () =>
+        generateAppearanceVariantImage({
+          db,
+          assetId: asset.id,
+          variantKey: sheet.key,
+          image: providers.image,
+          imageModel: providers.imageModel,
+          imageI2iModel: providers.imageI2iModel,
+          prompt,
+          requestId: randomUUID(),
+          count: body.count ?? 1,
+          allowFallback: false,
+        }),
+    );
+
+    const primaryMediaId = item.medias[0]?.id;
+    // Persist the prompt used for review / regeneration; promote first candidate to cover.
+    await db.assetAppearanceVariant.update({
+      where: { id: item.variant.id },
+      data: {
+        description: prompt,
+        ...(primaryMediaId
+          ? {
+              anchorMediaId: primaryMediaId,
+              state: 'review' as const,
+            }
+          : {}),
+      },
+    });
+    if (primaryMediaId) {
+      await db.asset.update({
+        where: { id: asset.id },
+        data: {
+          state: 'active',
+          referenceImages: [
+            primaryMediaId,
+            ...asset.referenceImages.filter((id) => id !== primaryMediaId),
+          ],
+        },
+      });
+    }
+
+    return reply.status(201).send({
+      asset_id: asset.id,
+      sheets: [
+        {
+          key: sheet.key,
+          title: sheet.title,
+          variant: item.variant,
+          medias: item.medias,
+        },
+      ],
+      generation_prompt: prompt,
+      provider: providers.selection.image,
+      model: providers.imageModel,
+      note: '单图多视角设定表（一次 T2I），已设为封面。',
+    });
   });
 
   app.get('/assets/:id/appearance-variants/:key', async (request) => {
@@ -226,6 +390,9 @@ export function registerAppearanceVariantRoutes(
     if (variant.key === DEFAULT_APPEARANCE_VARIANT_KEY) {
       throw new ApiError(400, 'DEFAULT_VARIANT_REQUIRED', '默认形象不可删除');
     }
+    if (isCharacterSheetVariantKey(variant.key)) {
+      throw new ApiError(400, 'SHEET_VARIANT_REQUIRED', '参考图槽位不可删除，可删除其中的候选图');
+    }
     await db.assetAppearanceVariant.update({
       where: { id: variant.id },
       data: { deletedAt: new Date() },
@@ -239,7 +406,7 @@ export function registerAppearanceVariantRoutes(
     const variant = await variantForAsset(db, asset.id, key);
     const body = generateBody.parse(request.body ?? {});
     const appearance = resolveAppearanceWithVariant(
-      appearanceFromAsset(asset.appearance),
+      appearanceFromAsset(asset.appearance) as CharacterAppearance,
       variant,
     );
     const appearanceBits = Object.values(appearance)
@@ -271,6 +438,7 @@ export function registerAppearanceVariantRoutes(
           variantKey: variant.key,
           image: providers.image,
           imageModel: providers.imageModel,
+          imageI2iModel: providers.imageI2iModel,
           prompt,
           requestId: randomUUID(),
           count: body.count,
@@ -307,6 +475,22 @@ export function registerAppearanceVariantRoutes(
     }
     const media = await db.media.findFirst({ where: { id: mediaId, deletedAt: null } });
     if (!media) throw new ApiError(404, 'MEDIA_NOT_FOUND', '候选图片不存在');
+    const generationMeta =
+      media.generationMetadata &&
+      typeof media.generationMetadata === 'object' &&
+      !Array.isArray(media.generationMetadata)
+        ? (media.generationMetadata as Record<string, unknown>)
+        : {};
+    if (
+      typeof generationMeta.generation_error === 'string' ||
+      generationMeta.provider === 'mock-fallback'
+    ) {
+      throw new ApiError(
+        409,
+        'FAILED_PLACEHOLDER_NOT_APPROVABLE',
+        '生图失败占位图不可批准，请修改提示词后重新生成',
+      );
+    }
 
     const [approved] = await db.$transaction([
       db.assetAppearanceVariant.update({
@@ -327,4 +511,24 @@ export function registerAppearanceVariantRoutes(
     ]);
     return approved;
   });
+
+  app.delete(
+    '/assets/:id/appearance-variants/:key/candidates/:mediaId',
+    async (request, reply) => {
+      const params = z
+        .object({
+          id: z.string().uuid(),
+          key: appearanceVariantKeySchema,
+          mediaId: z.string().uuid(),
+        })
+        .parse(request.params);
+      const asset = await characterAssetForMember(db, params.id, request.user.sub, true);
+      await removeAppearanceVariantCandidate(db, {
+        assetId: asset.id,
+        variantKey: params.key,
+        mediaId: params.mediaId,
+      });
+      return reply.status(204).send();
+    },
+  );
 }

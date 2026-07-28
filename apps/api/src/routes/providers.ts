@@ -20,7 +20,9 @@ const selectionBody = z
       .object({
         llm: z.string().trim().min(1).max(200).optional(),
         image: z.string().trim().min(1).max(200).optional(),
+        image_i2i: z.string().trim().min(1).max(200).optional(),
         video: z.string().trim().min(1).max(200).optional(),
+        video_i2v: z.string().trim().min(1).max(200).optional(),
         audio: z.string().trim().min(1).max(200).optional(),
       })
       .strict()
@@ -75,7 +77,9 @@ export function registerProviderRoutes(app: FastifyInstance): void {
         ...runtimeModels,
         ...(body.models.llm ? { llm: body.models.llm } : {}),
         ...(body.models.image ? { image: body.models.image } : {}),
+        ...(body.models.image_i2i ? { image_i2i: body.models.image_i2i } : {}),
         ...(body.models.video ? { video: body.models.video } : {}),
+        ...(body.models.video_i2v ? { video_i2v: body.models.video_i2v } : {}),
         ...(body.models.audio ? { audio: body.models.audio } : {}),
       };
     }

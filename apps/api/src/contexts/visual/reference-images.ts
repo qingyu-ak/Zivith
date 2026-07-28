@@ -55,8 +55,34 @@ export async function resolveVisualPrepReferenceImages(
   if (asset.type === 'character') {
     const variants = await db.assetAppearanceVariant.findMany({
       where: { assetId: asset.id, deletedAt: null },
-      select: { key: true, anchorMediaId: true, state: true, deletedAt: true },
+      select: { key: true, anchorMediaId: true, state: true, deletedAt: true, order: true },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
     });
+    // Prefer turnaround sheet, then legacy per-view slots for keyframe consistency.
+    const sheetKeys = [
+      'sheet_turnaround',
+      'sheet_front',
+      'sheet_face',
+      'sheet_side',
+      'sheet_back',
+    ] as const;
+    const sheetRefs: ImageReferenceImage[] = [];
+    for (const key of sheetKeys) {
+      const sheet = variants.find((item) => item.key === key && item.anchorMediaId);
+      if (!sheet?.anchorMediaId) continue;
+      const media = await mediaUrl(db, sheet.anchorMediaId);
+      if (!media) continue;
+      // Only https URLs are useful for SiliconFlow conditioning / video I2V.
+      if (!/^https?:\/\//i.test(media.url)) continue;
+      sheetRefs.push({
+        media_id: media.id,
+        label: `${asset.name}:${key}`,
+        role: 'character',
+        url: media.url,
+      });
+    }
+    if (sheetRefs.length > 0) return sheetRefs.slice(0, 4);
+
     const anchorId = resolveAppearanceVariantAnchor(
       variants.map((item) => ({
         key: item.key,
@@ -70,7 +96,7 @@ export async function resolveVisualPrepReferenceImages(
     );
     if (anchorId) {
       const media = await mediaUrl(db, String(anchorId));
-      if (media) {
+      if (media && /^https?:\/\//i.test(media.url)) {
         return [
           {
             media_id: media.id,
@@ -86,7 +112,7 @@ export async function resolveVisualPrepReferenceImages(
   const fallbackId = asset.referenceImages[0];
   if (!fallbackId) return [];
   const media = await mediaUrl(db, fallbackId);
-  if (!media) return [];
+  if (!media || !/^https?:\/\//i.test(media.url)) return [];
   return [
     {
       media_id: media.id,
@@ -112,13 +138,15 @@ export async function resolveAppearanceVariantReferenceImages(
   });
 
   const preferred =
-    variants.find((item) => item.key === DEFAULT_APPEARANCE_VARIANT_KEY) ??
+    variants.find((item) => item.key === 'sheet_turnaround' && item.key !== variantKey) ??
+    variants.find((item) => item.key === DEFAULT_APPEARANCE_VARIANT_KEY && item.key !== variantKey) ??
     variants.find((item) => item.key !== variantKey) ??
     variants[0];
 
   if (preferred?.anchorMediaId) {
     const media = await mediaUrl(db, preferred.anchorMediaId);
-    if (media) {
+    // SiliconFlow I2V/I2I need public http(s); skip data:/svg placeholders.
+    if (media && /^https?:\/\//i.test(media.url)) {
       return [
         {
           media_id: media.id,
@@ -133,7 +161,7 @@ export async function resolveAppearanceVariantReferenceImages(
   const fallbackId = asset.referenceImages[0];
   if (!fallbackId) return [];
   const media = await mediaUrl(db, fallbackId);
-  if (!media) return [];
+  if (!media || !/^https?:\/\//i.test(media.url)) return [];
   return [
     {
       media_id: media.id,

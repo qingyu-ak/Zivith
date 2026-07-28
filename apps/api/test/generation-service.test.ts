@@ -1,7 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@zivith/database';
-import { GenerationService } from '../src/contexts/generation/service.js';
+import {
+  GenerationService,
+  orderVisualMediaIdsForVideo,
+} from '../src/contexts/generation/service.js';
 import type { VideoGenerationAdapter } from '../src/ports/generation.js';
+
+describe('orderVisualMediaIdsForVideo', () => {
+  it('puts character keyframes before location for I2V', () => {
+    expect(
+      orderVisualMediaIdsForVideo(
+        [
+          { assetType: 'location', assetId: 'loc-1', approvedMediaId: 'media-loc' },
+          { assetType: 'character', assetId: 'char-b', approvedMediaId: 'media-b' },
+          { assetType: 'character', assetId: 'char-a', approvedMediaId: 'media-a' },
+        ],
+        ['char-a', 'char-b'],
+      ),
+    ).toEqual(['media-a', 'media-b', 'media-loc']);
+  });
+});
 
 function shot(requirementStatus: 'approved' | 'review' = 'approved') {
   return {

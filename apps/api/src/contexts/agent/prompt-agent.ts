@@ -114,24 +114,36 @@ export class PromptAgent implements Agent<PromptAgentInput, GeneratedPrompt> {
   }
 
   private constructPositive(input: PromptAgentInput): string {
+    const actionDescription =
+      typeof input.action?.description === 'string' ? input.action.description.trim() : '';
+    const compositionBackground =
+      typeof input.composition?.background === 'string'
+        ? input.composition.background.trim()
+        : '';
+    const sceneDescription = input.scene.description?.trim() ?? '';
+    // Avoid repeating the same narrative in Characters.action, Action, and Environment.
+    const environmentBits = [
+      input.scene.location_name,
+      input.scene.title,
+      sceneDescription &&
+      sceneDescription !== actionDescription &&
+      sceneDescription !== compositionBackground
+        ? sceneDescription
+        : null,
+      input.scene.time,
+      input.scene.weather,
+    ].filter(Boolean);
+
     const sections = [
       this.section('Cinematography', input.camera),
       this.section('Composition', input.composition),
       this.section('Lighting', input.lighting),
       this.section('Color', input.color),
       input.mood ? `Mood: ${input.mood}` : '',
-      this.characters(input.characters),
+      this.characters(input.characters, Boolean(actionDescription)),
       this.section('Action', input.action),
       this.section('Dialogue context', input.dialogue),
-      `Environment: ${[
-        input.scene.location_name,
-        input.scene.title,
-        input.scene.description,
-        input.scene.time,
-        input.scene.weather,
-      ]
-        .filter(Boolean)
-        .join(', ')}`,
+      environmentBits.length > 0 ? `Environment: ${environmentBits.join(', ')}` : '',
       this.section('Style', input.style),
     ];
     return sections.filter(Boolean).join('. ');
@@ -146,14 +158,17 @@ export class PromptAgent implements Agent<PromptAgentInput, GeneratedPrompt> {
     return content ? `${label}: ${content}` : '';
   }
 
-  private characters(characters: PromptAgentCharacter[]): string {
+  private characters(
+    characters: PromptAgentCharacter[],
+    omitActionWhenShotActionExists: boolean,
+  ): string {
     if (characters.length === 0) return '';
     return `Characters: ${characters
       .map((character) =>
         [
           character.name,
           character.presence,
-          character.action,
+          omitActionWhenShotActionExists ? null : character.action,
           character.emotion,
           character.pose,
           character.expression,

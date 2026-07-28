@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, type PrismaClient } from '@zivith/database';
 import {
+  CHARACTER_SHEET_TURNAROUND_KEY,
   characterSchema,
   locationSchema,
   mergeInherited,
@@ -10,9 +11,18 @@ import {
 } from '@zivith/domain';
 import { z } from 'zod';
 import { ensureDefaultAppearanceVariant } from '../contexts/visual/appearance-variants.js';
+import {
+  draftLocationSheetPrompt,
+  generateLocationSheetImage,
+  readLocationSheetPrompt,
+} from '../contexts/visual/location-sheet.js';
+import { createProviderBundle } from '../providers/registry.js';
+import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
+import { withUsageContext } from '../contexts/usage/context.js';
 import { ApiError } from '../errors.js';
 import { authenticate } from './auth.js';
 import type { StoragePort } from '../ports/index.js';
+import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 
 /** Prefer remote/data URLs stored on Media; only sign object storage for local keys. */
 async function resolveMediaAccessUrl(
@@ -183,6 +193,68 @@ export function assetDto<T extends Record<string, unknown>>(asset: T): Record<st
     ...base,
     asset_type: assetType,
     type: assetType === 'location' && typeof data.type === 'string' ? data.type : assetType,
+  };
+}
+
+async function mediaRefDto(
+  db: PrismaClient,
+  mediaId: string,
+  storage?: StoragePort,
+): Promise<{ id: string; url: string; access_url: string; thumbnail_url: string } | null> {
+  const media = await db.media.findFirst({ where: { id: mediaId, deletedAt: null } });
+  if (!media) return null;
+  const accessUrl = await resolveMediaAccessUrl(media.url, media.storageKey, storage);
+  return {
+    id: media.id,
+    url: media.url,
+    access_url: accessUrl,
+    thumbnail_url: accessUrl,
+  };
+}
+
+/** Resolve media ids → URLs and prefer sheet/cover for list thumbnails. */
+async function enrichAssetForClient(
+  db: PrismaClient,
+  asset: {
+    id: string;
+    type: string;
+    referenceImages: string[];
+    data: unknown;
+    [key: string]: unknown;
+  },
+  storage?: StoragePort,
+): Promise<Record<string, unknown>> {
+  const dto = assetDto(asset);
+  let coverId: string | undefined = asset.referenceImages[0];
+  if (asset.type === 'character') {
+    const sheet = await db.assetAppearanceVariant.findFirst({
+      where: { assetId: asset.id, key: CHARACTER_SHEET_TURNAROUND_KEY, deletedAt: null },
+      select: { anchorMediaId: true, candidateMediaIds: true },
+    });
+    coverId = sheet?.anchorMediaId ?? sheet?.candidateMediaIds[0] ?? coverId;
+  }
+  const orderedIds = [
+    ...(coverId ? [coverId] : []),
+    ...asset.referenceImages.filter((id) => id !== coverId),
+  ];
+  const referenceImages: Array<{
+    id: string;
+    url: string;
+    access_url: string;
+    thumbnail_url: string;
+  }> = [];
+  for (const id of orderedIds) {
+    const media = await mediaRefDto(db, id, storage);
+    if (media) referenceImages.push(media);
+  }
+  const coverImage = coverId ? ((await mediaRefDto(db, coverId, storage)) ?? referenceImages[0] ?? null) : (referenceImages[0] ?? null);
+  const locationSheetPrompt =
+    asset.type === 'location' ? readLocationSheetPrompt(asset.data) : undefined;
+  return {
+    ...dto,
+    referenceImages,
+    coverImage,
+    ...(locationSheetPrompt ? { locationSheetPrompt } : {}),
   };
 }
 
@@ -934,7 +1006,7 @@ export function registerResourceRoutes(
       }),
       orderBy: { updatedAt: 'desc' },
     });
-    return assets.map(assetDto);
+    return Promise.all(assets.map((asset) => enrichAssetForClient(db, asset, storage)));
   });
   app.post('/projects/:pid/assets', async (request, reply) => {
     const { pid } = projectParams.parse(request.params);
@@ -985,10 +1057,92 @@ export function registerResourceRoutes(
     const asset = await db.asset.findFirst({ where: { id, deletedAt: null } });
     if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '资产不存在');
     await requireMember(db, request.user.sub, asset.projectId);
+    const enriched = await enrichAssetForClient(db, asset, storage);
     if (asset.type === 'character' && asset.baseCharacterId) {
-      return assetDto({ ...asset, resolved_appearance: await resolveAppearance(db, asset) });
+      return {
+        ...enriched,
+        resolved_appearance: await resolveAppearance(db, asset),
+      };
     }
-    return assetDto(asset);
+    return enriched;
+  });
+
+  const sheetBody = z
+    .object({
+      prompt: z.string().trim().min(1).max(5_000).optional(),
+      count: z.number().int().min(1).max(4).optional().default(1),
+    })
+    .strict();
+
+  app.post('/assets/:id/location-sheet/draft-prompt', async (request) => {
+    const { id } = idParams.parse(request.params);
+    const asset = await db.asset.findFirst({ where: { id, deletedAt: null, type: 'location' } });
+    if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '地点资产不存在');
+    await requireMember(db, request.user.sub, asset.projectId, true);
+    const providers = instrumentProviderBundle(
+      db,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+    const traits = await withUsageContext({ projectId: asset.projectId, taskType: 'llm' }, () =>
+      draftLocationSheetPrompt({
+        db,
+        assetId: asset.id,
+        llm: providers.llm,
+        llmModel: providers.llmModel,
+        requestId: randomUUID(),
+      }),
+    );
+    return {
+      asset_id: asset.id,
+      generation_prompt: traits.generation_prompt,
+      appearance_summary: traits.appearance_summary,
+      description: traits.description,
+      provider: providers.selection.llm,
+      model: providers.llmModel,
+      note: '仅起草地点设定表提示词，未调用生图。',
+    };
+  });
+
+  app.post('/assets/:id/location-sheet/generate', async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const asset = await db.asset.findFirst({ where: { id, deletedAt: null, type: 'location' } });
+    if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '地点资产不存在');
+    await requireMember(db, request.user.sub, asset.projectId, true);
+    const body = sheetBody.parse(request.body ?? {});
+    const providers = instrumentProviderBundle(
+      db,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+    const result = await withUsageContext(
+      { projectId: asset.projectId, taskType: 'image_generate' },
+      () =>
+        generateLocationSheetImage({
+          db,
+          assetId: asset.id,
+          image: providers.image,
+          imageModel: providers.imageModel,
+          requestId: randomUUID(),
+          count: body.count,
+          ...(body.prompt ? { prompt: body.prompt } : {}),
+        }),
+    );
+    return reply.status(201).send({
+      asset_id: asset.id,
+      media: {
+        id: result.media.id,
+        url: result.media.url,
+        access_url: result.media.url,
+      },
+      medias: result.medias.map((item) => ({
+        id: item.id,
+        url: item.url,
+        access_url: item.url,
+      })),
+      generation_prompt: result.generation_prompt,
+      provider: providers.selection.image,
+      model: providers.imageModel,
+      note: '地点多角度设定表（一次 T2I），已设为封面。',
+    });
   });
   app.patch('/assets/:id', async (request) => {
     const { id } = idParams.parse(request.params);

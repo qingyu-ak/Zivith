@@ -10,6 +10,8 @@ const traitSchema = z.object({
 
 export type VisualTraitDraft = z.infer<typeof traitSchema>;
 
+export type VisualTraitPurpose = 'keyframe' | 'character_sheet' | 'location_sheet';
+
 export interface EnrichVisualAssetInput {
   asset_type: 'character' | 'location';
   asset_name: string;
@@ -20,31 +22,79 @@ export interface EnrichVisualAssetInput {
   story_synopsis?: string | undefined;
   story_screenplay_excerpt?: string | undefined;
   existing_description?: string | undefined;
+  appearance_bits?: string | undefined;
+  /** character_sheet / location_sheet → multi-view single image; else scene keyframe */
+  purpose?: VisualTraitPurpose;
+}
+
+function resolvePurpose(input: EnrichVisualAssetInput): VisualTraitPurpose {
+  if (input.purpose) return input.purpose;
+  if (input.variant_key === 'sheet_turnaround' || input.variant_key.startsWith('sheet_')) {
+    return 'character_sheet';
+  }
+  if (input.asset_type === 'location' && input.variant_key === 'default') {
+    return 'location_sheet';
+  }
+  return 'keyframe';
 }
 
 /** Build a deterministic fallback when LLM is unavailable or fails. */
 export function buildFallbackVisualTrait(input: EnrichVisualAssetInput): VisualTraitDraft {
   const kind = input.asset_type === 'character' ? '角色' : '地点';
+  const purpose = resolvePurpose(input);
   const description =
     input.existing_description?.trim() ||
     `${kind}“${input.asset_name}”，出现在场景“${input.scene_title}”。`;
   const appearance_summary =
-    input.asset_type === 'character'
+    input.appearance_bits?.trim() ||
+    (input.asset_type === 'character'
       ? `实体角色 ${input.asset_name}，与故事气质一致，服装与材质清晰可读`
-      : `场景地点 ${input.asset_name}，空间层次清楚，光影符合变体 ${input.variant_key}`;
-  const generation_prompt = [
-    input.asset_type === 'character'
-      ? 'character key visual portrait'
-      : 'environment establishing key visual',
-    input.asset_name,
-    appearance_summary,
-    `scene: ${input.scene_title}`,
-    `variant: ${input.variant_key}`,
-    input.story_title ? `story: ${input.story_title}` : '',
-    'cinematic, high detail, consistent design, film still',
-  ]
-    .filter(Boolean)
-    .join(', ');
+      : `场景地点 ${input.asset_name}，空间层次清楚，光影符合变体 ${input.variant_key}`);
+
+  let generation_prompt: string;
+  if (purpose === 'character_sheet') {
+    generation_prompt = [
+      'character model sheet on ONE image, strict 2x2 four-panel layout',
+      'panel 1 full-body front view',
+      'panel 2 full-body side profile',
+      'panel 3 full-body back view',
+      'panel 4 large head-and-shoulders face close-up portrait panel with detailed facial features, eyes nose mouth expression, filling the whole panel not a tiny crop',
+      'identical identity outfit and colors across all four panels',
+      input.asset_name,
+      appearance_summary,
+      description.slice(0, 400),
+      input.story_title ? `story: ${input.story_title}` : '',
+      'clean white background, even studio lighting, consistent proportions, no text, no labels, no watermark',
+    ]
+      .filter(Boolean)
+      .join(', ');
+  } else if (purpose === 'location_sheet') {
+    generation_prompt = [
+      'single environment design sheet on ONE image',
+      'main establishing view plus complementary angles of the same place',
+      input.asset_name,
+      appearance_summary,
+      description.slice(0, 400),
+      `scene: ${input.scene_title}`,
+      'consistent architecture and materials, cinematic lighting, no text, no watermark',
+    ]
+      .filter(Boolean)
+      .join(', ');
+  } else {
+    generation_prompt = [
+      input.asset_type === 'character'
+        ? 'character key visual portrait'
+        : 'environment establishing key visual',
+      input.asset_name,
+      appearance_summary,
+      `scene: ${input.scene_title}`,
+      `variant: ${input.variant_key}`,
+      input.story_title ? `story: ${input.story_title}` : '',
+      'cinematic, high detail, consistent design, film still',
+    ]
+      .filter(Boolean)
+      .join(', ');
+  }
   return { description, appearance_summary, generation_prompt };
 }
 
@@ -60,7 +110,7 @@ export async function enrichVisualAssetTraits(
         request_id: requestId,
         model,
         system_prompt: loadAgentSystemPrompt('visual_trait', 'en', { knowledge_context: '' }),
-        user_prompt: JSON.stringify(input),
+        user_prompt: JSON.stringify({ ...input, purpose: resolvePurpose(input) }),
         temperature: 0.5,
         max_tokens: 1_200,
       },

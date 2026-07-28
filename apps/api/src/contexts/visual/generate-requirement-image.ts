@@ -10,9 +10,9 @@ import {
 import {
   referenceInjectionMetadata,
   resolveVisualPrepReferenceImages,
-  toImageReferencePayload,
   withReferencePromptClauses,
 } from './reference-images.js';
+import { generateImageWithI2iFallback } from './generate-with-fallback.js';
 
 function svgPlaceholderDataUrl(label: string, size = 1024): string {
   const text = label.slice(0, 18).replace(/[<>&'"]/g, '');
@@ -33,7 +33,10 @@ export interface GenerateRequirementImageInput {
   db: PrismaClient;
   requirementId: string;
   image: ImageGenerationAdapter;
+  /** Text-to-image（无参考图） */
   imageModel: string;
+  /** Text+image-to-image（有参考图时优先） */
+  imageI2iModel?: string;
   prompt: string;
   requestId?: string;
   /** Candidate count 1–4 (default 1). */
@@ -80,17 +83,21 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
     let isMock = provider === 'mock';
     let generationError: string | undefined;
     let adapterMeta: Record<string, string | number | boolean> = {};
+    let usedModel = input.imageModel;
     try {
-      const generated = await input.image.generate({
-        request_id: count === 1 ? baseRequestId : `${baseRequestId}:${index + 1}`,
-        model: input.imageModel,
+      const generated = await generateImageWithI2iFallback({
+        image: input.image,
+        requestId: count === 1 ? baseRequestId : `${baseRequestId}:${index + 1}`,
         prompt,
         count,
-        ...(refs.length ? { reference_images: toImageReferencePayload(refs) } : {}),
+        imageModel: input.imageModel,
+        refs,
+        ...(input.imageI2iModel ? { imageI2iModel: input.imageI2iModel } : {}),
       });
       if (generated.image_url) imageUrl = generated.image_url;
       isMock = Boolean(generated.metadata.is_mock);
       adapterMeta = generated.metadata;
+      usedModel = generated.used_model;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!allowFallback) {
@@ -119,7 +126,7 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
         generationMetadata: json({
           is_mock: isMock,
           provider,
-          model: input.imageModel,
+          model: usedModel,
           generation_prompt: prompt,
           requirement_id: requirement.id,
           candidate_index: index + 1,

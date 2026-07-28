@@ -4,11 +4,11 @@
 >
 > Status: Active
 >
-> Synced: 2026-07-23
+> Synced: 2026-07-28
 >
-> Priority policy: **V0.4 plan first** — Tracks A–D are closed or later-scoped; active work follows [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) (W2 → W1 → W3 → W4 → W5 → W6 → W7)
+> Priority policy: **Provider stability polish (Track G)** after V0.4 Track F; then Phase 3
 >
-> Related: [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](Technical-Architecture.md)
+> Related: [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](Technical-Architecture.md), [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md)
 
 ---
 
@@ -109,7 +109,7 @@ Default linear Story→Video **stays**. No node canvas; no gate time-travel (D4)
 
 ---
 
-## Track F — V0.4 Modification Plan (active)
+## Track F — V0.4 Modification Plan (completed first pass)
 
 Source of truth: [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) (from the [waoowaoo architecture review](architecture/review/Zivith-Architecture-Review-Based-on-waoowaoo.md) A1–A7 + ADR-0006). Each row is one independently mergeable workstream with acceptance criteria in the plan.
 
@@ -124,6 +124,60 @@ Source of truth: [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) (from th
 | F7 | W7 Usage records (first pass of C8; freeze/limits second pass) | Review A6 / C8 | P3 | Done 2026-07-23 |
 
 **Exit criteria for Track F:** V0.4 plan §10 definition of done — all W1–W6 acceptance items pass, W7 first pass lands, linear newcomer path regression-free, docs synced.
+
+---
+
+## Track G — Real-provider stability polish (active)
+
+Goal: make SiliconFlow / DeepSeek generation reliable for daily operator use before Phase 3 productionizing.
+
+| ID | Task | Notes | Status |
+|----|------|-------|--------|
+| G1 | Canonicalize SiliconFlow model IDs (image + video) | Case-sensitive API; Qwen / Wan2.2 | Done 2026-07-24 |
+| G2 | Sequential video enqueue + worker concurrency default 1 | Avoid provider burst / 429 | Done 2026-07-24 |
+| G3 | I2V prefers character keyframe over location | `orderVisualMediaIdsForVideo` | Done 2026-07-24 |
+| G4 | Block approving failed placeholder media | Visual + appearance approve | Done 2026-07-24 |
+| G5 | UI: rerun controls inside per-card prompt areas | WorkflowPanel | Done 2026-07-24 |
+| G6 | Character **turnaround** sheet (single 2×2 image) + candidate delete | Replaces four separate front/side/back/face gens; legacy keys kept | Done 2026-07-24; UX polish 2026-07-28 |
+| G7 | Manual E2E: Story→Video with real SiliconFlow keys | Operator checklist after API restart | Pending |
+| G8 | Per-scene review (like story segments) | Scene.state + WorkflowPanel | Done 2026-07-24 |
+| G9 | Prompt-draft visual prep + deferred keyframe/video gen | Sheets/prompts drafted; operator generates one-by-one | Done 2026-07-24 |
+| G10 | Prompt constructPositive dedupe | Action/Environment duplication | Done 2026-07-24 |
+| G11 | Four model slots: T2I / I2I / T2V / I2V | Env + Provider panel; pick by refs | Done 2026-07-24 |
+| G12 | Face close-up enforced in sheet prompt template | 2×2 + dedicated face panel; auto-append clause | Done 2026-07-24 |
+| G13 | Asset list → detail page (no side panel) | `/projects/:pid/assets/:assetId` | Done 2026-07-24 |
+| G14 | Resolve `cover_image` / `reference_images` to Media URLs | Fix broken list covers (bare media IDs) | Done 2026-07-24 |
+| G15 | Location design sheet draft + generate APIs/UI | `POST …/location-sheet/*` | Done 2026-07-24 |
+| G16 | I2I → T2I fallback on SiliconFlow 4xx/5xx (50507) | Scene keyframes with sheet refs | Done 2026-07-24 |
+| G17 | Docs sync (Asset-Model, Next-Tasks, Tech Arch, agents) | This pass | Done 2026-07-28 |
+
+**Exit criteria for Track G:** real image + video succeed with documented model IDs; failed placeholders cannot pass review; unit tests for model canonicalize + I2V media order green; character/location sheets generate and show as list covers.
+
+**Operator checklist (G7):**
+
+1. Restart API after `.env` / domain rebuild (`pnpm --filter @zivith/domain build` if sheet constants changed)
+2. Provider panel: confirm T2I=`Qwen/Qwen-Image`, I2I=`Qwen/Qwen-Image-Edit` (or Kolors), T2V/I2V Wan2.2
+3. Visual Prep → asset detail: draft + generate character turnaround → list cover visible
+4. Location detail: draft + generate location sheet → list cover visible
+5. Workflow visual review: generate character/location keyframes one-by-one; I2I may fall back to T2I
+6. Approve visuals → shots → video with http(s) refs for I2V
+
+---
+
+## Track H — Entity history foundation (planned; design complete)
+
+Goal: add queryable creative history and safe project-scoped alternative directions without replacing current domain tables or adopting full Event Sourcing. Source: [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md).
+
+| ID | Task | Notes | Status |
+|----|------|-------|--------|
+| H0 | Architecture, domain, API, and migration contract | Includes failure, rollback, and two E2E examples | Done 2026-07-28 |
+| H1 | Canonical Entity snapshot/event schemas | Start with Shot/PromptVersion/Output and AppearanceVariant/VisualRequirement | Planned |
+| H2 | History tables, Project `main` Track, and baseline backfill | No runtime read-path switch | Planned |
+| H3 | Shadow write then transactional dual write | Per-Entity feature flags and hash consistency checks | Planned |
+| H4 | Read-only Timeline/revision APIs + optimistic concurrency | Cursor pagination, idempotency, 409 conflicts | Planned |
+| H5 | AppearanceVariant/Shot CreativeTrack pilot | Compare and explicit merge to `main`; stale propagation required | Planned |
+
+**Exit criteria for Track H:** all acceptance conditions in the architecture document pass; branch writes cannot mutate `main`; merge conflict and rollback tests are green; existing resource APIs remain compatible during migration.
 
 ---
 
@@ -145,6 +199,10 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
          E0 RFC accepted (2026-07-23) + ADR-0006
               ↓
          Track F (V0.4 plan): F1 W2 → F2 W1 → F3 W3 → F4 W4 → F5 W5 → F6 W6 → F7 W7
+              ↓
+         Track G (provider stability polish) → then Phase 3
+              ↓
+         Track H implementation only after explicit scheduling; H0 design is complete
 ```
 
 ---
@@ -160,6 +218,7 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
 - **Node-based workflow canvas as primary UX** — Constitution D3; see Looser Creative Flow RFC non-goals
 - **Story segment UI without persisted `StorySegment` rows** — ADR-0006 compliance rule (the ADR itself is resolved)
 - **Top-level Chapter entity / cross-project global asset library / lip-sync / timeline editor** — V0.4 plan §9 explicit non-goals
+- **Video/audio nonlinear timeline editor remains out of scope.** The proposed Project Timeline is an append-only creative-history view and is not an NLE timeline.
 
 ---
 

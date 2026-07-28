@@ -90,15 +90,21 @@ character:
     distinguishing_features: "small mole below left ear"
   personality: "内向、敏感，对家族历史一无所知，从不安逐渐走向恐惧"
   default_outfit: "白色T恤、牛仔裤、深色外套"
-  reference_images: []             # 需要 AI 生成或上传角色设定图
+  reference_images: []             # 列表 API 会解析为带 url 的 Media；封面优先 sheet_turnaround
   tags: ["protagonist", "female", "young_adult", "horror"]
   # V0.4 W2: every Character auto-has a default appearance variant;
   # additional narrative states are first-class variants (not separate Characters).
+  # Track G: reserved sheet_turnaround = one 2×2 multi-view design sheet (T2I after prompt review).
   appearance_variants:
     - key: default
       title: 默认形象
       state: approved
       anchor_media_id: null          # filled after asset-library or Visual Prep approve
+    - key: sheet_turnaround
+      title: 角色设定表（多视角）
+      state: draft
+      description: null              # LLM-drafted T2I prompt; generate on character detail page
+      anchor_media_id: null
     - key: night_fear
       title: 夜半惊惧
       change_reason: 阁楼异响后

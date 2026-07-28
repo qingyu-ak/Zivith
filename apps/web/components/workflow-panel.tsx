@@ -159,20 +159,20 @@ function canApproveArtifacts(
     if (segments.length === 0) return true;
     return segments.every((segment) => segment.state === 'approved');
   }
-  if (review === 'scene_review') return scenes.length > 0;
+  if (review === 'scene_review') {
+    if (scenes.length === 0) return false;
+    return scenes.every((scene) => scene.state === 'approved');
+  }
   if (review === 'shot_review') return shots.length > 0;
   if (review === 'visual_assets_review') {
     if (visualItems.length === 0) return false;
     return visualItems.every(
       (item) =>
         !item.requirement.required ||
-        item.requirement.status === 'approved' ||
-        Boolean(
-          item.media &&
-          item.requirement.candidate_media_ids[0] &&
+        (item.requirement.status === 'approved' &&
+          Boolean(item.requirement.approved_media_id) &&
           !item.issue &&
-          !isFailedPlaceholder(item.media),
-        ),
+          !isFailedPlaceholder(item.media)),
     );
   }
   if (review === 'prompt_review') {
@@ -223,7 +223,7 @@ export function WorkflowPanel({
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [recomputingKey, setRecomputingKey] = useState<string | null>(null);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Record<string, string>>({});
-  const [candidateCount, setCandidateCount] = useState(2);
+  const [candidateCount, setCandidateCount] = useState(1);
 
   const clearArtifacts = useCallback(() => {
     setStory(null);
@@ -408,7 +408,7 @@ export function WorkflowPanel({
                 requirement,
                 sceneTitle,
                 candidates: [],
-                issue: '必需视觉需求缺少候选图片，无法通过审核',
+                // Deferred generation: operator clicks「按提示词生成」per card.
               } satisfies VisualReviewItem;
             }
             if (candidateIds.length === 0) {
@@ -545,6 +545,7 @@ export function WorkflowPanel({
       const output = stepOutput(run, 'video');
       const shotIds = stringArray(output.shot_ids);
       const outputIds = stringArray(output.output_ids);
+      const deferred = output.deferred_generation === true || outputIds.length === 0;
       if (shotIds.length === 0) {
         throw new Error('视频材料缺失：工作流未记录镜头列表');
       }
@@ -560,28 +561,39 @@ export function WorkflowPanel({
             outputs.find((item) => item.id === expectedOutputId) ??
             outputs.find((item) => outputIdSet.has(item.id)) ??
             outputs.find((item) => item.is_active) ??
+            outputs.find((item) => item.status === 'completed' && item.video_url) ??
             outputs[0];
           if (!matched) {
             return {
               shot,
-              issue: `缺少工作流产出的视频 ${expectedOutputId?.slice(0, 8) ?? ''}…`,
+              issue: deferred ? undefined : `缺少工作流产出的视频`,
             } satisfies VideoReviewItem;
           }
           if (!matched.video_url) {
             return {
               shot,
               output: matched,
-              issue: '视频输出缺少可播放地址',
+              issue:
+                matched.status === 'failed'
+                  ? '视频生成失败，请修改提示词后重试'
+                  : matched.status === 'queued' || matched.status === 'generating'
+                    ? '视频生成中，请稍候刷新'
+                    : '视频输出缺少可播放地址',
             } satisfies VideoReviewItem;
           }
           return { shot, output: matched } satisfies VideoReviewItem;
         }),
       );
       const blocked = items.filter((item) => item.issue);
+      const waiting = items.filter((item) => !item.output?.video_url && !item.issue);
       if (active) {
         setVideoItems(items);
         if (blocked.length > 0) {
           setArtifactWarning(`${blocked.length} 条视频材料异常，请核对后再继续`);
+        } else if (waiting.length > 0) {
+          setArtifactWarning(
+            `还有 ${waiting.length} 条镜头未生成视频。请逐条点击「生成本镜头视频」（按条计费）。`,
+          );
         }
       }
     };
@@ -751,6 +763,34 @@ export function WorkflowPanel({
     }
   }
 
+  async function submitSceneReview(scene: SceneDTO, action: 'approve') {
+    if (!run?.state.awaiting_review || run.state.awaiting_review !== 'scene_review') return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await api<WorkflowRunDTO>(`/workflows/${run.id}/review`, {
+        method: 'POST',
+        body: {
+          step: 'scene_review',
+          action,
+          scene_id: scene.id,
+        },
+      });
+      setScenes((current) =>
+        current.map((item) =>
+          item.id === scene.id ? { ...item, state: 'approved' as const } : item,
+        ),
+      );
+      setNotice(`场景「${scene.title}」已通过`);
+      await onArtifactsChanged();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function cancel() {
     if (!run || !window.confirm('确定取消当前 AI 工作流吗？')) return;
     setBusy(true);
@@ -808,13 +848,40 @@ export function WorkflowPanel({
       });
       setNotice(
         candidateCount > 1
-          ? `已生成 ${candidateCount} 张候选图，请选择后再审核通过`
-          : '已按当前提示词重新生成候选图',
+          ? `已生成 ${candidateCount} 张候选图（旧图保留在历史中），请选择后再审核通过`
+          : '已按当前提示词追加候选图（旧图保留，除非手动删除）',
       );
       setPromptDrafts((current) => ({
         ...current,
         [requirement.id]: prompt,
       }));
+      const step = selectedStep;
+      setSelectedStep(null);
+      window.setTimeout(() => setSelectedStep(step), 0);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setRegeneratingId(null);
+    }
+  }
+
+  async function removeVisualCandidate(requirement: VisualRequirementDTO, mediaId: string) {
+    if (!confirm('确定从历史中删除这张候选图？')) return;
+    setRegeneratingId(requirement.id);
+    setError('');
+    setNotice('');
+    try {
+      await api(
+        `/scenes/${requirement.scene_id}/visual-requirements/${requirement.id}/candidates/${mediaId}`,
+        { method: 'DELETE' },
+      );
+      setSelectedCandidateIds((current) => {
+        if (current[requirement.id] !== mediaId) return current;
+        const next = { ...current };
+        delete next[requirement.id];
+        return next;
+      });
+      setNotice('已删除该候选图');
       const step = selectedStep;
       setSelectedStep(null);
       window.setTimeout(() => setSelectedStep(step), 0);
@@ -872,10 +939,6 @@ export function WorkflowPanel({
       setRecomputingKey(null);
     }
   }
-
-  const visualSceneIds = [
-    ...new Set(visualItems.map((item) => item.requirement.scene_id).filter(Boolean)),
-  ];
 
   return (
     <Card className="mb-8">
@@ -1100,9 +1163,26 @@ export function WorkflowPanel({
               ) : (
                 scenes.map((scene) => (
                   <div key={scene.id} className="rounded-lg border border-line bg-ink p-4">
-                    <p className="text-sm font-medium">
-                      #{scene.order} {scene.title}
-                    </p>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium">
+                        #{scene.order} {scene.title}
+                      </p>
+                      <Badge
+                        tone={
+                          scene.state === 'approved'
+                            ? 'success'
+                            : scene.state === 'review'
+                              ? 'warning'
+                              : 'neutral'
+                        }
+                      >
+                        {scene.state === 'approved'
+                          ? '已通过'
+                          : scene.state === 'review'
+                            ? '待审'
+                            : '草稿'}
+                      </Badge>
+                    </div>
                     {scene.summary && (
                       <p className="mt-2 text-xs leading-5 text-zinc-400">{scene.summary}</p>
                     )}
@@ -1110,6 +1190,18 @@ export function WorkflowPanel({
                       {[scene.time_of_day, scene.weather, scene.mood].filter(Boolean).join(' · ') ||
                         '时间 / 天气 / 情绪待补充'}
                     </p>
+                    {isLiveReview && review === 'scene_review' && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={busy || scene.state === 'approved'}
+                          onClick={() => void submitSceneReview(scene, 'approve')}
+                        >
+                          {scene.state === 'approved' ? '本场景已通过' : '通过本场景'}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -1145,35 +1237,17 @@ export function WorkflowPanel({
 
           {viewKind === 'visual' && !loadingArtifacts && (
             <div className="mt-5 grid gap-3">
-              {visualSceneIds.length > 0 && (
-                <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
-                  {visualSceneIds.map((sceneId) => {
-                    const title = scenes.find((scene) => scene.id === sceneId)?.title;
-                    return (
-                      <Button
-                        key={sceneId}
-                        type="button"
-                        variant="secondary"
-                        disabled={busy || recomputingKey === `visual:${sceneId}`}
-                        onClick={() => void recomputeSceneVisual(sceneId)}
-                      >
-                        {recomputingKey === `visual:${sceneId}`
-                          ? '重跑中…'
-                          : title
-                            ? `重跑本场景视觉准备（${title}）`
-                            : '重跑本场景视觉准备'}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {visualItems.length === 0 ? (
                 <p className="text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">
                   没有可展示的视觉材料。
                 </p>
               ) : (
-                visualItems.map(({ requirement, media, candidates, sceneTitle, issue }) => {
+                <>
+                  <p className="text-xs text-zinc-500 sm:col-span-2 lg:col-span-3">
+                    视觉准备会从剧本起草角色设定表与场景提示词（不自动生图）。请先在「角色与地点」审核设定表提示词并生成单图多视角，再回此处分条生成场景关键图。
+                  </p>
+                {visualItems.map(({ requirement, media, candidates, sceneTitle, issue }) => {
                   const gallery = candidates && candidates.length > 0 ? candidates : media ? [media] : [];
                   const selectedId =
                     selectedCandidateIds[requirement.id] ??
@@ -1213,41 +1287,55 @@ export function WorkflowPanel({
                           暂无预览
                         </div>
                       )}
-                      {gallery.length > 1 && (
+                      {gallery.length > 0 && (
                         <div className="mb-3 grid grid-cols-3 gap-2">
                           {gallery.map((candidate, index) => {
                             const src = candidate.access_url || candidate.url || '';
                             const selected = candidate.id === selectedId;
                             return (
-                              <button
-                                key={candidate.id}
-                                type="button"
-                                disabled={!canEditVisual || busy}
-                                title={`候选 ${index + 1}`}
-                                className={`overflow-hidden rounded-md border ${
-                                  selected
-                                    ? 'border-accent ring-1 ring-accent/50'
-                                    : 'border-transparent hover:border-accent/40'
-                                }`}
-                                onClick={() =>
-                                  setSelectedCandidateIds((current) => ({
-                                    ...current,
-                                    [requirement.id]: candidate.id,
-                                  }))
-                                }
-                              >
-                                {src ? (
-                                  <img
-                                    className="aspect-square w-full object-cover"
-                                    src={src}
-                                    alt={`候选 ${index + 1}`}
-                                  />
-                                ) : (
-                                  <div className="grid aspect-square place-items-center bg-zinc-900 text-[10px] text-zinc-600">
-                                    无图
-                                  </div>
+                              <div key={candidate.id} className="relative">
+                                <button
+                                  type="button"
+                                  disabled={!canEditVisual || busy}
+                                  title={`候选 ${index + 1}（历史保留）`}
+                                  className={`w-full overflow-hidden rounded-md border ${
+                                    selected
+                                      ? 'border-accent ring-1 ring-accent/50'
+                                      : 'border-transparent hover:border-accent/40'
+                                  }`}
+                                  onClick={() =>
+                                    setSelectedCandidateIds((current) => ({
+                                      ...current,
+                                      [requirement.id]: candidate.id,
+                                    }))
+                                  }
+                                >
+                                  {src ? (
+                                    <img
+                                      className="aspect-square w-full object-cover"
+                                      src={src}
+                                      alt={`候选 ${index + 1}`}
+                                    />
+                                  ) : (
+                                    <div className="grid aspect-square place-items-center bg-zinc-900 text-[10px] text-zinc-600">
+                                      无图
+                                    </div>
+                                  )}
+                                </button>
+                                {canEditVisual && (
+                                  <button
+                                    type="button"
+                                    className="absolute right-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-black/90"
+                                    disabled={busy || regeneratingId === requirement.id}
+                                    title="从历史中删除"
+                                    onClick={() =>
+                                      void removeVisualCandidate(requirement, candidate.id)
+                                    }
+                                  >
+                                    删
+                                  </button>
                                 )}
-                              </button>
+                              </div>
                             );
                           })}
                         </div>
@@ -1289,43 +1377,57 @@ export function WorkflowPanel({
                           }
                         />
                       </Field>
-                      {canEditVisual && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <label className="flex items-center gap-1 text-xs text-zinc-400">
-                            候选数
-                            <select
-                              className="rounded border border-line bg-ink px-2 py-1 text-xs text-zinc-200"
-                              value={candidateCount}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {canEditVisual && (
+                          <>
+                            <label className="flex items-center gap-1 text-xs text-zinc-400">
+                              候选数
+                              <select
+                                className="rounded border border-line bg-ink px-2 py-1 text-xs text-zinc-200"
+                                value={candidateCount}
+                                disabled={busy || regeneratingId === requirement.id}
+                                onChange={(event) =>
+                                  setCandidateCount(Number(event.target.value) || 1)
+                                }
+                              >
+                                {[1, 2, 3, 4].map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <Button
+                              type="button"
+                              variant="secondary"
                               disabled={busy || regeneratingId === requirement.id}
-                              onChange={(event) =>
-                                setCandidateCount(Number(event.target.value) || 1)
-                              }
+                              onClick={() => void regenerateVisual(requirement)}
                             >
-                              {[1, 2, 3, 4].map((value) => (
-                                <option key={value} value={value}>
-                                  {value}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            disabled={busy || regeneratingId === requirement.id}
-                            onClick={() => void regenerateVisual(requirement)}
-                          >
-                            {regeneratingId === requirement.id
-                              ? '生成中…'
-                              : failedPlaceholder || !imageSrc
-                                ? '按提示词生成'
-                                : '按提示词重生成'}
-                          </Button>
-                        </div>
-                      )}
+                              {regeneratingId === requirement.id
+                                ? '生成中…'
+                                : failedPlaceholder || !imageSrc
+                                  ? '按提示词生成'
+                                  : '按提示词重生成'}
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={busy || recomputingKey === `visual:${requirement.scene_id}`}
+                          onClick={() => void recomputeSceneVisual(requirement.scene_id)}
+                          title="重跑该场景的整步视觉准备（含本卡与同场景其他卡）"
+                        >
+                          {recomputingKey === `visual:${requirement.scene_id}`
+                            ? '场景重跑中…'
+                            : '重跑本场景视觉准备'}
+                        </Button>
+                      </div>
                       {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
                     </div>
                   );
-                })
+                })}
+                </>
               )}
               </div>
             </div>
@@ -1345,26 +1447,28 @@ export function WorkflowPanel({
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium">{shot.label || '未命名镜头'}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={busy || recomputingKey === `prompt:${shot.id}`}
-                          onClick={() => void recomputeShotPrompt(shot.id)}
-                        >
-                          {recomputingKey === `prompt:${shot.id}` ? '重跑中…' : '重跑本镜头提示词'}
-                        </Button>
-                        <ShotEditorLink projectId={projectId} shot={shot} />
-                      </div>
+                      <ShotEditorLink projectId={projectId} shot={shot} />
                     </div>
-                    <p className="mt-2 text-xs leading-5 text-zinc-400">
-                      {prompt.positive || '暂无正向提示词'}
-                    </p>
+                    <Field label="正向提示词">
+                      <p className="mt-1 text-xs leading-5 text-zinc-400 whitespace-pre-wrap">
+                        {prompt.positive || '暂无正向提示词'}
+                      </p>
+                    </Field>
                     {prompt.negative && (
                       <p className="mt-2 text-xs leading-5 text-red-300/70">
                         Negative: {prompt.negative}
                       </p>
                     )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={busy || recomputingKey === `prompt:${shot.id}`}
+                        onClick={() => void recomputeShotPrompt(shot.id)}
+                      >
+                        {recomputingKey === `prompt:${shot.id}` ? '重跑中…' : '重跑本镜头提示词'}
+                      </Button>
+                    </div>
                     {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
                     {!issue && warning && (
                       <p className="mt-2 text-xs text-amber-200/80">{warning}</p>
@@ -1396,17 +1500,31 @@ export function WorkflowPanel({
                     )}
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium">{shot.label || '未命名镜头'}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={busy || recomputingKey === `video:${shot.id}`}
-                          onClick={() => void recomputeShotVideo(shot.id)}
-                        >
-                          {recomputingKey === `video:${shot.id}` ? '重跑中…' : '重跑本镜头视频'}
-                        </Button>
-                        <ShotEditorLink projectId={projectId} shot={shot} />
-                      </div>
+                      <ShotEditorLink projectId={projectId} shot={shot} />
+                    </div>
+                    <Field label="视频提示词">
+                      <p className="mt-1 text-xs leading-5 text-zinc-400 whitespace-pre-wrap">
+                        {shot.prompt?.positive?.trim() || '暂无提示词'}
+                      </p>
+                    </Field>
+                    {shot.prompt?.negative && (
+                      <p className="mt-2 text-xs leading-5 text-red-300/70">
+                        Negative: {shot.prompt.negative}
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={busy || recomputingKey === `video:${shot.id}`}
+                        onClick={() => void recomputeShotVideo(shot.id)}
+                      >
+                        {recomputingKey === `video:${shot.id}`
+                          ? '生成中…'
+                          : output?.video_url
+                            ? '重跑本镜头视频'
+                            : '生成本镜头视频'}
+                      </Button>
                     </div>
                     {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
                   </div>

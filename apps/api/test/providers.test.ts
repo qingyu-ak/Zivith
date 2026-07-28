@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeepSeekLLMAdapter } from '../src/adapters/deepseek-llm.js';
 import { SiliconFlowAudioAdapter } from '../src/adapters/siliconflow-audio.js';
-import { SiliconFlowImageAdapter } from '../src/adapters/siliconflow-image.js';
+import {
+  SiliconFlowImageAdapter,
+  resolveSiliconFlowImageModel,
+} from '../src/adapters/siliconflow-image.js';
 import { SiliconFlowVideoAdapter } from '../src/adapters/siliconflow-video.js';
 import { createProviderBundle } from '../src/providers/registry.js';
 import { resetRuntimeProviderState } from '../src/routes/providers.js';
@@ -67,6 +70,26 @@ describe('SiliconFlow adapters', () => {
     expect(result.image_url).toBe('https://cdn.example/a.png');
   });
 
+  it('canonicalizes lowercase Z-Image-Turbo model ids', async () => {
+    expect(resolveSiliconFlowImageModel('tongyi-mai/z-image-turbo')).toBe(
+      'Tongyi-MAI/Z-Image-Turbo',
+    );
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ images: [{ url: 'https://cdn.example/z.png' }] }),
+    });
+    const adapter = new SiliconFlowImageAdapter({ apiKey: 'sf', fetchImpl });
+    await adapter.generate({
+      request_id: 'img-z',
+      model: 'tongyi-mai/z-image-turbo',
+      prompt: 'portrait',
+    });
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body ?? '{}')) as {
+      model?: string;
+    };
+    expect(body.model).toBe('Tongyi-MAI/Z-Image-Turbo');
+  });
+
   it('polls video status until complete', async () => {
     const fetchImpl = vi
       .fn()
@@ -94,7 +117,7 @@ describe('SiliconFlow adapters', () => {
     });
     const result = await adapter.generate({
       request_id: 'vid-1',
-      model: 'Wan-AI/Wan2.1-T2V-14B',
+      model: 'Wan-AI/Wan2.2-T2V-A14B',
       positive_prompt: 'rain',
       shot: {
         id: '00000000-0000-4000-8000-000000000001',
@@ -102,6 +125,65 @@ describe('SiliconFlow adapters', () => {
     });
     expect(result.status).toBe('completed');
     expect(result.video_url).toBe('https://cdn.example/v.mp4');
+    expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
+      method: 'POST',
+    });
+    const submitBody = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body ?? '{}')) as {
+      image_size?: string;
+      model?: string;
+    };
+    expect(submitBody.image_size).toBe('1280x720');
+    expect(submitBody.model).toBe('Wan-AI/Wan2.2-T2V-A14B');
+  });
+
+  it('upgrades deprecated Wan2.1 and switches to I2V when a frame is provided', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ requestId: 'job-2' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            status: 'Succeed',
+            results: [{ url: 'https://cdn.example/v2.mp4' }],
+          }),
+      });
+    const adapter = new SiliconFlowVideoAdapter({
+      apiKey: 'sf',
+      fetchImpl: fetchImpl,
+      pollIntervalMs: 1,
+      timeoutMs: 1_000,
+    });
+    await adapter.generate({
+      request_id: 'vid-2',
+      model: 'Wan-AI/Wan2.1-T2V-14B',
+      positive_prompt: 'walk',
+      reference_image_urls: ['https://cdn.example/frame.png'],
+      shot: {
+        id: '00000000-0000-4000-8000-000000000002',
+      } as never,
+    });
+    const submitBody = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body ?? '{}')) as {
+      model?: string;
+      image?: string;
+      image_size?: string;
+    };
+    expect(submitBody.model).toBe('Wan-AI/Wan2.2-I2V-A14B');
+    expect(submitBody.image).toBe('https://cdn.example/frame.png');
+    expect(submitBody.image_size).toBe('1280x720');
+  });
+
+  it('canonicalizes lowercase env model ids and falls back to T2V without a frame', async () => {
+    const adapter = new SiliconFlowVideoAdapter({ apiKey: 'sf' });
+    expect(adapter.resolveModel('wan-ai/wan2.2-i2v-a14b', false)).toBe(
+      'Wan-AI/Wan2.2-T2V-A14B',
+    );
+    expect(adapter.resolveModel('wan-ai/wan2.2-i2v-a14b', true)).toBe(
+      'Wan-AI/Wan2.2-I2V-A14B',
+    );
   });
 
   it('returns audio bytes from speech endpoint', async () => {

@@ -44,6 +44,36 @@ export interface GenerateVideoOptions {
   async?: boolean;
 }
 
+/**
+ * Prefer character keyframes for I2V (adapter uses urls[0]). Location refs follow.
+ * Within characters, follow shot.characters order when possible.
+ */
+export function orderVisualMediaIdsForVideo(
+  requirements: readonly {
+    assetType: string;
+    assetId: string;
+    approvedMediaId: string | null;
+  }[],
+  shotCharacterIds: readonly string[],
+): string[] {
+  const withMedia = requirements.filter(
+    (item): item is typeof item & { approvedMediaId: string } => Boolean(item.approvedMediaId),
+  );
+  const characters = withMedia.filter((item) => item.assetType === 'character');
+  const locations = withMedia.filter((item) => item.assetType === 'location');
+  const others = withMedia.filter(
+    (item) => item.assetType !== 'character' && item.assetType !== 'location',
+  );
+  const sortedCharacters = [...characters].sort((left, right) => {
+    const leftIndex = shotCharacterIds.indexOf(left.assetId);
+    const rightIndex = shotCharacterIds.indexOf(right.assetId);
+    const leftRank = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+    const rightRank = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+    return leftRank - rightRank;
+  });
+  return [...sortedCharacters, ...locations, ...others].map((item) => item.approvedMediaId);
+}
+
 type VideoAdapterSource = VideoGenerationAdapter | (() => VideoGenerationAdapter);
 
 export class GenerationService {
@@ -181,9 +211,11 @@ export class GenerationService {
 
     const outputId = randomUUID();
     const taskId = randomUUID();
-    const visualMediaIds = required
-      .map((requirement) => requirement.approvedMediaId)
-      .filter((id): id is string => Boolean(id));
+    const shotCharacterIds = (Array.isArray(shot.characters) ? shot.characters : [])
+      .map((item) => record(item))
+      .map((item) => item.character_id)
+      .filter((id): id is string => typeof id === 'string');
+    const visualMediaIds = orderVisualMediaIdsForVideo(required, shotCharacterIds);
     const contextSnapshot = {
       project: shot.scene.story.project.defaults,
       story: shot.scene.story.overrides,
@@ -341,7 +373,13 @@ export class GenerationService {
       }
 
       if (result.status !== 'completed' || !result.video_url) {
-        throw new Error(`Mock generation ended with ${result.status}`);
+        const reason =
+          typeof result.metadata?.reason === 'string'
+            ? result.metadata.reason
+            : typeof result.metadata?.error === 'string'
+              ? result.metadata.error
+              : result.status;
+        throw new Error(`Video generation ended with ${reason}`);
       }
       await this.db.$transaction([
         this.db.output.update({
@@ -376,25 +414,24 @@ export class GenerationService {
         });
         return;
       }
+      const message = error instanceof Error ? error.message : 'Video generation failed';
       await this.db.$transaction([
         this.db.output.update({
           where: { id: outputId },
-          data: { status: 'failed', errorCode: 'MOCK_GENERATION_FAILED' },
+          data: { status: 'failed', errorCode: 'VIDEO_GENERATION_FAILED' },
         }),
         this.db.task.update({
           where: { id: task.id },
           data: {
             status: 'failed',
-            errorCode: 'MOCK_GENERATION_FAILED',
-            result: json({
-              message: error instanceof Error ? error.message : 'Mock generation failed',
-            }),
+            errorCode: 'VIDEO_GENERATION_FAILED',
+            result: json({ message: message.slice(0, 800) }),
             completedAt: new Date(),
           },
         }),
         this.db.shot.update({ where: { id: shot.id }, data: { state: 'draft' } }),
       ]);
-      throw new ApiError(502, 'MOCK_GENERATION_FAILED', 'Mock 视频生成失败');
+      throw new ApiError(502, 'VIDEO_GENERATION_FAILED', `视频生成失败：${message.slice(0, 200)}`);
     }
   }
 

@@ -2,13 +2,13 @@
 
 > Zivith 实施计划
 >
-> Version: 2.2
+> Version: 2.3
 >
-> Status: Active — progress synced 2026-07-23 (V0.4 Modification Plan inserted before Phase 3)
+> Status: Active — progress synced 2026-07-28 (Entity history architecture documented; runtime not started)
 >
 > Strategy: B-Line — AI Agent Pipeline First, Video Gen Mocked
 >
-> Related: Technical-Architecture.md, AI-Agent-Collaboration.md, Core-Domain-Model.md, Next-Tasks.md
+> Related: Technical-Architecture.md, AI-Agent-Collaboration.md, Core-Domain-Model.md, Next-Tasks.md, architecture/entity-state-timeline-track.md
 
 ---
 
@@ -18,7 +18,7 @@ This document defines the phased implementation roadmap for Zivith.
 
 **Strategy decision (2026-07):** The MVP follows B-Line — the AI Agent creative pipeline is built first, while real video generation uses a Mock Adapter. This prioritizes demonstrating the "AI as creative partner" workflow over video quality, and defers video model selection to a later phase when the provider landscape is clearer.
 
-### Live progress (2026-07-23)
+### Live progress (2026-07-28)
 
 | Phase | Progress | Summary |
 |-------|----------|---------|
@@ -27,9 +27,23 @@ This document defines the phased implementation roadmap for Zivith.
 | 2 AI Agent + Mock Gen | ~95% | Mock Story→Video E2E (A1) + WorkflowPanel gates/SSE/queue/recover |
 | 2.5 First Providers | ~80% | DeepSeek + SiliconFlow adapters + provider UI; BYOK/usage later |
 | **V0.4 (interlude)** | ~95% | W1–W7 first-pass landed (`usage_records` recording; freeze/limits later). See [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) |
+| 2.5 polish (Track G) | ~90% | Four model slots, turnaround/location sheets, cover URL resolve, I2I→T2I fallback; G7 manual E2E pending |
+| Creative history architecture | design complete | [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) contract written; runtime schema/API/dual-write/UI not started |
 | 3–5 | 0% | Not started |
 
-**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track F** (V0.4 plan, W2 → W1 → W3 → W4 → W5 → W6 → W7). The Looser Creative Flow RFC is Accepted (0.2); Slices A/B/C map to W4/W2/W3. V0.4 W1 (reference-image injection) also front-loads the Phase 3 “Character Consistency Strategy” — image conditioning moves from Phase 3 promise to V0.4 implementation. W4 Slice A scoped recompute is Done.
+**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track G** (G7 real-key E2E remaining). Track F (V0.4 W1–W7) is Done. See [Asset-Model.md](Asset-Model.md) for turnaround / location sheets and the T2I·I2I·T2V·I2V matrix.
+
+### Entity history implementation gate
+
+The `Entity + State + Timeline + Track` proposal is an architecture target, not part of the current runtime baseline. Implementation must proceed incrementally after explicit scheduling:
+
+1. freeze canonical snapshot and event schemas;
+2. add history tables and backfill each Project's `main` baseline;
+3. enable per-Entity shadow writes, then transactional dual writes;
+4. expose read-only Timeline/revision APIs and optimistic concurrency;
+5. pilot CreativeTrack branching and explicit merge for AppearanceVariant and Shot.
+
+Existing resource tables remain authoritative throughout migration. No phase may switch reads to history or expose branch merge until consistency checks and rollback criteria in the architecture document pass.
 
 Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not started.
 

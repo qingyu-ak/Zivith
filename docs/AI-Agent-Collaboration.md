@@ -2,11 +2,11 @@
 
 > Zivith AI Agent 协作模型与 Workflow 规范
 >
-> Version: 1.0
+> Version: 1.1
 >
-> Status: Draft
+> Status: Active — synced 2026-07-28 (prompt-draft Visual Prep + deferred generate)
 >
-> Related: Core-Domain-Model.md, Shot-Specification.md, Asset-Model.md
+> Related: Core-Domain-Model.md, Shot-Specification.md, Asset-Model.md, Next-Tasks.md
 
 ---
 
@@ -258,7 +258,14 @@ scenes:
 
 ### Stage 3: Visual Preparation
 
-The Visual Prep Agent runs per Scene after Scene review. It evaluates the Scene's characters, location, time, weather, mood, and sub-location against approved Project assets, then recommends reusing or generating the required visuals. `voice_only` and `implied` characters do not require character images.
+The Visual Prep Agent runs per Scene after Scene review. It evaluates the Scene's characters, location, time, weather, mood, and sub-location against approved Project assets, then lists required visual bindings. `voice_only` and `implied` characters do not require character images.
+
+**Current implementation (Track G):**
+
+1. Ensure each Character has a `sheet_turnaround` slot; **draft** multi-view sheet prompts from screenplay (no auto T2I).
+2. Enrich Character/Location traits via `visual_trait` agent (`purpose`: `character_sheet` / `location_sheet` / `keyframe`) and persist `generation_prompt` on the Asset / requirement.
+3. Upsert `VisualAssetRequirement` rows as `pending` with empty candidates — **do not** batch-generate scene keyframes.
+4. Operator flow: asset library drafts/generates character turnaround + location sheets → WorkflowPanel generates **one keyframe per card** → approve all required bindings before Shot.
 
 ```yaml
 visual_requirements:
@@ -661,4 +668,4 @@ User provides world lore → Asset Agent structures Knowledge → User reviews
 
 The Asset Agent can also be invoked contextually during the main workflow. If the Shot Agent determines a needed Character does not exist, it prompts the user: "This Scene requires a character 'Forest Spirit'. Create one now?" — which triggers the Asset Agent in-line.
 
-The Visual Prep Agent runs after Scene review. It compares the Scene requirements with existing `reference_images[]`, produces a per-Scene list of visuals to reuse or generate, and writes each approved Media item back to the Asset's key image or the Scene variant. It must complete its required approval gate before the Shot Agent can begin.
+The Visual Prep Agent runs after Scene review. It compares the Scene requirements with existing assets and appearance-sheet anchors, produces a per-Scene list of visuals to reuse or generate, and **drafts** generation prompts (including character `sheet_turnaround` / location `location_sheet` when empty). Image APIs are invoked only when the operator clicks generate (asset library for design sheets; WorkflowPanel per keyframe). Approved Media is written back to the Scene binding and, for design sheets, to Asset cover / `reference_images[]`. It must complete its required approval gate before the Shot Agent can begin. See [Asset-Model.md](Asset-Model.md).

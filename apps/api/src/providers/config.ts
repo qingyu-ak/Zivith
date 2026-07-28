@@ -17,9 +17,25 @@ export interface ProviderSelection {
 
 export interface ProviderModels {
   llm: string;
+  /** Text-to-image：首张角色/场景图 */
   image: string;
+  /** Text+image-to-image：有参考图时的一致性生图 */
+  image_i2i: string;
+  /** Text-to-video：无可用参考帧时 */
   video: string;
+  /** Image-to-video：有 http(s) 参考帧时，保证角色/场景一致 */
+  video_i2v: string;
   audio: string;
+}
+
+/** 有参考图 → I2I，否则 T2I。 */
+export function pickImageModel(models: ProviderModels, hasReferenceImages: boolean): string {
+  return hasReferenceImages ? models.image_i2i : models.image;
+}
+
+/** 有可用 http(s) 参考帧 → I2V，否则 T2V。 */
+export function pickVideoModel(models: ProviderModels, hasHttpsReferenceFrame: boolean): string {
+  return hasHttpsReferenceFrame ? models.video_i2v : models.video;
 }
 
 export interface ProviderCredentials {
@@ -44,10 +60,16 @@ export function loadProviderCredentials(): ProviderCredentials {
 }
 
 export function loadProviderModels(): ProviderModels {
+  const imageT2i = envValue('SILICONFLOW_IMAGE_MODEL', 'Qwen/Qwen-Image');
+  const videoT2v = envValue('SILICONFLOW_VIDEO_MODEL', 'Wan-AI/Wan2.2-T2V-A14B');
   return {
     llm: envValue('DEEPSEEK_MODEL', 'deepseek-chat'),
-    image: envValue('SILICONFLOW_IMAGE_MODEL', 'black-forest-labs/FLUX.1-schnell'),
-    video: envValue('SILICONFLOW_VIDEO_MODEL', 'Wan-AI/Wan2.1-T2V-14B'),
+    image: imageT2i,
+    // Prefer explicit I2I env; else fall back to a known img2img-capable id.
+    image_i2i: envValue('SILICONFLOW_IMAGE_I2I_MODEL', 'Qwen/Qwen-Image-Edit'),
+    // Wan2.1 series was deprecated on SiliconFlow (2025-09); default to Wan2.2 T2V.
+    video: videoT2v,
+    video_i2v: envValue('SILICONFLOW_VIDEO_I2V_MODEL', 'Wan-AI/Wan2.2-I2V-A14B'),
     audio: envValue('SILICONFLOW_AUDIO_MODEL', 'FunAudioLLM/CosyVoice2-0.5B'),
   };
 }
@@ -100,7 +122,9 @@ export function listProviderCatalog() {
         default_models: {
           llm: models.llm,
           image: models.image,
+          image_i2i: models.image_i2i,
           video: models.video,
+          video_i2v: models.video_i2v,
           audio: models.audio,
         },
         base_url: credentials.siliconflowBaseUrl,

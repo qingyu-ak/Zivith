@@ -6,7 +6,7 @@
 >
 > Status: Implementation — Phase 2 closed for Track A–D core; Phase 2.5 providers in use
 >
-> Last Progress Sync: 2026-07-22
+> Last Progress Sync: 2026-07-28
 
 ---
 
@@ -47,12 +47,13 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | [Asset Model](Asset-Model.md) | Asset taxonomy (Characters, Locations, Styles, etc.) |
 | [AI Agent Collaboration](AI-Agent-Collaboration.md) | Agent architecture, required review gates, and Visual Prep workflow |
 | [Architecture Principles](architecture/architecture-principles.md) | Long-term architectural constitution guiding all future ADRs and RFCs |
+| [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) | Proposed creative revision history, project timeline, branch semantics, API contracts, and migration plan |
 | [ADR Guide](architecture/adr-guide.md) | When and how to record architecture decisions ([ADR index](architecture/adr/README.md)) |
 | [RFC Guide](architecture/rfc-guide.md) | Proposal, review, risk, migration, and acceptance process for significant changes |
 | [Technical Architecture](Technical-Architecture.md) | System design, adapters, APIs, queues, BYOK, and data storage |
 | [Implementation Plan](Implementation-Plan.md) | Phased roadmap with live progress checkboxes |
-| [Next Tasks](Next-Tasks.md) | Current engineering backlog (active: Track F = V0.4 plan) |
-| [V0.4 Modification Plan](V0.4-Modification-Plan.md) | **Active implementation source** — workstreams W1–W7 from the waoowaoo review + ADR-0006 |
+| [Next Tasks](Next-Tasks.md) | Current engineering backlog (Track G ~90%; G7 E2E pending; Track H history foundation planned) |
+| [V0.4 Modification Plan](V0.4-Modification-Plan.md) | Completed first-pass reference — workstreams W1–W7 from the waoowaoo review + ADR-0006 |
 | [Director Copilot RFC (thin)](architecture/rfc/Director-Copilot-RFC.md) | Project sidebar co-pilot scope lock (Phase 3+; not a chatbot) |
 | [Looser Creative Flow RFC (thin)](architecture/rfc/Looser-Creative-Flow-RFC.md) | Partial recompute / asset-first visuals / story segmentation ramp |
 | [Architecture Review: waoowaoo](architecture/review/Zivith-Architecture-Review-Based-on-waoowaoo.md) | Peer open-source project review; A1–A7 adoption list feeding V0.4 planning |
@@ -93,19 +94,20 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 
 ---
 
-## Project Status (2026-07-22)
+## Project Status (2026-07-28)
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 0 Foundation | ~95% done | BullMQ wired when REDIS_URL set; no staging deploy |
 | Phase 1 Core Domain | ~90% done | Inheritance is read-time resolve; Character/Location only |
 | Phase 2 AI Agent + Mock Gen | ~95% done | A1 E2E gates pass; queue + SSE + recover landed |
-| Phase 2.5 First Providers | ~80% done | DeepSeek + SiliconFlow; BYOK/usage later (C7/C8) |
+| Phase 2.5 First Providers | ~85% done | DeepSeek + SiliconFlow; four modality model slots; BYOK later (C7) |
+| Track G polish | ~90% done | Sheets / covers / I2I fallback landed; G7 real-key E2E pending |
 | Phase 3–5 | Not started | — |
 
 **Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
 **Strategy:** B-Line — Agent pipeline first, video generation mocked.  
-**Near-term focus:** V0.4 Modification Plan (Track F) **W1–W7 first-pass done**. Remaining later: usage freeze/limits (C8 second pass), Phase 3 consistency/timeline. See [V0.4 Modification Plan](V0.4-Modification-Plan.md) and [Next Tasks](Next-Tasks.md).
+**Near-term focus:** Finish [Next Tasks](Next-Tasks.md) **G7** (real SiliconFlow E2E), then Phase 3. Asset sheets + provider matrix: [Asset Model](Asset-Model.md). Remaining later: usage freeze/limits, BYOK (C7).
 
 ---
 
