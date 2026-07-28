@@ -8,7 +8,7 @@
 >
 > Horizon: 5–10 years
 >
-> Related: Design-Philosophy.md, Core-Domain-Model.md, Technical-Architecture.md, AI-Agent-Collaboration.md
+> Related: Design-Philosophy.md, Core-Domain-Model.md, Technical-Architecture.md, AI-Agent-Collaboration.md, entity-state-timeline-track.md, adr/0007-preserve-current-state-with-immutable-creative-history.md
 
 ---
 
@@ -35,6 +35,8 @@ Zivith is an AI-native creative operating system for filmmaking.
 | **Scheduling** | Process model | Workflows as declarative, interruptible, resumable processes with human authority built into the engine |
 
 An AI video generator turns a prompt into a file. An operating system manages state, exposes interfaces, and schedules work — so that *other* things, including things not yet invented, can run on top of it.
+
+The proposed [Entity + State + Timeline + Track](entity-state-timeline-track.md) architecture makes the State pillar concrete without replacing the semantic domain model: dedicated entity tables remain the current-state authority, immutable revisions and timeline events preserve history, and project-scoped CreativeTracks carry explicit alternative creative directions. It is an approved design target, not yet a runtime capability.
 
 The vision holds regardless of AI progress because it is not a bet on any model's capability. It is a bet on three invariants:
 
@@ -95,6 +97,8 @@ Each act of generation carries full provenance (what intent, what configuration,
 The system must know more about a creative universe after a year of use than after a day. Review decisions, recurring corrections, and stylistic preferences are signals to be captured into project knowledge — not exhaust to be discarded after a single retry.
 
 *Why it holds:* this is the difference between a creative partner and a creative tool, and it is the one advantage that cannot be replicated by a competitor with a better model, because the memory belongs to the user's history, not to the technology.
+
+Immutable history is not equivalent to Event Sourcing. Zivith may preserve committed revisions and facts while continuing to read current state from dedicated domain tables. Workflow steps, queue attempts, and video-editing tracks retain separate semantics; they must not be collapsed into creative history merely because they are ordered.
 
 ---
 

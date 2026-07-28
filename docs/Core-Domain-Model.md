@@ -12,6 +12,8 @@
 > - Shot-Specification.md
 > - Asset-Model.md
 > - AI-Agent-Collaboration.md
+> - architecture/entity-state-timeline-track.md
+> - architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md
 
 ---
 
@@ -493,3 +495,20 @@ This ensures creative consistency while preserving iterative editing.
 Approval represents a creative decision rather than a technical lock.
 
 When an approved Scene is edited, it returns to `draft`. Its affected Visual Asset Requirements return to `pending` and must complete visual review again before new Shots or Videos can be generated. Previously approved Shots and existing Outputs retain snapshots of their creation-time context and are not changed automatically.
+
+---
+
+# 9. Revision History, Timeline & Creative Tracks
+
+The creative hierarchy defines semantic ownership; it does not by itself define history or branching. The proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) architecture adds those capabilities without changing `Project → Story → Scene → Shot`:
+
+- an **Entity** keeps its stable domain identity and dedicated storage model;
+- an immutable **State revision** records what that Entity was at a committed point;
+- the Project **Timeline** orders committed creative, review, generation, and dependency-staleness facts;
+- a **CreativeTrack** holds an explicit alternative creative direction that may be compared, merged into `main`, or abandoned.
+
+Dedicated domain tables remain authoritative for current `main` state. Revisions and timeline events are authoritative for history; they are not a complete Event Sourcing log. Workflow runs, queue attempts, and future video/audio editing tracks are related execution or editing concepts and are not CreativeTracks.
+
+Approved snapshots remain domain-level freeze records. A revision history does not permit later Asset, Scene, Track, or Workflow changes to rewrite an approved Shot or an existing Output's creation-time context.
+
+**Implementation status (2026-07-28):** architecture and migration contract documented; database tables, APIs, dual-write paths, and UI are not yet implemented.
