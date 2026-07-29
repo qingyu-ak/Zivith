@@ -8,12 +8,14 @@ import {
 } from '@zivith/domain';
 import { ApiError } from '../../errors.js';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
+import type { StoragePort } from '../../ports/index.js';
 import {
   referenceInjectionMetadata,
   resolveAppearanceVariantReferenceImages,
   withReferencePromptClauses,
 } from './reference-images.js';
 import { generateImageWithI2iFallback } from './generate-with-fallback.js';
+import { persistRemoteImage } from './persist-remote-image.js';
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -138,6 +140,7 @@ export interface GenerateAppearanceVariantImageInput {
   /** Candidate count 1–4 (default 1). */
   count?: number;
   allowFallback?: boolean;
+  storage?: StoragePort;
 }
 
 function clampCandidateCount(count: number | undefined): number {
@@ -210,6 +213,12 @@ export async function generateAppearanceVariantImage(input: GenerateAppearanceVa
     }
 
     const mediaId = randomUUID();
+    const storageKey = `appearance-variants/${mediaId}.png`;
+    const persisted = await persistRemoteImage({
+      url: imageUrl,
+      storageKey,
+      ...(input.storage ? { storage: input.storage } : {}),
+    });
     const media = await input.db.media.create({
       data: {
         id: mediaId,
@@ -219,9 +228,9 @@ export async function generateAppearanceVariantImage(input: GenerateAppearanceVa
             ? `${asset.name} · ${variant.title} ${index + 1}/${count}`
             : `${asset.name} · ${variant.title}`,
         mediaType: 'image',
-        mimeType: 'image/png',
-        storageKey: `appearance-variants/${mediaId}.png`,
-        url: imageUrl,
+        mimeType: persisted.mimeType,
+        storageKey: persisted.storageKey,
+        url: persisted.url,
         source: 'generated',
         generationMetadata: json({
           is_mock: isMock,
@@ -232,6 +241,10 @@ export async function generateAppearanceVariantImage(input: GenerateAppearanceVa
           appearance_variant_key: variant.key,
           candidate_index: index + 1,
           candidate_count: count,
+          persisted_to_storage: persisted.persisted,
+          ...(persisted.sourceUrl && persisted.persisted
+            ? { provider_source_url: persisted.sourceUrl.slice(0, 300) }
+            : {}),
           ...referenceInjectionMetadata(refs, adapterMeta),
           ...(generationError ? { generation_error: generationError } : {}),
         }),

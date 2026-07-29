@@ -3,12 +3,14 @@ import type { Prisma, PrismaClient } from '@zivith/database';
 import { LOCATION_SHEET_KEY, LOCATION_SHEET_PROMPT_CLAUSE } from '@zivith/domain';
 import { ApiError } from '../../errors.js';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
+import type { StoragePort } from '../../ports/index.js';
 import {
   enrichVisualAssetTraits,
   mergeVisualPromptIntoAssetData,
   readVisualPromptFromAssetData,
 } from '../agent/visual-trait.js';
 import type { LLMAdapter } from '../../ports/llm.js';
+import { persistRemoteImage } from './persist-remote-image.js';
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -73,6 +75,7 @@ export async function generateLocationSheetImage(input: {
   prompt?: string;
   requestId?: string;
   count?: number;
+  storage?: StoragePort;
 }): Promise<{
   media: { id: string; url: string };
   medias: Array<{ id: string; url: string }>;
@@ -107,6 +110,12 @@ export async function generateLocationSheetImage(input: {
       throw new ApiError(502, 'IMAGE_GENERATION_FAILED', '地点设定表生图未返回图片');
     }
     const mediaId = randomUUID();
+    const storageKey = `location-sheets/${mediaId}.png`;
+    const persisted = await persistRemoteImage({
+      url: generated.image_url,
+      storageKey,
+      ...(input.storage ? { storage: input.storage } : {}),
+    });
     const media = await input.db.media.create({
       data: {
         id: mediaId,
@@ -116,9 +125,9 @@ export async function generateLocationSheetImage(input: {
             ? `${asset.name} · 地点设定表 ${index + 1}/${count}`
             : `${asset.name} · 地点设定表`,
         mediaType: 'image',
-        mimeType: 'image/png',
-        storageKey: `location-sheets/${mediaId}.png`,
-        url: generated.image_url,
+        mimeType: persisted.mimeType,
+        storageKey: persisted.storageKey,
+        url: persisted.url,
         source: 'generated',
         generationMetadata: json({
           is_mock: Boolean(generated.metadata.is_mock),
@@ -128,6 +137,10 @@ export async function generateLocationSheetImage(input: {
           location_sheet: true,
           candidate_index: index + 1,
           candidate_count: count,
+          persisted_to_storage: persisted.persisted,
+          ...(persisted.sourceUrl && persisted.persisted
+            ? { provider_source_url: persisted.sourceUrl.slice(0, 300) }
+            : {}),
         }),
         tags: ['generated', 'location_sheet', 'location'],
       },

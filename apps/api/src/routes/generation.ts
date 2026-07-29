@@ -3,6 +3,7 @@ import type { PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { GenerationService } from '../contexts/generation/service.js';
 import { ApiError } from '../errors.js';
+import type { StoragePort } from '../ports/index.js';
 
 const shotParams = z.object({ id: z.string().uuid() });
 const outputParams = z.object({ id: z.string().uuid(), oid: z.string().uuid() });
@@ -18,6 +19,25 @@ const generateBody = z
     async: z.boolean().optional(),
   })
   .strict();
+
+async function resolveOutputVideoUrl(
+  videoUrl: string | null | undefined,
+  storage?: StoragePort,
+): Promise<string | null | undefined> {
+  if (!videoUrl) return videoUrl;
+  if (/^https?:\/\//i.test(videoUrl) || videoUrl.startsWith('data:')) return videoUrl;
+  if (!storage) return videoUrl;
+  // s3://bucket/key or bare object key
+  const key = videoUrl.startsWith('s3://')
+    ? videoUrl.replace(/^s3:\/\/[^/]+\//, '')
+    : videoUrl.replace(/^\//, '');
+  if (!key) return videoUrl;
+  try {
+    return await storage.signedReadUrl(key, 6 * 3600);
+  } catch {
+    return videoUrl;
+  }
+}
 
 async function requireShotMember(db: PrismaClient, shotId: string, userId: string, write = false) {
   const shot = await db.shot.findFirst({
@@ -46,6 +66,7 @@ export function registerGenerationRoutes(
   app: FastifyInstance,
   db: PrismaClient,
   service = new GenerationService(db),
+  storage?: StoragePort,
 ): void {
   app.post('/shots/:id/generate', async (request, reply) => {
     const { id } = shotParams.parse(request.params);
@@ -62,10 +83,16 @@ export function registerGenerationRoutes(
   app.get('/shots/:id/outputs', async (request) => {
     const { id } = shotParams.parse(request.params);
     await requireShotMember(db, id, request.user.sub);
-    return db.output.findMany({
+    const rows = await db.output.findMany({
       where: { shotId: id },
       orderBy: { createdAt: 'desc' },
     });
+    return Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        videoUrl: await resolveOutputVideoUrl(row.videoUrl, storage),
+      })),
+    );
   });
 
   app.get('/projects/:projectId/generation-tasks', async (request) => {

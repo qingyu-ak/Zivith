@@ -139,6 +139,11 @@ describe('SiliconFlow adapters', () => {
   it('upgrades deprecated Wan2.1 and switches to I2V when a frame is provided', async () => {
     const fetchImpl = vi
       .fn()
+      // Probe reference URL (pass-through, no base64).
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'image/png' },
+      })
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ requestId: 'job-2' }),
@@ -148,7 +153,7 @@ describe('SiliconFlow adapters', () => {
         json: () =>
           Promise.resolve({
             status: 'Succeed',
-            results: [{ url: 'https://cdn.example/v2.mp4' }],
+            results: { videos: [{ url: 'https://cdn.example/v2.mp4' }] },
           }),
       });
     const adapter = new SiliconFlowVideoAdapter({
@@ -157,7 +162,7 @@ describe('SiliconFlow adapters', () => {
       pollIntervalMs: 1,
       timeoutMs: 1_000,
     });
-    await adapter.generate({
+    const result = await adapter.generate({
       request_id: 'vid-2',
       model: 'Wan-AI/Wan2.1-T2V-14B',
       positive_prompt: 'walk',
@@ -166,7 +171,7 @@ describe('SiliconFlow adapters', () => {
         id: '00000000-0000-4000-8000-000000000002',
       } as never,
     });
-    const submitBody = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body ?? '{}')) as {
+    const submitBody = JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body ?? '{}')) as {
       model?: string;
       image?: string;
       image_size?: string;
@@ -174,6 +179,80 @@ describe('SiliconFlow adapters', () => {
     expect(submitBody.model).toBe('Wan-AI/Wan2.2-I2V-A14B');
     expect(submitBody.image).toBe('https://cdn.example/frame.png');
     expect(submitBody.image_size).toBe('1280x720');
+    expect(result.video_url).toBe('https://cdn.example/v2.mp4');
+  });
+
+  it('skips SiliconFlow temporary CDN frames and uses T2V', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ requestId: 'job-3' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            status: 'Succeed',
+            results: { videos: [{ url: 'https://cdn.example/v3.mp4' }] },
+          }),
+      });
+    const adapter = new SiliconFlowVideoAdapter({
+      apiKey: 'sf',
+      fetchImpl: fetchImpl,
+      pollIntervalMs: 1,
+      timeoutMs: 1_000,
+    });
+    const result = await adapter.generate({
+      request_id: 'vid-3',
+      model: 'Wan-AI/Wan2.2-I2V-A14B',
+      positive_prompt: 'walk',
+      reference_image_urls: ['https://s3.siliconflow.cn/temporary/outputs/expired.png'],
+      shot: {
+        id: '00000000-0000-4000-8000-000000000003',
+      } as never,
+    });
+    const submitBody = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body ?? '{}')) as {
+      model?: string;
+      image?: string;
+    };
+    expect(submitBody.model).toBe('Wan-AI/Wan2.2-T2V-A14B');
+    expect(submitBody.image).toBeUndefined();
+    expect(result.metadata?.reference_skipped).toBe('temporary_cdn_unsupported_for_i2v');
+  });
+
+  it('keeps polling through transient fetch failed status errors', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ requestId: 'job-4' }),
+      })
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            status: 'Succeed',
+            results: { videos: [{ url: 'https://cdn.example/v4.mp4' }] },
+          }),
+      });
+    const adapter = new SiliconFlowVideoAdapter({
+      apiKey: 'sf',
+      fetchImpl: fetchImpl,
+      pollIntervalMs: 1,
+      timeoutMs: 5_000,
+    });
+    const result = await adapter.generate({
+      request_id: 'vid-4',
+      model: 'Wan-AI/Wan2.2-T2V-A14B',
+      positive_prompt: 'walk',
+      shot: {
+        id: '00000000-0000-4000-8000-000000000004',
+      } as never,
+    });
+    expect(result.status).toBe('completed');
+    expect(result.video_url).toBe('https://cdn.example/v4.mp4');
   });
 
   it('canonicalizes lowercase env model ids and falls back to T2V without a frame', async () => {

@@ -40,4 +40,6 @@ export interface VideoGenerationAdapter {
   getStatus(jobId: string): Promise<GenerationJobStatus>;
   cancel(jobId: string): Promise<void>;
   getCapabilities(): VideoModelCapabilities;
+  /** Optional: continue polling a previously submitted provider job. */
+  pollExisting?(jobId: string, options?: { timeoutMs?: number }): Promise<VideoGenerationResult>;
 }

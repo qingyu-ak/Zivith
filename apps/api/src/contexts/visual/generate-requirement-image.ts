@@ -3,6 +3,7 @@ import type { Prisma } from '@zivith/database';
 import { type PrismaClient } from '@zivith/database';
 import { ApiError } from '../../errors.js';
 import type { ImageGenerationAdapter } from '../../ports/media.js';
+import type { StoragePort } from '../../ports/index.js';
 import {
   mergeVisualPromptIntoAssetData,
   readVisualPromptFromAssetData,
@@ -13,6 +14,7 @@ import {
   withReferencePromptClauses,
 } from './reference-images.js';
 import { generateImageWithI2iFallback } from './generate-with-fallback.js';
+import { persistRemoteImage } from './persist-remote-image.js';
 
 function svgPlaceholderDataUrl(label: string, size = 1024): string {
   const text = label.slice(0, 18).replace(/[<>&'"]/g, '');
@@ -43,6 +45,7 @@ export interface GenerateRequirementImageInput {
   count?: number;
   /** When false, provider failures throw instead of writing an SVG placeholder. */
   allowFallback?: boolean;
+  storage?: StoragePort;
 }
 
 export async function generateRequirementImage(input: GenerateRequirementImageInput) {
@@ -113,15 +116,21 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
     }
 
     const mediaId = randomUUID();
+    const storageKey = `visual-assets/${mediaId}.png`;
+    const persisted = await persistRemoteImage({
+      url: imageUrl,
+      storageKey,
+      ...(input.storage ? { storage: input.storage } : {}),
+    });
     const media = await input.db.media.create({
       data: {
         id: mediaId,
         projectId: scene.projectId,
         name: count > 1 ? `${asset.name} Key Image ${index + 1}/${count}` : `${asset.name} Key Image`,
         mediaType: 'image',
-        mimeType: 'image/png',
-        storageKey: `visual-assets/${mediaId}.png`,
-        url: imageUrl,
+        mimeType: persisted.mimeType,
+        storageKey: persisted.storageKey,
+        url: persisted.url,
         source: 'generated',
         generationMetadata: json({
           is_mock: isMock,
@@ -131,6 +140,10 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
           requirement_id: requirement.id,
           candidate_index: index + 1,
           candidate_count: count,
+          persisted_to_storage: persisted.persisted,
+          ...(persisted.sourceUrl && persisted.persisted
+            ? { provider_source_url: persisted.sourceUrl.slice(0, 300) }
+            : {}),
           ...referenceInjectionMetadata(refs, adapterMeta),
           ...(generationError ? { generation_error: generationError } : {}),
         }),

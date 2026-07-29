@@ -131,12 +131,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
       registerAuthRoutes(api, db);
       api.register((protectedApi, _protectedOptions, protectedDone) => {
         protectedApi.addHook('preHandler', authenticate);
-        registerGenerationRoutes(protectedApi, db, generationService);
+        registerGenerationRoutes(protectedApi, db, generationService, storage);
         registerResourceRoutes(protectedApi, db, storage);
         registerStorySegmentRoutes(protectedApi, db);
         registerAppearanceVariantRoutes(protectedApi, db, storage);
         registerShotPromptRoutes(protectedApi, db);
-        registerVisualRequirementRoutes(protectedApi, db);
+        registerVisualRequirementRoutes(protectedApi, db, storage);
         registerRecomputeRoutes(protectedApi, db, createRunner);
         registerUsageRoutes(protectedApi, db);
         registerWorkflowRoutes(protectedApi, db, orchestrator, createRunner);

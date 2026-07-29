@@ -288,6 +288,9 @@ export interface OutputDTO {
   video_url?: string | null;
   thumbnail_url?: string | null;
   is_active: boolean;
+  error_code?: string | null;
+  provider?: string | null;
+  model?: string | null;
 }
 
 export interface PromptVersionDTO {
@@ -350,5 +353,11 @@ export interface ProviderCatalogDTO {
   runtime_override?: {
     selection?: Partial<ProviderCatalogDTO['selection']>;
     models?: Partial<ProviderModelsDTO>;
+  };
+  siliconflow_account?: {
+    total_balance?: string;
+    charge_balance?: string;
+    balance?: string;
+    status?: string;
   };
 }

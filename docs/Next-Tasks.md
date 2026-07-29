@@ -4,9 +4,9 @@
 >
 > Status: Active
 >
-> Synced: 2026-07-28
+> Synced: 2026-07-29
 >
-> Priority policy: **Provider stability polish (Track G)** after V0.4 Track F; then Phase 3
+> Priority policy: **Track G complete** — next default track is **Phase 3** (productionize real generation). Track H only after explicit scheduling.
 >
 > Related: [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](Technical-Architecture.md), [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md)
 
@@ -127,7 +127,7 @@ Source of truth: [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) (from th
 
 ---
 
-## Track G — Real-provider stability polish (active)
+## Track G — Real-provider stability polish (completed 2026-07-29)
 
 Goal: make SiliconFlow / DeepSeek generation reliable for daily operator use before Phase 3 productionizing.
 
@@ -139,7 +139,7 @@ Goal: make SiliconFlow / DeepSeek generation reliable for daily operator use bef
 | G4 | Block approving failed placeholder media | Visual + appearance approve | Done 2026-07-24 |
 | G5 | UI: rerun controls inside per-card prompt areas | WorkflowPanel | Done 2026-07-24 |
 | G6 | Character **turnaround** sheet (single 2×2 image) + candidate delete | Replaces four separate front/side/back/face gens; legacy keys kept | Done 2026-07-24; UX polish 2026-07-28 |
-| G7 | Manual E2E: Story→Video with real SiliconFlow keys | Operator checklist after API restart | Pending |
+| G7 | Manual E2E: Story→Video with real SiliconFlow keys | Operator confirmed workflow through video review with playable Wan output; deferred per-shot video gen | Done 2026-07-29 |
 | G8 | Per-scene review (like story segments) | Scene.state + WorkflowPanel | Done 2026-07-24 |
 | G9 | Prompt-draft visual prep + deferred keyframe/video gen | Sheets/prompts drafted; operator generates one-by-one | Done 2026-07-24 |
 | G10 | Prompt constructPositive dedupe | Action/Environment duplication | Done 2026-07-24 |
@@ -150,17 +150,19 @@ Goal: make SiliconFlow / DeepSeek generation reliable for daily operator use bef
 | G15 | Location design sheet draft + generate APIs/UI | `POST …/location-sheet/*` | Done 2026-07-24 |
 | G16 | I2I → T2I fallback on SiliconFlow 4xx/5xx (50507) | Scene keyframes with sheet refs | Done 2026-07-24 |
 | G17 | Docs sync (Asset-Model, Next-Tasks, Tech Arch, agents) | This pass | Done 2026-07-28 |
+| G18 | Video: Wan prompt collapse + skip temp CDN I2V + soft poll | `wan-video-prompt`, siliconflow-video, generation service | Done 2026-07-29 |
+| G19 | Persist generated images to MinIO (not only SF temporary URL) | Keyframes / sheets / location sheets | Done 2026-07-29 |
+| G20 | Provider panel: show SiliconFlow balance warning | `/providers` + ProviderPanel | Done 2026-07-29 |
+| G21 | No auto re-submit on video failure (~¥2/Wan) | Drop I2V→T2V auto fallback; `video_generate` BullMQ attempts=1; confirm before generate | Done 2026-07-29 |
 
-**Exit criteria for Track G:** real image + video succeed with documented model IDs; failed placeholders cannot pass review; unit tests for model canonicalize + I2V media order green; character/location sheets generate and show as list covers.
+**Exit criteria for Track G:** met — real image + video succeed with documented model IDs; failed placeholders cannot pass review; unit tests for model canonicalize + I2V media order green; character/location sheets generate and show as list covers; manual Story→Video E2E with playable output confirmed 2026-07-29.
 
-**Operator checklist (G7):**
+**Operator notes (post-G7):**
 
-1. Restart API after `.env` / domain rebuild (`pnpm --filter @zivith/domain build` if sheet constants changed)
-2. Provider panel: confirm T2I=`Qwen/Qwen-Image`, I2I=`Qwen/Qwen-Image-Edit` (or Kolors), T2V/I2V Wan2.2
-3. Visual Prep → asset detail: draft + generate character turnaround → list cover visible
-4. Location detail: draft + generate location sheet → list cover visible
-5. Workflow visual review: generate character/location keyframes one-by-one; I2I may fall back to T2I
-6. Approve visuals → shots → video with http(s) refs for I2V
+1. Top up SiliconFlow if Wan jobs stay `InQueue` for a long time
+2. Do not spam「生成本镜头视频」— each confirmed click ≈ ¥2 and enqueues one Wan job
+3. Failed videos do **not** auto-retry; regenerate only via explicit button
+4. Prefer MinIO-persisted media; SF temporary CDN URLs expire and are unsuitable for I2V
 
 ---
 
@@ -200,7 +202,7 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓
          Track F (V0.4 plan): F1 W2 → F2 W1 → F3 W3 → F4 W4 → F5 W5 → F6 W6 → F7 W7
               ↓
-         Track G (provider stability polish) → then Phase 3
+         Track G (provider stability polish) ✓ 2026-07-29 → Phase 3
               ↓
          Track H implementation only after explicit scheduling; H0 design is complete
 ```

@@ -50,16 +50,54 @@ export function resetRuntimeProviderState(): void {
 export function registerProviderRoutes(app: FastifyInstance): void {
   app.addHook('preHandler', authenticate);
 
-  app.get('/providers', () => {
+  app.get('/providers', async () => {
     const catalog = listProviderCatalog();
+    const selection = loadProviderSelection(runtimeSelection);
+    const models = { ...loadProviderModels(), ...runtimeModels };
+    let siliconflowAccount:
+      | { total_balance?: string; charge_balance?: string; balance?: string; status?: string }
+      | undefined;
+    if (selection.video === 'siliconflow' || selection.image === 'siliconflow') {
+      const apiKey = process.env.SILICONFLOW_API_KEY?.trim();
+      const baseUrl = (process.env.SILICONFLOW_BASE_URL ?? 'https://api.siliconflow.cn/v1').replace(
+        /\/$/,
+        '',
+      );
+      if (apiKey) {
+        try {
+          const response = await fetch(`${baseUrl}/user/info`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
+          if (response.ok) {
+            const payload = (await response.json()) as {
+              data?: {
+                totalBalance?: string;
+                chargeBalance?: string;
+                balance?: string;
+                status?: string;
+              };
+            };
+            siliconflowAccount = {
+              total_balance: payload.data?.totalBalance,
+              charge_balance: payload.data?.chargeBalance,
+              balance: payload.data?.balance,
+              status: payload.data?.status,
+            };
+          }
+        } catch {
+          /* optional probe — ignore network errors */
+        }
+      }
+    }
     return {
       ...catalog,
-      selection: loadProviderSelection(runtimeSelection),
-      models: { ...loadProviderModels(), ...runtimeModels },
+      selection,
+      models,
       runtime_override: {
         selection: runtimeSelection,
         models: runtimeModels,
       },
+      ...(siliconflowAccount ? { siliconflow_account: siliconflowAccount } : {}),
     };
   });
 

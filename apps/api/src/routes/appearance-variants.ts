@@ -286,6 +286,7 @@ export function registerAppearanceVariantRoutes(
           requestId: randomUUID(),
           count: body.count ?? 1,
           allowFallback: false,
+          ...(storage ? { storage } : {}),
         }),
     );
 
@@ -444,6 +445,7 @@ export function registerAppearanceVariantRoutes(
           count: body.count,
           // Asset-library generate is operator-driven; fail loudly like manual visual regenerate.
           allowFallback: false,
+          ...(storage ? { storage } : {}),
         }),
     );
 

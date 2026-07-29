@@ -349,10 +349,21 @@ export class GenerationService {
     ]);
 
     try {
+      const pollRound =
+        typeof payload.poll_round === 'number'
+          ? payload.poll_round
+          : Number(payload.poll_round ?? 0) || 0;
+      const existingProviderJobId =
+        output.providerJobId ||
+        (typeof payload.provider_job_id === 'string' ? payload.provider_job_id : null);
+
       const result = await withUsageContext(
         { projectId: shot.projectId, taskType: 'video_generate' },
-        () =>
-          this.adapter.generate({
+        async () => {
+          if (existingProviderJobId && typeof this.adapter.pollExisting === 'function') {
+            return this.adapter.pollExisting(existingProviderJobId);
+          }
+          return this.adapter.generate({
             request_id: requestId,
             model: output.model,
             positive_prompt: positive,
@@ -360,7 +371,8 @@ export class GenerationService {
             shot: this.domainShot(shot),
             reference_image_urls: referenceImageUrls,
             parameters: { output_id: outputId, visual_media_ids: visualMediaIds },
-          }),
+          });
+        },
       );
 
       const latestTask = await this.db.task.findFirst({ where: { id: task.id } });
@@ -372,6 +384,68 @@ export class GenerationService {
         return;
       }
 
+      // Soft timeout: SiliconFlow often stays InQueue for a long time — keep polling.
+      if (
+        (result.status === 'queued' || result.status === 'running') &&
+        result.metadata?.poll_timeout === true &&
+        result.job_id
+      ) {
+        const nextRound = pollRound + 1;
+        const maxRounds = Number(process.env.SILICONFLOW_VIDEO_POLL_ROUNDS ?? 6);
+        await this.db.$transaction([
+          this.db.output.update({
+            where: { id: outputId },
+            data: {
+              status: 'generating',
+              providerJobId: result.job_id,
+              parameters: json(result.metadata),
+            },
+          }),
+          this.db.task.update({
+            where: { id: task.id },
+            data: {
+              status: 'running',
+              providerJobId: result.job_id,
+              result: json({
+                message:
+                  typeof result.metadata?.reason === 'string'
+                    ? result.metadata.reason
+                    : 'Waiting on SiliconFlow queue',
+                poll_round: nextRound,
+                ...result.metadata,
+              }),
+              payload: json({
+                ...payload,
+                provider_job_id: result.job_id,
+                poll_round: nextRound,
+              }),
+            },
+          }),
+        ]);
+
+        if (nextRound <= maxRounds && this.queue) {
+          await this.queue.enqueue({
+            id: `${task.id}:poll:${nextRound}`,
+            type: 'video_generate',
+            idempotency_key: `${output.idempotencyKey}__poll_${nextRound}`,
+            payload: {
+              output_id: outputId,
+              task_id: task.id,
+              shot_id: shot.id,
+              provider_job_id: result.job_id,
+              poll_round: nextRound,
+            },
+          });
+          return;
+        }
+
+        throw new Error(
+          typeof result.metadata?.reason === 'string'
+            ? `${result.metadata.reason}（已续轮询 ${maxRounds} 轮仍未完成，请到 siliconflow 控制台查看余额与排队）`
+            : 'SiliconFlow video still queued after extended polling',
+        );
+      }
+
       if (result.status !== 'completed' || !result.video_url) {
         const reason =
           typeof result.metadata?.reason === 'string'
@@ -379,7 +453,11 @@ export class GenerationService {
             : typeof result.metadata?.error === 'string'
               ? result.metadata.error
               : result.status;
-        throw new Error(`Video generation ended with ${reason}`);
+        const submitted =
+          typeof result.metadata?.submitted_prompt === 'string'
+            ? ` | prompt=${result.metadata.submitted_prompt}`
+            : '';
+        throw new Error(`Video generation ended with ${reason}${submitted}`);
       }
       await this.db.$transaction([
         this.db.output.update({
@@ -435,14 +513,29 @@ export class GenerationService {
     }
   }
 
-  private async waitForOutput(outputId: string, timeoutMs = 120_000) {
+  private async waitForOutput(outputId: string, timeoutMs = 20 * 60_000) {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
       const output = await this.db.output.findUnique({ where: { id: outputId } });
       if (!output) throw new ApiError(404, 'OUTPUT_NOT_FOUND', '视频输出不存在');
       if (output.status === 'completed') return output;
       if (output.status === 'failed') {
-        throw new ApiError(502, 'MOCK_GENERATION_FAILED', 'Mock 视频生成失败');
+        const task = await this.db.task.findFirst({
+          where: { idempotencyKey: output.idempotencyKey },
+          select: { result: true, errorCode: true, provider: true },
+        });
+        const detail =
+          typeof record(task?.result).message === 'string'
+            ? String(record(task?.result).message)
+            : '';
+        const provider = task?.provider || output.provider || 'unknown';
+        throw new ApiError(
+          502,
+          'VIDEO_GENERATION_FAILED',
+          detail
+            ? `视频生成失败（${provider}）：${detail.slice(0, 300)}`
+            : `视频生成失败（${provider}）`,
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }

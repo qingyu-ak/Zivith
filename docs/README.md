@@ -4,9 +4,9 @@
 >
 > Version: 0.1.0-pre
 >
-> Status: Implementation — Phase 2 closed for Track A–D core; Phase 2.5 providers in use
+> Status: Implementation — Phase 2.5 + Track G complete; next is Phase 3
 >
-> Last Progress Sync: 2026-07-28
+> Last Progress Sync: 2026-07-29
 
 ---
 
@@ -52,7 +52,7 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | [RFC Guide](architecture/rfc-guide.md) | Proposal, review, risk, migration, and acceptance process for significant changes |
 | [Technical Architecture](Technical-Architecture.md) | System design, adapters, APIs, queues, BYOK, and data storage |
 | [Implementation Plan](Implementation-Plan.md) | Phased roadmap with live progress checkboxes |
-| [Next Tasks](Next-Tasks.md) | Current engineering backlog (Track G ~90%; G7 E2E pending; Track H history foundation planned) |
+| [Next Tasks](Next-Tasks.md) | Current engineering backlog (Track G Done; Phase 3 next; Track H history foundation planned) |
 | [V0.4 Modification Plan](V0.4-Modification-Plan.md) | Completed first-pass reference — workstreams W1–W7 from the waoowaoo review + ADR-0006 |
 | [Director Copilot RFC (thin)](architecture/rfc/Director-Copilot-RFC.md) | Project sidebar co-pilot scope lock (Phase 3+; not a chatbot) |
 | [Looser Creative Flow RFC (thin)](architecture/rfc/Looser-Creative-Flow-RFC.md) | Partial recompute / asset-first visuals / story segmentation ramp |
@@ -94,7 +94,7 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 
 ---
 
-## Project Status (2026-07-28)
+## Project Status (2026-07-29)
 
 | Phase | Status | Notes |
 |-------|--------|-------|
@@ -102,12 +102,12 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 | Phase 1 Core Domain | ~90% done | Inheritance is read-time resolve; Character/Location only |
 | Phase 2 AI Agent + Mock Gen | ~95% done | A1 E2E gates pass; queue + SSE + recover landed |
 | Phase 2.5 First Providers | ~85% done | DeepSeek + SiliconFlow; four modality model slots; BYOK later (C7) |
-| Track G polish | ~90% done | Sheets / covers / I2I fallback landed; G7 real-key E2E pending |
-| Phase 3–5 | Not started | — |
+| Track G polish | **Done** | Real-key Story→Video E2E; Wan harden / MinIO / balance / no auto re-bill |
+| Phase 3–5 | Not started | Phase 3 is the default next track |
 
 **Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
-**Strategy:** B-Line — Agent pipeline first, video generation mocked.  
-**Near-term focus:** Finish [Next Tasks](Next-Tasks.md) **G7** (real SiliconFlow E2E), then Phase 3. Asset sheets + provider matrix: [Asset Model](Asset-Model.md). Remaining later: usage freeze/limits, BYOK (C7).
+**Strategy:** B-Line — Agent pipeline first; real SiliconFlow path validated in Track G.  
+**Near-term focus:** [Next Tasks](Next-Tasks.md) **Phase 3** productionize. Asset sheets + provider matrix: [Asset Model](Asset-Model.md). Remaining later: usage freeze/limits, BYOK (C7); Track H after explicit scheduling.
 
 ---
 

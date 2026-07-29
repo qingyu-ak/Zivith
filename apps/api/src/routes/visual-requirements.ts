@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma, PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
+import type { StoragePort } from '../ports/index.js';
 import {
   mergeVisualPromptIntoAssetData,
   readVisualPromptFromAssetData,
@@ -119,7 +120,11 @@ async function enrichRequirement(
   };
 }
 
-export function registerVisualRequirementRoutes(app: FastifyInstance, db: PrismaClient): void {
+export function registerVisualRequirementRoutes(
+  app: FastifyInstance,
+  db: PrismaClient,
+  storage?: StoragePort,
+): void {
   app.get('/scenes/:id/visual-requirements', async (request) => {
     const { id } = sceneParams.parse(request.params);
     await sceneForMember(db, id, request.user.sub);
@@ -239,6 +244,7 @@ export function registerVisualRequirementRoutes(app: FastifyInstance, db: Prisma
             count: body.count,
             // Manual regenerate must fail loudly so operators can fix model/provider settings.
             allowFallback: false,
+            ...(storage ? { storage } : {}),
           }),
       );
       if (!result) throw new ApiError(404, 'VISUAL_REQUIREMENT_NOT_FOUND', '视觉需求不存在');

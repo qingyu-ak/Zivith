@@ -92,8 +92,14 @@ export function createGenerationQueueRuntime(
         await workflowProcessor(job);
       }
     },
-    // Default 1 so SiliconFlow video/image calls do not fan out in parallel.
-    { connection, concurrency: Number(process.env.GENERATION_WORKER_CONCURRENCY ?? 1) },
+    {
+      connection,
+      // Default 1 so SiliconFlow video/image calls do not fan out in parallel.
+      concurrency: Number(process.env.GENERATION_WORKER_CONCURRENCY ?? 1),
+      // Wan video polls for up to ~20 minutes; keep the lock alive across that window.
+      lockDuration: Number(process.env.GENERATION_WORKER_LOCK_MS ?? 20 * 60 * 1000),
+      stalledInterval: 60_000,
+    },
   );
 
   worker.on('failed', (job, error) => {

@@ -288,12 +288,19 @@ export default function ShotEditorPage() {
   }
 
   async function generateVideo() {
+    if (
+      !window.confirm(
+        '确认生成视频？\n\nSiliconFlow Wan 约 ¥2/条，失败后不会自动重试；仅本次点击会发起一次计费请求。',
+      )
+    ) {
+      return;
+    }
     setGenerating(true);
     setError('');
     setNotice('');
     try {
       await api(`/shots/${shotId}/generate`, { method: 'POST', body: {} });
-      setNotice('视频生成完成（使用当前所选视频提供商）');
+      setNotice('已提交视频生成（约 ¥2；失败不会自动重试）');
       await load();
     } catch (reason) {
       setError(errorMessage(reason));
@@ -318,12 +325,19 @@ export default function ShotEditorPage() {
   }
 
   async function recomputeVideo() {
+    if (
+      !window.confirm(
+        '确认重跑本镜头视频？\n\nSiliconFlow Wan 约 ¥2/条，失败后不会自动重试；仅本次点击会发起一次计费请求。',
+      )
+    ) {
+      return;
+    }
     setGenerating(true);
     setError('');
     setNotice('');
     try {
       await api(`/shots/${shotId}/recompute-video`, { method: 'POST' });
-      setNotice('已局部重跑本镜头视频（工作流 attempt 已记录）');
+      setNotice('已排队重跑本镜头视频（约 ¥2；失败不会自动重试）');
       await load();
     } catch (reason) {
       setError(errorMessage(reason));

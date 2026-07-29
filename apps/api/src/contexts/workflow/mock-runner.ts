@@ -1406,9 +1406,12 @@ export class MockWorkflowRunner {
     if (options?.shotIds?.length && options.advance === false) {
       const outputs = [];
       for (const shotId of shotIds) {
+        // Async enqueue: Wan2.2 often exceeds HTTP sync wait (was 120s → false timeouts
+        // while the worker was still polling SiliconFlow).
         const output = await this.generationService.generate(shotId, {
           requestId: `${run.id}:${shotId}:recompute:${Date.now()}`,
           model: this.providers.videoModel,
+          async: true,
         });
         outputs.push(output);
       }

@@ -1124,6 +1124,7 @@ export function registerResourceRoutes(
           requestId: randomUUID(),
           count: body.count,
           ...(body.prompt ? { prompt: body.prompt } : {}),
+          ...(storage ? { storage } : {}),
         }),
     );
     return reply.status(201).send({

@@ -18,20 +18,20 @@ This document defines the phased implementation roadmap for Zivith.
 
 **Strategy decision (2026-07):** The MVP follows B-Line — the AI Agent creative pipeline is built first, while real video generation uses a Mock Adapter. This prioritizes demonstrating the "AI as creative partner" workflow over video quality, and defers video model selection to a later phase when the provider landscape is clearer.
 
-### Live progress (2026-07-28)
+### Live progress (2026-07-29)
 
 | Phase | Progress | Summary |
 |-------|----------|---------|
 | 0 Foundation | ~95% | Monorepo, auth, Compose, CI, BullMQ wired; no staging deploy |
 | 1 Core Domain | ~90% | Full creative CRUD + inheritance + Character/Location assets |
 | 2 AI Agent + Mock Gen | ~95% | Mock Story→Video E2E (A1) + WorkflowPanel gates/SSE/queue/recover |
-| 2.5 First Providers | ~80% | DeepSeek + SiliconFlow adapters + provider UI; BYOK/usage later |
+| 2.5 First Providers | ~85% | DeepSeek + SiliconFlow adapters + provider UI; BYOK later (C7) |
 | **V0.4 (interlude)** | ~95% | W1–W7 first-pass landed (`usage_records` recording; freeze/limits later). See [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) |
-| 2.5 polish (Track G) | ~90% | Four model slots, turnaround/location sheets, cover URL resolve, I2I→T2I fallback; G7 manual E2E pending |
+| 2.5 polish (Track G) | **Done** | Real-key Story→Video E2E; Wan harden + MinIO persist + balance warn + no auto re-bill |
 | Creative history architecture | design complete | [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) contract written; runtime schema/API/dual-write/UI not started |
-| 3–5 | 0% | Not started |
+| 3–5 | 0% | Next: Phase 3 productionize |
 
-**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track G** (G7 real-key E2E remaining). Track F (V0.4 W1–W7) is Done. See [Asset-Model.md](Asset-Model.md) for turnaround / location sheets and the T2I·I2I·T2V·I2V matrix.
+**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Phase 3** (Track G closed 2026-07-29). Track H only after explicit scheduling. See [Asset-Model.md](Asset-Model.md) for turnaround / location sheets and the T2I·I2I·T2V·I2V matrix.
 
 ### Entity history implementation gate
 

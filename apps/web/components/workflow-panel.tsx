@@ -32,7 +32,7 @@ const stepLabels: Record<WorkflowStepName, string> = {
   shot_review: '镜头审核',
   prompt: '提示词生成',
   prompt_review: '提示词审核',
-  video: 'Mock 视频生成',
+  video: '视频生成',
   video_review: '视频审核',
 };
 
@@ -143,6 +143,42 @@ function referenceInjectionSkipped(media?: WorkflowMediaDTO): boolean {
   return injection === 'skipped_unsupported' || injection === 'skipped_error';
 }
 
+function resolveVisualCandidate(
+  item: VisualReviewItem,
+  selectedCandidateIds: Record<string, string>,
+): WorkflowMediaDTO | undefined {
+  const gallery =
+    item.candidates && item.candidates.length > 0
+      ? item.candidates
+      : item.media
+        ? [item.media]
+        : [];
+  if (gallery.length === 0) return undefined;
+  const selectedId =
+    selectedCandidateIds[item.requirement.id] ??
+    item.requirement.approved_media_id ??
+    gallery[0]?.id;
+  return gallery.find((candidate) => candidate.id === selectedId) ?? gallery[0];
+}
+
+/** Ready to approve = each required card has a real (non-placeholder) candidate to bind. */
+function isVisualItemReadyToApprove(
+  item: VisualReviewItem,
+  selectedCandidateIds: Record<string, string>,
+): boolean {
+  if (!item.requirement.required) return true;
+  if (item.issue) return false;
+  if (
+    item.requirement.status === 'approved' &&
+    item.requirement.approved_media_id &&
+    !isFailedPlaceholder(item.media)
+  ) {
+    return true;
+  }
+  const selected = resolveVisualCandidate(item, selectedCandidateIds);
+  return Boolean(selected) && !isFailedPlaceholder(selected);
+}
+
 function canApproveArtifacts(
   review: WorkflowStepName | null | undefined,
   visualItems: VisualReviewItem[],
@@ -151,6 +187,7 @@ function canApproveArtifacts(
   story: StoryDTO | null,
   scenes: SceneDTO[],
   shots: ShotDTO[],
+  selectedCandidateIds: Record<string, string> = {},
 ): boolean {
   if (!review) return false;
   if (review === 'story_review') {
@@ -166,14 +203,7 @@ function canApproveArtifacts(
   if (review === 'shot_review') return shots.length > 0;
   if (review === 'visual_assets_review') {
     if (visualItems.length === 0) return false;
-    return visualItems.every(
-      (item) =>
-        !item.requirement.required ||
-        (item.requirement.status === 'approved' &&
-          Boolean(item.requirement.approved_media_id) &&
-          !item.issue &&
-          !isFailedPlaceholder(item.media)),
-    );
+    return visualItems.every((item) => isVisualItemReadyToApprove(item, selectedCandidateIds));
   }
   if (review === 'prompt_review') {
     return promptItems.length > 0 && promptItems.every((item) => !item.issue);
@@ -249,6 +279,23 @@ export function WorkflowPanel({
   useEffect(() => {
     void loadLatest();
   }, [loadLatest]);
+
+  // While SiliconFlow video jobs run (minutes), keep refreshing the video review cards.
+  useEffect(() => {
+    const pending = videoItems.some(
+      (item) =>
+        item.output &&
+        (item.output.status === 'queued' || item.output.status === 'generating') &&
+        !item.output.video_url,
+    );
+    if (!pending || selectedStep !== 'video_review') return;
+    const timer = window.setInterval(() => {
+      const step = selectedStep;
+      setSelectedStep(null);
+      window.setTimeout(() => setSelectedStep(step), 0);
+    }, 20_000);
+    return () => window.clearInterval(timer);
+  }, [videoItems, selectedStep]);
 
   useEffect(() => {
     if (!run) {
@@ -409,6 +456,7 @@ export function WorkflowPanel({
                 sceneTitle,
                 candidates: [],
                 // Deferred generation: operator clicks「按提示词生成」per card.
+                issue: '尚未生成关键图，请先点击「按提示词生成」',
               } satisfies VisualReviewItem;
             }
             if (candidateIds.length === 0) {
@@ -557,11 +605,19 @@ export function WorkflowPanel({
             api<ShotDTO>(`/shots/${id}`),
             api<OutputDTO[]>(`/shots/${id}/outputs`),
           ]);
+          const playable = (item: OutputDTO) =>
+            Boolean(item.video_url) && (item.status === 'completed' || item.is_active);
+          // Prefer a completed/active playable output over a stale failed id still listed in
+          // workflow step output_ids (common after recover / soft-timeout).
           const matched =
+            outputs.find((item) => playable(item) && item.is_active) ??
+            outputs.find((item) => playable(item)) ??
+            (expectedOutputId
+              ? outputs.find((item) => item.id === expectedOutputId && playable(item))
+              : undefined) ??
             outputs.find((item) => item.id === expectedOutputId) ??
+            outputs.find((item) => outputIdSet.has(item.id) && playable(item)) ??
             outputs.find((item) => outputIdSet.has(item.id)) ??
-            outputs.find((item) => item.is_active) ??
-            outputs.find((item) => item.status === 'completed' && item.video_url) ??
             outputs[0];
           if (!matched) {
             return {
@@ -570,14 +626,18 @@ export function WorkflowPanel({
             } satisfies VideoReviewItem;
           }
           if (!matched.video_url) {
+            const providerHint = matched.provider ? `（${matched.provider}）` : '';
             return {
               shot,
               output: matched,
               issue:
                 matched.status === 'failed'
-                  ? '视频生成失败，请修改提示词后重试'
+                  ? matched.error_code === 'GENERATION_TIMEOUT' ||
+                    matched.error_code === 'VIDEO_GENERATION_FAILED'
+                    ? `视频生成失败${providerHint}${matched.error_code ? `：${matched.error_code}` : ''}。不会自动重试（约 ¥2/条）；需手动点「生成本镜头视频」`
+                    : `视频生成失败${providerHint}，请重试或检查 Provider 模型`
                   : matched.status === 'queued' || matched.status === 'generating'
-                    ? '视频生成中，请稍候刷新'
+                    ? '视频生成中：SiliconFlow Wan 常在对方队列排队较久（余额不足时可能长期 InQueue）。请刷新状态，勿重复狂点生成。'
                     : '视频输出缺少可播放地址',
             } satisfies VideoReviewItem;
           }
@@ -622,9 +682,39 @@ export function WorkflowPanel({
         story,
         scenes,
         shots,
+        selectedCandidateIds,
       ),
-    [run?.state.awaiting_review, visualItems, promptItems, videoItems, story, scenes, shots],
+    [
+      run?.state.awaiting_review,
+      visualItems,
+      promptItems,
+      videoItems,
+      story,
+      scenes,
+      shots,
+      selectedCandidateIds,
+    ],
   );
+
+  const visualApproveBlockedReason = useMemo(() => {
+    if (run?.state.awaiting_review !== 'visual_assets_review' || approveReady) return '';
+    const pending = visualItems.filter(
+      (item) => !isVisualItemReadyToApprove(item, selectedCandidateIds),
+    );
+    if (pending.length === 0) return artifactWarning || '审核材料尚未就绪';
+    const names = pending
+      .slice(0, 3)
+      .map((item) => item.requirement.asset?.name ?? item.requirement.variant_key)
+      .join('、');
+    const more = pending.length > 3 ? ` 等 ${pending.length} 项` : '';
+    return `请先为「${names}${more}」生成并选中真实关键图（非占位图），再点审核通过`;
+  }, [
+    run?.state.awaiting_review,
+    approveReady,
+    visualItems,
+    selectedCandidateIds,
+    artifactWarning,
+  ]);
 
   async function start(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -694,7 +784,9 @@ export function WorkflowPanel({
     if (!run?.state.awaiting_review) return;
     const review = run.state.awaiting_review;
     if (action === 'approve' && !approveReady) {
-      setError(artifactWarning || '审核材料尚未就绪，无法通过');
+      setError(
+        visualApproveBlockedReason || artifactWarning || '审核材料尚未就绪，无法通过',
+      );
       return;
     }
     setBusy(true);
@@ -925,13 +1017,25 @@ export function WorkflowPanel({
   }
 
   async function recomputeShotVideo(shotId: string) {
+    if (
+      !window.confirm(
+        '确认生成该镜头视频？\n\nSiliconFlow Wan 约 ¥2/条，失败后不会自动重试；仅本次点击会发起一次计费请求。',
+      )
+    ) {
+      return;
+    }
     setRecomputingKey(`video:${shotId}`);
     setError('');
     setNotice('');
     try {
       await api(`/shots/${shotId}/recompute-video`, { method: 'POST' });
-      setNotice('已局部重跑该镜头视频');
-      await refresh();
+      setNotice(
+        '已排队生成该镜头视频（异步，约 ¥2）。失败不会自动重试；Wan 通常需数分钟，可点「刷新状态」。',
+      );
+      // Force artifact reload for the video step.
+      const step = selectedStep;
+      setSelectedStep(null);
+      window.setTimeout(() => setSelectedStep(step ?? 'video_review'), 0);
       await onArtifactsChanged();
     } catch (reason) {
       setError(errorMessage(reason));
@@ -1245,9 +1349,9 @@ export function WorkflowPanel({
               ) : (
                 <>
                   <p className="text-xs text-zinc-500 sm:col-span-2 lg:col-span-3">
-                    视觉准备会从剧本起草角色设定表与场景提示词（不自动生图）。请先在「角色与地点」审核设定表提示词并生成单图多视角，再回此处分条生成场景关键图。
+                    视觉准备只起草提示词、不自动生图。请先在「角色与地点」生成设定表，再在本页对每张卡点「按提示词生成本张」。全部关键图就绪后，底部「审核通过并继续」会亮起。「重写本场景全部提示词」会重写同场景所有卡的提示词草稿，不会单独生图。
                   </p>
-                {visualItems.map(({ requirement, media, candidates, sceneTitle, issue }) => {
+                {visualItems.map(({ requirement, media, candidates, sceneTitle, issue }, index) => {
                   const gallery = candidates && candidates.length > 0 ? candidates : media ? [media] : [];
                   const selectedId =
                     selectedCandidateIds[requirement.id] ??
@@ -1260,6 +1364,9 @@ export function WorkflowPanel({
                   const typeLabel =
                     requirement.asset_type === 'character' ? '角色关键图' : '地点参考';
                   const draft = promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '';
+                  const showSceneRecompute =
+                    visualItems.findIndex((item) => item.requirement.scene_id === requirement.scene_id) ===
+                    index;
                   return (
                     <div
                       key={requirement.id}
@@ -1402,26 +1509,38 @@ export function WorkflowPanel({
                               variant="secondary"
                               disabled={busy || regeneratingId === requirement.id}
                               onClick={() => void regenerateVisual(requirement)}
+                              title="只生成/追加本张关键图候选，不影响同场景其他卡"
                             >
                               {regeneratingId === requirement.id
                                 ? '生成中…'
                                 : failedPlaceholder || !imageSrc
-                                  ? '按提示词生成'
-                                  : '按提示词重生成'}
+                                  ? '按提示词生成本张'
+                                  : '按提示词重生成本张'}
                             </Button>
                           </>
                         )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          disabled={busy || recomputingKey === `visual:${requirement.scene_id}`}
-                          onClick={() => void recomputeSceneVisual(requirement.scene_id)}
-                          title="重跑该场景的整步视觉准备（含本卡与同场景其他卡）"
-                        >
-                          {recomputingKey === `visual:${requirement.scene_id}`
-                            ? '场景重跑中…'
-                            : '重跑本场景视觉准备'}
-                        </Button>
+                        {showSceneRecompute && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            disabled={busy || recomputingKey === `visual:${requirement.scene_id}`}
+                            onClick={() => {
+                              if (
+                                !window.confirm(
+                                  '将重跑该场景整步视觉准备：重新起草本场景全部角色/地点提示词（不自动生图）。单张生图请用「按提示词生成本张」。确定继续？',
+                                )
+                              ) {
+                                return;
+                              }
+                              void recomputeSceneVisual(requirement.scene_id);
+                            }}
+                            title="重写本场景全部提示词草稿，不是单张生图"
+                          >
+                            {recomputingKey === `visual:${requirement.scene_id}`
+                              ? '场景提示词重跑中…'
+                              : '重写本场景全部提示词'}
+                          </Button>
+                        )}
                       </div>
                       {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
                     </div>
@@ -1545,6 +1664,11 @@ export function WorkflowPanel({
                 <Button
                   disabled={busy || loadingArtifacts || !approveReady}
                   onClick={() => void submitReview('approve')}
+                  title={
+                    approveReady
+                      ? '绑定当前选中关键图并继续工作流'
+                      : visualApproveBlockedReason || '审核材料尚未就绪'
+                  }
                 >
                   {busy ? '正在处理…' : '审核通过并继续'}
                 </Button>
@@ -1552,10 +1676,14 @@ export function WorkflowPanel({
                   variant="secondary"
                   disabled={busy || !feedback.trim()}
                   onClick={() => void submitReview('retry_with_feedback')}
+                  title="按下方反馈意见重跑当前审核阶段（可能影响同阶段多项）"
                 >
                   按反馈重新生成
                 </Button>
               </div>
+              {!approveReady && visualApproveBlockedReason && (
+                <p className="text-xs text-amber-200/90">{visualApproveBlockedReason}</p>
+              )}
             </div>
           )}
         </>
