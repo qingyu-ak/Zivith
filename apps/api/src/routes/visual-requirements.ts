@@ -18,6 +18,7 @@ import { createProviderBundle } from '../providers/registry.js';
 import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
+import { maybeRecordEntityChange } from '../contexts/history/index.js';
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -318,6 +319,20 @@ export function registerVisualRequirementRoutes(
         },
       }),
     ]);
+    await maybeRecordEntityChange(db, {
+      projectId: asset.projectId,
+      entityType: 'visual_requirement',
+      entityId: approved.id,
+      row: approved as unknown as Record<string, unknown>,
+      changeKind: 'transition',
+      eventType: 'review.decided',
+      idempotencyKey: `visual_requirement:approve:${approved.id}:${mediaId}`,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'POST .../visual-requirements/:rid/approve',
+      payload: { decision: 'approve', media_id: mediaId },
+    });
     if (asset.type === 'character') {
       await syncVariantAnchorFromRequirement(db, {
         assetId: asset.id,

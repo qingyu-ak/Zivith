@@ -7,6 +7,7 @@ import type { QueuePort } from '../../ports/index.js';
 import type { VideoGenerationAdapter } from '../../ports/generation.js';
 import { resolveMediaUrls } from '../visual/reference-images.js';
 import { withUsageContext } from '../usage/context.js';
+import { maybeRecordEntityChange } from '../history/index.js';
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -483,6 +484,19 @@ export class GenerationService {
         }),
         this.db.shot.update({ where: { id: shot.id }, data: { state: 'review' } }),
       ]);
+      const completed = await this.db.output.findUniqueOrThrow({ where: { id: outputId } });
+      await maybeRecordEntityChange(this.db, {
+        projectId: shot.projectId,
+        entityType: 'output',
+        entityId: outputId,
+        row: completed as unknown as Record<string, unknown>,
+        changeKind: 'update',
+        eventType: 'generation.completed',
+        idempotencyKey: `output:completed:${outputId}:${completed.providerJobId ?? result.job_id}`,
+        sourceType: 'generation_worker',
+        sourceId: task.id,
+        payload: { status: 'completed' },
+      });
     } catch (error) {
       const latestTask = await this.db.task.findFirst({ where: { id: task.id } });
       if (latestTask?.status === 'cancelled') {
@@ -509,6 +523,21 @@ export class GenerationService {
         }),
         this.db.shot.update({ where: { id: shot.id }, data: { state: 'draft' } }),
       ]);
+      const failed = await this.db.output.findUnique({ where: { id: outputId } });
+      if (failed) {
+        await maybeRecordEntityChange(this.db, {
+          projectId: shot.projectId,
+          entityType: 'output',
+          entityId: outputId,
+          row: failed as unknown as Record<string, unknown>,
+          changeKind: 'update',
+          eventType: 'generation.failed',
+          idempotencyKey: `output:failed:${outputId}:${failed.updatedAt.toISOString()}`,
+          sourceType: 'generation_worker',
+          sourceId: task.id,
+          payload: { status: 'failed', error_code: 'VIDEO_GENERATION_FAILED' },
+        });
+      }
       throw new ApiError(502, 'VIDEO_GENERATION_FAILED', `视频生成失败：${message.slice(0, 200)}`);
     }
   }

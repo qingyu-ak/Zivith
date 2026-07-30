@@ -1,6 +1,6 @@
 # Entity history write-path inventory (Track H H1)
 
-> Status: H2 tables landed; dual-write still H3
+> Status: H3 dual-write helpers landed; flags default **off**
 >
 > Synced: 2026-07-30
 >
@@ -8,7 +8,7 @@
 >
 > Related: [entity-state-timeline-track.md](entity-state-timeline-track.md), [ADR-0007](adr/0007-preserve-current-state-with-immutable-creative-history.md)
 
-This document lists current authoritative write surfaces for the H1 first-batch Entities. **H2** adds `entity_revisions` / `change_events` / `project_sequences` and an idempotent baseline backfill (`pnpm --filter @zivith/api history:backfill-baselines`). **H3** will attach live dual-write on these surfaces. **Do not confuse ChangeEvent (system facts) with Presentation Timeline Items** (Scene/Shot order).
+This document lists current authoritative write surfaces for the H1 first-batch Entities. **H2** adds `entity_revisions` / `change_events` / `project_sequences` and an idempotent baseline backfill (`pnpm --filter @zivith/api history:backfill-baselines`). **H3** adds `recordEntityChange` / `maybeRecordEntityChange` with per-Entity `off|shadow|dual` flags (default off). **Do not confuse ChangeEvent (system facts) with Presentation Timeline Items** (Scene/Shot order).
 
 ## Naming
 
@@ -79,9 +79,20 @@ This document lists current authoritative write surfaces for the H1 first-batch 
 
 Baseline creates `revision=1` + `entity.created` ChangeEvent per missing Entity. Soft-deleted Shot / AppearanceVariant / VisualRequirement rows are skipped. Re-running is safe (idempotent).
 
-## Out of H2 (still later)
+## H3 dual-write flags (default off)
 
-- No live `recordEntityChange` dual-write (H3)
+| Mode | Behavior |
+|------|----------|
+| `off` (default) | No history writes on live paths |
+| `shadow` | Best-effort append after business write; failures logged, request still succeeds |
+| `dual` | Await history append; `409 REVISION_CONFLICT` / `IDEMPOTENCY_KEY_REUSED` propagate |
+
+Env: `HISTORY_WRITE_DEFAULT`, `HISTORY_ENTITY_SHOT`, `HISTORY_ENTITY_PROMPT_VERSION`, `HISTORY_ENTITY_OUTPUT`, `HISTORY_ENTITY_APPEARANCE_VARIANT`, `HISTORY_ENTITY_VISUAL_REQUIREMENT`.
+
+Wired call sites (no-op until flags enabled): Shot create/patch, PromptVersion create/approve, Output complete/fail, AppearanceVariant approve, VisualRequirement approve.
+
+## Out of H3 (still later)
+
 - No Presentation Timeline / World Time APIs (H4+)
 - No CreativeBranch (H10)
-- No read-path switch away from dedicated business tables
+- Not every write path is wired yet (workflow mock-runner bulk paths remain for later)

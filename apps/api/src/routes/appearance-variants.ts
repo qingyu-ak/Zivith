@@ -30,6 +30,7 @@ import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
 import type { StoragePort } from '../ports/index.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
+import { maybeRecordEntityChange } from '../contexts/history/index.js';
 
 const assetParams = z.object({ id: z.string().uuid() });
 const variantParams = z.object({
@@ -511,6 +512,20 @@ export function registerAppearanceVariantRoutes(
         },
       }),
     ]);
+    await maybeRecordEntityChange(db, {
+      projectId: asset.projectId,
+      entityType: 'appearance_variant',
+      entityId: approved.id,
+      row: approved as unknown as Record<string, unknown>,
+      changeKind: 'transition',
+      eventType: 'review.decided',
+      idempotencyKey: `appearance_variant:approve:${approved.id}:${mediaId}`,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'POST /assets/:id/appearance-variants/:key/approve',
+      payload: { decision: 'approve', media_id: mediaId },
+    });
     return approved;
   });
 

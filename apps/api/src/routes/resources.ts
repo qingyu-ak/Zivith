@@ -23,6 +23,7 @@ import { ApiError } from '../errors.js';
 import { authenticate } from './auth.js';
 import type { StoragePort } from '../ports/index.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
+import { maybeRecordEntityChange } from '../contexts/history/index.js';
 
 /** Prefer remote/data URLs stored on Media; only sign object storage for local keys. */
 async function resolveMediaAccessUrl(
@@ -745,6 +746,20 @@ export function registerResourceRoutes(
         prompt: json(body.prompt),
       }),
     });
+    await maybeRecordEntityChange(db, {
+      projectId,
+      entityType: 'shot',
+      entityId: shot.id,
+      row: shot as unknown as Record<string, unknown>,
+      changeKind: 'create',
+      eventType: 'entity.created',
+      idempotencyKey: `shot:create:${shot.id}`,
+      expectedRevision: 0,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'POST /scenes/:sid/shots',
+    });
     return reply.status(201).send(shot);
   });
   app.get('/shots/:id', async (request) => {
@@ -850,6 +865,19 @@ export function registerResourceRoutes(
       }),
     });
     await audit(db, request, projectId, 'shot', id, 'update', existing, updated);
+    await maybeRecordEntityChange(db, {
+      projectId,
+      entityType: 'shot',
+      entityId: id,
+      row: updated as unknown as Record<string, unknown>,
+      changeKind: 'update',
+      eventType: 'entity.changed',
+      idempotencyKey: `shot:update:${id}:${updated.updatedAt.toISOString()}`,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'PATCH /shots/:id',
+    });
     return updated;
   });
   app.delete('/shots/:id', async (request, reply) => {

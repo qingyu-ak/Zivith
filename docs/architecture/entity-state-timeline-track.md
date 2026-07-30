@@ -2,7 +2,7 @@
 
 > Zivith 世界创作状态与可变时间维度体系
 >
-> Status: Accepted design — revised 2026-07-29; H1–H2 implemented on `feat/track-h-entity-history` (2026-07-30); dual-write and Timeline UI not yet
+> Status: Accepted design — revised 2026-07-29; H1–H3 on `feat/track-h-entity-history` (2026-07-30); Presentation Timeline UI not yet
 >
 > Scope: Domain architecture, presentation-led variable time model, API contract, UI boundary, and migration plan
 >
@@ -10,7 +10,7 @@
 >
 > Governance: [ADR-0007](adr/0007-preserve-current-state-with-immutable-creative-history.md) is Accepted; implementation proceeds on explicit Track H scheduling
 >
-> Implementation: H1 `@zivith/domain` `history/*`; H2 Prisma `entity_revisions` / `change_events` / `project_sequences` + baseline backfill — see [entity-history-write-paths.md](entity-history-write-paths.md)
+> Implementation: H1 schemas; H2 tables + baseline; H3 `recordEntityChange` / flags default off — see [entity-history-write-paths.md](entity-history-write-paths.md)
 
 ---
 

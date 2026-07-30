@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { AgentRuntime } from '../contexts/agent/runtime.js';
 import { PromptAgent, type PromptAgentInput } from '../contexts/agent/prompt-agent.js';
 import { ApiError } from '../errors.js';
+import { maybeRecordEntityChange } from '../contexts/history/index.js';
 
 const shotParams = z.object({ id: z.string().uuid() });
 const promptParams = z.object({ id: z.string().uuid(), promptId: z.string().uuid() });
@@ -188,21 +189,35 @@ export function registerShotPromptRoutes(app: FastifyInstance, db: PrismaClient)
       });
       return version;
     });
+    await maybeRecordEntityChange(db, {
+      projectId: shot.projectId,
+      entityType: 'prompt_version',
+      entityId: promptVersion.id,
+      row: promptVersion as unknown as Record<string, unknown>,
+      changeKind: 'create',
+      eventType: 'entity.created',
+      idempotencyKey: `prompt_version:create:${promptVersion.id}`,
+      expectedRevision: 0,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'POST /shots/:id/generate-prompt',
+    });
     return reply.status(201).send({ prompt_version: promptVersion, prompt: generated });
   });
 
   app.post('/shots/:id/prompts/:promptId/approve', async (request) => {
     const { id, promptId } = promptParams.parse(request.params);
-    await shotForMember(db, id, request.user.sub, true);
+    const shot = await shotForMember(db, id, request.user.sub, true);
     const prompt = await db.promptVersion.findFirst({ where: { id: promptId, shotId: id } });
     if (!prompt) throw new ApiError(404, 'PROMPT_NOT_FOUND', '提示词版本不存在');
     const approvedAt = new Date();
-    return db.$transaction(async (tx) => {
+    const approved = await db.$transaction(async (tx) => {
       await tx.promptVersion.updateMany({
         where: { shotId: id, approvedAt: { not: null } },
         data: { approvedAt: null },
       });
-      const approved = await tx.promptVersion.update({
+      const next = await tx.promptVersion.update({
         where: { id: promptId },
         data: { approvedAt },
       });
@@ -217,7 +232,22 @@ export function registerShotPromptRoutes(app: FastifyInstance, db: PrismaClient)
           },
         },
       });
-      return approved;
+      return next;
     });
+    await maybeRecordEntityChange(db, {
+      projectId: shot.projectId,
+      entityType: 'prompt_version',
+      entityId: approved.id,
+      row: approved as unknown as Record<string, unknown>,
+      changeKind: 'transition',
+      eventType: 'review.decided',
+      idempotencyKey: `prompt_version:approve:${approved.id}:${approvedAt.toISOString()}`,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'POST /shots/:id/prompts/:promptId/approve',
+      payload: { decision: 'approve' },
+    });
+    return approved;
   });
 }
