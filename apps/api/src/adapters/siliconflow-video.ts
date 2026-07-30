@@ -225,8 +225,8 @@ export class SiliconFlowVideoAdapter implements VideoGenerationAdapter {
     const result = await this.submitAndPoll({
       requestModel: request.model,
       prompt,
-      negative,
-      image: preparedImage,
+      ...(negative ? { negative } : {}),
+      ...(preparedImage ? { image: preparedImage } : {}),
     });
 
     return {

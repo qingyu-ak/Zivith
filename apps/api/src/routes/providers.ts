@@ -78,10 +78,14 @@ export function registerProviderRoutes(app: FastifyInstance): void {
               };
             };
             siliconflowAccount = {
-              total_balance: payload.data?.totalBalance,
-              charge_balance: payload.data?.chargeBalance,
-              balance: payload.data?.balance,
-              status: payload.data?.status,
+              ...(payload.data?.totalBalance !== undefined
+                ? { total_balance: payload.data.totalBalance }
+                : {}),
+              ...(payload.data?.chargeBalance !== undefined
+                ? { charge_balance: payload.data.chargeBalance }
+                : {}),
+              ...(payload.data?.balance !== undefined ? { balance: payload.data.balance } : {}),
+              ...(payload.data?.status !== undefined ? { status: payload.data.status } : {}),
             };
           }
         } catch {

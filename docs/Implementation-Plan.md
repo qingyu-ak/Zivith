@@ -28,16 +28,16 @@ This document defines the phased implementation roadmap for Zivith.
 | 2.5 First Providers | ~85% | DeepSeek + SiliconFlow adapters + provider UI; BYOK later (C7) |
 | **V0.4 (interlude)** | ~95% | W1–W7 first-pass landed (`usage_records` recording; freeze/limits later). See [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) |
 | 2.5 polish (Track G) | **Done** | Real-key Story→Video E2E; Wan harden + MinIO persist + balance warn + no auto re-bill |
-| Entity + State + Timeline + Track (Track H) | H1 Done | Canonical snapshot + ChangeEvent schemas in `@zivith/domain`; H2 tables next on `feat/track-h-entity-history` |
+| Entity + State + Timeline + Track (Track H) | H2 Done | Schemas + `entity_revisions`/`change_events`/`project_sequences` + baseline backfill; H3 dual-write next |
 | 3–5 | 0% | Phase 3 productionize remains scheduled around / after H foundation |
 
-**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track H** (H1 Done → H2). See [Asset-Model.md](Asset-Model.md) for turnaround / location sheets and the T2I·I2I·T2V·I2V matrix.
+**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track H** (H2 Done → H3 dual-write). See [Asset-Model.md](Asset-Model.md) for turnaround / location sheets and the T2I·I2I·T2V·I2V matrix.
 
 ### Entity + State + Timeline + Track implementation gate
 
 ADR-0007 is Accepted; Track H is explicitly scheduled. Runtime history tables are not yet baseline. Proceed incrementally:
 
-1. **V1 Entity + State:** `[x]` canonical snapshots (H1) → EntityRevision/ChangeEvent tables, baseline backfill, transactional dual write (H2–H3);
+1. **V1 Entity + State:** `[x]` canonical snapshots (H1) → `[x]` EntityRevision/ChangeEvent tables + baseline backfill (H2) → transactional dual write (H3);
 2. **V2 Timeline:** read-only Presentation Time from existing Scene/Shot order; World Time follows by default;
 3. **V3 Track System:** add variable World Time dimensions and advanced derived Tracks after Scene/Character/Shot validation;
 4. **V4 AI consistency:** cross-Entity/time-binding checks with human-confirmed fixes;

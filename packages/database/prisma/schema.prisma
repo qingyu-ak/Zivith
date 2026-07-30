@@ -80,6 +80,17 @@ enum RequirementStatus {
   rejected
 }
 
+/// Track H — EntityRevision.change_kind (ADR-0007 / entity-state-timeline-track)
+enum EntityChangeKind {
+  baseline
+  create
+  update
+  transition
+  delete
+  restore
+  merge
+}
+
 model User {
   id            String         @id @default(uuid())
   email         String         @unique
@@ -129,6 +140,9 @@ model Project {
   tasks       Task[]
   workflows   WorkflowRun[]
   usageRecords UsageRecord[]
+  entityRevisions EntityRevision[]
+  changeEvents    ChangeEvent[]
+  projectSequence ProjectSequence?
 
   @@index([ownerId, deletedAt])
   @@map("projects")
@@ -529,4 +543,72 @@ model UsageRecord {
   @@index([projectId, createdAt])
   @@index([projectId, taskType])
   @@map("usage_records")
+}
+
+/// Track H H2 — immutable Entity State history (append-only). Not a Presentation Timeline Item.
+model EntityRevision {
+  id                 String           @id @default(uuid())
+  projectId          String           @map("project_id")
+  entityType         String           @map("entity_type")
+  entityId           String           @map("entity_id")
+  revision           Int
+  parentRevisionId   String?          @map("parent_revision_id")
+  /// null = main line; CreativeBranch ids deferred (H10)
+  branchId           String?          @map("branch_id")
+  schemaVersion      Int              @default(1) @map("schema_version")
+  snapshot           Json?
+  snapshotRef        String?          @map("snapshot_ref")
+  snapshotHash       String           @map("snapshot_hash")
+  changeKind         EntityChangeKind @map("change_kind")
+  changedFields      String[]         @default([]) @map("changed_fields")
+  actorId            String?          @map("actor_id")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentRevision     EntityRevision?  @relation("EntityRevisionParent", fields: [parentRevisionId], references: [id], onDelete: SetNull)
+  childRevisions     EntityRevision[] @relation("EntityRevisionParent")
+  changeEvents       ChangeEvent[]
+
+  @@unique([entityType, entityId, revision])
+  @@index([projectId, entityType, entityId])
+  @@index([projectId, createdAt])
+  @@map("entity_revisions")
+}
+
+/// Track H H2 — system-committed facts (audit / SSE / causation). Not Presentation Timeline.
+model ChangeEvent {
+  id               String          @id @default(uuid())
+  projectId        String          @map("project_id")
+  sequence         BigInt
+  eventType        String          @map("event_type")
+  schemaVersion    Int             @default(1) @map("schema_version")
+  entityType       String?         @map("entity_type")
+  entityId         String?         @map("entity_id")
+  entityRevisionId String?         @map("entity_revision_id")
+  actorType        String?         @map("actor_type")
+  actorId          String?         @map("actor_id")
+  sourceType       String?         @map("source_type")
+  sourceId         String?         @map("source_id")
+  correlationId    String?         @map("correlation_id")
+  causationId      String?         @map("causation_id")
+  idempotencyKey   String?         @map("idempotency_key")
+  payload          Json            @default("{}")
+  occurredAt       DateTime        @map("occurred_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entityRevision   EntityRevision? @relation(fields: [entityRevisionId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, sequence])
+  @@index([projectId, createdAt])
+  @@index([projectId, entityType, entityId])
+  @@index([projectId, correlationId])
+  @@map("change_events")
+}
+
+/// Atomic Project-scoped sequence allocator for ChangeEvent.sequence
+model ProjectSequence {
+  projectId String @id @map("project_id")
+  lastValue BigInt @default(0) @map("last_value")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_sequences")
 }

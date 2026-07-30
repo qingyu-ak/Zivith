@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "history:backfill-baselines": "tsx scripts/backfill-entity-baselines.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.637.0",

@@ -6,7 +6,7 @@
 >
 > Synced: 2026-07-30
 >
-> Priority policy: **Track H active** on branch `feat/track-h-entity-history` (H1 Done). Phase 3 remains the post-H default for generation productionizing.
+> Priority policy: **Track H active** on branch `feat/track-h-entity-history` (H2 Done → H3 next). Phase 3 remains the post-H default for generation productionizing.
 >
 > Related: [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](Technical-Architecture.md), [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md)
 
@@ -174,7 +174,7 @@ Goal: establish immutable Entity State evolution, then visualize it on a Present
 |----|------|-------|--------|
 | H0 | Revised architecture, ADR, IDE RFC, and Agent Effort RFC | Track=semantic lane; Branch is separate | Done 2026-07-29 |
 | H1 | Canonical Entity snapshot + ChangeEvent schemas | `@zivith/domain` `history/*`; Shot/PromptVersion/Output/AppearanceVariant/VisualRequirement; ADR-0007 Accepted | Done 2026-07-30 |
-| H2 | EntityRevision/ChangeEvent tables and baseline backfill | No runtime read-path switch | Planned |
+| H2 | EntityRevision/ChangeEvent tables and baseline backfill | Prisma tables + `backfillEntityBaselines`; no read-path switch | Done 2026-07-30 |
 | H3 | Shadow write then transactional State dual write | Feature flags, hashes, idempotency, 409 conflicts | Planned |
 | H4 | Read-only Presentation Timeline | Import existing Scene/Shot order; World Time defaults to follow | Planned |
 | H5 | Minimal Scene/Character/Shot Track UI | No advanced tracks or editing in first release | Planned |
@@ -209,7 +209,7 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓
          Track G (provider stability polish) ✓ 2026-07-29
               ↓
-         Track H (revised): H0 ✓ → H1 ✓ → H2… on feat/track-h-entity-history
+         Track H (revised): H0 ✓ → H1 ✓ → H2 ✓ → H3… on feat/track-h-entity-history
               ↓
          Phase 3 (generation productionize) — parallel or after H foundation as scheduled
 ```
