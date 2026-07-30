@@ -498,17 +498,19 @@ When an approved Scene is edited, it returns to `draft`. Its affected Visual Ass
 
 ---
 
-# 9. Revision History, Timeline & Creative Tracks
+# 9. Entity State, Timeline & Tracks
 
-The creative hierarchy defines semantic ownership; it does not by itself define history or branching. The proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) architecture adds those capabilities without changing `Project → Story → Scene → Shot`:
+The creative hierarchy defines ownership, while the proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) architecture defines evolution and temporal presentation without changing `Project → Story → Scene → Shot`:
 
-- an **Entity** keeps its stable domain identity and dedicated storage model;
+- an **Entity** keeps stable identity and dedicated storage;
 - an immutable **State revision** records what that Entity was at a committed point;
-- the Project **Timeline** orders committed creative, review, generation, and dependency-staleness facts;
-- a **CreativeTrack** holds an explicit alternative creative direction that may be compared, merged into `main`, or abandoned.
+- one Project **Timeline** uses Presentation Time as its stable axis; optional World Time bindings follow it or express relative, fuzzy, ranged, and parallel-world deviations;
+- semantic **Tracks** organize Scene, Character, Event, Shot, Camera, Style, Prompt, and Model views.
 
-Dedicated domain tables remain authoritative for current `main` state. Revisions and timeline events are authoritative for history; they are not a complete Event Sourcing log. Workflow runs, queue attempts, and future video/audio editing tracks are related execution or editing concepts and are not CreativeTracks.
+Timeline is not the audit log. Committed system facts are `ChangeEvent`s. World Time does not impose a standardized fictional calendar: the core stores a minimal dimension/relation envelope while Project-defined values remain opaque. Track is not a branch; future alternative state lines use the distinct term `CreativeBranch`.
 
-Approved snapshots remain domain-level freeze records. A revision history does not permit later Asset, Scene, Track, or Workflow changes to rewrite an approved Shot or an existing Output's creation-time context.
+World Entity scope begins with Character and Location and expands deliberately to Object, Event, and Organization. Scene and Shot retain their hierarchy semantics; Workflow runs and queue attempts remain execution objects.
 
-**Implementation status (2026-07-28):** architecture and migration contract documented; database tables, APIs, dual-write paths, and UI are not yet implemented.
+Approved snapshots remain domain-level freeze records. A revision history or Timeline move does not permit later Asset, Scene, Track, Branch, or Workflow changes to rewrite an approved Shot or an existing Output's creation-time context.
+
+**Implementation status (2026-07-29):** revised architecture, ADR, and UI/Agent RFCs documented; database tables, APIs, projections, and UI are not yet implemented.

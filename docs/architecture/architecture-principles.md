@@ -36,7 +36,7 @@ Zivith is an AI-native creative operating system for filmmaking.
 
 An AI video generator turns a prompt into a file. An operating system manages state, exposes interfaces, and schedules work — so that *other* things, including things not yet invented, can run on top of it.
 
-The proposed [Entity + State + Timeline + Track](entity-state-timeline-track.md) architecture makes the State pillar concrete without replacing the semantic domain model: dedicated entity tables remain the current-state authority, immutable revisions and timeline events preserve history, and project-scoped CreativeTracks carry explicit alternative creative directions. It is an approved design target, not yet a runtime capability.
+The [Entity + State + Timeline + Track](entity-state-timeline-track.md) architecture (ADR-0007 Accepted) makes the State pillar concrete without replacing the semantic domain model: dedicated entity tables remain current-state authority, immutable revisions preserve evolution, and one creative Timeline uses Presentation Time as its stable axis with optional Project-defined World Time bindings. Fictional calendars and parallel-world dimensions are not normalized into one clock. Alternative versions, if later needed, are CreativeBranches rather than Tracks. Canonical snapshot/ChangeEvent schemas are frozen (Track H H1); history tables and Timeline runtime are still rolling out.
 
 The vision holds regardless of AI progress because it is not a bet on any model's capability. It is a bet on three invariants:
 
@@ -243,6 +243,8 @@ The primary-surface question is settled permanently in §9. Even as a secondary 
 ### D4 — Do not build a full nonlinear video editor
 
 The constitution requires assembly to live in the domain (§3): a Cut — an ordered arrangement of shot outputs with elementary transitions and sound — so that "a film" is a real, versioned, exportable entity from V1. What is deferred is everything an editor's craft demands beyond that: multi-track timelines, frame-accurate trimming, effects, grading. That is a decade-deep product in itself, adjacent to Zivith's actual differentiation, and — through export (§4) — already served by dedicated tools that creators trust.
+
+The proposed Entity State Timeline does not activate D4: its Tracks organize Character, Event, Shot, Camera, Prompt, and other semantic State on a Presentation-led creative axis with optional World Time overlays. It does not provide frame-accurate media layering, effects, grading, or NLE ownership of source media.
 **Revisit when:** creators routinely export cuts only to perform trivial adjustments elsewhere — evidence that a slightly deeper native assembly would retain the whole loop.
 
 ### D5 — Delay enterprise-only capabilities until the core is mature

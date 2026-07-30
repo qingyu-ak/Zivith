@@ -147,11 +147,11 @@ The domain is divided into eight bounded contexts. Each context owns its data an
 - User preferences
 - Project membership
 
-### Creative History Context (cross-cutting; proposed)
-- Immutable Entity revisions and Project Timeline queries
-- Project-scoped CreativeTrack lifecycle, comparison, and explicit merge
-- Optimistic revision checks, command idempotency, and committed-fact recording
-- Dependency-staleness propagation after accepted `main` changes
+### Entity State & Timeline Context (cross-cutting; proposed)
+- Immutable Entity revisions and ChangeEvent queries
+- Project Timeline led by Presentation Time, with optional Project-defined World Time bindings
+- Semantic Track configuration and derived Track projections
+- Optimistic revision checks, command idempotency, and dependency-staleness propagation
 
 This context is specified in [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) but is not yet implemented. It does not own Story, Shot, Asset, Workflow, or Generation current state; each existing bounded context remains responsible for its dedicated tables and domain transitions.
 
@@ -258,17 +258,16 @@ The public API follows REST conventions. Real-time updates use Server-Sent Event
 | `POST` | `/workflows/{runId}/cancel` | Cancel workflow |
 | `GET` | `/workflows/{runId}/events` | SSE stream for real-time progress |
 
-### Creative History and Tracks (proposed)
+### Entity State, Timeline, and Tracks (proposed)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/projects/{pid}/timeline` | Cursor-paginated committed Project facts |
 | `GET` | `/projects/{pid}/entities/{type}/{id}/revisions` | List immutable Entity revisions |
-| `GET` | `/projects/{pid}/tracks` | List CreativeTracks |
-| `POST` | `/projects/{pid}/tracks` | Fork a CreativeTrack |
-| `POST` | `/projects/{pid}/tracks/{trackId}/compare` | Compare branch, base, and target heads |
-| `POST` | `/projects/{pid}/tracks/{trackId}/merge` | Explicitly merge confirmed states into `main` |
-| `POST` | `/projects/{pid}/tracks/{trackId}/abandon` | Make a branch read-only without changing `main` |
+| `GET` | `/projects/{pid}/changes` | Cursor-paginated committed ChangeEvents |
+| `GET` | `/projects/{pid}/timeline` | Query World, Presentation, or Dual Timeline |
+| `GET` | `/projects/{pid}/timeline/tracks` | List semantic Scene/Character/Event/Shot/etc. Tracks |
+| `POST` | `/projects/{pid}/timeline/items` | Place Entity State on Presentation Time with optional World Time binding |
+| `PATCH` | `/projects/{pid}/timeline/items/{itemId}` | Move or relabel an explicit TimelineItem |
 
 These endpoints are design contracts, not currently available routes. Writes carry `expected_revision` and an idempotency key; revision conflicts return HTTP 409.
 
@@ -345,7 +344,7 @@ Only specified fields are updated. `null` values reset a field to inherit from p
 | **Job Queue** | Async task management | Generation jobs, workflow steps, notifications |
 | **Cache** | Frequently accessed, rarely changed data | Resolved Asset data, prompt templates, model capabilities |
 
-The proposed history layer also stores `CreativeTrack`, `EntityRevision`, `TrackHead`, and `TimelineEvent` in PostgreSQL. Dedicated business tables remain the current `main` read model; revisions/events are the history authority. Large snapshots use object-storage references plus canonical hashes rather than copying binary or provider payloads into PostgreSQL.
+The proposed State/Timeline layer stores `EntityRevision`, `ChangeEvent`, `ProjectTimeline`, `TimelineTrack`, and `TimelineItem` in PostgreSQL. Dedicated business tables remain current-state authority; revisions are State-history authority. Timeline rows require Presentation placement and optionally carry opaque Project-defined World Time bindings. Large snapshots use object-storage references plus canonical hashes rather than copying binary or provider payloads into PostgreSQL.
 
 ## 5.2 Primary Database — Entity-Relationship Overview
 
@@ -361,10 +360,12 @@ Scene N──M Character (via scene_characters join)
 Shot N──1 Location (reference)
 Shot N──1 Style (reference)
 WorkflowRun 1──N WorkflowStep
-Project 1──N CreativeTrack (proposed)
-CreativeTrack 1──N TrackHead (proposed)
 Entity 1──N EntityRevision (logical reference; proposed)
-Project 1──N TimelineEvent (proposed)
+Project 1──N ChangeEvent (proposed)
+Project 1──1 ProjectTimeline (proposed)
+ProjectTimeline 1──N TimelineTrack (proposed)
+TimelineTrack 1──N TimelineItem (proposed)
+TimelineItem N──1 EntityRevision (logical reference; proposed)
 ```
 
 ## 5.3 Key Schema Decisions
@@ -388,7 +389,7 @@ All entities support soft delete (`deleted_at` timestamp). Hard deletes require 
 
 Current implementation records selected Shot and Workflow actions in `audit_logs`; coverage is not complete and the table is not an event store.
 
-The proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) migration introduces append-only `EntityRevision` and `TimelineEvent` records in the same transaction as current-state writes. `AuditLog` remains during migration, may be temporarily dual-written, and is retired only after query, retention, permission, and backfill equivalence is verified. Workflow attempts and queue progress remain in their dedicated tables; only committed business facts enter the Project Timeline.
+The proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) migration introduces append-only `EntityRevision` and `ChangeEvent` records in the same transaction as current-state writes. `AuditLog` remains during migration, may be temporarily dual-written, and is retired only after query, retention, permission, and backfill equivalence is verified. Workflow attempts and queue progress remain in their dedicated tables. ChangeEvent history is not the creative Timeline: Timeline derives Presentation order first; World Time follows unless an optional variable-dimension binding says otherwise.
 
 ---
 
@@ -558,9 +559,17 @@ The first integration set uses `TongyiWanxiangAdapter`. Provider authentication,
 - Project-level statistics (story count, asset count, generation cost)
 
 ### Story Editor
-- Timeline-based story structure view
+- Ordered Story/Scene structure view; this current list/reorder surface is the future Timeline's Presentation-order input, not the full Entity State workspace
 - Act/scene organization with drag-and-drop reordering
 - Story-level AI actions (generate, expand, rewrite)
+
+### AI Creative IDE (proposed)
+- Left Project Explorer for hierarchy and world Entities
+- Center Presentation-led Timeline with optional World Time overlays and semantic Tracks
+- Lower Director Console / Agent Chat
+- Right Entity Inspector with current State and revision history
+- Fast / Balanced / Deep uses execution policy, not permission or gate changes
+- Full scope and ramp: [AI Creative IDE RFC](architecture/rfc/AI-Creative-IDE-RFC.md) and [Agent Effort Control RFC](architecture/rfc/Agent-Effort-Control-RFC.md)
 
 ### Scene Canvas
 - Visual scene layout showing shot thumbnails in sequence

@@ -4,9 +4,9 @@
 >
 > Status: Active
 >
-> Synced: 2026-07-29
+> Synced: 2026-07-30
 >
-> Priority policy: **Track G complete** — next default track is **Phase 3** (productionize real generation). Track H only after explicit scheduling.
+> Priority policy: **Track H active** on branch `feat/track-h-entity-history` (H1 Done). Phase 3 remains the post-H default for generation productionizing.
 >
 > Related: [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](Technical-Architecture.md), [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md)
 
@@ -166,20 +166,25 @@ Goal: make SiliconFlow / DeepSeek generation reliable for daily operator use bef
 
 ---
 
-## Track H — Entity history foundation (planned; design complete)
+## Track H — Entity + State + Timeline + Track (active on `feat/track-h-entity-history`)
 
-Goal: add queryable creative history and safe project-scoped alternative directions without replacing current domain tables or adopting full Event Sourcing. Source: [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md).
+Goal: establish immutable Entity State evolution, then visualize it on a Presentation-led Timeline. World Time follows Presentation order by default and only adds variable Project-defined bindings for deviations. This engineering backlog “Track H” is not a TimelineTrack. Source: [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md). Write-path inventory: [entity-history-write-paths.md](architecture/entity-history-write-paths.md).
 
 | ID | Task | Notes | Status |
 |----|------|-------|--------|
-| H0 | Architecture, domain, API, and migration contract | Includes failure, rollback, and two E2E examples | Done 2026-07-28 |
-| H1 | Canonical Entity snapshot/event schemas | Start with Shot/PromptVersion/Output and AppearanceVariant/VisualRequirement | Planned |
-| H2 | History tables, Project `main` Track, and baseline backfill | No runtime read-path switch | Planned |
-| H3 | Shadow write then transactional dual write | Per-Entity feature flags and hash consistency checks | Planned |
-| H4 | Read-only Timeline/revision APIs + optimistic concurrency | Cursor pagination, idempotency, 409 conflicts | Planned |
-| H5 | AppearanceVariant/Shot CreativeTrack pilot | Compare and explicit merge to `main`; stale propagation required | Planned |
+| H0 | Revised architecture, ADR, IDE RFC, and Agent Effort RFC | Track=semantic lane; Branch is separate | Done 2026-07-29 |
+| H1 | Canonical Entity snapshot + ChangeEvent schemas | `@zivith/domain` `history/*`; Shot/PromptVersion/Output/AppearanceVariant/VisualRequirement; ADR-0007 Accepted | Done 2026-07-30 |
+| H2 | EntityRevision/ChangeEvent tables and baseline backfill | No runtime read-path switch | Planned |
+| H3 | Shadow write then transactional State dual write | Feature flags, hashes, idempotency, 409 conflicts | Planned |
+| H4 | Read-only Presentation Timeline | Import existing Scene/Shot order; World Time defaults to follow | Planned |
+| H5 | Minimal Scene/Character/Shot Track UI | No advanced tracks or editing in first release | Planned |
+| H6 | Variable WorldTime bindings | Custom dimensions, fuzzy/range/relative/parallel time | Planned |
+| H7 | Advanced derived Track projections | Camera/Prompt/Model first; Style later | Planned |
+| H8 | Object/Event/Organization Entity expansion | Add one type only when a real project needs it | Planned |
+| H9 | AI consistency suggestions | Cross-State/time-binding checks; human confirmation required | Planned |
+| H10 | CreativeBranch evaluation | Later only; not a Timeline Track dependency | Deferred |
 
-**Exit criteria for Track H:** all acceptance conditions in the architecture document pass; branch writes cannot mutate `main`; merge conflict and rollback tests are green; existing resource APIs remain compatible during migration.
+**Exit criteria for Track H:** architecture acceptance conditions pass; Presentation Time remains the stable main axis; absent World Time bindings follow it without duplicate storage; custom dimensions remain opaque; Track does not mean Branch; Timeline movement cannot silently mutate Entity State; existing resource APIs remain compatible.
 
 ---
 
@@ -202,9 +207,11 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓
          Track F (V0.4 plan): F1 W2 → F2 W1 → F3 W3 → F4 W4 → F5 W5 → F6 W6 → F7 W7
               ↓
-         Track G (provider stability polish) ✓ 2026-07-29 → Phase 3
+         Track G (provider stability polish) ✓ 2026-07-29
               ↓
-         Track H implementation only after explicit scheduling; H0 design is complete
+         Track H (revised): H0 ✓ → H1 ✓ → H2… on feat/track-h-entity-history
+              ↓
+         Phase 3 (generation productionize) — parallel or after H foundation as scheduled
 ```
 
 ---
@@ -220,7 +227,7 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
 - **Node-based workflow canvas as primary UX** — Constitution D3; see Looser Creative Flow RFC non-goals
 - **Story segment UI without persisted `StorySegment` rows** — ADR-0006 compliance rule (the ADR itself is resolved)
 - **Top-level Chapter entity / cross-project global asset library / lip-sync / timeline editor** — V0.4 plan §9 explicit non-goals
-- **Video/audio nonlinear timeline editor remains out of scope.** The proposed Project Timeline is an append-only creative-history view and is not an NLE timeline.
+- **Video/audio nonlinear timeline editor remains out of scope.** The proposed Project Timeline follows Presentation order and overlays optional World Time deviations; it is not ChangeEvent history and not an NLE.
 
 ---
 

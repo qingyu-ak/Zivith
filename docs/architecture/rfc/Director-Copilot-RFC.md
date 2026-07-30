@@ -8,7 +8,7 @@
 >
 > Decided: 2026-07-21 (product Q&A)
 >
-> Related: Design-Philosophy.md, AI-Agent-Collaboration.md, Implementation-Plan.md, Next-Tasks.md
+> Related: Design-Philosophy.md, AI-Agent-Collaboration.md, Implementation-Plan.md, Next-Tasks.md, AI-Creative-IDE-RFC.md, Agent-Effort-Control-RFC.md
 
 ---
 
@@ -92,12 +92,14 @@ Copilot may use the same LLM provider adapter as other text agents (e.g. DeepSee
 
 ## 6. UI sketch (non-binding)
 
-- Collapsible **right sidebar** on the project page  
-- Thread scoped to `projectId` (optional: clear thread / new thread)  
-- Show “只读问答” badge in v1  
-- Deep links into workflow panel or shot routes when relevant  
+- Current-page first slice: collapsible **right sidebar** on the project page
+- Future AI Creative IDE: the same Project-scoped capability may appear as the lower **Director Console**; placement changes, authority and scope do not
+- Thread scoped to `projectId` (optional: clear thread / new thread)
+- Show “只读问答” badge in v1
+- Deep links into workflow panel or shot routes when relevant
+- Fast / Balanced / Deep, if shown, follows Agent Effort policy and cannot expand Copilot permissions
 
-Exact layout, persistence, and streaming UX are deferred to a full design pass before implementation.
+Exact layout, persistence, and streaming UX are governed by [AI Creative IDE RFC](AI-Creative-IDE-RFC.md) before implementation.
 
 ---
 

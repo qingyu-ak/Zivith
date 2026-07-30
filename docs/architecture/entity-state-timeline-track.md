@@ -1,55 +1,68 @@
 # Entity + State + Timeline + Track
 
-> Zivith 创作状态历史与分支体系
+> Zivith 世界创作状态与可变时间维度体系
 >
-> Status: Proposed — design complete 2026-07-28; runtime not implemented
+> Status: Accepted design — revised 2026-07-29; H1 schemas freezing on `feat/track-h-entity-history` (2026-07-30); runtime tables not implemented
 >
-> Scope: Architecture, domain model, API contract, and migration plan
+> Scope: Domain architecture, presentation-led variable time model, API contract, UI boundary, and migration plan
 >
-> Decision: current-state tables + append-only revisions/events; not Event Sourcing
+> Decision: dedicated current-state tables + immutable State history; Timeline visualizes Entity State; Track is a semantic timeline lane
 >
-> Governance: [ADR-0007](adr/0007-preserve-current-state-with-immutable-creative-history.md) is Proposed; runtime implementation requires acceptance and explicit scheduling
+> Governance: [ADR-0007](adr/0007-preserve-current-state-with-immutable-creative-history.md) is Accepted; implementation proceeds on explicit Track H scheduling
+>
+> H1 code: `@zivith/domain` `history/*` serializers + ChangeEvent vocab; write-path inventory in [entity-history-write-paths.md](entity-history-write-paths.md)
 
 ---
 
 ## 1. 目的
 
-Zivith 已经拥有稳定的创作实体、审批状态、生成任务和局部重算能力，但状态变化分散在业务表、`AuditLog`、`WorkflowRun.state`、`PromptVersion` 和 `Output` 中。用户可以看到“现在是什么”，却难以统一回答：
+Zivith 不是 Prompt → Video 工具，而是管理 IP 创作世界的 AI 原生创作 IDE：
 
-- 谁在什么时候把哪个 Entity 从什么状态改成了什么状态？
-- 某次 Prompt 或 Video 基于哪个创作快照生成？
-- 两个创作方案从哪里分叉，分别改了什么？
-- 一个方案合并回主线后，哪些下游结果应标记为 stale？
-- 工作流重试是否产生了新的创作决策，还是只重复执行了同一命令？
+```text
+Create the world first. Produce the content second.
 
-本体系增加一层通用的创作历史与分支语义，同时保留现有专用领域模型：
+Prompt → World → Production → Video
+```
 
-1. **Entity** 提供稳定身份。
-2. **State** 保存 Entity 的不可变业务 revision。
-3. **Timeline** 记录已提交事实并提供统一历史视图。
-4. **Track** 承载同一 Project 内可并行比较、合并或废弃的创作方案。
+本体系回答四个不同问题：
 
-本设计不把 Zivith 改造成事件溯源系统，也不把所有业务对象塞进一张万能 JSON 表。
+1. **Entity**：世界里有哪些具有持续身份的对象？
+2. **State**：这些对象在某个时刻是什么样？
+3. **Timeline**：如何以作品顺序为主轴，并叠加可变的世界时间关系？
+4. **Track**：不同类型的 Entity State 如何分轨显示和编辑？
+
+Timeline 是 Entity State 的可视化与编排视图，不是数据库审计日志。Track 是 Timeline 中的语义轨道，不是 Git 分支、Workflow 阶段、工程计划 Track 或视频 NLE 轨。
 
 ---
 
-## 2. 术语
+## 2. 核心概念
 
-### 2.1 Entity
+### 2.1 Entity：持续存在的世界对象
 
-Entity 是具有稳定 ID、明确类型、唯一 Project 作用域和生命周期的领域对象。内容可以变化，身份不变。
+Entity 具有稳定 ID、Project 作用域、类型和生命周期。它的 State 可以变化，但身份不变。
 
-首批受支持的 Entity：
+#### 当前 Entity
 
-| 类别 | Entity 类型 | 当前权威表 |
+| 领域 | Entity | 当前模型 |
 |---|---|---|
-| 叙事 | `story`, `story_segment`, `scene`, `shot` | `stories`, `story_segments`, `scenes`, `shots` |
-| 资源 | `asset`, `appearance_variant`, `visual_requirement` | `assets`, `asset_appearance_variants`, `visual_asset_requirements` |
-| 产物 | `prompt_version`, `output`, `media` | `prompt_versions`, `outputs`, `media` |
+| 世界 | Character | `Asset(type=character)` |
+| 世界 | Location | `Asset(type=location)` |
+| 叙事 | Story / StorySegment / Scene / Shot | 专用业务表 |
+| 视觉 | AppearanceVariant / VisualRequirement | 专用业务表 |
+| 产物 | PromptVersion / Output / Media | 专用业务表 |
 
-`WorkflowRun`、`WorkflowStep`、`Task` 是执行与编排对象，可以作为 Timeline 事件的 `source`，但不属于 CreativeTrack 的创作 Entity。
+#### 计划扩展 Entity
 
-Entity 通过逻辑引用表示：
+| Entity | 语义 | 首版策略 |
+|---|---|---|
+| Object | 道具、交通工具、关键物体 | 映射 `Asset(type=prop)`，先补齐 API/UI |
+| Event | 世界内发生且可影响多个 Entity 的事件 | 新增独立 WorldEvent，不用 WorkflowEvent 代替 |
+| Organization | 阵营、公司、门派、家庭等持续组织 | 新增 Project 级 Entity |
+| Relationship | Entity 之间随时间变化的关系 | 先作为 Entity State 的结构化字段；需要独立查询时再提升为 Entity |
+
+`WorkflowRun`、`WorkflowStep`、`Task` 是执行对象，不是世界 Entity。Provider 和 Model 是生成基础设施与 provenance，不成为世界 Entity。
+
+统一逻辑引用：
 
 ```ts
 interface EntityRef {
@@ -59,756 +72,608 @@ interface EntityRef {
 }
 ```
 
-`EntityRef` 不替代现有外键，也不建立跨类型多态外键。服务层必须验证 Entity 存在且属于同一 Project。
+逻辑引用不替代现有外键。服务层必须验证 Entity 存在且属于同一 Project。
 
-### 2.2 State
+### 2.2 State：当前状态 + 不可变历史
 
-State 是某个 Entity 在一个确定 revision 上的不可变业务快照。它描述“Entity 在该版本是什么”，而非“任务执行到了哪里”。
+Entity State 描述某个 Entity 在一个确定 revision 上的业务状态。
 
-State 必须：
+以 Character 为例，State 可包含：
 
-- 具有单调递增的 `revision`；
-- 属于一个 `track_id`；
-- 指向其父 revision，形成可追溯历史；
-- 包含规范化快照或可验证的 snapshot reference；
-- 记录 schema 版本与内容 hash；
-- 创建后不可更新或删除。
+- 外貌与服装；
+- 性格与心理；
+- 声音；
+- 能力与限制；
+- 所属组织；
+- 与其他 Entity 的关系；
+- 可用与审批状态。
 
-State 不强制所有实体共享一个状态枚举。Zivith 保留不同状态族：
+存储策略：
 
-| 状态族 | 示例 | 语义 |
-|---|---|---|
-| Lifecycle | `AssetState: draft/active/archived` | 是否可被新创作引用 |
-| Review | `ApprovalState`, `RequirementStatus` | 创作决策是否通过 |
-| Creative progression | `ShotState` | Shot 从编辑到生成、审核、冻结 |
-| Generation | `OutputStatus`, `JobStatus` | 技术任务执行结果 |
-| Freshness | `fresh/stale` | 上游变化是否使派生产物过期 |
-
-同一 revision 可以同时包含多个状态族，不能把 `active`、`approved`、`completed` 合并成一个通用 `state`。
-
-### 2.3 Timeline
-
-Timeline 是 Project 内已提交事实的有序视图。它由 append-only `TimelineEvent` 构成，用于历史、审计、通知和追踪因果关系。
-
-Timeline 不是：
-
-- 数据库事务日志；
-- Workflow step 列表；
-- 视频剪辑时间线；
-- Entity 当前状态的唯一真源。
-
-每个 Project 拥有独立、单调递增的 `sequence`。`occurred_at` 用于显示时间，`sequence` 用于稳定排序和 cursor 分页。
-
-### 2.4 Track
-
-Track 是同一 Project 内的一条创作方案线。每个 Project 创建时拥有且仅拥有一条不可删除的 `main` Track。
-
-Track 可以从某个 Entity revision 或某个 Project timeline sequence 分叉。分支只保存发生变化的 Entity head；未修改 Entity 按父 Track 的 fork point 读取。
-
-Track 不是：
-
-- Video、Audio、Subtitle 剪辑轨；
-- StorySegment；
-- 工程计划中的 Track A–G；
-- Workflow 的阶段或重试 attempt；
-- 跨 Project 的共享分支。
-
----
-
-## 3. 架构决策
-
-### 3.1 双真相边界
-
-专用业务表仍是**当前状态权威来源**；`EntityRevision` 与 `TimelineEvent` 是**历史权威来源**。
-
-一次成功的命令必须在同一数据库事务内：
-
-1. 校验权限、Track 状态和 `expected_revision`；
-2. 更新 main Track 对应的业务表，或保存 branch-only revision；
-3. append `EntityRevision`；
-4. upsert `TrackHead`；
-5. append 一个或多个 `TimelineEvent`；
-6. 提交事务后再发布 SSE/队列通知。
-
-如果任一步失败，整个事务回滚。禁止先发事件再更新业务表。
-
-```mermaid
-flowchart LR
-  Command[Command] --> Validate[权限与版本校验]
-  Validate --> Tx[数据库事务]
-  Tx --> BusinessRow[专用业务表]
-  Tx --> Revision[EntityRevision]
-  Tx --> Head[TrackHead]
-  Tx --> Event[TimelineEvent]
-  Event --> AfterCommit[提交后通知]
+```text
+Dedicated Current State + Immutable EntityRevision History
 ```
 
-### 3.2 main 与 branch 的写入差异
+- 专用业务表仍是当前状态权威来源；
+- `EntityRevision` 是历史状态权威来源；
+- revision 单调递增、创建后不可修改；
+- 大型媒体只保存 Media 引用，不复制二进制；
+- approved Scene/Shot 与 Output 的冻结快照继续保留；
+- 不采用完整 Event Sourcing，不从事件重建全部当前数据库。
 
-- `main`：命令同时更新现有业务表和历史表；现有 API 默认操作 `main`。
-- 非 `main`：命令只写 revision、head 和 event，不直接修改现有业务表。
-- merge 到 `main`：在一个事务内应用已确认的 merged snapshot、更新业务表、创建 main revision、推进 main head、记录 merge 事件并传播 stale。
+State 不共享单一状态枚举。必须区分：
 
-这样可在不重写所有读取路径的前提下逐步加入分支能力。
+| 状态族 | 示例 | 含义 |
+|---|---|---|
+| Lifecycle | Asset `draft/active/archived` | 是否可被新创作引用 |
+| Review | `draft/review/approved` | 是否经过创作决策 |
+| Generation | Output `queued/generating/completed/failed` | 技术执行结果 |
+| Freshness | `fresh/stale` | 上游变化是否令派生产物过期 |
+| World State | alive/dead、young/old、alliance/hostile 等 | 作品世界内部状态 |
 
-### 3.3 快照粒度
+### 2.3 Timeline：作品时间主轴 + 可变世界时间维度
 
-revision snapshot 只保存可重建业务语义所需的数据：
+Project 提供一个统一 Timeline 工作区，同一画布可以按 Story、Scene、Entity 或 Track 过滤。**作品时间是唯一稳定主轴，World Time 默认跟随作品时间。**
 
-- 不保存二进制内容，只引用 `MediaId`；
-- 不复制完整父 Entity，只保存当前 Entity 的 canonical state；
-- 不复制 Provider 原始响应；保留 provider/model/job ID 和必要 metadata；
-- 大于配置阈值的快照可写对象存储，数据库保留 `snapshot_ref`、`snapshot_hash` 和摘要；
-- hash 使用 canonical JSON，忽略 `updated_at` 等非业务字段。
+#### Presentation Time（作品时间，主轴）
 
-Shot 的 `approved_snapshot`、Output 的 `prompt_snapshot/context_snapshot` 继续存在，因为它们是领域冻结语义，不由通用 revision 替代。
+观众在具体 Story/成片中看到内容的顺序与持续时间：
+
+- Scene/Shot 顺序；
+- Shot 在作品中的起止秒数；
+- 同一世界事件可被多个 Story 或 Shot 呈现。
+
+```ts
+interface PresentationTime {
+  story_id: string;
+  order: number;
+  start_ms?: number;
+  duration_ms?: number;
+}
+```
+
+在尚无成片时，`order` 是权威；存在 Cut 后可增加毫秒坐标。Presentation Time 不是 Workflow 执行时间，也不使用 `created_at` 推断。
+
+#### World Time（世界时间，跟随层）
+
+World Time 不是独立、统一的全局时钟，而是附着在作品时间 Item 上的可变语义：
+
+- 没有显式 World Time 时，默认 `follow` 当前 Presentation 顺序；
+- 闪回声明相对某个 Item 的 `before`；
+- 时间跳跃可以声明模糊值或范围；
+- 虚构历法由 Project 自定义维度解释；
+- 平行世界、梦境、模拟世界可使用不同时间维度；
+- 跨越维度的 Item 可同时持有多个 binding。
+
+Zivith **不标准化时间值本身**。系统只标准化最小信封，以便保存引用、关系和显示信息：
+
+```ts
+interface TemporalDimension {
+  id: string;
+  label: string;
+  kind: 'calendar' | 'worldline' | 'dream' | 'simulation' | 'custom';
+  parent_dimension_id?: string;
+  schema?: JsonValue; // Project-defined; core does not interpret its calendar
+}
+
+interface WorldTimeBinding {
+  dimension_id: string;
+  mode: 'follow' | 'point' | 'range' | 'relative' | 'crossing' | 'unknown';
+  value?: JsonValue;
+  start?: JsonValue;
+  end?: JsonValue;
+  anchor_item_id?: string;
+  relation?: 'before' | 'after' | 'same_as' | 'overlaps';
+  label?: string;
+  confidence?: 'exact' | 'approximate' | 'ambiguous';
+}
+```
+
+`value/start/end` 对核心系统是不透明 JSON；对应维度的解释器负责显示和比较。完全不设信封会使引用、跨维关系和一致性检查不可实现，因此“不标准化”指不强制统一历法或标量，不是无结构存储。
+
+#### 跟随不变量
+
+- 首版 TimelineItem 必须有 Presentation Time；
+- `world_time_bindings=[]` 表示跟随作品顺序，不重复存储 World Time；
+- 显式 binding 只描述相对偏移、范围、模糊时间或维度跨越；
+- 同一 EntityRevision 可在多个 Presentation 位置出现；
+- 世界中尚未进入任何作品的 Entity 保留 State，但首版不进入 Timeline；
+- 数据库提交时间属于 ChangeEvent，不属于创作时间；
+- 时间标注变化不自动修改 Entity State。
+
+### 2.4 Track：Timeline 的语义轨道
+
+Track 按创作语义组织 TimelineItem。Track 不拥有 Entity，不创建平行真源。
+
+#### 世界轨
+
+| Track kind | 内容 |
+|---|---|
+| `scene` | 世界地点、环境或 Scene 的持续区间 |
+| `character` | Character State 与出场区间 |
+| `object` | Object 的持有、位置、损坏等状态 |
+| `event` | WorldEvent 的发生与影响 |
+| `organization` | Organization 状态、成员和关系变化 |
+
+#### 作品轨
+
+| Track kind | 内容 |
+|---|---|
+| `shot` | Story 中 Shot 顺序与持续时间 |
+| `camera` | 从 Shot State 投影出的机位、镜头运动与构图 |
+| `style` | 视觉风格、色彩与灯光区间 |
+| `prompt` | PromptVersion 使用区间与批准状态 |
+| `model` | 从 Output provenance 投影出的生成模型/配置，只读展示 |
+
+`camera`、`style`、`prompt`、`model` 首选派生 Track：它们从 Shot、PromptVersion、Output 的 State 或 provenance 投影，避免重复存储。只有用户创建独立于现有 Entity 的规划片段时才保存显式 TimelineItem。
+
+### 2.5 Branch：与 Track 分离的可选概念
+
+替代创作方案仍有价值，但必须命名为 `CreativeBranch`，不能占用 Track：
+
+- `main` 表示当前被接受的状态线；
+- branch 保存替代 Entity revision head；
+- compare/merge/abandon 属于 Branch 生命周期；
+- branch 不直接修改当前业务表；
+- Branch 属于后续能力，不阻塞 Entity + State 与 Timeline + Track。
 
 ---
 
-## 4. 领域模型
+## 3. 总体关系
+
+```mermaid
+flowchart TB
+  Project[Project] --> Entity[Entity]
+  Entity --> CurrentState[CurrentState]
+  Entity --> Revision[EntityRevision]
+  Project --> Timeline[ProjectTimeline]
+  Timeline --> PresentationAxis[PresentationTime主轴]
+  PresentationAxis --> WorldLayer[WorldTime可变跟随层]
+  Timeline --> Track[TimelineTrack]
+  Track --> Item[TimelineItem]
+  Item --> Revision
+  Entity --> ChangeEvent[ChangeEvent]
+  CreativeBranch[CreativeBranch] -. optional .-> Revision
+```
 
 ```mermaid
 erDiagram
-  Project ||--|| CreativeTrack : has_main
-  Project ||--o{ CreativeTrack : owns
-  CreativeTrack o|--o{ CreativeTrack : forks_from
-  CreativeTrack ||--o{ TrackHead : contains
-  TrackHead }o--|| EntityRevision : points_to
+  Project ||--|| ProjectTimeline : owns
+  Project ||--o{ TimelineTrack : scopes
+  TimelineTrack ||--o{ TimelineItem : contains
+  TimelineItem }o--|| EntityRevision : displays
   EntityRevision o|--o{ EntityRevision : parent
-  EntityRevision o|--o{ EntityRevision : merge_parent
-  Project ||--o{ TimelineEvent : owns
-  CreativeTrack ||--o{ TimelineEvent : scopes
-  EntityRevision ||--o{ TimelineEvent : described_by
+  Project ||--o{ ChangeEvent : records
+  EntityRevision ||--o{ ChangeEvent : described_by
+  Project ||--o{ CreativeBranch : may_own
+  CreativeBranch ||--o{ BranchHead : advances
+  BranchHead }o--|| EntityRevision : points_to
 ```
 
-### 4.1 CreativeTrack
+---
+
+## 4. 数据模型
+
+### 4.1 EntityRevision
 
 | 字段 | 类型 | 约束 |
 |---|---|---|
 | `id` | UUID | PK |
-| `project_id` | UUID | 必填，同 Project 内 |
-| `key` | string | `(project_id, key)` 唯一；`main` 保留 |
-| `name` | string | 用户可见名称 |
-| `description` | string? | 分支目的 |
-| `status` | enum | `active`, `merged`, `abandoned` |
-| `parent_track_id` | UUID? | main 为空；分支必填 |
-| `forked_from_sequence` | bigint | 分叉时 Project sequence |
-| `created_by` | UUID? | 用户；系统操作可空 |
-| `merged_at` / `abandoned_at` | timestamp? | 与 status 一致 |
-| `created_at` / `updated_at` | timestamp | 审计字段 |
-
-不变量：
-
-- Track 与 parent 必须属于同一 Project；
-- 当前阶段只允许从 `main` 或 active Track 分叉，最大深度建议限制为 8；
-- `merged` 与 `abandoned` Track 只读；
-- `main` 不可 merge、abandon、delete 或重命名 key；
-- Track 不跨 Project；
-- 分叉不会复制全部 EntityRevision。
-
-### 4.2 EntityRevision
-
-| 字段 | 类型 | 约束 |
-|---|---|---|
-| `id` | UUID | PK |
-| `project_id` | UUID | 权限与分区键 |
-| `track_id` | UUID | 所属 Track |
-| `entity_type` / `entity_id` | string / UUID | 逻辑 EntityRef |
-| `revision` | int | `(track_id, entity_type, entity_id, revision)` 唯一 |
-| `parent_revision_id` | UUID? | 同 Entity 的直接父 revision |
-| `merge_parent_revision_id` | UUID? | merge 时的第二父 revision |
-| `schema_version` | int | snapshot 结构版本 |
-| `snapshot` | JSON? | canonical state |
-| `snapshot_ref` | string? | 大快照外部引用 |
-| `snapshot_hash` | string | SHA-256 canonical hash |
-| `change_kind` | enum | `create`, `update`, `transition`, `delete`, `restore`, `merge`, `baseline` |
-| `changed_fields` | string[] | 顶层或 JSON Pointer 路径 |
+| `project_id` | UUID | Project 权限与分区键 |
+| `entity_type/entity_id` | string/UUID | EntityRef |
+| `revision` | int | `(entity_type, entity_id, revision)` 唯一 |
+| `parent_revision_id` | UUID? | 直接父 revision |
+| `branch_id` | UUID? | `null` 表示 main |
+| `schema_version` | int | snapshot schema 版本 |
+| `snapshot/snapshot_ref` | JSON/string | 恰有一个非空 |
+| `snapshot_hash` | string | canonical JSON SHA-256 |
+| `change_kind` | enum | baseline/create/update/transition/delete/restore/merge |
+| `changed_fields` | string[] | JSON Pointer 路径 |
 | `actor_id` | UUID? | 用户；系统可空 |
-| `source_type` / `source_id` | string? | workflow/task/api/import |
 | `created_at` | timestamp | 不可变 |
 
-`snapshot` 与 `snapshot_ref` 必须恰有一个非空。软删除也创建 revision，snapshot 中保存 `deleted_at`，历史记录本身不软删。
+### 4.2 ProjectTimeline
 
-### 4.3 TrackHead
+每个 Project 恰有一个 ProjectTimeline。它是统一工作区配置，不保存所有 Item 的大 JSON：
 
-| 字段 | 类型 | 约束 |
+| 字段 | 类型 | 说明 |
 |---|---|---|
-| `track_id` | UUID | 复合 PK |
-| `entity_type` / `entity_id` | string / UUID | 复合 PK |
-| `revision_id` | UUID | 指向当前 revision |
-| `revision` | int | 冗余以便乐观锁 |
-| `updated_at` | timestamp | 排序与诊断 |
+| `project_id` | UUID | PK/FK |
+| `temporal_dimensions` | JSON[] | Project 自定义时间维度；不强制统一历法 |
+| `settings` | JSON | 显示密度、默认折叠等非领域偏好 |
+| `version` | int | 乐观锁 |
 
-TrackHead 是读取优化，不是历史。读取 branch 时：
+### 4.3 TimelineTrack
 
-1. 查询 branch 自身 head；
-2. 若不存在，沿 parent Track 查找在 fork point 可见的 head；
-3. 得到 snapshot 后再执行现有 inheritance/override resolver；
-4. approved Entity 始终优先使用其冻结 snapshot。
-
-为避免每次递归，后续可增加 materialized projection；首版不需要。
-
-### 4.4 TimelineEvent
-
-| 字段 | 类型 | 约束 |
+| 字段 | 类型 | 说明 |
 |---|---|---|
 | `id` | UUID | PK |
 | `project_id` | UUID | 必填 |
-| `sequence` | bigint | `(project_id, sequence)` 唯一、单调递增 |
-| `track_id` | UUID? | Project 级事件可空 |
-| `event_type` | string | 版本化词汇 |
-| `schema_version` | int | payload schema 版本 |
-| `entity_type` / `entity_id` | string? | 主体 Entity |
-| `entity_revision_id` | UUID? | 若事件产生 revision 则关联 |
-| `actor_type` / `actor_id` | string / UUID? | `user`, `agent`, `system` |
-| `source_type` / `source_id` | string? | `api`, `workflow`, `task`, `import` |
-| `correlation_id` | UUID | 一次用户意图/工作流调用 |
-| `causation_id` | UUID? | 直接导致本事件的 event |
-| `idempotency_key` | string? | 重试去重 |
-| `payload` | JSON | 小型事实数据 |
-| `occurred_at` | timestamp | 业务发生时间 |
-| `created_at` | timestamp | 服务端落库时间 |
+| `story_id` | UUID? | 作品轨通常绑定 Story；世界轨可为 Project 级 |
+| `kind` | enum | scene/character/object/event/organization/shot/camera/style/prompt/model |
+| `source` | enum | explicit/derived |
+| `entity_id` | UUID? | Character/Object 等专属轨可绑定一个 Entity |
+| `name` | string | UI 名称 |
+| `order` | int | 同 scope 内显示顺序 |
+| `collapsed/hidden` | boolean | 用户视图偏好 |
+| `created_at/updated_at` | timestamp | 审计字段 |
 
-`TimelineEvent` 不保存可变的 `before/after` 全量副本。差异由相邻 revision 计算；payload 只保存事实，例如审核意见、失败码、merge 摘要。
+派生 Track 可以不落库；若需要保存顺序和折叠偏好，只保存配置，不复制派生 Item。
+
+### 4.4 TimelineItem
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | UUID | PK |
+| `track_id` | UUID | 所属语义 Track |
+| `entity_type/entity_id` | string/UUID | 展示的 Entity |
+| `entity_revision_id` | UUID? | 固定 revision；为空表示跟随当前 State |
+| `story_id` | UUID | Presentation scope |
+| `presentation_order` | int | 无 Cut 时权威顺序 |
+| `presentation_start_ms` | bigint? | 有 Cut 后可用 |
+| `presentation_duration_ms` | bigint? | 可选 |
+| `world_time_bindings` | JSON[] | 可选；为空即跟随 Presentation Time |
+| `label` | string? | 局部显示名 |
+| `metadata` | JSON | 仅视图数据，不放领域真源 |
+| `version` | int | 乐观锁 |
+
+Presentation Time 必填。`entity_revision_id` 固定时，后续 Entity 更新不改变该 Item 的历史显示；跟随当前 State 的 Item 必须在 UI 中明确标识。World Time binding 使用 Project 定义的 `dimension_id`，但核心数据库不解析其不透明时间值。
+
+### 4.5 ChangeEvent
+
+`ChangeEvent` 记录“系统中已提交了什么事实”，替代旧设计中的 `TimelineEvent` 命名，避免和创作 Timeline 混淆。
+
+关键字段：
+
+- Project 内单调 `sequence`；
+- `event_type` 与 `schema_version`；
+- Entity/Revision 引用；
+- actor/source；
+- correlation/causation；
+- idempotency key；
+- 小型 payload；
+- `occurred_at/created_at`。
+
+ChangeEvent 用于审计、通知、SSE 和因果追踪，但不直接作为 TimelineItem。投影器可以根据 ChangeEvent 更新派生 Track。
 
 ---
 
-## 5. State 与命令模型
+## 5. 一致性与写入
 
-### 5.1 命令信封
+一次 main Entity 命令在同一事务中：
 
-所有接入本体系的写命令使用统一信封：
+1. 校验 Project 权限与 `expected_revision`；
+2. 运行领域状态转换；
+3. 更新专用业务表；
+4. append `EntityRevision`；
+5. append `ChangeEvent`；
+6. 标记受影响的非冻结下游 stale；
+7. 事务提交后触发派生 Track 刷新/SSE。
+
+```mermaid
+flowchart LR
+  Command[EntityCommand] --> Validate[权限与Revision校验]
+  Validate --> Tx[数据库事务]
+  Tx --> Current[专用当前表]
+  Tx --> Revision[EntityRevision]
+  Tx --> Event[ChangeEvent]
+  Tx --> Stale[Stale传播]
+  Event --> Projection[TimelineTrack投影]
+```
+
+命令统一携带：
 
 ```ts
-interface EntityCommand<TPayload> {
+interface EntityCommand<T> {
   project_id: string;
-  track_id?: string;              // 默认 main
   entity: EntityRef;
-  expected_revision: number;      // 新建时为 0
+  expected_revision: number;
   idempotency_key: string;
-  correlation_id?: string;
-  payload: TPayload;
+  payload: T;
 }
 ```
 
-`expected_revision` 与 TrackHead 不一致时返回 `409 REVISION_CONFLICT`，响应包含当前 revision，但不自动覆盖。
-
-相同 `idempotency_key`：
-
-- command type、entity、track、payload hash 全部相同：返回第一次结果；
-- key 相同但内容不同：返回 `409 IDEMPOTENCY_KEY_REUSED`；
-- 第一次仍在处理：返回 `409 COMMAND_IN_PROGRESS` 或原任务引用。
-
-### 5.2 状态转换
-
-状态转换必须由领域函数验证。现有 `SHOT_TRANSITIONS` 是标准模式：
-
-- command 表达意图，如 `approve_shot`；
-- domain transition 校验 from/to 与冻结快照；
-- persistence 在事务内写当前状态、revision 和 event；
-- 禁止通用 API 直接 patch `state` 字段绕过状态机。
-
-其他状态族逐步增加显式转换表，但不要求先统一所有枚举。
-
-### 5.3 stale 传播
-
-上游 Entity 合并或 main 更新后，依赖图决定下游 freshness：
-
-| 上游变化 | 下游影响 |
-|---|---|
-| Scene visual context | VisualRequirement → pending；未批准 Shot prompt stale |
-| Asset/AppearanceVariant | 未冻结引用 stale；approved Shot/Output 保留快照 |
-| Shot creative fields | PromptVersion/Output stale；历史 Output 不删除 |
-| Prompt approval | 后续 generation 使用新批准版本；旧 Output 保留 |
-
-每次传播必须记录 `dependency.staled`，payload 包含 `upstream_ref`、`downstream_ref`、`reason` 和 `policy_version`。stale 不等于删除或自动重算。
+- revision 不一致：`409 REVISION_CONFLICT`；
+- 相同 key 与相同 payload：返回首次结果；
+- 相同 key 与不同 payload：`409 IDEMPOTENCY_KEY_REUSED`；
+- 缺少 revision：兼容期后返回 `428 PRECONDITION_REQUIRED`。
 
 ---
 
-## 6. Track 生命周期
+## 6. Timeline 解析与投影
 
-### 6.1 创建与分叉
+### 6.1 世界轨投影
 
-创建 Track 时记录：
+- Character Track：AppearanceVariant、Character State、WorldEvent 影响；
+- Scene Track：Scene/Location 与 World Time 区间；
+- Event Track：WorldEvent；
+- Object/Organization Track：对应 Entity State。
 
-- parent Track；
-- fork sequence；
-- 可选的 focus Entity；
-- 创建目的。
+### 6.2 作品轨投影
 
-分叉不改变 Entity，也不创建 revision。第一次在分支修改 Entity 时，新 revision 的 `parent_revision_id` 指向 fork point 可见的 revision。
+- Shot Track：`Scene.order + Shot.order`；
+- Camera Track：Shot camera/composition；
+- Style Track：Shot/Scene resolved style、lighting、color；
+- Prompt Track：批准的 PromptVersion；
+- Model Track：Output provider/model provenance，只读。
 
-### 6.2 比较
+现有 `resolveShotContext` 仍负责 Project → Story → Scene → Shot 的继承。Timeline 选择位置和 revision，resolver 决定该 revision 的完整创作上下文。
 
-Track compare 返回三方差异：
+### 6.3 作品主轴与世界时间叠层
 
-- `base`：共同祖先 revision；
-- `ours`：目标 Track head；
-- `theirs`：源 Track head。
-
-差异按 Entity 和字段路径分组。Media、PromptVersion、Output 等不可安全字段级合并的对象使用“选择整个 revision”策略。
-
-### 6.3 合并
-
-首版只支持显式合并，不做无提示自动合并。
-
-合并步骤：
-
-1. 锁定 source/target Track heads；
-2. 校验 source 为 `active`，target 为 `main`；
-3. 计算三方差异；
-4. 无冲突字段可预填建议，但用户必须确认最终 merged snapshot；
-5. 对每个 Entity 校验 target `expected_revision`；
-6. 在单事务中更新业务表、创建带两个 parent 的 main revision、更新 head；
-7. 记录 `track.merged`、`state.changed` 和必要的 `dependency.staled`；
-8. source Track 标记 `merged`。
-
-冲突包括：
-
-- base 后 source 与 target 修改同一字段且值不同；
-- 一方删除、另一方修改；
-- 状态机转换不可组合；
-- 引用指向 target 不可见或已归档 Entity；
-- approval/freeze snapshot 与合并内容不一致。
-
-### 6.4 废弃
-
-废弃 Track 只改变 Track status 并记录 `track.abandoned`。revision 和 event 永久保留，不影响 main。
+- 主排序始终使用 `story_id + presentation_order`，有 Cut 时可增加毫秒；
+- 默认 World Time 为 `follow`，不生成第二套重复顺序；
+- 显式 binding 以标记、跨度、连接线或维度分层叠加在作品主轴；
+- 只有维度解释器能够比较两个不透明值时，UI 才提供该维度内的辅助世界排序；
+- 平行世界不强行合并为单一序列，而是切换/并列显示 dimension；
+- 相同位置的稳定排序使用 Track order + Item ID，不使用数据库时间。
 
 ---
 
-## 7. Timeline 事件词汇
+## 7. API 契约
 
-事件名使用 `<namespace>.<past-tense-fact>`，payload 通过 `schema_version` 演进。已有字段不得改变语义；破坏性变化发布新 event type 或新 schema version。
+所有路径位于 `/api/v1`，沿用 snake_case。
 
-| Event type | 触发条件 | 关键 payload |
-|---|---|---|
-| `entity.created` | Entity 首次创建 | `initial_state`, `entity_ref` |
-| `state.changed` | 业务字段或状态变化 | `from_revision`, `to_revision`, `changed_fields` |
-| `entity.deleted` | 软删除 | `revision`, `reason` |
-| `entity.restored` | 恢复软删除 Entity | `revision` |
-| `review.decided` | approve/reject/retry | `decision`, `review_kind`, `feedback` |
-| `generation.requested` | 生成命令已持久化 | `task_id`, `input_revision_ids` |
-| `generation.completed` | 生成结果可用 | `task_id`, `output_id/media_id` |
-| `generation.failed` | 最终失败 | `task_id`, `error_code`, `retryable` |
-| `dependency.staled` | 上游变化使下游过期 | refs、reason、policy_version |
-| `track.created` | Track 分叉 | parent、fork_sequence、focus |
-| `track.merged` | Track 合并完成 | source、target、merged revisions |
-| `track.abandoned` | Track 废弃 | reason |
-
-技术重试不应重复产生 `generation.requested`；同一 logical command 的 attempt 变化留在 Task/WorkflowStepAttempt。只有最终业务事实进入 Timeline。
-
----
-
-## 8. API 契约
-
-所有路径位于 `/api/v1`，沿用现有 snake_case 响应。
-
-### 8.1 Timeline 查询
-
-```http
-GET /projects/:projectId/timeline
-  ?after=<opaque_cursor>
-  &limit=50
-  &track_id=<uuid>
-  &entity_type=shot
-  &entity_id=<uuid>
-  &event_type=state.changed,review.decided
-  &correlation_id=<uuid>
-```
-
-响应：
-
-```json
-{
-  "items": [
-    {
-      "id": "evt_...",
-      "sequence": "1042",
-      "event_type": "review.decided",
-      "schema_version": 1,
-      "track_id": "track_main",
-      "entity": { "entity_type": "shot", "entity_id": "shot_1" },
-      "revision": 8,
-      "actor": { "actor_type": "user", "actor_id": "user_1" },
-      "payload": { "decision": "approve", "review_kind": "shot" },
-      "occurred_at": "2026-07-28T08:00:00.000Z"
-    }
-  ],
-  "next_cursor": "opaque",
-  "has_more": true
-}
-```
-
-Cursor 编码 `(project_id, sequence)`，对客户端不透明。默认 `limit=50`，最大 200。权限必须先校验 Project membership，再应用过滤条件。
-
-辅助查询：
+### Entity State
 
 ```http
 GET /projects/:projectId/entities/:entityType/:entityId/revisions
 GET /projects/:projectId/entities/:entityType/:entityId/revisions/:revision
-GET /projects/:projectId/correlations/:correlationId/timeline
 ```
 
-### 8.2 Track
+### Timeline
 
 ```http
-GET    /projects/:projectId/tracks
-POST   /projects/:projectId/tracks
-GET    /projects/:projectId/tracks/:trackId
-POST   /projects/:projectId/tracks/:trackId/compare
-POST   /projects/:projectId/tracks/:trackId/merge
-POST   /projects/:projectId/tracks/:trackId/abandon
+GET   /projects/:projectId/timeline
+GET   /projects/:projectId/timeline/items
+POST  /projects/:projectId/timeline/items
+PATCH /projects/:projectId/timeline/items/:itemId
+DELETE /projects/:projectId/timeline/items/:itemId
 ```
 
-创建：
+查询参数：
 
-```json
-{
-  "key": "character-young-look",
-  "name": "角色年轻形象方案",
-  "description": "尝试更年轻的妆造",
-  "parent_track_id": "track_main",
-  "forked_from_sequence": "1030",
-  "focus": { "entity_type": "appearance_variant", "entity_id": "variant_1" }
-}
+- `story_id`
+- `view=presentation|world_overlay`
+- `dimension_id`
+- `track_kind`
+- `entity_type/entity_id`
+- `presentation_from/presentation_to`
+- `world_relation=follow|explicit|crossing|unknown`
+- cursor + limit
+
+TimelineItem 写入必须携带 `expected_revision` 和 idempotency key。移动 Item 只改变时间坐标，不隐式修改 Entity State。
+
+### Track
+
+```http
+GET   /projects/:projectId/timeline/tracks
+POST  /projects/:projectId/timeline/tracks
+PATCH /projects/:projectId/timeline/tracks/:trackId
+DELETE /projects/:projectId/timeline/tracks/:trackId
 ```
 
-合并：
+- 派生 Track 只允许更新显示配置；
+- 显式 Track 可以增删；
+- 删除 Track 不删除 Entity、Revision 或 Output；
+- Model Track 不接受客户端写入 provider/model 事实。
 
-```json
-{
-  "target_track_id": "track_main",
-  "expected_target_heads": [
-    { "entity_type": "appearance_variant", "entity_id": "variant_1", "revision": 4 }
-  ],
-  "resolutions": [
-    {
-      "entity_type": "appearance_variant",
-      "entity_id": "variant_1",
-      "strategy": "use_source"
-    }
-  ],
-  "idempotency_key": "merge_..."
-}
+### Change history
+
+```http
+GET /projects/:projectId/changes
+GET /projects/:projectId/correlations/:correlationId/changes
 ```
 
-### 8.3 Entity 写入兼容
+Change history 与创作 Timeline 分开命名和导航。
 
-现有资源路由继续可用，默认 main Track。接入后要求：
+### CreativeBranch（后续）
 
-- 请求支持 `If-Match: "<revision>"`，迁移期也可接受 body `expected_revision`；
-- 响应增加 `entity_revision` 与 `track_id`；
-- 非 main 写入使用显式 `X-Zivith-Track-Id` 或新 command endpoint；
-- 缺失 revision 的旧客户端仅在兼容窗口内允许 last-write-wins，并记录 metric；
-- 兼容窗口结束后，接入 Entity 的写操作缺少 revision 返回 `428 PRECONDITION_REQUIRED`。
+```http
+GET  /projects/:projectId/branches
+POST /projects/:projectId/branches
+POST /projects/:projectId/branches/:branchId/compare
+POST /projects/:projectId/branches/:branchId/merge
+POST /projects/:projectId/branches/:branchId/abandon
+```
 
-### 8.4 错误
+Branch API 不属于 Timeline Track API。
 
-| HTTP | code | 含义 |
+---
+
+## 8. ChangeEvent 词汇
+
+| Event type | 含义 |
+|---|---|
+| `entity.created/changed/deleted/restored` | Entity 当前 State 变化 |
+| `state.transitioned` | 显式领域状态转换 |
+| `review.decided` | approve/reject/retry |
+| `generation.requested/completed/failed` | 生成业务事实 |
+| `dependency.staled` | 上游变化令下游过期 |
+| `timeline.item_placed/moved/removed` | 显式 TimelineItem 变化 |
+| `timeline.track_configured` | Track 视图配置变化 |
+| `branch.created/merged/abandoned` | 后续 Branch 生命周期 |
+
+Task attempt、心跳和进度百分比留在执行表，不进入 ChangeEvent。
+
+---
+
+## 9. 数据库迁移目标
+
+首批新增表：
+
+```text
+entity_revisions
+change_events
+project_timelines
+timeline_tracks
+timeline_items
+project_sequences
+```
+
+后续可选：
+
+```text
+creative_branches
+branch_heads
+world_events
+organizations
+```
+
+关键约束与索引：
+
+- `entity_revisions(entity_type, entity_id, revision)` unique；
+- `change_events(project_id, sequence)` unique；
+- `change_events(project_id, idempotency_key)` unique when non-null；
+- `timeline_tracks(project_id, story_id, kind, order)`；
+- `timeline_items(track_id, presentation_order)`；
+- `timeline_items(project_id/entity ref)` 通过 Track join 或冗余 project_id 优化；
+- `snapshot XOR snapshot_ref` CHECK；
+- TimelineItem 的 `story_id + presentation_order` 必填；
+- WorldTime binding 的 `dimension_id/mode` 信封校验，时间值保持不透明；
+- append-only 表的应用角色无 UPDATE/DELETE 权限。
+
+Project sequence 使用原子 allocator，不用时间戳模拟顺序。
+
+---
+
+## 10. 分阶段路线
+
+### V1：Entity + State
+
+1. 冻结首批 Entity canonical snapshot schema；
+2. 建立 EntityRevision、ChangeEvent、Project sequence；
+3. 为现有 Entity 回填 baseline revision；
+4. shadow write 后按 Entity 开启事务双写；
+5. 提供只读 revision/change history。
+
+首批只接入 Character Asset、Scene、Shot 及其生成 provenance。PromptVersion、Output、AppearanceVariant、VisualRequirement 作为引用/快照接入，不在首版扩展 Object、Event、Organization。
+
+### V2：Timeline
+
+1. 建立只读 ProjectTimeline；
+2. 只以现有 Scene/Shot order 作为 Presentation Time 主轴；
+3. 首批只显示 Scene、Character、Shot 三种 Track；
+4. World Time 全部默认 follow，不要求用户填写；
+5. 验证只读 UI 后再开放显式 TimelineItem 移动。
+
+### V3：Track System
+
+1. 增加 WorldTime binding 与 Project-defined TemporalDimension；
+2. 支持模糊值、范围、相对关系和平行维度；
+3. Camera、Prompt、Model 先作为只读派生 Track，Style 后续；
+4. 验证折叠、过滤、关联高亮和大型 Project 虚拟化；
+5. Object、Event、Organization 仅在真实项目需求出现后逐类增加。
+
+### V4：AI 一致性维护
+
+1. AI 读取 EntityRevision、Presentation 主轴和 WorldTime binding；
+2. 检测角色状态、物体归属、组织关系和世界事件矛盾；
+3. 只提出修复建议，不静默改写 State；
+4. 用户确认后通过正常 EntityCommand 提交；
+5. 所有建议与决定进入 ChangeEvent。
+
+### 后续：CreativeBranch
+
+Branch compare/merge 在 Entity + State 稳定后单独排期，不阻塞 V1–V4。
+
+---
+
+## 11. UI 边界
+
+Zivith 的长期目标布局是 AI 原生创作 IDE；首版只交付 Explorer + 只读 Timeline + Inspector，Director Console 与高级 Track 后续启用：
+
+```text
+┌──────────────┬───────────────────────────────┬────────────────┐
+│ Project      │ Timeline                     │ Entity         │
+│ Explorer     │ Presentation + World Overlay  │ Inspector      │
+│              ├───────────────────────────────┤                │
+│              │ Director Console / Agent Chat │                │
+└──────────────┴───────────────────────────────┴────────────────┘
+```
+
+- 左侧 Explorer：Entity 与 Story 层级导航；
+- 中间 Timeline：作品时间主轴与可选世界时间叠层；
+- 中间下 Director Console：AI 解释、建议和受控命令；
+- 右侧 Inspector：当前选中 Entity State、revision 与引用。
+
+详细 UI 行为见 [AI Creative IDE RFC](rfc/AI-Creative-IDE-RFC.md)。
+
+---
+
+## 12. Agent Effort Control
+
+Agent 输入区可提供：
+
+| Level | 目标 | 典型行为 |
 |---|---|---|
-| 400 | `INVALID_TRACK_OPERATION` | 不满足 Track 生命周期 |
-| 403 | `PROJECT_ACCESS_DENIED` | 无 Project 权限 |
-| 404 | `ENTITY_OR_TRACK_NOT_FOUND` | 不存在或跨 Project |
-| 409 | `REVISION_CONFLICT` | expected revision 过期 |
-| 409 | `MERGE_CONFLICT` | 需要用户解决冲突 |
-| 409 | `IDEMPOTENCY_KEY_REUSED` | key 与原命令不一致 |
-| 422 | `INVALID_STATE_TRANSITION` | 违反领域状态机 |
-| 428 | `PRECONDITION_REQUIRED` | 缺少 expected revision |
+| Fast | 低延迟、局部建议 | 单 Agent、少量上下文、基础检查 |
+| Balanced | 默认质量 | 适量工具与一致性检查 |
+| Deep | 高投入创作与验证 | 多 Agent、更多上下文、跨轨一致性检查 |
+
+Effort 只控制预算上限和执行策略，不改变权限、Review Gate、领域状态机或事实标准。详细约束见 [Agent Effort Control RFC](rfc/Agent-Effort-Control-RFC.md)。
 
 ---
 
-## 9. Prisma 数据结构提案
+## 13. 端到端示例
 
-这是迁移目标，不在本设计阶段直接修改 schema。
+### Character State 与闪回
 
-```prisma
-enum CreativeTrackStatus {
-  active
-  merged
-  abandoned
-}
+1. Character 当前为成年 State revision 8；
+2. Story 后段 Shot 使用童年 State revision 3 表达闪回；
+3. Item 仍位于作品后段的 Presentation Time；
+4. WorldTime binding 声明相对成年 Item 为 `before`，无需统一年代数值；
+5. Character Track 与 Shot Track 通过同一 revision 连接；
+6. 后续成年 State 修改不改变闪回使用的 revision 3。
 
-enum EntityChangeKind {
-  baseline
-  create
-  update
-  transition
-  delete
-  restore
-  merge
-}
+### Shot 到 Video
 
-model CreativeTrack {
-  id                 String              @id @default(uuid())
-  projectId          String              @map("project_id")
-  key                String
-  name               String
-  description        String?
-  status             CreativeTrackStatus @default(active)
-  parentTrackId      String?             @map("parent_track_id")
-  forkedFromSequence BigInt              @map("forked_from_sequence")
-  createdBy          String?             @map("created_by")
-  mergedAt           DateTime?           @map("merged_at")
-  abandonedAt        DateTime?           @map("abandoned_at")
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
+1. Shot revision 7 修改 camera，提交 revision 8；
+2. Camera Track 从 revision 8 增量投影；
+3. PromptVersion 和 Output 记录输入 revision；
+4. Prompt Track 与 Model Track 展示批准 Prompt 和生成 provenance；
+5. Shot 在 Presentation Time 移动只改变 TimelineItem；
+6. 若移动导致叙事语义变化，AI 可建议 State 修改，但不得自动提交。
 
-  @@unique([projectId, key])
-  @@index([projectId, status, createdAt])
-  @@map("creative_tracks")
-}
+### World Event 影响多 Entity
 
-model EntityRevision {
-  id                    String           @id @default(uuid())
-  projectId             String           @map("project_id")
-  trackId               String           @map("track_id")
-  entityType            String           @map("entity_type")
-  entityId              String           @map("entity_id")
-  revision              Int
-  parentRevisionId      String?          @map("parent_revision_id")
-  mergeParentRevisionId String?          @map("merge_parent_revision_id")
-  schemaVersion         Int              @default(1) @map("schema_version")
-  snapshot              Json?
-  snapshotRef           String?          @map("snapshot_ref")
-  snapshotHash          String           @map("snapshot_hash")
-  changeKind            EntityChangeKind @map("change_kind")
-  changedFields         String[]         @default([]) @map("changed_fields")
-  actorId               String?          @map("actor_id")
-  sourceType            String?          @map("source_type")
-  sourceId              String?          @map("source_id")
-  createdAt             DateTime         @default(now()) @map("created_at")
-
-  @@unique([trackId, entityType, entityId, revision])
-  @@index([projectId, entityType, entityId, createdAt])
-  @@index([parentRevisionId])
-  @@map("entity_revisions")
-}
-
-model TrackHead {
-  trackId      String   @map("track_id")
-  entityType  String   @map("entity_type")
-  entityId    String   @map("entity_id")
-  revisionId  String   @map("revision_id")
-  revision    Int
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@id([trackId, entityType, entityId])
-  @@unique([trackId, revisionId])
-  @@index([entityType, entityId])
-  @@map("track_heads")
-}
-
-model TimelineEvent {
-  id               String   @id @default(uuid())
-  projectId        String   @map("project_id")
-  sequence         BigInt
-  trackId          String?  @map("track_id")
-  eventType        String   @map("event_type")
-  schemaVersion    Int      @default(1) @map("schema_version")
-  entityType       String?  @map("entity_type")
-  entityId         String?  @map("entity_id")
-  entityRevisionId String?  @map("entity_revision_id")
-  actorType        String   @map("actor_type")
-  actorId          String?  @map("actor_id")
-  sourceType       String?  @map("source_type")
-  sourceId         String?  @map("source_id")
-  correlationId    String   @map("correlation_id")
-  causationId      String?  @map("causation_id")
-  idempotencyKey   String?  @map("idempotency_key")
-  payload          Json     @default("{}")
-  occurredAt       DateTime @map("occurred_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-
-  @@unique([projectId, sequence])
-  @@unique([projectId, idempotencyKey])
-  @@index([projectId, trackId, sequence])
-  @@index([projectId, entityType, entityId, sequence])
-  @@index([projectId, eventType, sequence])
-  @@index([projectId, correlationId, sequence])
-  @@map("timeline_events")
-}
-```
-
-实现迁移时还需增加外键、Project sequence allocator，以及 `snapshot XOR snapshot_ref`、Track status 时间字段一致性等数据库 CHECK 约束。Prisma 无法完整表达的约束写入 SQL migration。
-
-Project sequence 建议使用独立 `project_sequences(project_id PK, last_value bigint)`，在事务中执行原子 `UPDATE ... SET last_value = last_value + 1 RETURNING last_value`。不能使用时间戳或全局 sequence 替代 Project 内顺序。
+1. Event“王城陷落”首先放置在某个 Story 的 Presentation Time；
+2. 其 WorldTime binding 使用自定义王朝历维度和模糊范围；
+3. Event Track 展示因果关联；
+4. 两个 Story 可在不同 Presentation Time 呈现同一 Event；
+5. 一致性 Agent 通过 `before/after` 关系检测某 Shot 使用陷落前 Location State，提示冲突并等待确认。
 
 ---
 
-## 10. 迁移计划
+## 14. 明确不做
 
-### Phase 0：准备与观测
-
-- 冻结事件词汇 v1 和每类 Entity 的 canonical snapshot serializer。
-- 为现有写路径建立清单，识别直写 Prisma、事务边界与 AuditLog 调用。
-- 增加 shadow-write feature flag、差异 metric 和 dead-letter 诊断记录。
-- 不改变客户端 API。
-
-回滚：关闭 feature flag，无新表依赖。
-
-### Phase 1：建表与基线
-
-- 创建 `creative_tracks`、`entity_revisions`、`track_heads`、`timeline_events`、`project_sequences`。
-- 为每个 Project 创建 `main` Track。
-- 按批次回填首批 Entity 的 `baseline` revision 和 head。
-- baseline snapshot 直接读取当前业务表；`created_at` 保留原时间，timeline `occurred_at` 标记为迁移时间并设置 `source_type=migration`。
-- 关键 `AuditLog` 可转换为 TimelineEvent，但不伪造缺失 revision；无法证明顺序的历史只作为 `legacy.audit_imported`。
-
-回滚：业务读取仍不依赖新表；停止回填并保留表供诊断。
-
-### Phase 2：main 双写
-
-按风险从低到高接入：
-
-1. Shot、PromptVersion、Output；
-2. AppearanceVariant、VisualRequirement；
-3. Story、StorySegment、Scene、Asset；
-4. Media 只记录生命周期与生成事实，不复制大 metadata。
-
-每个写路径在原事务中调用统一 `recordEntityChange`。shadow 模式先计算但不阻断；一致率达到阈值后启用强一致双写。
-
-验证：
-
-- business row hash 与 main head snapshot hash 一致；
-- revision 连续且无重复；
-- command 重试不产生重复 event；
-- approved snapshot 与 revision 可追溯。
-
-回滚：关闭该 Entity 类型双写；业务表保持权威。已写历史不删除。
-
-### Phase 3：Timeline 读取与并发控制
-
-- 上线只读 Timeline/revision API。
-- UI 先以只读历史面板消费。
-- 写 API 返回 revision，先告警缺失 `If-Match`，再逐 Entity 启用 428。
-- SSE 从提交后的 TimelineEvent 读取，不再用整行指纹表达业务变化；Workflow 专用进度 SSE 可继续存在。
-
-回滚：Timeline UI 降级隐藏；现有资源读取不变。
-
-### Phase 4：CreativeTrack
-
-- 先开放 AppearanceVariant 和 Shot 两种可分支 Entity。
-- branch 写入仅进入 revision/head，不改业务表。
-- compare 初期只读；merge 需人工确认并仅允许 target=main。
-- 验证 stale 传播后再扩展到 Scene/Asset。
-
-回滚：禁止新建/合并 Track；已有 Track 只读。main 业务状态不受影响。
-
-### AuditLog 处置
-
-- 迁移期保留 `AuditLog`，避免影响现有合规查询。
-- 新接入路径以 TimelineEvent 为主，并可临时双写 AuditLog。
-- 当查询、保留期和权限等价后停止新增 AuditLog。
-- 不删除旧 AuditLog；文档标记其覆盖不完整。
+- 不建立万能 Entity JSON 表替代专用领域模型；
+- 不采用完整 Event Sourcing；
+- 不把 ChangeEvent 审计流称为 Timeline；
+- 不把 CreativeBranch 称为 Track；
+- 不把 Workflow step、Task attempt、工程 Track A–H 或 NLE 轨混入 TimelineTrack；
+- 不把 Presentation Time 当作 Workflow/数据库时间；
+- 不把 World Time 强制标准化为 UTC、统一历法或单一标量；
+- 不在首版实现独立于作品时间的世界总时间轴；
+- 不让 Agent Effort 绕过权限、预算或 Review Gate；
+- 不因 Timeline 移动静默改写 Entity State；
+- 不在当前阶段构建完整非线性视频编辑器。
 
 ---
 
-## 11. 端到端验证
+## 15. 验收条件
 
-### 11.1 Shot 修改到批准
-
-初始：main 上 Shot revision 7，状态 `draft`。
-
-1. 用户修改 camera，提交 `expected_revision=7`。
-2. 事务更新 `shots`，创建 revision 8，记录 `state.changed`。
-3. scoped recompute 将旧 Prompt 标记 stale，记录 `dependency.staled`。
-4. Prompt 构造命令记录 `generation.requested`，完成后创建 PromptVersion 和各自 revision/event。
-5. 视频任务以 Shot revision 8、批准 PromptVersion revision 和 VisualRequirement revisions 作为 `input_revision_ids`。
-6. 任务重试只增加 Task attempt；不重复 `generation.requested`。
-7. 完成后创建 Output，记录 `generation.completed`；Shot 进入 review。
-8. 用户批准 Shot，领域函数要求 approved snapshot；创建 revision 9 与 `review.decided`。
-9. 后续 Asset 修改不会改变该 approved snapshot 或历史 Output，只会影响未冻结引用。
-
-可回答：Output 使用了哪一版 Shot/Prompt/视觉资产、谁批准、经历了哪些 stale 与重算。
-
-### 11.2 角色形象分支并合并
-
-初始：AppearanceVariant main revision 4。
-
-1. 用户从 sequence 1030 创建 `character-young-look` Track。
-2. 分支首次修改 description，创建 branch revision 1，其 parent 指向 main revision 4。
-3. 分支生成多个候选 Media；事件引用 Media ID，不复制文件。
-4. 用户批准候选，分支 head 推进；main 业务表不变。
-5. compare 以 main revision 4 为 base，展示 description、anchor_media_id 和 review state 差异。
-6. 若 main 仍为 revision 4，用户确认 `use_source` 后合并。
-7. 同一事务更新 `asset_appearance_variants`、创建 main revision 5、推进 main head、记录 `track.merged`。
-8. 引用该 variant 且未冻结的 VisualRequirement/Shot 被标记 stale；approved Shot 保留原快照。
-9. Track 状态变为 `merged` 并只读。
-
-若 main 已变为 revision 5，原合并请求返回 `REVISION_CONFLICT`，必须重新 compare，不自动覆盖。
-
----
-
-## 12. 权限、保留与安全
-
-- 所有查询先按 `project_id` 校验 owner/editor/viewer；不能仅凭 event/entity ID 查询。
-- viewer 可读 Timeline；editor 可建 Track 和提交 revision；Track merge/abandon 默认要求 editor，Project 可配置仅 owner。
-- payload 不保存 provider secret、认证 token、原始上传内容或未脱敏用户输入。
-- actor/source 不可由普通客户端任意伪造，由认证与执行上下文注入。
-- TimelineEvent、EntityRevision 默认随 Project 生命周期保留；Project 软删除后不可见但不立即物理删除。
-- 用户数据删除按合规策略执行整 Project 分区清理；单 Entity 软删除不清理历史。
-- 外部 snapshot_ref 使用与 Project 相同的存储 ACL 和生命周期策略。
-- timeline 导出必须包含 schema version、hash 和 sequence，便于校验完整性。
-
----
-
-## 13. 性能与运维
-
-- Timeline 使用 cursor 分页，禁止 offset 深分页。
-- 按 `project_id` 开头建立所有主要索引，未来可按 Project hash 分区。
-- `payload` 与 snapshot 设置大小上限；大数据转外部存储。
-- 监控：双写失败率、business/head hash 不一致、revision conflict、幂等命中、merge conflict、sequence 分配延迟。
-- 定期一致性任务只报告并隔离异常，不自动重写历史。
-- append-only 由数据库权限和 trigger/规则共同保护：应用角色无 UPDATE/DELETE revision/event 权限。
-
----
-
-## 14. 与现有系统的边界
-
-### Workflow
-
-Workflow 是命令发起者和执行编排器。它通过 `source_type=workflow`、`source_id=run_id/step_id` 关联事件，但 `WorkflowRun.state` 不进入 CreativeTrack，也不作为 EntityRevision。
-
-### Generation Queue
-
-Task/Output 保留技术状态。Timeline 只记录 requested、completed、failed 等业务事实；attempt、心跳、进度百分比不进入 Timeline。
-
-### Resolution 与 Freeze
-
-现有 Project → Story → Scene → Shot 的读时 inheritance 继续工作。Track 先选择每个 Entity 的可见 revision，再执行 resolver。approved Scene/Shot 继续读取冻结 snapshot，避免历史上游变化静默污染。
-
-### Cut 与剪辑轨
-
-未来 Cut 的 Video/Audio/Subtitle Track 是独立领域。剪辑 Track 可作为 Entity 被本体系版本化，但不能复用 `CreativeTrack` 表达时间位置或媒体叠放。
-
----
-
-## 15. 明确不做
-
-- 不建立万能 `entities` 表替代 Story/Scene/Shot/Asset 等专用表。
-- 不采用完整 Event Sourcing，不从 TimelineEvent 重放整个业务数据库。
-- 不允许跨 Project Track 或引用。
-- 不自动解决有语义冲突的合并。
-- 不把 Workflow step、Task attempt 或工程 Track 当成 CreativeTrack。
-- 不把 Video/Audio/Subtitle 剪辑轨混入本模型。
-- 不修改或压缩已提交的 revision/event。
-- 不因 stale 自动删除 Output 或自动触发昂贵重算。
-
----
-
-## 16. 验收条件
-
-进入实现 RFC 前必须满足：
-
-- 每个首批 Entity 有 canonical snapshot schema 与 schema migration 策略；
-- main 写入可在单事务内更新业务表、revision、head 和 event；
-- 并发写通过 expected revision 稳定返回 409；
-- 相同幂等命令不会产生重复 revision/event；
-- Project Timeline 的 sequence 在并发事务下严格唯一且单调；
-- branch 不修改 main 业务表；
-- merge 冲突不会部分提交；
-- Shot 生成链能追踪全部 input revisions；
-- AppearanceVariant 分支可 compare、merge 并传播 stale；
-- approved snapshot 与历史 Output 不被后续上游变化改写；
-- Timeline 权限、软删除、保留、导出和回滚策略经过安全评审。
+- Entity、State、Timeline、Track、Branch、ChangeEvent 在 API 和文档中没有术语重叠；
+- 当前业务表与 EntityRevision 双写原子且可回滚；
+- approved snapshot 和历史 Output 不被后续 State 修改；
+- Presentation Time 是稳定主轴，缺少 binding 时 World Time 可零存储跟随；
+- 可变 WorldTime binding 能表达闪回、模糊时间、范围、平行维度和重复呈现；
+- 核心系统只校验 binding 信封，不解释 Project 自定义历法值；
+- TimelineItem 可固定 EntityRevision；
+- 派生 Track 不复制领域真源；
+- 首版 Scene、Character、Shot Track 可追溯到 EntityRevision；
+- Camera、Prompt、Model 等高级派生 Track 不阻塞首版；
+- Timeline 移动与 Entity State 修改是两个显式命令；
+- Branch 不阻塞 V1 Entity + State、V2 Timeline、V3 Track；
+- UI 与 Agent Effort RFC 通过评审后才进入实现；
+- 权限、幂等、并发、软删除、历史保留和导出经过安全评审。

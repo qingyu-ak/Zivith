@@ -4,7 +4,7 @@
 >
 > Version: 2.3
 >
-> Status: Active — progress synced 2026-07-28 (Entity history architecture documented; runtime not started)
+> Status: Active — progress synced 2026-07-30 (Track H H1 schemas frozen on feat/track-h-entity-history)
 >
 > Strategy: B-Line — AI Agent Pipeline First, Video Gen Mocked
 >
@@ -18,7 +18,7 @@ This document defines the phased implementation roadmap for Zivith.
 
 **Strategy decision (2026-07):** The MVP follows B-Line — the AI Agent creative pipeline is built first, while real video generation uses a Mock Adapter. This prioritizes demonstrating the "AI as creative partner" workflow over video quality, and defers video model selection to a later phase when the provider landscape is clearer.
 
-### Live progress (2026-07-29)
+### Live progress (2026-07-30)
 
 | Phase | Progress | Summary |
 |-------|----------|---------|
@@ -28,22 +28,22 @@ This document defines the phased implementation roadmap for Zivith.
 | 2.5 First Providers | ~85% | DeepSeek + SiliconFlow adapters + provider UI; BYOK later (C7) |
 | **V0.4 (interlude)** | ~95% | W1–W7 first-pass landed (`usage_records` recording; freeze/limits later). See [V0.4-Modification-Plan.md](V0.4-Modification-Plan.md) |
 | 2.5 polish (Track G) | **Done** | Real-key Story→Video E2E; Wan harden + MinIO persist + balance warn + no auto re-bill |
-| Creative history architecture | design complete | [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) contract written; runtime schema/API/dual-write/UI not started |
-| 3–5 | 0% | Next: Phase 3 productionize |
+| Entity + State + Timeline + Track (Track H) | H1 Done | Canonical snapshot + ChangeEvent schemas in `@zivith/domain`; H2 tables next on `feat/track-h-entity-history` |
+| 3–5 | 0% | Phase 3 productionize remains scheduled around / after H foundation |
 
-**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Phase 3** (Track G closed 2026-07-29). Track H only after explicit scheduling. See [Asset-Model.md](Asset-Model.md) for turnaround / location sheets and the T2I·I2I·T2V·I2V matrix.
+**Near-term engineering backlog:** [Next-Tasks.md](Next-Tasks.md) **Track H** (H1 Done → H2). See [Asset-Model.md](Asset-Model.md) for turnaround / location sheets and the T2I·I2I·T2V·I2V matrix.
 
-### Entity history implementation gate
+### Entity + State + Timeline + Track implementation gate
 
-The `Entity + State + Timeline + Track` proposal is an architecture target, not part of the current runtime baseline. Implementation must proceed incrementally after explicit scheduling:
+ADR-0007 is Accepted; Track H is explicitly scheduled. Runtime history tables are not yet baseline. Proceed incrementally:
 
-1. freeze canonical snapshot and event schemas;
-2. add history tables and backfill each Project's `main` baseline;
-3. enable per-Entity shadow writes, then transactional dual writes;
-4. expose read-only Timeline/revision APIs and optimistic concurrency;
-5. pilot CreativeTrack branching and explicit merge for AppearanceVariant and Shot.
+1. **V1 Entity + State:** `[x]` canonical snapshots (H1) → EntityRevision/ChangeEvent tables, baseline backfill, transactional dual write (H2–H3);
+2. **V2 Timeline:** read-only Presentation Time from existing Scene/Shot order; World Time follows by default;
+3. **V3 Track System:** add variable World Time dimensions and advanced derived Tracks after Scene/Character/Shot validation;
+4. **V4 AI consistency:** cross-Entity/time-binding checks with human-confirmed fixes;
+5. **Later CreativeBranch:** alternative State compare/merge, explicitly separate from Timeline Track.
 
-Existing resource tables remain authoritative throughout migration. No phase may switch reads to history or expose branch merge until consistency checks and rollback criteria in the architecture document pass.
+Existing resource tables remain authoritative throughout migration. ChangeEvent history must not be exposed as the creative Timeline, World Time values must not be forced into one calendar, Timeline movement must not silently mutate Entity State, and branch work must not begin before V1–V3 semantics stabilize.
 
 Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not started.
 

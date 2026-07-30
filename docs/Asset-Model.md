@@ -338,7 +338,7 @@ When an Asset is modified:
 | `active` Asset modified | Approved Shots are unaffected (they are frozen) |
 | `archived` Asset | Existing references continue to resolve; new references are blocked |
 
-Under the proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) architecture, an Asset or AppearanceVariant update on `main` also creates an immutable revision and timeline fact. A branch Track may hold a proposed Asset/AppearanceVariant state without modifying the current Asset row. Merging that branch into `main` must mark affected, non-frozen VisualAssetRequirements and Shots as stale; approved Shots and existing Outputs continue to use their creation-time snapshots. This capability is designed but not yet implemented.
+Under the proposed [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) architecture, an Asset or AppearanceVariant update also creates an immutable EntityRevision and ChangeEvent. Shot/Scene order places selected Character State on the Presentation Time axis; World Time follows by default and uses optional Project-defined bindings only for time deviations. Track is a view lane, not an alternative version branch. A future `CreativeBranch` may hold a proposed Asset/AppearanceVariant State without modifying the current row. Accepted changes mark affected, non-frozen VisualAssetRequirements and Shots stale; approved Shots and existing Outputs continue to use creation-time snapshots. These capabilities are designed but not yet implemented.
 
 ---
 

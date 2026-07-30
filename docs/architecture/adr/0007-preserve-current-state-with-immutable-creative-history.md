@@ -1,75 +1,95 @@
 # ADR-0007: Preserve current domain state alongside immutable creative history
 
-- **Status:** Proposed
-- **Date:** 2026-07-28
+- **Status:** Accepted
+- **Date:** 2026-07-29
+- **Accepted:** 2026-07-30 (Track H scheduled on `feat/track-h-entity-history`)
 - **Deciders:** Project owner / architecture maintainer
 - **Class:** Standard
 - **Reversibility:** Costly
 
 ## Context
 
-Zivith stores current creative state in dedicated Project, Story, Scene, Shot, Asset, PromptVersion, Output, and related tables. Selected actions also write `AuditLog`; workflow and generation execution have separate persistence. This supports current reads and generation, but it does not provide one reliable model for immutable Entity revisions, Project-wide committed history, optimistic concurrency, or explicit alternative creative directions.
+Zivith stores current creative state in dedicated Project, Story, Scene, Shot, Asset, PromptVersion, Output, and related tables. Selected actions also write `AuditLog`; workflow and generation execution have separate persistence. This supports current reads, but it does not preserve a complete immutable State history or provide a stable foundation for visualizing Entity State across world chronology and work presentation order.
 
-The decision changes provenance and versioning semantics and will require stored-data migration, so an ADR is mandatory. The detailed proposal is [Entity + State + Timeline + Track](../entity-state-timeline-track.md).
+Product design requires:
+
+- persistent Entity identity;
+- current State plus immutable State history;
+- one creative Timeline led by Presentation Time, with World Time as a variable following dimension;
+- semantic Tracks such as Character, Event, Shot, Camera, Prompt, and Model.
+
+This changes provenance and versioning semantics and requires stored-data migration, so an ADR is mandatory. The detailed proposal is [Entity + State + Timeline + Track](../entity-state-timeline-track.md).
 
 ## Principles at Stake
 
-- **Serves P1 — Creative intent is the asset:** each generated result can identify the committed creative revisions that produced it.
-- **Serves P2 — The domain model is a contract:** history extends dedicated domain entities instead of replacing them with a generic JSON entity model.
-- **Serves P3 — The core is headless:** revision, timeline, compare, and merge behavior are programmable API operations.
-- **Serves P7 — Every generation is recorded and reproducible:** generation facts carry correlation and input revision identity.
-- **Serves P8 — Memory compounds:** committed decisions and corrections remain queryable Project memory.
-- **Strains simplicity and storage cost:** every participating write gains revision/event work and history is retained. The staged rollout, payload limits, and per-Entity feature flags contain this cost.
+- **Serves P1:** generated results can identify the committed Entity revisions that produced them.
+- **Serves P2:** dedicated domain entities remain authoritative instead of moving to a generic JSON entity model.
+- **Serves P3:** State history and Timeline behavior are programmable operations, not UI-only features.
+- **Serves P7:** generation provenance references exact Shot, Prompt, and visual revisions.
+- **Serves P8:** world changes and human decisions become durable Project memory.
+- **Strains simplicity and storage cost:** participating writes gain immutable history and projection work. Staged rollout and derived Tracks contain the cost.
+- **Strains D4 if misunderstood:** a semantic creative Timeline could drift into a nonlinear video editor. Track kinds and explicit non-goals preserve the boundary.
 
 ## Decision
 
-We keep dedicated domain tables as the authority for current `main` state and add append-only Entity revisions and Timeline events as the authority for history. Project-scoped CreativeTracks may hold alternative Entity heads and may change `main` only through an explicit, conflict-checked merge.
+We keep dedicated domain tables as the authority for current State and add append-only Entity revisions as the authority for State history. Presentation Time is the Timeline's stable primary axis. World Time follows it by default and uses optional Project-defined bindings for relative, approximate, ranged, or parallel-world time; Zivith does not standardize fictional calendar values. Tracks are semantic lanes within that Timeline.
 
-This is not Event Sourcing. Workflow steps, queue attempts, and future video/audio editing tracks retain separate semantics.
+Committed system facts use the distinct name `ChangeEvent`. Alternative creative versions, if later introduced, use `CreativeBranch`, not Track. This is not Event Sourcing and not a nonlinear video editor.
 
 ## Alternatives Considered
 
 ### Full Event Sourcing
 
-Events become the only source of truth and current state is rebuilt through projections. It offers complete replay, but requires rewriting current persistence, projection recovery, and every read/write path before users receive value. It loses because the migration and operational burden are disproportionate to current product scale.
+Events become the only source of truth. This offers replay, but requires rewriting current persistence and projections before users receive Timeline value. It loses because the migration and operational burden are disproportionate.
 
-### Snapshot-only version tables
+### Snapshot-only current state
 
-Store occasional versions without a committed-fact timeline or correlation model. This is simpler, but cannot reliably answer causation, idempotent retry, generation provenance, or Project-wide history questions. It loses because those are primary requirements.
+Keep only current rows and approved snapshots. This is simple, but cannot display Character evolution, historical world state, exact generation provenance, or world-time deviations from work order. It loses because those are primary requirements.
 
-### Expand `AuditLog`
+### Treat audit events as Timeline
 
-Treat current before/after logs as the history system. Existing coverage is incomplete, payload semantics are unconstrained, and the model lacks Track heads, parent revisions, schema versions, stable Project sequence, and merge lineage. It loses because retrofitting all of those would effectively create the proposed model under a misleading name.
+Order `AuditLog` or ChangeEvents and display them directly. This records database change chronology, not world chronology or presentation order. It cannot express flashback, repeated presentation, or planned future state. It loses because it conflates three different times.
+
+### Use Track for creative branches
+
+Model Track as a Git-like branch. Branching is useful, but product Track means Character/Scene/Event/Shot/Camera/Prompt lanes. It loses because shared terminology would make UI, API, and domain contracts ambiguous. The distinct term is `CreativeBranch`.
 
 ### Generic Entity table
 
-Move every domain object into one polymorphic JSON table. This simplifies generic history mechanics but weakens domain constraints, ownership, queryability, and migration clarity. It contradicts P2 and loses.
+Move every domain object into a polymorphic JSON table. This simplifies generic history mechanics but weakens domain constraints, ownership, queryability, and migration clarity. It contradicts P2 and loses.
 
 ## Trade-off Record
 
 | We gained | We gave up | Horizon |
 |-----------|------------|---------|
-| Queryable immutable creative history | Lower write-path complexity | Revisit if dual-write operations dominate latency or failure rate |
-| Safe optimistic concurrency and explicit branch merge | Last-write-wins convenience | Revisit only with evidence that conflict UX blocks ordinary single-user work |
-| Incremental migration preserving current APIs | Immediate universal branching | Expand Entity coverage only after pilot consistency criteria pass |
-| Stable domain-specific current tables | Replay-from-events capability | Revisit only if multiple independent projections become a proven requirement |
+| Immutable Entity evolution | Lower write-path complexity | Revisit if history writes dominate latency |
+| Variable World Time over a stable Presentation axis | Globally sortable standardized world chronology | Revisit only when real projects prove a shared calendar contract is necessary |
+| Stable Track semantics | Reusing one term for branches and lanes | Permanent unless product vocabulary changes by superseding ADR |
+| Incremental migration preserving current APIs | Immediate universal Timeline editing | Promote each phase only after consistency evidence |
+| Derived Camera/Style/Model Tracks | Fully independent editing of every lane | Revisit when a real use case cannot map to existing Entity State |
 
 ## Consequences
 
-- Every participating command must update current `main` state, revision, Track head, and Timeline facts in one transaction.
-- Branch writes do not mutate current domain tables; merge into `main` is explicit and conflict checked.
-- Canonical snapshot schemas, event schemas, optimistic revision checks, and idempotency keys become public implementation contracts.
-- Existing approval snapshots remain authoritative freeze records and cannot be rewritten by later Track or upstream changes.
-- `AuditLog` remains during migration and can be retired only after coverage, retention, permission, and backfill equivalence.
-- PostgreSQL storage, indexes, retention, consistency checks, and migration tooling become ongoing operational costs.
-- Runtime implementation does not begin merely because this ADR is Proposed; acceptance and explicit backlog scheduling are required.
+- Every participating Entity command atomically updates current State, appends EntityRevision, and records ChangeEvent.
+- TimelineItem position is separate from Entity State; moving an item cannot silently mutate Entity content.
+- Presentation Time is the required Story/content order, not Workflow execution time or database time.
+- World Time defaults to following Presentation Time and cannot assume UTC, one calendar, or one scalar dimension.
+- The core standardizes only a binding envelope; Project-defined time values remain opaque.
+- Track becomes reserved for semantic Timeline lanes.
+- CreativeBranch is optional and scheduled after Entity + State and Timeline + Track.
+- Existing approval snapshots remain frozen and cannot be rewritten by later Timeline or upstream changes.
+- `AuditLog` remains during migration and is retired only after equivalence is verified.
+- Runtime table dual-write does not begin until Track H H2+; H1 freezes schemas only. CreativeBranch merge APIs stay deferred (H10).
 
 ## Compliance
 
-- The runtime may not expose CreativeTrack merge before this ADR is Accepted.
-- No branch write may update a dedicated current-state table.
-- Every `main` dual write must be atomic and verified by business-row/head snapshot hashes.
-- Timeline events and Entity revisions are append-only at the database permission boundary.
-- Concurrent stale `expected_revision` writes return conflict instead of overwriting.
-- Generation completion can be traced to its input Entity revision IDs.
-- The acceptance and rollback checks in the detailed architecture document are required release gates.
+- APIs and schemas must not use `TimelineEvent` for audit/change facts; use `ChangeEvent`.
+- APIs and schemas must not use `CreativeTrack` for a branch; use `CreativeBranch`.
+- Every first-release TimelineItem has Presentation Time.
+- Missing WorldTime bindings mean `follow`; explicit bindings identify a dimension and relation/mode without requiring standardized values.
+- EntityRevision and ChangeEvent are append-only at the database permission boundary.
+- Concurrent stale `expected_revision` writes return conflict.
+- Generation completion traces to input Entity revision IDs.
+- Derived Tracks cannot become a second source of domain truth.
+- Timeline and Agent UI cannot bypass existing review or budget authority.
+- The acceptance and rollback checks in the detailed architecture document are release gates.

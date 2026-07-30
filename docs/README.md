@@ -4,9 +4,9 @@
 >
 > Version: 0.1.0-pre
 >
-> Status: Implementation — Phase 2.5 + Track G complete; next is Phase 3
+> Status: Implementation — Track G complete; Track H H1 schemas frozen; next H2 tables
 >
-> Last Progress Sync: 2026-07-29
+> Last Progress Sync: 2026-07-30
 
 ---
 
@@ -47,15 +47,18 @@ The required workflow is: **Story → Scene → Scene review → Visual Prep →
 | [Asset Model](Asset-Model.md) | Asset taxonomy (Characters, Locations, Styles, etc.) |
 | [AI Agent Collaboration](AI-Agent-Collaboration.md) | Agent architecture, required review gates, and Visual Prep workflow |
 | [Architecture Principles](architecture/architecture-principles.md) | Long-term architectural constitution guiding all future ADRs and RFCs |
-| [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) | Proposed creative revision history, project timeline, branch semantics, API contracts, and migration plan |
+| [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) | Entity State history, Presentation-led Timeline, variable World Time dimensions, semantic Tracks, and staged rollout |
 | [ADR Guide](architecture/adr-guide.md) | When and how to record architecture decisions ([ADR index](architecture/adr/README.md)) |
 | [RFC Guide](architecture/rfc-guide.md) | Proposal, review, risk, migration, and acceptance process for significant changes |
 | [Technical Architecture](Technical-Architecture.md) | System design, adapters, APIs, queues, BYOK, and data storage |
 | [Implementation Plan](Implementation-Plan.md) | Phased roadmap with live progress checkboxes |
-| [Next Tasks](Next-Tasks.md) | Current engineering backlog (Track G Done; Phase 3 next; Track H history foundation planned) |
+| [Next Tasks](Next-Tasks.md) | Current engineering backlog (Track H active: H1 Done → H2; Phase 3 later) |
+| [Entity history write paths](architecture/entity-history-write-paths.md) | H1 inventory of first-batch Entity write surfaces (no dual-write yet) |
 | [V0.4 Modification Plan](V0.4-Modification-Plan.md) | Completed first-pass reference — workstreams W1–W7 from the waoowaoo review + ADR-0006 |
 | [Director Copilot RFC (thin)](architecture/rfc/Director-Copilot-RFC.md) | Project sidebar co-pilot scope lock (Phase 3+; not a chatbot) |
 | [Looser Creative Flow RFC (thin)](architecture/rfc/Looser-Creative-Flow-RFC.md) | Partial recompute / asset-first visuals / story segmentation ramp |
+| [AI Creative IDE RFC](architecture/rfc/AI-Creative-IDE-RFC.md) | Explorer + Presentation/World-overlay Timeline + Director Console + Entity Inspector |
+| [Agent Effort Control RFC](architecture/rfc/Agent-Effort-Control-RFC.md) | Fast / Balanced / Deep execution policy without changing authority |
 | [Architecture Review: waoowaoo](architecture/review/Zivith-Architecture-Review-Based-on-waoowaoo.md) | Peer open-source project review; A1–A7 adoption list feeding V0.4 planning |
 | [Code Agent Design Guide](Code-Agent-Design-Guide.md) | Implementation conventions for AI code agents |
 
@@ -94,7 +97,7 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 
 ---
 
-## Project Status (2026-07-29)
+## Project Status (2026-07-30)
 
 | Phase | Status | Notes |
 |-------|--------|-------|
@@ -103,11 +106,12 @@ Infrastructure decisions: see the [ADR index](architecture/adr/README.md).
 | Phase 2 AI Agent + Mock Gen | ~95% done | A1 E2E gates pass; queue + SSE + recover landed |
 | Phase 2.5 First Providers | ~85% done | DeepSeek + SiliconFlow; four modality model slots; BYOK later (C7) |
 | Track G polish | **Done** | Real-key Story→Video E2E; Wan harden / MinIO / balance / no auto re-bill |
-| Phase 3–5 | Not started | Phase 3 is the default next track |
+| Track H Entity/State/Timeline | H1 Done | Snapshot + ChangeEvent schemas; H2 tables next |
+| Phase 3–5 | Not started | Generation productionize around / after H foundation |
 
 **Repository:** Active monorepo (`apps/web`, `apps/api`, `packages/*`).  
 **Strategy:** B-Line — Agent pipeline first; real SiliconFlow path validated in Track G.  
-**Near-term focus:** [Next Tasks](Next-Tasks.md) **Phase 3** productionize. Asset sheets + provider matrix: [Asset Model](Asset-Model.md). Remaining later: usage freeze/limits, BYOK (C7); Track H after explicit scheduling.
+**Near-term focus:** [Next Tasks](Next-Tasks.md) **Track H H2** (EntityRevision/ChangeEvent tables). Asset sheets + provider matrix: [Asset Model](Asset-Model.md). Remaining later: usage freeze/limits, BYOK (C7).
 
 ---
 

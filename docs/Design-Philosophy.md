@@ -6,7 +6,7 @@
 >
 > Status: Draft
 >
-> Last Updated: 2026-07
+> Last Updated: 2026-07-29
 
 ---
 
@@ -35,6 +35,12 @@ Every creative artifact should remain editable, reusable and reviewable.
 The goal is not only to generate videos.
 
 The goal is to build an AI-native creative operating system for storytelling.
+
+Its direction is:
+
+> Create the world first. Produce the content second.
+
+Persistent Entities and their evolving State form the world. Stories, Scenes, Shots, Prompts, and Videos are ways to develop and present that world rather than disposable prompt sessions.
 
 ---
 
@@ -159,6 +165,8 @@ Videos can always be regenerated from their corresponding Shot.
 Projects represent long-term creative worlds rather than one-time productions.
 
 Knowledge, assets and creative history belong to the Project.
+
+Entity State is presented on a stable Story order. World Time follows that Presentation Time by default and diverges only when the creator expresses a flashback, fuzzy period, range, time jump, or parallel world. Zivith does not force fictional worlds into one calendar or scalar clock; it preserves Project-defined time dimensions through a minimal relational envelope. Timeline is not a workflow graph or nonlinear video editor.
 
 ---
 
