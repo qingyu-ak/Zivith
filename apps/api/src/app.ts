@@ -32,6 +32,7 @@ import { registerVisualRequirementRoutes } from './routes/visual-requirements.js
 import { registerRecomputeRoutes } from './routes/recompute.js';
 import { registerWorkflowEventRoutes } from './routes/workflow-events.js';
 import { registerWorkflowRoutes } from './routes/workflows.js';
+import { registerWorldRoutes } from './routes/world.js';
 
 export interface BuildAppOptions {
   db?: PrismaClient;
@@ -146,6 +147,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
         protectedDone();
       });
       registerStubRoutes(api);
+      // Creator layer (ADR-0013): local single user, no auth on world routes.
+      api.register(
+        (worldApi, _worldOptions, worldDone) => {
+          registerWorldRoutes(worldApi, db);
+          worldDone();
+        },
+        { prefix: '/world' },
+      );
       done();
     },
     { prefix: '/api/v1' },
