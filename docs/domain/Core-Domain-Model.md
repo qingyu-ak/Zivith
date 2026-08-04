@@ -645,7 +645,7 @@ IP 就是 `Project`。不存在单独的 IP 对象。
 
 ## Conversation
 
-Creator Chat 以自然语言收集意图，并产出结构化草稿实体。对话本身不是创作产物：它不被 Project 拥有，不参与继承解析，也不出现在导出的创作层中。见 [ADR-0010](../architecture/adr/0010-creator-chat-is-a-guided-world-creation-wizard.md)。
+Creator Chat 以持续对话收集意图，经提案与用户确认后产出结构化草稿实体（默认 `draft`）。对话记录是会话工作底稿，不是创作产物：它不被 Project 拥有，不参与继承解析，也不出现在导出的创作层中（宪法 §9.2，2026-08-04 修订）。见 [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)。
 
 ## Workflow 执行
 

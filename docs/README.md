@@ -169,7 +169,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 ---
 
-## 项目状态（2026-07-30）
+## 项目状态（2026-08-04）
 
 | 阶段 | 状态 | 说明 |
 |-------|--------|-------|
@@ -178,15 +178,15 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 | Phase 2 AI Agent + Mock Gen | ~95% done | A1 E2E 关卡通过；queue + SSE + recover 已落地 |
 | Phase 2.5 First Providers | ~85% done | DeepSeek + SiliconFlow；四模态模型槽位；BYOK 稍后（C7） |
 | Track G polish | **Done** | 真密钥 Story→Video E2E；Wan harden / MinIO / balance / 无自动重计费 |
-| Track H — IP Core foundation | H3 Done | Entity/State/Timeline。双写 helpers；flags 默认关闭；下一步 H4 Timeline |
-| Track I — IP Core world entities | Not started | WorldEvent → Relationship 可查询 → Organization，按证据切片 gated |
-| Track J — Creator Chat wizard | Not started | 引导式世界创建 onboarding，由 ADR-0010 划界 |
-| Track K — World-first UI | Not started | Project 主页变为 World Overview；K1 无依赖 |
+| Track H — IP Core foundation | H3 Done | Entity/State/Timeline。双写 helpers；flags 默认关闭；H4 以世界线视图形式进行中（`feat/creator-layer-first`） |
+| Track I — IP Core world entities | I1 / I2 落地 | WorldEvent（ADR-0011）与 Relationship（ADR-0012）已入 domain contract；Organization 待偿 |
+| Track J — Creator Chat | 进行中 | 世界优先的持续对话创作面，应用默认页 `/`，无登录（ADR-0010 修订 / ADR-0013） |
+| Track K — World-first UI | 进行中 | 项目主页 World Overview；`/world` 三栏工作区（2026-08-04 设计）；见 UI Information Architecture |
 | Phase 3–5 | Not started | 生成生产化，在 IP Core 之后重新排序（ADR-0008） |
 
 **仓库：** 活跃 monorepo（`apps/web`、`apps/api`、`packages/*`）。  
-**策略：** B-Line — 先 Agent 管线；真 SiliconFlow 路径已在 Track G 验证。自 2026-07-31 起，IP Core 优先于生成生产化。  
-**近期焦点：** [Next Tasks](planning/Next-Tasks.md) **Track H H4**（只读 Presentation Timeline）— 重新定位不改变这一点，因为 Track H 本就是 IP Core 基础。资产表 + 提供商矩阵见 [Asset Model](domain/Asset-Model.md)。后续仍待：用量冻结/限额、BYOK（C7）。
+**策略：** B-Line — 先 Agent 管线；真 SiliconFlow 路径已在 Track G 验证。自 2026-07-31 起 IP Core 优先；2026-08-04 创造层优先（分支 `feat/creator-layer-first`）。  
+**近期焦点：** [Next Tasks](planning/Next-Tasks.md) — 创造层优先：IP 核心数据库（WorldEvent / Relationship，ADR-0011 / 0012）+ Creator Chat 持续对话（ADR-0010 修订）+ `/world` 世界线三栏视图（Track K）。资产表 + 提供商矩阵见 [Asset Model](domain/Asset-Model.md)。后续仍待：用量冻结/限额、BYOK（C7）。
 
 ---
 

@@ -6,7 +6,7 @@
 >
 > Status: Active（生效）— 已于 2026-07-28 同步（prompt-draft Visual Prep + 延后 generate）；Agent 角色已于 2026-07-31 按 IP 世界模型重组（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）；2026-07-31 重组为四部分（仅结构调整，无内容变更）
 >
-> Related: [Product-Positioning.md](../product/Product-Positioning.md), [Core-Domain-Model.md](Core-Domain-Model.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Shot-Specification.md](Shot-Specification.md), [Asset-Model.md](Asset-Model.md), [Next-Tasks.md](../planning/Next-Tasks.md), [ADR-0009](../architecture/adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-a-guided-world-creation-wizard.md)
+> Related: [Product-Positioning.md](../product/Product-Positioning.md), [Core-Domain-Model.md](Core-Domain-Model.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Shot-Specification.md](Shot-Specification.md), [Asset-Model.md](Asset-Model.md), [Next-Tasks.md](../planning/Next-Tasks.md), [ADR-0009](../architecture/adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)
 
 ---
 
@@ -74,7 +74,7 @@ Zivith 不是单一 AI 在做视频。它是一支在持久世界上协作的专
 
 **创建世界、提出问题、补齐设定。**
 
-它根据创作者用自然语言描述的内容，起草 `Project` 世界设定、`Asset(type=character)`、`Asset(type=location)`、`WorldEvent` 以及 Relationship 结构。它也是 Creator Chat 引导向导背后的引擎（[ADR-0010](../architecture/adr/0010-creator-chat-is-a-guided-world-creation-wizard.md)），因此其产出一律以 `draft` 进入，并可编辑、可拒绝。
+它根据创作者用自然语言描述的内容，起草 `Project` 世界设定、`Asset(type=character)`、`Asset(type=location)`、`WorldEvent` 以及 Relationship 结构。它也是 Creator Chat 持续对话背后的引擎（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)，2026-08-04 修订），因此其产出一律经提案与用户确认后以 `draft` 进入，并可编辑、可拒绝。
 
 | 方面 | 详情 |
 |---|---|
@@ -110,9 +110,9 @@ User provides world lore → asset stage structures Knowledge → User reviews
 | 主界面 | Workflow 面板、内联提示 | Creator Chat 向导、World Workspace |
 | 输出状态 | Draft | Draft（不变） |
 
-两个约束在两个方向上都成立。该阶段产出一律以 `draft` 进入，并保持可编辑、可拒绝——Creator Chat 不得写入已批准状态（[ADR-0010](../architecture/adr/0010-creator-chat-is-a-guided-world-creation-wizard.md)）。且该阶段不扩展领域模型：它产出 `Asset`、`WorldEvent` 与 Relationship State，均定义于 [Core-Domain-Model.md](Core-Domain-Model.md) §3。
+两个约束在两个方向上都成立。该阶段产出一律经提案与用户确认后以 `draft` 进入，并保持可编辑、可拒绝——Creator Chat 不得写入已批准状态（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)）。且该阶段不扩展领域模型：它产出 `Asset`、`WorldEvent` 与 Relationship State，均定义于 [Core-Domain-Model.md](Core-Domain-Model.md) §3。
 
-此次反转的落地顺序见 [Next-Tasks.md](../planning/Next-Tasks.md) 的 Track I（世界实体）与 Track J（Creator Chat 向导）。UI 侧为 Track K，规范见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md)。
+此次反转的落地顺序见 [Next-Tasks.md](../planning/Next-Tasks.md) 的 Track I（世界实体）与 Track J（Creator Chat 持续对话）。UI 侧为 Track K，规范见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md)。
 
 ### 3. Lore Keeper Agent
 

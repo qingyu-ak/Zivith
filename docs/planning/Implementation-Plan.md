@@ -4,7 +4,7 @@
 >
 > Version: 2.4
 >
-> Status: Active — 进度已于 2026-07-30 同步；2026-07-31 围绕 IP Core 重新排序（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）
+> Status: Active — 进度已于 2026-07-30 同步；2026-07-31 围绕 IP Core 重新排序（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）；2026-08-04 创造层优先转向（分支 `feat/creator-layer-first`，ADR-0010 修订 + 0011 / 0012 / 0013），实施细节以 [Next-Tasks.md](Next-Tasks.md) 为准
 >
 > Strategy: B-Line — AI Agent 流水线优先，视频生成用 Mock；IP Core 先于生成生产化
 >
@@ -18,7 +18,7 @@
 
 **策略决策（2026-07）：** MVP 遵循 B-Line — 先建设 AI Agent 创作流水线，真实视频生成使用 Mock Adapter。这优先演示「AI 作为创作伙伴」工作流，而非视频质量，并将视频模型选型推迟到提供商格局更清晰的后期阶段。
 
-**重新排序（2026-07-31，[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）：** Zivith 的定位现为「AI 可理解的 IP 创作系统」。**IP Core** — Entity、State、Relationship、WorldEvent、Timeline — 是产品基础，并排在生成生产化之前。实践上这与其说是反转，不如说是确认：Track H 已经*是* IP Core 基础，并将不间断继续。变化的是它之后做什么。Track I（世界实体）与 Track J（引导式世界创建向导）现在排在 Phase 3–5 之前，且 MVP 在验证视频质量之前先验证四个问题：
+**重新排序（2026-07-31，[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)；2026-08-04 创造层优先）：** Zivith 的定位现为「AI 可理解的 IP 创作系统」。**IP Core** — Entity、State、Relationship、WorldEvent、Timeline — 是产品基础，并排在生成生产化之前。实践上这与其说是反转，不如说是确认：Track H 已经*是* IP Core 基础，并将不间断继续。变化的是它之后做什么。Track I（世界实体）与 Track J（Creator Chat 持续对话创作面）现在排在 Phase 3–5 之前，且 MVP 在验证视频质量之前先验证四个问题：
 
 1. 用户是否愿意创建 IP？
 2. AI 能否帮助用户组织世界？
@@ -35,10 +35,10 @@
 | 2.5 First Providers | ~85% | DeepSeek + SiliconFlow 适配器 + 提供商 UI；BYOK 稍后（C7） |
 | **V0.4（间奏）** | ~95% | W1–W7 首轮已落地（`usage_records` 记录；freeze/limits 稍后）。见 [V0.4-Modification-Plan.md](../archive/V0.4-Modification-Plan.md) |
 | 2.5 polish（Track G） | **已完成** | 真实密钥 Story→Video E2E；Wan 加固 + MinIO 持久化 + 余额告警 + 无自动重复计费 |
-| **IP Core foundation（Track H）** | H3 已完成 | Entity + State + Timeline + Track。双写助手 + 按 Entity 开关（默认关）；下一步 H4 Presentation Timeline |
-| **IP Core world entities（Track I）** | 0% | WorldEvent → Relationship 可查询性 → Organization，每次一块。受 H4 门禁 |
-| **Creator Chat wizard（Track J）** | 0% | 引导式世界创建入门；由 ADR-0010 划界 |
-| **World-first UI（Track K）** | 0% | 项目首页变为 World Overview；`/world` 工作区。见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md) |
+| **IP Core foundation（Track H）** | H3 已完成 | Entity + State + Timeline + Track。双写助手 + 按 Entity 开关（默认关）；H4 以世界线视图形式在 `feat/creator-layer-first` 进行中 |
+| **IP Core world entities（Track I）** | I1 / I2 已落地 | WorldEvent 已落库（[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md)）；Relationship 已提升为独立实体（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）；Organization 待偿 |
+| **Creator Chat 持续对话（Track J）** | 进行中 | 世界优先的持续对话创作面；由 ADR-0010（2026-08-04 修订）划界 |
+| **World-first UI（Track K）** | 进行中 | 项目首页变为 World Overview；`/world` 三栏工作区（2026-08-04 设计）；Creator Chat 为应用默认页 `/`。见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md) |
 | 3–5 | 0% | 生成生产化现排在 IP Core 之后 |
 
 **近期工程待办：** [Next-Tasks.md](Next-Tasks.md) **Track H**（H3 已完成 → H4 只读 Presentation Timeline），然后 Track I / Track J。设定表 / 地点表与 T2I·I2I·T2V·I2V 矩阵见 [Asset-Model.md](../domain/Asset-Model.md)。
@@ -77,13 +77,13 @@ Track H: Entity + State + Timeline + Track       [H3 done]
     │   H4 read-only Presentation Timeline is the next action
     ↓
 Track I: IP Core world entities  (3-5 weeks, slice-gated)
-    │   I1 WorldEvent → I2 Relationship queryability → I3 Organization
+    │   I1 WorldEvent (ADR-0011 done) → I2 Relationship (ADR-0012 done) → I3 Organization
     ↓
-Track J: Creator Chat guided wizard  (2-3 weeks)
+Track J: Creator Chat continuous conversation (2-3 weeks)
     │   May run in parallel with Track I
     │
     │   Track K: world-first UI information architecture
-    │   K1 no dependency · K2 after H4 · K3 after J · K4 after I
+    │   K1 · K2 / K3 in progress (feat/creator-layer-first) · K4 after Production Skill
     ↓
 ─────────────  Generation productionization  ─────────────
     ↓

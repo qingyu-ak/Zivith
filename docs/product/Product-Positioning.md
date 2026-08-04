@@ -97,7 +97,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     Core["IP Core (Project / Entity / State / Timeline)"]
-    Chat["Creator Chat: 引导式世界创建向导"]
+    Chat["Creator Chat: 持续对话创作面（默认入口）"]
     Studio["Studio IDE: 结构化专业管理"]
     Chat --> Core
     Studio --> Core
@@ -168,24 +168,24 @@ Skill 没有 identity、没有 revision、没有 ownership，不落库、不出�
 
 ---
 
-## 7. Creator Chat（引导式世界创建向导）
+## 7. Creator Chat（世界优先的持续对话创作面）
 
-**目标：降低首次使用门槛。** 新用户不应该在第一次打开 Zivith 时就面对数据结构、时间线与专业工作流。
+**目标：降低首次使用门槛，并成为长期创作入口。** 新用户不应该在第一次打开 Zivith 时就面对数据结构、时间线与专业工作流。打开应用即进入对话（`/`），无登录门禁（本地单用户模式，[ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)）。
 
 用户只需要用自然语言描述想法：
 
 > 我想创造一个东方玄幻世界。
 
-向导据此引导用户补全世界背景、力量体系、主角设定与核心冲突，并在后台逐步产出结构化的 `Project`、`Asset(type=character)`、`Asset(type=location)`、`WorldEvent` 与 Relationship 草案。
+对话智能体据此引导用户补全世界背景、力量体系、主角设定与核心冲突，并**自动创建任务（IP / 项目）**：经提案与用户确认后，后台产出结构化的 `Project`、`Asset(type=character)`、`Asset(type=location)`、`WorldEvent` 与 `Relationship` 草案，一律以 `draft` 进入，可编辑、可拒绝。随着内容累积，用户可像 Trae / Cursor 切换 IDE 一样进入 Studio 世界工作区（`/projects/[id]/world`），对话与工作区双向可达。
 
-**Creator Chat 是向导，不是聊天产品。** 边界由 [ADR-0010](../architecture/adr/0010-creator-chat-is-a-guided-world-creation-wizard.md) 锁定：
+**Creator Chat 是持续对话创作面，不是一次性向导。** 边界由 [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)（2026-08-04 修订）锁定：
 
-- 它的产物是结构化实体草案，**不是**对话记录；对话本身不是创作载体
-- 它**不是** studio 全局 chat，**不是**通用问答助手
-- 它**不得**绕过任何 mandatory review gate
-- 完成引导后，用户进入结构化工作区继续创作
+- 写库必须提案且经用户确认，AI 永不自主写库；产物默认 `draft`，gate 不可绕过
+- 对话记录是会话工作底稿，**不是**创作产物，不作为创作载体展示或导出
+- 它**不是** Director Copilot，**不是**通用问答助手
+- 对话围绕「世界」持续进行：用户后续创作中可随时回到对话补充事件、调整关系、修订设定
 
-这保持了宪法 §9.2「Zivith 永不成为 chatbot」的效力：对话可以采集意图，但创作面始终是结构化的世界模型。
+这对应宪法 §9.2（2026-08-04 修订）「把聊天记录当作创作宇宙本身」的反向表述：对话可以做创作入口，但创作面始终是结构化的世界模型。
 
 ---
 

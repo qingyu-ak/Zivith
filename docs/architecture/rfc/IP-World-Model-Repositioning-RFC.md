@@ -2,15 +2,15 @@
 
 > 为什么 Zivith 从 AI Video Workflow 转向 AI-understandable IP System
 >
-> Version: 1.0
+> Version: 1.1
 >
-> Status: Accepted — 2026-07-31
+> Status: Accepted — 2026-07-31（2026-08-04 修订，同步创造层优先转向）
 >
 > Author: Zivith 架构组
 >
 > Decider: 项目所有者
 >
-> Spawned ADRs: [ADR-0008](../adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)（Constitutional Amendment）、[ADR-0009](../adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md)、[ADR-0010](../adr/0010-creator-chat-is-a-guided-world-creation-wizard.md)
+> Spawned ADRs: [ADR-0008](../adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)（Constitutional Amendment）、[ADR-0009](../adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md)、[ADR-0010](../adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)（2026-08-04 修订）、[ADR-0011](../adr/0011-world-event-is-a-domain-creative-entity.md)（Slice 1 落库）、[ADR-0012](../adr/0012-relationship-is-an-independent-queryable-entity.md)（Slice 2 提前晋级）、[ADR-0013](../adr/0013-local-single-user-mode-no-login.md)（本地单用户模式）
 >
 > Related: [architecture-principles.md](../architecture-principles.md), [Product-Positioning.md](../../product/Product-Positioning.md), [Entity + State + Timeline + Track](../entity-state-timeline-track.md), [ADR-0007](../adr/0007-preserve-current-state-with-immutable-creative-history.md)
 
@@ -46,7 +46,7 @@
 **紧张的原则：**
 
 - **§3「模型靠加深而非加宽生长」** — 本 RFC 提议新增 `WorldEvent`（以及后续可能的 `Organization`、`Relationship`）。缓解措施：`IP` 映射到既有 `Project` 而非新增实体；`Skill` 被明确拒绝为实体（ADR-0009）；`WorldEvent` 与 `Organization` 采用逐个 slice、需晋级证据的推进方式，而非一次性铺开。净效果是：本 RFC 拒绝的新概念多于它引入的。
-- **§9.2「Zivith 永不成为 chatbot」** — Creator Chat 接近这条红线。按 [adr-guide.md](../adr-guide.md) §5 的 Rung 3「加围栏」处理，围栏与 tripwire 记录在 ADR-0010，红线本身不撤销。
+- **§9.2（2026-08-04 修订）** — 原「Zivith 永不成为 chatbot」红线经 ADR-0010 修订为「把聊天记录当作创作宇宙本身」的反向表述：对话可以做创作入口，但对话记录永远是会话工作底稿，不是创作宇宙本身。围栏与 tripwire 记录在修订后的 ADR-0010（写库必须提案且经用户确认）。
 
 **触碰的 Never 清单条目：** §9.2（见上）。本 RFC 另**新增**一条 Never 条目（不自研基础模型），属于收紧而非放宽。
 
@@ -59,7 +59,7 @@
 1. Zivith 的产品定位正式表述为「AI-understandable IP creation system」（ADR-0008 修订宪法 §1 / §9 / §10）
 2. 产品概念到领域契约的强制术语映射（见 [Product-Positioning.md](../../product/Product-Positioning.md) §3）
 3. Skill 是能力层而非领域实体（ADR-0009）
-4. Creator Chat 是引导式向导而非对话创作面（ADR-0010）
+4. Creator Chat 是世界优先的持续对话创作面，而非引导式向导（ADR-0010，2026-08-04 修订）
 5. IP Core 世界实体的推进顺序与晋级证据（见 §5 capability ramp）
 
 ### Non-goals（读者会默认包含、但明确排除的）
@@ -71,22 +71,22 @@
 - **不激活 CreativeBranch。** 平行世界仍由 World Time 的 parallel-world 维度表达，Track H10 保持 Deferred。
 - **不把 `ChangeEvent` 复用为 `WorldEvent`。** 系统审计事实与故事世界事件是两个语义，不合并。
 - **不引入 IP 实体。** `IP` 即 `Project`。
-- **不打断 Track H。** H4 只读 Presentation Timeline 仍是下一个工程动作。
+- **不打断 Track H。** H4 只读 Presentation Timeline 以「世界线视图」形式在 `feat/creator-layer-first` 分支优先落地（2026-08-04 创造层优先转向）。
 - **不承诺 3D / 游戏 / 虚拟世界。** 长期方向，不进入任何已排期 slice。
 
 ## 5. Capability ramp
 
 IP Core 世界实体逐 slice 推进，每个 slice 需要晋级证据才进入下一个。
 
-| Slice | 范围 | 晋级证据 |
+| Slice | 范围 | 晋级证据 / 状态 |
 |-------|------|----------|
-| **Slice 1 — `WorldEvent` 只读** | 新增 Project 级 `WorldEvent`：发生时间、影响的 Entity、前置条件、后续变化。挂载到 Presentation-led `Timeline` 的 event track，只读呈现 | 真实项目中创作者主动创建了 `WorldEvent`，且能在 Timeline 上定位「世界现在处于什么阶段」 |
-| **Slice 2 — `Relationship` 可查询** | `Relationship` 作为 `Entity` State 的结构化字段落地，支持「查询某角色在某时点的全部关系」 | 创作者或 Agent 实际发起了跨 Entity 的关系查询，且 State 字段形态不再够用之前不推进 |
-| **Slice 3 — `Organization` 与关系提升** | 新增 Project 级 `Organization`；仅当 Slice 2 暴露出真实的跨实体关系查询需求时，才把 `Relationship` 提升为独立 Entity | 出现无法用 State 字段表达的关系查询（如「列出所有敌对阵营对」），且需求来自真实项目而非假设 |
+| **Slice 1 — `WorldEvent`（已落地）** | 新增 Project 级 `WorldEvent`：发生时间、影响的 Entity、前置条件、后续变化。挂载到 Presentation-led `Timeline` 的 event track | ✅ 2026-08-04 经 ADR-0011 进入 domain contract。v1 边界：只读呈现 + 创建 draft，时间一律使用世界时间信封（opaque），锚点 `anchorStoryId?` + `presentationOrder?` |
+| **Slice 2 — `Relationship`（已落地，提前晋级）** | 原设计为 `Entity` State 上的结构化字段；2026-08-04 经 ADR-0012 提前晋级为独立可查询实体（多态 `EntityRef`，无物理外键，`directed / undirected`） | ✅ 晋级证据：世界线视图需要跨实体关系查询与连线，State 字段形态已不够用 |
+| **Slice 3 — `Organization`** | 新增 Project 级 `Organization` | 出现无法用 `Relationship` 表达的组织级查询（如「列出所有敌对阵营对」），且需求来自真实项目而非假设。**未触发，待偿** |
 
-Slice 1 之前的前置条件是 Track H 的 H4（只读 Presentation Timeline）落地——`WorldEvent` 需要一个可以挂载的时间轴。
+Slice 1 的前置条件（Track H 的 H4 只读 Presentation Timeline）随 2026-08-04 创造层优先转向，以「世界线视图」形式与 Slice 1 / 2 同批落地——`WorldEvent` 需要一个可以挂载的时间轴。
 
-Creator Chat（Track J）与上述 slice 并行但独立排期，其自身的能力爬坡定义在 ADR-0010。
+Creator Chat（Track J）与上述 slice 并行但独立排期，其自身的能力爬坡定义在 ADR-0010（2026-08-04 修订为持续对话创作面，取代原「有终点向导」设计）。
 
 ## 6. Risk assessment
 
@@ -94,15 +94,15 @@ Creator Chat（Track J）与上述 slice 并行但独立排期，其自身的能
 
 | 类别 | 风险 | L × I × D | 缓解与责任人 |
 |------|------|-----------|--------------|
-| **Domain contract risk** (P2) | `WorldEvent` 的字段形态在首批真实项目后被证明错误，迫使破坏性变更 | 中 × 高 × 高（有迁移流程可见） | Slice 1 只读、不参与继承解析、不被 `Shot` 引用，把回退成本限制在单表。落库时须另开 ADR（见 §9）。责任人：架构 owner；tripwire：首批 `WorldEvent` 出现第二次字段变更 |
+| **Domain contract risk** (P2) | `WorldEvent` 的字段形态在首批真实项目后被证明错误，迫使破坏性变更 | 中 × 高 × 高（有迁移流程可见） | v1 边界保持只读 + 创建 draft、不参与继承解析、不被 `Shot` 引用，把回退成本限制在单表。落库 ADR（ADR-0011）登记并延续此缓解。责任人：架构 owner；tripwire：首批 `WorldEvent` 出现第二次字段变更 |
 | **Stored-data risk** (§3, §8) | 已有 `Project` 在新叙事下被重新解读，创作者原有数据语义漂移 | 低 × 高 × 中 | 本轮零 schema 变更；术语映射表把新说法绑定到既有契约，既有数据的含义不变。责任人：架构 owner |
 | **Promise risk** (§4, D1) | 「AI 可理解的 IP 系统」被外部读作对某种可编程世界模型格式的承诺 | 中 × 中 × 低（静默，加重一级） | 定位文档明确 D1 未激活、不发布格式；RFC non-goals 显式排除。责任人：文档 owner；tripwire：外部方开始基于导出数据构建产品 |
-| **Authority risk** (P6, §6) | Creator Chat 在自然语言引导中变相绕过 review gate | 中 × 高 × 低（静默，加重一级） | ADR-0010 规定向导产物一律为 draft、必须经既有 gate；实现时须有可观测的 gate 通过记录。责任人：Track J owner；tripwire：出现任何未经 gate 的向导产物 |
-| **Economic risk** (P7, §7) | 引导式向导在后台连续调用 LLM，产生无归属花费 | 中 × 中 × 中 | 向导的每次生成沿用既有 metering 与 budget 归属，不新增计费路径。责任人：Track J owner |
+| **Authority risk** (P6, §6) | Creator Chat 在持续对话中变相绕过 review gate | 中 × 高 × 低（静默，加重一级） | ADR-0010 围栏：写库必须提案且经用户确认；产物默认 `draft`，gate 不可绕过。实现时须有可观测的 gate 通过记录。责任人：Track J owner；tripwire：出现任何未经确认落库的对话产物 |
+| **Economic risk** (P7, §7) | 持续对话面在后台连续调用 LLM，产生无归属花费 | 中 × 中 × 中 | 对话的每次生成沿用既有 metering 与 budget 归属，不新增计费路径。责任人：Track J owner |
 | **Lock-in risk** (P4, §9) | Skill 命名让读者误以为绑定某供应商的 skill 体系 | 低 × 中 × 中 | ADR-0009 明确 Skill 不落库、不出现在导出数据里，仅为既有 capability boundary 的产品化命名。责任人：架构 owner |
 | **Complexity risk** (§3) | 领域模型因世界实体而膨胀成大杂烩 | 中 × 高 × 中 | 这是本 RFC 最主要的风险，也是它拒绝 Skill Entity 与 IP Entity 的原因。逐 slice 晋级证据机制是核心缓解手段。责任人：架构 owner；tripwire：任一 slice 未取得晋级证据即开工下一个 |
 
-「Unlikely」在本表中未被使用。Stored-data risk 评为低，是**因为**本轮零 schema 变更，风险窗口在 Slice 1 落库时才真正打开，届时由 §9 登记的 ADR 重新评估。
+「Unlikely」在本表中未被使用。Stored-data risk 在 RFC 发布时评为低，是**因为**当时零 schema 变更；Slice 1 / 2 落库（ADR-0011 / 0012）时已按 §9 登记重新评估，`Relationship` 无物理外键的设计进一步把存量数据漂移风险压到最低。
 
 ## 7. Migration plan
 
@@ -129,22 +129,22 @@ Creator Chat（Track J）与上述 slice 并行但独立排期，其自身的能
 - 无 provider 概念越过 capability boundary（P4）
 - 每个新步骤都保留人类 review 能力；mandatory gate 未移动（P6）
 - 每条新生成路径都被计量、限额、归属（P7）
-- 向导过程中采集到的世界知识被写入 `Project` 结构化状态，而非丢弃（P8）
+- 对话过程中采集到的世界知识经用户确认后写入 `Project` 结构化状态，而非丢弃（P8）
 - 导出仍包含全部内容，包括本 RFC 引入的产物（§4）
 
 ### 8.3 Governance criteria
 
-- 不可逆决策已记录为 ADR-0008 / 0009 / 0010 并互相交叉链接 ✅
+- 不可逆决策已记录为 ADR-0008 / 0009 / 0010（修订）/ 0011 / 0012 / 0013 并互相交叉链接 ✅
 - deferral registry 未被触碰，无需更新 ✅
-- 迁移债务：无存量债务；Slice 1 的债务已在 §9 登记
+- 迁移债务：Slice 1 / 2 已落库并结清（ADR-0011 / 0012）；Slice 3 `Organization` 仍在 §9 待偿登记
 - revisit trigger 已写入 §6 风险表，供周期性架构评审检查 ✅
 
 ## 9. 待偿 ADR 登记
 
 本 RFC **不**授权 schema 变更。以下决策在真正落库时必须各自开新 ADR：
 
-- **`WorldEvent` 进入 domain contract**（Slice 1）— 新增实体、所有权规则、与 `ChangeEvent` 的边界、是否参与继承解析。触发条件：Slice 1 开工。
-- **`Relationship` 提升为独立 Entity**（Slice 3，条件性）— 仅在 Slice 2 暴露出 State 字段无法表达的查询需求时触发。若未触发，无需 ADR。
-- **`Organization` 进入 domain contract**（Slice 3）— 与 `Asset` 的关系、Project 级所有权。触发条件：Slice 3 开工。
+- **`WorldEvent` 进入 domain contract**（Slice 1）— ✅ 已完成：ADR-0011（2026-08-04）。新增实体、所有权规则、与 `ChangeEvent` 的边界、是否参与继承解析均已记录。
+- **`Relationship` 提升为独立 Entity** — ✅ 已完成：ADR-0012（2026-08-04），由原 Slice 3 条件性决策提前晋级。
+- **`Organization` 进入 domain contract**（Slice 3）— 与 `Asset` 的关系、Project 级所有权。触发条件：Slice 3 开工。**待偿**。
 
 按 [adr-guide.md](../adr-guide.md) §1，上述每一项都命中「Changes the domain contract」这一强制触发条件。

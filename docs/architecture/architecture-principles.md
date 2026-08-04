@@ -202,9 +202,9 @@ AI 视频生成器把提示词变成文件。操作系统管理状态、暴露�
 
 1. **提示词到视频的生成器。** 「打一句话、收一部片、丢弃、重试」的交互，正是 Zivith 存在以取代的黑箱。无论模型多好，把创作过程坍缩为单次不透明跳跃，是对愿景的放弃，不是达成。
 
-2. **聊天机器人。** 对话可辅助创作；它永远不会*成为*创作界面。聊天日志是创意宇宙最弱的可能表示——无结构、不可版本、不可共享、不可评审。
+2. **把聊天记录当作创作宇宙本身。** 对话可以作为创作入口（Creator Chat）；但对话记录永远只是会话工作底稿，创作宇宙的唯一表示形式是结构化实体。无结构、不可版本、不可共享、不可评审的聊天日志，永远不会成为创作载体。
 
-   *边界澄清（ADR-0010）。* 本条禁止把聊天日志当作创意产物；并不禁止自然语言作为收集意图的手段。有界的入门向导，其输出为结构化草稿实体——可在结构化工作区中评审、版本化、编辑——不违反本条。无论叫什么，把对话本身当作工作而持久化的，则违反。
+   *边界澄清（ADR-0010，2026-08-04 修订）。* 本条禁止把聊天日志当作创作宇宙的表示；并不禁止自然语言作为创作入口。允许对话式创作入口（Creator Chat）：对话中确认提案后，由系统经既有 API 语义把世界沉淀为结构化 `draft` 实体，可在结构化工作区中评审、版本化、编辑。对话记录不进入领域模型、不参与导出。无论叫什么，把对话本身当作创作宇宙表示而持久化的，则违反。
 
 3. **节点图工具。** 把原始计算管线暴露为主创作界面，是用引擎类工具的主场换掉语义层级——Zivith 的护城河——并以专家心智模型向每位初学者征税。
 
@@ -284,5 +284,6 @@ AI 视频生成器把提示词变成文件。操作系统管理状态、暴露�
 |---------|------|--------------|------------------|
 | 1.0 | 2026-07-22 | — | Ratified |
 | 1.1 | 2026-07-31 | [ADR-0008](adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md) (Constitutional Amendment) | §1 Vision restated around the IP world; §3 gained the world-layer and capability-is-not-domain rules; §9.2 gained a boundary clarification and §9 gained item 7 (a model foundry); §10 restated the North Star and reordered its measures |
+| 1.2 | 2026-08-04 | [ADR-0010](adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) (revised) | §9.2 changed: conversational creation entry allowed; chat logs are session working drafts, the structured entity is the sole representation of the creative universe |
 
 修订仅追加。较晚修订通过显式 ADR 取代较早者；本表永不重写以隐藏被取代状态。
