@@ -11,6 +11,7 @@ const ENV_KEYS: Record<HistoryEntityType, string> = {
   output: 'HISTORY_ENTITY_OUTPUT',
   appearance_variant: 'HISTORY_ENTITY_APPEARANCE_VARIANT',
   visual_requirement: 'HISTORY_ENTITY_VISUAL_REQUIREMENT',
+  world_event: 'HISTORY_ENTITY_WORLD_EVENT',
 };
 
 function parseMode(raw: string | undefined): HistoryWriteMode | undefined {
@@ -24,7 +25,7 @@ function parseMode(raw: string | undefined): HistoryWriteMode | undefined {
  *
  * Env:
  * - `HISTORY_WRITE_DEFAULT=off|shadow|dual` (default off)
- * - `HISTORY_ENTITY_SHOT` / `_PROMPT_VERSION` / `_OUTPUT` / `_APPEARANCE_VARIANT` / `_VISUAL_REQUIREMENT`
+ * - `HISTORY_ENTITY_SHOT` / `_PROMPT_VERSION` / `_OUTPUT` / `_APPEARANCE_VARIANT` / `_VISUAL_REQUIREMENT` / `_WORLD_EVENT`
  *   override the default for one Entity type.
  */
 export function historyWriteModeFor(entityType: HistoryEntityType): HistoryWriteMode {

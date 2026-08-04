@@ -21,5 +21,12 @@ export type WorkflowRunId = Brand<string, 'WorkflowRunId'>;
 export type WorkflowStepId = Brand<string, 'WorkflowStepId'>;
 export type TemplateId = Brand<string, 'TemplateId'>;
 export type KnowledgeId = Brand<string, 'KnowledgeId'>;
+export type WorldEventId = Brand<string, 'WorldEventId'>;
+export type RelationshipId = Brand<string, 'RelationshipId'>;
+export type ProjectTimelineId = Brand<string, 'ProjectTimelineId'>;
+export type TimelineTrackId = Brand<string, 'TimelineTrackId'>;
+export type TimelineItemId = Brand<string, 'TimelineItemId'>;
+export type CreatorChatThreadId = Brand<string, 'CreatorChatThreadId'>;
+export type CreatorChatMessageId = Brand<string, 'CreatorChatMessageId'>;
 
 export const asId = <T extends Brand<string, string>>(value: string): T => value as T;

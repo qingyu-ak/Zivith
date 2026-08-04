@@ -143,6 +143,10 @@ model Project {
   entityRevisions EntityRevision[]
   changeEvents    ChangeEvent[]
   projectSequence ProjectSequence?
+  worldEvents     WorldEvent[]
+  relationships   Relationship[]
+  timeline        ProjectTimeline?
+  creatorThreads  CreatorChatThread[]
 
   @@index([ownerId, deletedAt])
   @@map("projects")
@@ -611,4 +615,139 @@ model ProjectSequence {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("project_sequences")
+}
+
+/// ADR-0011 — WorldEvent: a domain creative entity on the world line.
+/// World time is opaque (world_time_envelope); presentation axis via anchor_story_id + presentation_order.
+model WorldEvent {
+  id                String        @id @default(uuid())
+  projectId         String        @map("project_id")
+  anchorStoryId     String?       @map("anchor_story_id")
+  title             String
+  description       String?
+  worldTimeEnvelope Json          @default("{}") @map("world_time_envelope")
+  presentationOrder Int?          @map("presentation_order")
+  state             ApprovalState @default(draft)
+  characterIds      String[]      @default([]) @map("character_ids")
+  sceneIds          String[]      @default([]) @map("scene_ids")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, deletedAt])
+  @@index([projectId, anchorStoryId, presentationOrder])
+  @@map("world_events")
+}
+
+/// ADR-0012 — Relationship: independent queryable entity.
+/// Polymorphic EntityRef (source_type/source_id, target_type/target_id) — no physical FK.
+model Relationship {
+  id          String        @id @default(uuid())
+  projectId   String        @map("project_id")
+  kind        String
+  sourceType  String        @map("source_type")
+  sourceId    String        @map("source_id")
+  targetType  String        @map("target_type")
+  targetId    String        @map("target_id")
+  direction   String        @default("directed")
+  label       String?
+  description String?
+  validFrom   Json?         @map("valid_from")
+  validUntil  Json?         @map("valid_until")
+  state       ApprovalState @default(draft)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, deletedAt])
+  @@index([projectId, sourceType, sourceId])
+  @@index([projectId, targetType, targetId])
+  @@map("relationships")
+}
+
+/// H4+ — Presentation Timeline aggregate (world line).
+/// Abstract, non-uniform scale: pure presentation coordinates, no real time conversion (ADR-0007).
+model ProjectTimeline {
+  id          String          @id @default(uuid())
+  projectId   String          @unique @map("project_id")
+  name        String          @default("World Line")
+  description String?
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tracks      TimelineTrack[]
+
+  @@index([projectId, deletedAt])
+  @@map("project_timelines")
+}
+
+model TimelineTrack {
+  id         String           @id @default(uuid())
+  timelineId String           @map("timeline_id")
+  /// character | scene | world_event | organization
+  kind       String
+  title      String
+  order      Int              @default(0)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+  deletedAt  DateTime?        @map("deleted_at")
+  timeline   ProjectTimeline  @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  items      TimelineItem[]
+
+  @@unique([timelineId, order])
+  @@index([timelineId, deletedAt])
+  @@map("timeline_tracks")
+}
+
+model TimelineItem {
+  id                String        @id @default(uuid())
+  trackId           String        @map("track_id")
+  entityType        String        @map("entity_type")
+  entityId          String        @map("entity_id")
+  presentationOrder Int           @map("presentation_order")
+  startOffsetMs     Int?          @map("start_offset_ms")
+  durationMs        Int?          @map("duration_ms")
+  metadata          Json?         @default("{}")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+  track             TimelineTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([trackId, presentationOrder])
+  @@index([trackId, entityType, entityId])
+  @@map("timeline_items")
+}
+
+/// ADR-0013 — Creator Chat. Local single-user mode: no userId on these tables.
+/// thread.projectId is null until the "create world" proposal is confirmed.
+model CreatorChatThread {
+  id        String             @id @default(uuid())
+  projectId String?            @map("project_id")
+  title     String?
+  state     String             @default("active")
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+  project   Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  messages  CreatorChatMessage[]
+
+  @@index([projectId])
+  @@map("creator_chat_threads")
+}
+
+model CreatorChatMessage {
+  id            String            @id @default(uuid())
+  threadId      String            @map("thread_id")
+  role          String
+  content       String
+  proposal      Json?             @default("{}")
+  proposalKey   String?           @map("proposal_key")
+  proposalState String?           @map("proposal_state")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  thread        CreatorChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("creator_chat_messages")
 }

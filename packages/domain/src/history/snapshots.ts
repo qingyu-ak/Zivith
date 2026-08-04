@@ -170,6 +170,24 @@ export function serializeVisualRequirementSnapshot(row: Row): CanonicalSnapshotE
   });
 }
 
+export function serializeWorldEventSnapshot(row: Row): CanonicalSnapshotEnvelope {
+  return envelope('world_event', {
+    id: asString(pick(row, 'id')),
+    project_id: asString(pick(row, 'project_id', 'projectId')),
+    anchor_story_id: asString(pick(row, 'anchor_story_id', 'anchorStoryId')),
+    title: asString(pick(row, 'title')),
+    description: asString(pick(row, 'description')),
+    world_time_envelope: asJson(pick(row, 'world_time_envelope', 'worldTimeEnvelope')),
+    presentation_order: asNumber(pick(row, 'presentation_order', 'presentationOrder')),
+    state: asString(pick(row, 'state')),
+    character_ids: asStringArray(pick(row, 'character_ids', 'characterIds')),
+    scene_ids: asStringArray(pick(row, 'scene_ids', 'sceneIds')),
+    created_at: asIso(pick(row, 'created_at', 'createdAt')),
+    updated_at: asIso(pick(row, 'updated_at', 'updatedAt')),
+    deleted_at: asIso(pick(row, 'deleted_at', 'deletedAt')),
+  });
+}
+
 export function serializeHistorySnapshot(
   entityType: HistoryEntityType,
   row: Row,
@@ -185,6 +203,8 @@ export function serializeHistorySnapshot(
       return serializeAppearanceVariantSnapshot(row);
     case 'visual_requirement':
       return serializeVisualRequirementSnapshot(row);
+    case 'world_event':
+      return serializeWorldEventSnapshot(row);
     default: {
       const _exhaustive: never = entityType;
       throw new Error(`Unsupported history entity type: ${_exhaustive}`);

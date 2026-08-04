@@ -10,6 +10,7 @@ export const HISTORY_ENTITY_TYPES = [
   'output',
   'appearance_variant',
   'visual_requirement',
+  'world_event',
 ] as const;
 
 export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];

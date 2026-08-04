@@ -18,11 +18,11 @@ import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormList, getFormText, getOptionalFormText } from '@/lib/form-data';
 import type { AssetDTO, AssetType, MediaDTO } from '@/lib/types';
 
-function imageUrl(image: string | MediaDTO) {
+function imageUrl(image: string | MediaDTO): string {
   if (typeof image === 'string') {
     return /^(https?:|data:|blob:)/i.test(image) ? image : '';
   }
-  const access = 'access_url' in image ? image.access_url : undefined;
+  const access = 'access_url' in image ? (image as { access_url?: string }).access_url : undefined;
   return access ?? image.thumbnail_url ?? image.url ?? '';
 }
 

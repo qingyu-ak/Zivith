@@ -7,6 +7,7 @@ import {
   serializePromptVersionSnapshot,
   serializeShotSnapshot,
   serializeVisualRequirementSnapshot,
+  serializeWorldEventSnapshot,
   type HistoryEntityType,
 } from '@zivith/domain';
 import { allocateProjectSequence } from './project-sequence.js';
@@ -42,6 +43,7 @@ function emptyCounts(): BaselineBackfillResult['byType'] {
     output: { scanned: 0, created: 0, skipped: 0 },
     appearance_variant: { scanned: 0, created: 0, skipped: 0 },
     visual_requirement: { scanned: 0, created: 0, skipped: 0 },
+    world_event: { scanned: 0, created: 0, skipped: 0 },
   };
 }
 
@@ -138,6 +140,22 @@ async function loadCandidates(db: Db, projectId?: string): Promise<Candidate[]> 
     });
   }
 
+  const worldEvents = await db.worldEvent.findMany({
+    where: {
+      deletedAt: null,
+      ...(projectId ? { projectId } : {}),
+    },
+  });
+  for (const row of worldEvents) {
+    out.push({
+      entityType: 'world_event',
+      entityId: row.id,
+      projectId: row.projectId,
+      row: row as unknown as Record<string, unknown>,
+      occurredAt: row.createdAt,
+    });
+  }
+
   return out;
 }
 
@@ -153,6 +171,8 @@ function serializeCandidate(candidate: Candidate) {
       return serializeAppearanceVariantSnapshot(candidate.row);
     case 'visual_requirement':
       return serializeVisualRequirementSnapshot(candidate.row);
+    case 'world_event':
+      return serializeWorldEventSnapshot(candidate.row);
     default: {
       const _exhaustive: never = candidate.entityType;
       throw new Error(`Unsupported entity type: ${_exhaustive}`);
