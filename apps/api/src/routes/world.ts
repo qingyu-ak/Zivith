@@ -458,6 +458,34 @@ function registerCreatorChatRoutes(
     });
   });
 
+  // Local single user (ADR-0013): list every active thread with its project name.
+  app.get('/creator-chats', async () => {
+    const threads = await db.creatorChatThread.findMany({
+      where: { state: 'active' },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    });
+    const projectIds = [
+      ...new Set(
+        threads
+          .map((thread) => thread.projectId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const projects =
+      projectIds.length > 0
+        ? await db.project.findMany({
+            where: { id: { in: projectIds }, deletedAt: null },
+            select: { id: true, name: true },
+          })
+        : [];
+    const nameById = new Map(projects.map((project) => [project.id, project.name]));
+    return threads.map((thread) => ({
+      ...thread,
+      project_name: thread.projectId ? (nameById.get(thread.projectId) ?? null) : null,
+    }));
+  });
+
   app.get('/creator-chats/:threadId', async (request) => {
     const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
     const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
@@ -571,19 +599,42 @@ function registerCreatorChatRoutes(
       throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能重复确认');
     }
 
-    const proposal = proposalSchema.parse(message.proposal);
-    const result = await applyProposal(db, proposal, thread.projectId);
+    // The agent stores a proposals array on the assistant message (ADR-0010).
+    // Confirming applies every proposal in the message, in order.
+    const rawProposals = message.proposal;
+    const proposals = (Array.isArray(rawProposals) ? rawProposals : [rawProposals])
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .map((item) => proposalSchema.parse(item));
+    if (proposals.length === 0) {
+      throw new ApiError(400, 'NO_PROPOSAL', '该消息没有可应用的提案');
+    }
+
+    const applied: Array<{ kind: string; project_id: string; entity_type: string; entity_id: string; title: string }> =
+      [];
+    for (const proposal of proposals) {
+      if (proposal.kind === 'create_project' && thread.projectId) {
+        throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
+      }
+      const result = await applyProposal(db, proposal, thread.projectId);
+      applied.push({
+        kind: result.kind,
+        project_id: result.projectId,
+        entity_type: result.entityType,
+        entity_id: result.entityId,
+        title: result.title,
+      });
+      if (result.entityType === 'project') {
+        await db.creatorChatThread.update({
+          where: { id: threadId },
+          data: { projectId: result.projectId },
+        });
+      }
+    }
 
     await db.creatorChatMessage.update({
       where: { id: messageId },
       data: { proposalState: 'applied' },
     });
-    if (result.entityType === 'project') {
-      await db.creatorChatThread.update({
-        where: { id: threadId },
-        data: { projectId: result.projectId },
-      });
-    }
-    return { proposal: result };
+    return { applied };
   });
 }

@@ -13,6 +13,7 @@ const navigation: Array<{
   href?: string;
   suffix?: string;
 }> = [
+  { label: '创作聊天', href: '/creator-chats', icon: '◉' },
   { label: '项目', href: '/projects', icon: '◇' },
   { label: '故事', suffix: '', icon: '▤' },
   { label: '角色与场景', suffix: '/assets', icon: '◎' },
@@ -25,16 +26,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
 
   useEffect(() => {
-    if (!session.getToken()) {
+    // Creator layer (ADR-0013) needs no auth: creator-chats must stay reachable.
+    if (!session.getToken() && !pathname.startsWith('/creator-chats')) {
       router.replace('/login');
       return;
     }
     api<ProjectDTO[] | { data?: ProjectDTO[]; items?: ProjectDTO[] }>('/projects')
       .then((value) => setProjects(unwrapList(value)))
       .catch(() => {
-        if (!session.getToken()) router.replace('/login');
+        if (!session.getToken() && !pathname.startsWith('/creator-chats')) {
+          router.replace('/login');
+        }
       });
-  }, [router]);
+  }, [pathname, router]);
 
   async function logout() {
     const refreshToken = session.getRefreshToken();
@@ -93,11 +97,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ? `/projects/${params.projectId}${item.suffix}`
                 : (item.href ?? '/projects');
             const active =
-              item.suffix === '/assets'
-                ? pathname.includes('/assets')
-                : item.label === '项目'
-                  ? pathname === '/projects'
-                  : Boolean(params.projectId) && !pathname.includes('/assets');
+              item.href === '/creator-chats'
+                ? pathname.startsWith('/creator-chats')
+                : item.suffix === '/assets'
+                  ? pathname.includes('/assets')
+                  : item.label === '项目'
+                    ? pathname === '/projects'
+                    : Boolean(params.projectId) && !pathname.includes('/assets');
             return (
               <Link
                 key={item.label}

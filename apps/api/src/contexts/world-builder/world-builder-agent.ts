@@ -71,7 +71,7 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
   const world = input.world;
   const projectId = world?.projectId ?? null;
   const latest = latestUserMessage(input.history);
-  const text = latest?.content ?? '';
+  const text = input.text.trim() || (latest?.content ?? '');
   const conflicts: string[] = [];
   const openQuestions: string[] = [];
   const proposals: Proposal[] = [];

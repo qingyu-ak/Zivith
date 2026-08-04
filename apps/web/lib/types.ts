@@ -202,6 +202,51 @@ export interface ApiList<T> {
   next_cursor?: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Creator layer (ADR-0010 revised / ADR-0013): Creator Chat
+// ---------------------------------------------------------------------------
+
+export type ChatRole = 'user' | 'assistant' | 'system';
+
+export interface CreatorChatThreadDTO {
+  id: string;
+  project_id?: string | null;
+  /** Denormalized project name attached by the global list endpoint. */
+  project_name?: string | null;
+  title?: string | null;
+  state: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatorChatMessageDTO {
+  id: string;
+  thread_id: string;
+  role: ChatRole;
+  content: string;
+  proposal?: Record<string, unknown> | null;
+  proposal_key?: string | null;
+  proposal_state?: 'pending' | 'applied' | 'rejected' | string | null;
+  created_at: string;
+}
+
+export type ProposalKind =
+  | 'create_project'
+  | 'create_world_event'
+  | 'create_character'
+  | 'create_location'
+  | 'create_scene'
+  | 'create_relationship'
+  | 'update_entity';
+
+export interface ApplyProposalResultDTO {
+  kind: ProposalKind;
+  project_id: string;
+  entity_type: 'project' | 'world_event' | 'asset' | 'scene' | 'relationship' | 'story' | string;
+  entity_id: string;
+  title: string;
+}
+
 export type WorkflowStepName =
   | 'story'
   | 'story_review'
