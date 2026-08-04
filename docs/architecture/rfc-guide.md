@@ -1,6 +1,6 @@
-# RFC Guide
+# RFC 指南
 
-> Request for Comments — Change Governance for Zivith
+> Request for Comments — Zivith 的变更治理
 >
 > Version: 1.0
 >
@@ -8,70 +8,70 @@
 >
 > Horizon: 5–10 years
 >
-> Related: architecture-principles.md (the Constitution), adr-guide.md
+> Related: [architecture-principles.md](architecture-principles.md)（宪章）, [adr-guide.md](adr-guide.md)
 
 ---
 
-## Purpose
+## 目的
 
-An RFC is how a significant change earns the right to be built. Where an ADR records a *decision* (usually one page, one question, one answer), an RFC designs a *change*: the problem, the proposal, the risks, the migration, and the definition of done.
+RFC 是重大变更赢得建造权的方式。ADR 记录*决策*（通常一页、一问、一答），RFC 设计*变更*：问题、提案、风险、迁移，以及完成定义。
 
-The two artifacts divide the work:
+两种产物分工如下：
 
 | | RFC | ADR |
 |---|-----|-----|
-| Answers | "Should we build this, and how?" | "Which way did we decide, and why?" |
-| Shape | A design under discussion | A decision, recorded |
-| Lifetime | Active until implemented or rejected, then archival | Binding until superseded |
-| Relationship | One RFC may **spawn several ADRs** for the irreversible decisions it contains | An ADR may exist without any RFC |
+| 回答 | 「我们该不该建造这个，如何建？」 | 「我们决定了哪条路，为何？」 |
+| 形态 | 讨论中的设计 | 已记录的决策 |
+| 寿命 | 活跃至实现或拒绝，然后归档 | 约束直至被取代 |
+| 关系 | 一份 RFC 可为其包含的不可逆决策**催生多份 ADR** | ADR 可无 RFC 而存在 |
 
-The precedent for house style is the Director Copilot RFC: it locked scope, named explicit non-goals, recorded its Q&A traceability, and deliberately deferred everything it did not need to decide. That discipline — *deciding little, but firmly* — is what this guide generalizes.
-
----
-
-## 1. When to Create an RFC
-
-### An RFC is required when a change:
-
-- **Crosses context boundaries** — it touches more than one bounded area of the system, so no single owner can evaluate it alone.
-- **Adds a new user-facing capability with architectural surface** — a new entity in the creative hierarchy, a new stage in a workflow, a new kind of client at the boundary.
-- **Touches a deferred decision** (Constitution §11, D1–D6) — activating, reshaping, or re-deferring one. The deferral registry is a fence; opening a gate in it is always deliberate.
-- **Requires a migration** — any change whose rollout involves transforming stored creative data, workflow definitions, or contracts already in use.
-- **Spends more than trivial effort** — as a heuristic, anything one person cannot design, build, and validate inside a short iteration deserves written scrutiny before the spend.
-- **Changes who or what holds authority** — new automation defaults, new gate placements, new classes of caller.
-
-### An RFC is not required for:
-
-- Work that implements an already-accepted RFC or ADR.
-- Reversible improvements inside one context behind stable boundaries.
-- Restoring conformance with the Constitution (that is not a proposal; it is a repair).
-
-When a change needs no RFC but contains one irreversible decision, skip the RFC and write the ADR directly.
+家风先例是 Director Copilot RFC：它锁定范围、点名显式非目标、记录问答可追溯性，并刻意延期一切无需决定之事。这种纪律——*决定很少，但坚定*——正是本指南所一般化的。
 
 ---
 
-## 2. Feature Proposal Process
+## 1. 何时创建 RFC
 
-Every RFC begins as a proposal with five mandatory parts. A proposal missing any of them is returned, not reviewed.
+### 当变更满足下列情形时，需要 RFC：
 
-**1. Problem statement — in the user's world, not the system's.**
-What can a creator (human or agent) not do today, and what does it cost them? A problem stated as "we lack component X" is a solution in disguise; restate it until it names a person and a frustration.
+- **跨越上下文边界** — 触及系统一个以上有界区域，因此无一单一所有者能单独评估。
+- **新增具有架构表面的用户可见能力** — 创意层级中的新实体、工作流中的新阶段、边界上的新类客户端。
+- **触及延期决策**（宪章 §11，D1–D6）— 激活、重塑或再次延期。延期登记是围栏；打开其中一扇门始终刻意。
+- **需要迁移** — 任何上线涉及转换已存创意数据、工作流定义或已在使用的契约的变更。
+- **花费超过琐碎精力** — 作为启发法，任何一人无法在短迭代内设计、建造并验证之事，在花费前值得书面审视。
+- **变更谁或什么持有权威** — 新自动化默认、新门禁放置、新调用方类别。
 
-**2. Vision alignment.**
-One paragraph placing the proposal against the North Star ladder (Constitution §10): which measure does it advance — regeneration superiority, compounding universes, alternating operators, or the assumed substrate? A proposal that advances none of them may still be worthwhile (defensive work, debt repayment) but must say so honestly rather than borrow the vision's authority.
+### 下列情形不需要 RFC：
 
-**3. Constitutional check.**
-The same *Principles at Stake* analysis an ADR requires: which principles the proposal serves, which it strains, and whether it approaches anything in the Never list (§9) or the deferral registry (§11). This check happens at proposal time, *before* design effort is spent — the cheapest moment to discover that a proposal is unconstitutional.
+- 实现已 Accepted 的 RFC 或 ADR 的工作。
+- 在稳定边界后单一上下文内的可逆改进。
+- 恢复与宪章的符合（那不是提案；那是修复）。
 
-**4. Scope lock and non-goals.**
-The non-goals section is mandatory and is read first by reviewers. Scope creep does not arrive by decision; it arrives by omission. Following the Director Copilot precedent: state what the feature *is not*, what it *must not bypass*, and which adjacent capabilities are explicitly out of scope even though readers will assume them.
-
-**5. Capability ramp (if applicable).**
-If the feature will grow in stages, define the stages now — what the first slice does, what evidence promotes it to the next slice. A ramp defined up front prevents each stage from silently expanding into the next.
+当变更无需 RFC 但含有一个不可逆决策时，跳过 RFC，直接写 ADR。
 
 ---
 
-## 3. Technical Design Review Process
+## 2. 功能提案流程
+
+每份 RFC 以含五个强制部分的提案开始。缺任一者的提案退回，不评审。
+
+**1. 问题陈述——在用户世界中，不在系统中。**
+创作者（人或代理）今日不能做什么，代价是什么？陈述为「我们缺少组件 X」的问题是伪装的解决方案；重述直至它点名一个人与一种挫败。
+
+**2. 愿景对齐。**
+一段文字将提案置于北极星阶梯（宪章 §10）对照：它推进哪一度量——再生优越性、复利宇宙、交替操作者，或被默认的基底？推进无一者的提案仍可能值得（防御性工作、债务偿还），但必须诚实说明，而非借用愿景权威。
+
+**3. 宪章检查。**
+与 ADR 相同的 *Principles at Stake（攸关原则）* 分析：提案服务哪些原则、牵制哪些，以及是否接近 Never 列表（§9）或延期登记（§11）中的任何内容。该检查在提案时发生，*在*设计精力花费之前——发现提案违宪最廉价的时刻。
+
+**4. 范围锁定与非目标。**
+非目标一节强制，且评审者先读。范围蔓延不经决策到达；经省略到达。遵循 Director Copilot 先例：陈述功能*不是*什么、*不得绕过*什么，以及哪些相邻能力明确超出范围——即使读者会假定它们。
+
+**5. 能力爬坡（若适用）。**
+若功能将分阶段成长，现在定义阶段——第一片做什么，何种证据推动到下一片。事先定义爬坡可防止每一阶段默默膨胀成下一阶段。
+
+---
+
+## 3. 技术设计评审流程
 
 ```
 Draft ──▶ Review ──▶ Revision ──▶ Decision ──▶ (spawned ADRs) ──▶ Implementation
@@ -79,88 +79,88 @@ Draft ──▶ Review ──▶ Revision ──▶ Decision ──▶ (spawned 
              └────────────┘  (bounded iterations)
 ```
 
-**Roles.** Every RFC has one **author** (accountable for the document), named **reviewers** (accountable for the dimensions they review), and one **decider** — the person who owns the affected boundary. Review is advice; decision is singular. An RFC with a committee for a decider has no decider.
+**角色。** 每份 RFC 有一位**作者**（对文档负责）、具名**评审者**（对其评审维度负责），以及一位**决策者**——拥有受影响边界的人。评审是建议；决策是单一的。决策者为委员会的 RFC 没有决策者。
 
-**The review window is bounded.** Reviews that never conclude are a governance failure worse than a wrong decision, because they cannot be superseded — there is nothing on record. If the window closes without convergence, the decider decides with the objections attached.
+**评审窗口有界。** 永不结束的评审是比错误决策更糟的治理失败，因为它们无法被取代——记录上什么都没有。若窗口关闭仍未收敛，决策者带着所附异议做决定。
 
-**What reviewers examine, in priority order:**
+**评审者按优先级审视：**
 
-1. **Boundary impact** — which contracts change, which stay stable, and whether the change strengthens or erodes the quarantine of volatility (P4). A design that requires two boundaries to know each other's internals is redesigned before any other feedback matters.
-2. **Reversibility distribution** — which parts of the design are reversible experiments and which are one-way doors. Good designs concentrate their irreversibility into a few small, explicit decisions (which then become ADRs) and keep everything else swappable.
-3. **Authority and gates** — whether human review capability survives everywhere the Constitution guarantees it (P6), and whether any new caller class arrives with governance already attached (§7: governance precedes autonomy).
-4. **Provenance and accounting** — whether every new act of generation the feature introduces remains a recorded, priced, reproducible transaction (P7).
-5. **Simplicity of the default path** — whether a newcomer's experience got heavier. Powerful-when-needed must not tax simple-by-default.
+1. **边界影响** — 哪些契约变更、哪些保持稳定，以及变更是强化还是侵蚀波动性隔离（P4）。要求两个边界知晓彼此内部的设计，在任何其他反馈重要之前先重设计。
+2. **可逆性分布** — 设计哪些部分是可逆实验、哪些是单向门。好设计把不可逆性集中到少数小而显式的决策（然后成为 ADR），其余保持可替换。
+3. **权威与门禁** — 人类评审能力是否在宪章保证之处处处存活（P6），以及任何新调用方类别是否已附带治理到达（§7：治理先于自治）。
+4. **溯源与核算** — 功能引入的每一新生成行为是否仍为有记录、有计价、可复现的交易（P7）。
+5. **默认路径的简单性** — 新人体验是否变重。需要时强大，不得向默认简单征税。
 
-**Silence is not approval.** Each named reviewer either approves, objects with reasons, or explicitly abstains. Unreviewed dimensions are listed in the decision record as accepted blind spots.
+**沉默不是批准。** 每位具名评审者要么批准、要么附理由反对，要么显式弃权。未评审维度在决策记录中列为已接受的盲点。
 
 ---
 
-## 4. Risk Assessment
+## 4. 风险评估
 
-Every RFC carries a risk table. Zivith's risk categories are fixed — they mirror what the Constitution declares unrecoverable — so that no RFC can quietly omit the category it scores worst on:
+每份 RFC 携带风险表。Zivith 的风险类别固定——它们镜像宪章宣告为不可恢复之物——以便无 RFC 能默默省略其得分最差的类别：
 
-| Category | The question | Constitutional anchor |
+| 类别 | 问题 | 宪章锚点 |
 |----------|--------------|----------------------|
-| **Domain contract risk** | Could this force a breaking change to the creative hierarchy's semantics later? | P2 |
-| **Stored-data risk** | Could a creator's existing universe be corrupted, orphaned, or silently reinterpreted? | §3, §8 (compatibility debts) |
-| **Promise risk** | Does this create a public promise (interface, format, behavior) we may need to retract? | §4, D1 |
-| **Authority risk** | Could automation act beyond what a human approved, or a gate be bypassed in an edge path? | P6, §6 |
-| **Economic risk** | Could this spend money without bound, or without attribution? | P7, §7 |
-| **Lock-in risk** | Does this make any single external provider load-bearing, or make leaving Zivith harder? | P4, §9 |
-| **Complexity risk** | Does this add a concept the domain must carry forever? | §3 (grow by deepening) |
+| **领域契约风险** | 这是否可能日后迫使对创意层级语义的破坏性变更？ | P2 |
+| **已存数据风险** | 创作者既有宇宙是否可能被损坏、孤立或默默重新解释？ | §3，§8（兼容债务） |
+| **承诺风险** | 这是否创造我们可能需要收回的公开承诺（接口、格式、行为）？ | §4，D1 |
+| **权威风险** | 自动化是否可能超出人类批准行动，或门禁在边角路径被绕过？ | P6，§6 |
+| **经济风险** | 这是否可能无界花钱，或无归属花钱？ | P7，§7 |
+| **锁定风险** | 这是否使任何单一外部 provider 成为承重，或使离开 Zivith 更难？ | P4，§9 |
+| **复杂度风险** | 这是否添加领域必须永久承载的概念？ | §3（靠加深生长） |
 
-For each relevant category: **likelihood × impact × detectability**, plus a mitigation. Detectability matters as much as impact — a risk that manifests silently (a gate bypassed with no trace, a budget exceeded with no alarm) is scored one level worse than the same risk with an alarm attached.
+对每个相关类别：**可能性 × 影响 × 可检测性**，外加缓解。可检测性与影响同等重要——默默显现的风险（门禁被绕过无痕迹、预算超支无告警）比附有告警的同风险低评一级。
 
-Two rules of honesty:
+两条诚实规则：
 
-- **A risk without an owner is not mitigated.** Every mitigation names who would act and what tripwire triggers them.
-- **"Unlikely" requires an argument.** The phrase is banned unless followed by "because."
-
----
-
-## 5. Migration Plan
-
-Required whenever the change touches anything already stored, promised, or in flight. The Constitution's rule is absolute: *compatibility debts are repaid, never defaulted* — if a capability must die, its data must have somewhere to go.
-
-A migration plan answers five questions:
-
-1. **Forward path.** How does every existing artifact — creative data, workflow definitions, in-progress runs, exported archives — arrive in the new world? "Users recreate it" is not a path; it is a default on the debt.
-2. **In-flight work.** Long-running workflows may be *paused at a gate for weeks* by design (§5: interruption is a healthy state). The migration must define what happens to work that is mid-interruption when the change lands — resumed under old semantics, translated, or explicitly parked with the owner notified.
-3. **Rollback.** If the change is withdrawn after partial rollout, what happens to artifacts created under the new semantics? A migration with no rollback story is an irreversible decision and must be flagged as such in the spawned ADR.
-4. **Coexistence window.** Old and new semantics will overlap during rollout. State how long, what runs in both worlds, and what ends the window. Indefinite coexistence is a decision to maintain two systems forever — if that is intended, say so and price it.
-5. **External consumers.** Anything that crossed the boundary — exports taken, API contracts used, handoff links shared — is owed either continuity or a documented, dated deprecation with a destination.
+- **无所有者的风险未被缓解。** 每个缓解点名谁会行动、何种绊线触发他们。
+- **「不太可能」需要论证。** 该短语被禁，除非后接「因为」。
 
 ---
 
-## 6. Acceptance Criteria
+## 5. 迁移计划
 
-An RFC is not accepted when its design is admired; it is accepted when its finish line is defined. Acceptance criteria are written *before* implementation begins and have three layers:
+每当变更触及任何已存储、已承诺或在途之物时强制。宪章规则绝对：*兼容债务要偿还，永不违约*——若能力必须消亡，其数据必须有去处。
 
-**1. Problem criteria — did the frustration go away?**
-Restated from the problem statement in verifiable form: the creator (or agent) who could not do X can now do X, observable in the system's own records. Criteria phrased about the system ("the module exists") instead of the user are returned for rewriting.
+迁移计划回答五个问题：
 
-**2. Constitutional criteria — is the system still itself?**
-A fixed checklist, inherited by every RFC:
-
-- Every new artifact is traceable to its intent, and regenerable from it (P1).
-- No capability was introduced that exists only in one client surface (P3).
-- No provider concept leaked past a capability boundary (P4).
-- Human review capability exists at every new step; mandatory gates were not moved without their own ADR (P6).
-- Every new generation path is metered, budgeted, and attributed (P7).
-- Whatever the feature learned from users is captured, not discarded (P8).
-- Export still contains everything, including artifacts this feature created (§4).
-
-**3. Governance criteria — is the paper trail complete?**
-
-- Irreversible decisions inside the RFC are recorded as ADRs, cross-linked.
-- The deferral registry (§11) is updated if the RFC touched it.
-- Migration debts are either repaid or scheduled with owners.
-- Revisit triggers from the risk table are registered where the periodic architecture review will find them.
-
-An RFC whose implementation meets layers 1 and 3 but fails layer 2 is not "done with caveats." It is not done — layer 2 is the definition of the product.
+1. **前向路径。** 每个既有产物——创意数据、工作流定义、进行中的运行、已导出归档——如何抵达新世界？「用户重建」不是路径；那是对债务违约。
+2. **在途工作。** 长时工作流可能被设计为*在门禁处暂停数周*（§5：中断是健康状态）。迁移必须定义变更落地时处于中断中的工作会发生什么——在旧语义下恢复、被翻译，或显式停放并通知所有者。
+3. **回滚。** 若变更在部分上线后撤回，在新语义下创建的产物会发生什么？无回滚故事的迁移是不可逆决策，必须在催生的 ADR 中如此标记。
+4. **共存窗口。** 上线期间旧新语义会重叠。说明多久、什么在两个世界中运行、什么结束窗口。无限共存是永远维护两套系统的决策——若有意如此，说明并计价。
+5. **外部消费者。** 任何越过边界之物——已取导出、已用 API 契约、已分享交接链接——应得连续性，或有文档、有日期、有去向的弃用。
 
 ---
 
-## Closing Rule
+## 6. 验收标准
 
-Process is a servant. If this guide ever makes a right decision impossible — rather than making wrong decisions visible — the guide is the defect, and amending it follows the same path as everything else: a Constitutional-class ADR, with the evidence attached.
+RFC 不是在其设计被赞赏时 Accepted；而是在其终点被定义时 Accepted。验收标准在实现开始*之前*写就，有三层：
+
+**1. 问题标准——挫败消失了吗？**
+从问题陈述重述为可验证形式：不能做 X 的创作者（或代理）现在能做 X，可在系统自身记录中观察。关于系统（「模块存在」）而非用户措辞的标准退回重写。
+
+**2. 宪章标准——系统仍是它自己吗？**
+固定清单，每份 RFC 继承：
+
+- 每个新产物可追溯到其意图，并可由其再生（P1）。
+- 未引入仅存在于单一客户端界面的能力（P3）。
+- 无 provider 概念泄漏过能力边界（P4）。
+- 人类评审能力存在于每个新步骤；强制门禁未经自有 ADR 未被移动（P6）。
+- 每条新生成路径被计量、预算化并归属（P7）。
+- 功能从用户处学到的一切被捕获，而非丢弃（P8）。
+- 导出仍包含一切，包括本功能创建的产物（§4）。
+
+**3. 治理标准——纸迹完整吗？**
+
+- RFC 内的不可逆决策记录为 ADR，交叉链接。
+- 若 RFC 触及延期登记（§11），则更新之。
+- 迁移债务已偿还或已排期并有所有者。
+- 风险表中的再议触发注册在定期架构评审会找到之处。
+
+实现满足第 1、3 层但失败第 2 层的 RFC 不是「带但书完成」。它未完成——第 2 层是产品定义。
+
+---
+
+## 收尾规则
+
+流程是仆人。若本指南曾使正确决策不可能——而非使错误决策可见——则指南是缺陷，修订它遵循与其他一切相同的路径：宪章级 ADR，附证据。

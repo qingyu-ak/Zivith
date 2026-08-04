@@ -1,6 +1,6 @@
-# ADR Guide
+# ADR 指南
 
-> Architecture Decision Records — Governance for Zivith
+> Architecture Decision Records — Zivith 的治理
 >
 > Version: 1.0
 >
@@ -8,53 +8,53 @@
 >
 > Horizon: 5–10 years
 >
-> Related: architecture-principles.md (the Constitution), rfc-guide.md
+> Related: [architecture-principles.md](architecture-principles.md)（宪章）, [rfc-guide.md](rfc-guide.md)
 
 ---
 
-## Purpose
+## 目的
 
-An Architecture Decision Record (ADR) is the permanent memory of *why* Zivith is shaped the way it is. Code shows what was decided; only ADRs preserve what was rejected, what was traded away, and what evidence drove the choice.
+Architecture Decision Record（ADR）是 Zivith 为何如此成形的永久记忆。代码展示决定了什么；只有 ADR 保留被拒绝了什么、放弃了什么交易，以及何种证据驱动了选择。
 
-Over a 5–10 year horizon, every person who made today's decisions will eventually be gone — replaced by new engineers, new AI agents, or their own future selves who have forgotten. ADRs exist so that no one ever has to reverse-engineer intent from implementation, and so that no principle erodes silently through a series of individually reasonable decisions.
+在 5–10 年视野内，做出今日决策的每个人终将离去——被新工程师、新 AI 代理，或已遗忘的自己的未来所取代。ADR 存在，是为了无人再需从实现反推意图，也是为了原则不会通过一连串各自合理的决策而默默侵蚀。
 
-This guide is technology-agnostic by design. It governs decisions about boundaries, contracts, and authority — not about libraries.
+本指南刻意与技术无关。它治理关于边界、契约与权威的决策——不是关于库的决策。
 
 ---
 
-## 1. When an ADR Is Required
+## 1. 何时需要 ADR
 
-The Constitution (§8) classifies decisions by reversibility. That classification is the trigger.
+宪章（§8）按可逆性分类决策。该分类即触发条件。
 
-### An ADR is **mandatory** when a decision:
+### 当决策满足下列情形时，ADR **强制**：
 
-| Trigger | Why it is irreversible |
+| 触发 | 为何不可逆 |
 |---------|------------------------|
-| Changes the **domain contract** — entities, hierarchy semantics, inheritance rules, identity, approval states | Users' creative universes are stored against it (P2) |
-| Changes the **meaning or lifecycle of stored creative data**, including provenance and versioning semantics | History must never be silently rewritten (§3 of the Constitution) |
-| Makes or alters a **public promise** — programmable interface contracts, export formats, compatibility guarantees | Third parties build against promises; retracting one is a betrayal, not a refactor |
-| Adds, removes, or redefines an **orchestration primitive** (durable step, interruption, resumption, fan-out, partial recomputation) | Every workflow definition depends on the primitive set (P5) |
-| Moves a **review gate's mandatory status** in either direction | Gate placement is policy, but changing it reallocates human authority (P6) and must leave a trail |
-| Alters a **capability boundary** — what the system asks of external models, or how volatility is quarantined | The boundary is what keeps the rest of the system long-lived (P4) |
-| Touches **governance at the boundary** — identity, permission, budget, or rate semantics | Governance precedes autonomy (§7); weakening it is a safety event |
-| **Strains or contradicts any Constitutional principle**, or resolves a conflict between principles | See §5 below |
-| **Activates a deferred decision** (Constitution §11, D1–D6) or changes its revisit trigger | Deferral is itself an architectural decision; ending it must be equally deliberate |
+| 变更**领域契约**——实体、层级语义、继承规则、身份、审批状态 | 用户的创意宇宙依其存储（P2） |
+| 变更**已存创意数据的含义或生命周期**，包括溯源与版本语义 | 历史绝不可被默默改写（宪章 §3） |
+| 做出或变更**公开承诺**——可编程接口契约、导出格式、兼容保证 | 第三方依承诺构建；收回承诺是背叛，不是重构 |
+| 增加、移除或重定义**编排原语**（持久步骤、中断、恢复、扇出、局部重算） | 每个工作流定义都依赖原语集（P5） |
+| 在任一方向移动**评审门禁的强制状态** | 门禁放置是策略，但变更会重新分配人类权威（P6），必须留下痕迹 |
+| 变更**能力边界**——系统向外部模型要求什么，或如何隔离波动性 | 边界使系统其余部分长寿（P4） |
+| 触及**边界治理**——身份、权限、预算或速率语义 | 治理先于自治（§7）；削弱它是安全事件 |
+| **牵制或违背任何宪章原则**，或解决原则之间的冲突 | 见下文 §5 |
+| **激活延期决策**（宪章 §11，D1–D6）或变更其再议触发 | 延期本身是架构决策；结束它必须同样刻意 |
 
-### An ADR is **not** required for:
+### 下列情形**不**需要 ADR：
 
-- Reversible, local choices — anything that can be undone by a change confined to one component behind a stable boundary.
-- Implementation selection within an already-decided boundary (which library, which algorithm, which storage engine).
-- Restating what the Constitution already settles. An ADR that merely re-argues a ratified principle is noise.
+- 可逆、局部选择——任何可由限于稳定边界后单一组件的变更撤销者。
+- 在已决定边界内的实现选型（哪个库、哪个算法、哪个存储引擎）。
+- 重述宪章已解决之事。仅重新论证已批准原则的 ADR 是噪音。
 
-**The test:** *if this decision turns out to be wrong in two years, what does undoing it cost?* If the answer is "a contained rewrite," decide quickly and locally. If the answer involves migrating stored data, re-promising third parties, or renegotiating human authority — write the ADR.
+**检验：** *若该决策两年后被证明错误，撤销成本是什么？* 若答案是「有界重写」，则迅速、局部决定。若答案涉及迁移已存数据、向第三方重新承诺，或重新谈判人类权威——写 ADR。
 
-Spending ceremony on reversible decisions is as much a failure as skipping ceremony on irreversible ones. When in doubt, ask the test question, not this table.
+在可逆决策上耗仪式，与在不可逆决策上跳过仪式，同样是失败。存疑时问检验问题，而非本表。
 
 ---
 
-## 2. Relationship to the Architecture Constitution
+## 2. 与架构宪章的关系
 
-The hierarchy of authority is strict and one-directional:
+权威层级严格且单向：
 
 ```
 Architecture Constitution        (what must remain true)
@@ -64,19 +64,19 @@ ADRs                             (how the Constitution is applied to a decision)
 RFCs and implementation plans    (how a change is designed and executed)
 ```
 
-Rules of the relationship:
+关系规则：
 
-1. **Every ADR must cite the Constitution.** The template's *Principles at Stake* section is not optional. An ADR must name which principles the decision **serves** and which it **strains**. "None strained" is a legitimate answer only if argued, not asserted.
-2. **An ADR that silently contradicts the Constitution is void** — this restates the Constitution's own supremacy clause. Discovering such an ADR later means one of the two documents must be formally corrected.
-3. **ADRs interpret; they do not amend — except one special class.** A **Constitutional Amendment ADR** is the *only* mechanism by which the Constitution changes (§8: "the constitution amends; it does not drift"). It carries a heavier burden: the evidence that motivated the change, the exhaustion of the reconfiguration ladder (models → workflow definitions → gate policy → domain deepening → amendment), and the full text of the modified principle.
-4. **The Constitution wins ties.** When a decision is attractive and a principle forbids it, the default outcome is that the decision loses. The burden of proof is always on the change, never on the principle.
-5. **Precedent accumulates downward.** Accepted ADRs bind future ADRs the way the Constitution binds them, until superseded. A new ADR may overturn an old one only explicitly (see Lifecycle, §6).
+1. **每份 ADR 必须引用宪章。** 模板中的 *Principles at Stake（攸关原则）* 一节不可省略。ADR 必须点名决策**服务**哪些原则、**牵制**哪些原则。「无牵制」仅在论证后才是合法答案，不可断言。
+2. **默默与宪章相悖的 ADR 无效**——这重申宪章自身的至上条款。日后发现此类 ADR，意味着两份文档之一必须被正式纠正。
+3. **ADR 解释；不修订——仅有一类例外。** **宪章修订 ADR（Constitutional Amendment ADR）** 是宪章变更的*唯一*机制（§8：「宪章可修订；不漂移」）。它承担更重负担：驱动变更的证据、重配置阶梯的耗尽（模型 → 工作流定义 → 门禁策略 → 领域加深 → 修订），以及被修改原则的全文。
+4. **平局时宪章胜。** 当决策诱人而原则禁止时，默认结果是决策落败。举证责任始终在变更一方，从不在原则一方。
+5. **先例向下累积。** Accepted ADR 约束未来 ADR，方式同宪章约束它们，直至被取代。新 ADR 仅可显式推翻旧 ADR（见生命周期，§6）。
 
 ---
 
-## 3. ADR Standard Template
+## 3. ADR 标准模板
 
-One file per decision: `docs/architecture/adr/NNNN-short-slug.md`, numbered sequentially, never renumbered, never deleted.
+一决策一文件：`docs/architecture/adr/NNNN-short-slug.md`，顺序编号，永不重编号，永不删除。
 
 ```markdown
 # ADR-NNNN: <Decision title — an active sentence, not a topic>
@@ -128,38 +128,38 @@ How will we know this decision is actually being followed?
 (A boundary that can be violated invisibly will be.)
 ```
 
-Keep ADRs short — one to three pages. Length is usually a symptom of an undecided decision or several decisions bundled into one record. Split bundles.
+保持 ADR 简短——一至三页。篇幅通常是未决决策或数个决策捆进一条记录的症状。拆分捆绑。
 
 ---
 
-## 4. How to Record Architectural Trade-offs
+## 4. 如何记录架构权衡
 
-Trade-offs are the substance of architecture; everything else is drawing boxes. The rules:
+权衡是架构的实质；其余皆是画框。规则：
 
-1. **Name what was sacrificed, in the sacrificed party's own terms.** "We chose consistency over availability" is honest. "We chose the best of both worlds" is a sign the trade-off was not understood. If an ADR contains no sacrifice, either the decision was trivial (no ADR needed) or the analysis is incomplete.
-2. **Attach a horizon to every trade.** Trades are made against a context — model reliability, team size, user count — that will change. Each row of the trade-off table names the condition under which the trade should be re-examined ("when agent-initiated traffic exceeds human traffic," "when the export format has external consumers"). This converts trade-offs from permanent dogma into monitored positions.
-3. **Distinguish the three currencies.** Most Zivith trades exchange between: **optionality** (keeping futures open), **simplicity** (less to build and hold in one's head), and **capability** (what users get now). Naming which currency was spent prevents the most common self-deception — buying capability with optionality while believing it was bought with simplicity.
-4. **The Constitution's own Resolved Tensions are the house style.** Each of them (automation vs. mandatory gates; open format vs. premature publication; workflow-as-data vs. no node canvas; assembly layer vs. no editor) states both sides at full strength, then rules. Imitate that structure: a trade-off recorded with one side strawmanned will not survive the first person who held the strawmanned view.
-
----
-
-## 5. Handling Decisions That Conflict with Existing Principles
-
-A proposed decision will eventually collide with the Constitution. The procedure is a ladder — stop at the first rung that resolves the conflict:
-
-**Rung 1 — Re-examine the diagnosis.** Most "principle conflicts" are misdiagnosed layer conflicts. Apply the Constitution's reconfiguration ladder (§8): can the need be met by swapping behind a capability boundary, reshaping a workflow definition, or shifting gate *policy*? A conflict that dissolves under reframing was never a conflict. (Precedent: "workflow-as-data vs. no node canvas" dissolved entirely once engine and UI were separated by layer.)
-
-**Rung 2 — Reject the decision.** The default. The principle stood a longer test than the proposal has. Record the rejection as a short ADR anyway if the proposal is likely to recur — a documented "no, and here is why" prevents the same debate annually.
-
-**Rung 3 — Constrain the decision.** Sometimes the decision can proceed inside a fence that protects the principle: time-boxed, scoped to an experiment, or barred from touching stored data and public promises. The ADR must then state the fence and the tripwire that tears the experiment down.
-
-**Rung 4 — Amend the Constitution.** If the principle itself is wrong — the world changed, the evidence is strong, rungs 1–3 are exhausted — write a Constitutional Amendment ADR. Never preserve both a principle and a decision that contradicts it: an architecture that contains its own contradictions delegates the real decision to whoever implements last.
-
-What is **never** acceptable: proceeding while the conflict stands unresolved, or resolving it implicitly in code. The Constitution's rule is explicit — practice diverging from principle means one of them is wrong, and the divergence itself must be adjudicated, not normalized.
+1. **以被牺牲方自己的术语命名牺牲。** 「我们选择一致性而非可用性」诚实。「我们两全其美」说明权衡未被理解。若 ADR 不含牺牲，要么决策琐碎（无需 ADR），要么分析不完整。
+2. **为每笔交易附上视野。** 交易相对上下文做出——模型可靠性、团队规模、用户数——而上下文会变。权衡表每一行命名应再审视交易的条件（「当代理发起流量超过人类流量时」「当导出格式有外部消费者时」）。这把权衡从永久教条转为被监控的立场。
+3. **区分三种货币。** 多数 Zivith 交易在以下之间交换：**可选性**（保持未来开放）、**简单性**（更少建造、更少记在脑中）、**能力**（用户现在得到什么）。点名花费了哪种货币，可防止最常见的自欺——用可选性买能力却相信用的是简单性。
+4. **宪章自身的已解决张力是家风。** 每一条（自动化 vs. 强制门禁；开放格式 vs. 过早发布；工作流即数据 vs. 无节点画布；装配层 vs. 无编辑器）都以全力陈述双方，然后裁决。仿效该结构：一方被稻草人化的权衡记录，熬不过第一个持有被稻草人化观点的人。
 
 ---
 
-## 6. ADR Lifecycle
+## 5. 处理与既有原则冲突的决策
+
+拟议决策终将与宪章碰撞。程序是阶梯——在解决冲突的第一级停下：
+
+**第 1 级 — 重新审视诊断。** 多数「原则冲突」是误诊的层冲突。应用宪章的重配置阶梯（§8）：需求能否通过在能力边界后替换、重塑工作流定义，或调整门禁*策略*满足？在重框下消解的冲突从未是冲突。（先例：「工作流即数据 vs. 无节点画布」在引擎与 UI 按层分离后完全消解。）
+
+**第 2 级 — 拒绝决策。** 默认。原则经受的考验长于提案。若提案可能反复出现，仍以短 ADR 记录拒绝——有文档的「否，理由如下」可防止同一辩论年年发生。
+
+**第 3 级 — 约束决策。** 有时决策可在保护原则的围栏内推进：有时限、限定为实验，或禁止触及已存数据与公开承诺。ADR 须随即陈述围栏，以及拆除实验的绊线。
+
+**第 4 级 — 修订宪章。** 若原则本身错误——世界变了、证据充分、第 1–3 级已耗尽——写宪章修订 ADR。永不同时保留原则与与之相悖的决策：包含自身矛盾的架构，把真正决策委托给最后实现的人。
+
+**绝不可接受：** 在冲突未解决时推进，或在代码中隐式解决。宪章规则明确——实践偏离原则意味着二者之一为错，偏离本身必须被裁决，而非被常态化。
+
+---
+
+## 6. ADR 生命周期
 
 ```
 Draft ──▶ Proposed ──▶ Accepted ──▶ Superseded by ADR-XXXX
@@ -167,18 +167,18 @@ Draft ──▶ Proposed ──▶ Accepted ──▶ Superseded by ADR-XXXX
                 └─▶ Rejected (retained)
 ```
 
-| Status | Meaning | Rules |
+| Status | 含义 | 规则 |
 |--------|---------|-------|
-| **Draft** | Being written; not yet under review | May change freely |
-| **Proposed** | Under review by the deciders | Review window is bounded; silence is not consent — a Proposed ADR that nobody decides is escalated, not merged |
-| **Accepted** | In force; binds future work | **Immutable** except for status changes and an append-only addendum section. To change the decision, write a new ADR |
-| **Rejected** | Considered and declined | Retained forever; rejections are precedent too |
-| **Superseded** | Replaced by a newer ADR | Both records carry cross-links; the old ADR is history, not error |
-| **Deprecated** | No longer applies (context vanished) and nothing replaced it | Requires a dated note explaining what changed |
+| **Draft** | 撰写中；尚未评审 | 可自由变更 |
+| **Proposed** | 决策者评审中 | 评审窗口有界；沉默不是同意——无人决策的 Proposed ADR 应升级，而非合并 |
+| **Accepted** | 生效；约束未来工作 | **不可变**，状态变更与仅追加的附录节除外。要变更决策，写新 ADR |
+| **Rejected** | 已考虑并拒绝 | 永久保留；拒绝也是先例 |
+| **Superseded** | 被较新 ADR 取代 | 两条记录交叉链接；旧 ADR 是历史，不是错误 |
+| **Deprecated** | 不再适用（上下文消失）且无物取代 | 需要注明日期的说明，解释发生了什么变化 |
 
-Lifecycle rules that make the system durable:
+使系统持久的生命周期规则：
 
-1. **Append-only memory.** Accepted ADRs are never edited into agreement with the present. If reality diverged, the divergence is documented in a superseding record. A decision log that can be rewritten is not a log.
-2. **Every ADR names its revisit triggers** (from the trade-off horizons, §4). A periodic architecture review walks the accepted set and checks triggers — this is how the organization notices that a trade's context has expired *before* it fails in production.
-3. **Superseding is honorable.** An ADR overturned by better evidence did its job: it made the original reasoning cheap to re-examine. The failure mode to fear is not superseded ADRs; it is decisions with no record to supersede.
-4. **Constitutional Amendment ADRs additionally update the Constitution's text** in the same change, so the two documents can never disagree for longer than one commit.
+1. **仅追加记忆。** Accepted ADR 永不被编辑成与当下一致。若现实偏离，偏离记录在取代记录中。可被重写的决策日志不是日志。
+2. **每份 ADR 命名其再议触发**（来自权衡视野，§4）。定期架构评审遍历 accepted 集合并检查触发——组织由此在生产失败*之前*注意到交易上下文已过期。
+3. **取代是光荣的。** 被更好证据推翻的 ADR 完成了工作：它使原始推理廉价可再审视。应惧怕的失败模式不是被取代的 ADR；而是无可取代记录的决策。
+4. **宪章修订 ADR 额外在同一变更中更新宪章正文**，使两份文档从不同意见长于一次提交。

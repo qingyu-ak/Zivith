@@ -1,25 +1,25 @@
 # ADR-0002: Standardize on Node.js 22 and strict shared TypeScript
 
-- **Status:** Accepted
+- **Status:** 已接受
 - **Date:** 2026-07-20
-- **Deciders:** Phase 0 team
+- **Deciders:** Phase 0 团队
 - **Class:** Standard
-- **Reversibility:** Costly
+- **Reversibility:** 代价高
 
-> Migrated from the root `ARCHITECTURE-DECISIONS.md` (formerly ADR-002) on 2026-07-22.
-> This record predates the Architecture Constitution; the *Principles at Stake*
-> analysis has not been retrofitted.
+> 于 2026-07-22 自根目录 `ARCHITECTURE-DECISIONS.md`（原 ADR-002）迁入。
+> 本记录早于架构宪章；*Principles at Stake（攸关原则）*
+> 分析尚未回溯补全。
 
-## Context
+## 背景
 
-The web, API, and shared domain packages need one supported runtime and type baseline.
+Web、API 与共享领域包需要统一的受支持运行时与类型基线。
 
-## Decision
+## 决策
 
-Standardize on Node.js 22 and a strict shared TypeScript configuration. Use ESLint's flat
-configuration with type-aware TypeScript rules and Prettier for formatting.
+统一采用 Node.js 22 与严格的共享 TypeScript 配置。使用 ESLint 的 flat
+configuration，配合类型感知的 TypeScript 规则，并以 Prettier 负责格式化。
 
-## Consequences
+## 后果
 
-Developers and CI use the same runtime major. Package-specific configurations may extend
-the root defaults but should not weaken domain safety rules without recording a decision.
+开发者与 CI 使用同一运行时主版本。包级配置可扩展
+根默认值，但不得在未记录决策的情况下削弱领域安全规则。

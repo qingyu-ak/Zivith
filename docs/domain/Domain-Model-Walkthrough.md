@@ -8,7 +8,7 @@
 >
 > Based on: 用户提供的故事脚本「阁楼上的秘密」
 >
-> Related: Core-Domain-Model.md, Shot-Specification.md, Asset-Model.md, AI-Agent-Collaboration.md
+> Related: [Core-Domain-Model.md](Core-Domain-Model.md), [Shot-Specification.md](Shot-Specification.md), [Asset-Model.md](Asset-Model.md), [AI-Agent-Collaboration.md](AI-Agent-Collaboration.md)
 
 ---
 

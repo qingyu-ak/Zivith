@@ -1,12 +1,18 @@
 # Zivith
 
-Build cinematic AI videos from a single idea using autonomous AI agents.
+Create, manage, and keep expanding an IP world that AI can understand.
 
-Zivith is an AI-native film production studio. This repository is a pnpm/Turborepo
-monorepo for the web application, API, domain model, database, and shared UI.
+Zivith is not an AI generation tool — it is an AI-understandable IP creation system.
+Models execute generation; Zivith manages creative intent, world rules, character
+relationships, temporal development, and production context. Filmmaking is how that
+world is expressed and delivered. This repository is a pnpm/Turborepo monorepo for the
+web application, API, domain model, database, and shared UI.
 
-The canonical product and architecture specifications live in [`docs/`](docs/README.md).
-Active engineering backlog: [`docs/Next-Tasks.md`](docs/Next-Tasks.md).
+The canonical product and architecture specifications live in [`docs/`](docs/README.md),
+grouped by how often they change: `product/` (why), `domain/` (what), `engineering/` (how),
+`planning/` (when), `architecture/` (decisions), `archive/` (frozen).
+Start with [`docs/product/Product-Positioning.md`](docs/product/Product-Positioning.md).
+Active engineering backlog: [`docs/planning/Next-Tasks.md`](docs/planning/Next-Tasks.md).
 
 ## Prerequisites
 

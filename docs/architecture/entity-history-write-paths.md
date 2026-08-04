@@ -1,4 +1,4 @@
-# Entity history write-path inventory (Track H H1)
+# 实体历史写入路径清单（Track H H1）
 
 > Status: H3 dual-write helpers landed; flags default **off**
 >
@@ -8,19 +8,19 @@
 >
 > Related: [entity-state-timeline-track.md](entity-state-timeline-track.md), [ADR-0007](adr/0007-preserve-current-state-with-immutable-creative-history.md)
 
-This document lists current authoritative write surfaces for the H1 first-batch Entities. **H2** adds `entity_revisions` / `change_events` / `project_sequences` and an idempotent baseline backfill (`pnpm --filter @zivith/api history:backfill-baselines`). **H3** adds `recordEntityChange` / `maybeRecordEntityChange` with per-Entity `off|shadow|dual` flags (default off). **Do not confuse ChangeEvent (system facts) with Presentation Timeline Items** (Scene/Shot order).
+本文档列出 H1 首批 Entity 的当前权威写入面。**H2** 增加 `entity_revisions` / `change_events` / `project_sequences` 以及幂等基线回填（`pnpm --filter @zivith/api history:backfill-baselines`）。**H3** 增加带 per-Entity `off|shadow|dual` 标志（默认 off）的 `recordEntityChange` / `maybeRecordEntityChange`。**勿混淆 ChangeEvent（系统事实）与 Presentation Timeline Items**（Scene/Shot 顺序）。
 
-## Naming
+## 命名
 
 | Term | Meaning |
 |------|---------|
-| ChangeEvent | Append-only system facts for audit / SSE / causation |
-| Presentation Timeline | Story work order (`Scene.order` + `Shot.order`); H4+ |
-| Track | Semantic Timeline lane — not a git branch |
-| CreativeBranch | Deferred (H10); not a Timeline Track |
-| AuditLog | Legacy before/after log; keep during migration |
+| ChangeEvent | 仅追加的系统事实，用于审计 / SSE / 因果 |
+| Presentation Timeline | Story 工作顺序（`Scene.order` + `Shot.order`）；H4+ |
+| Track | 语义 Timeline 泳道——不是 git branch |
+| CreativeBranch | 延期（H10）；不是 Timeline Track |
+| AuditLog | 迁移前遗留的 before/after 日志；迁移期间保留 |
 
-## First-batch Entities
+## 首批 Entity
 
 ### `shot` → `shots`
 
@@ -65,9 +65,9 @@ This document lists current authoritative write surfaces for the H1 first-batch 
 
 ## AuditLog
 
-`AuditLog` writes remain during migration (resources / orchestrator). They may later project to ChangeEvent as `legacy.audit_imported` but **must not** become TimelineItems.
+迁移期间 `AuditLog` 写入仍保留（resources / orchestrator）。日后可能投影为 ChangeEvent `legacy.audit_imported`，但**不得**变为 TimelineItems。
 
-## H2 baseline backfill
+## H2 基线回填
 
 | Item | Location |
 |------|----------|
@@ -77,22 +77,22 @@ This document lists current authoritative write surfaces for the H1 first-batch 
 | Backfill | [`apps/api/src/contexts/history/baseline-backfill.ts`](../../apps/api/src/contexts/history/baseline-backfill.ts) |
 | CLI | `pnpm --filter @zivith/api history:backfill-baselines` (`--dry-run`, `--project <uuid>`) |
 
-Baseline creates `revision=1` + `entity.created` ChangeEvent per missing Entity. Soft-deleted Shot / AppearanceVariant / VisualRequirement rows are skipped. Re-running is safe (idempotent).
+基线为每个缺失 Entity 创建 `revision=1` + `entity.created` ChangeEvent。软删除的 Shot / AppearanceVariant / VisualRequirement 行被跳过。重跑安全（幂等）。
 
-## H3 dual-write flags (default off)
+## H3 双写标志（默认 off）
 
 | Mode | Behavior |
 |------|----------|
-| `off` (default) | No history writes on live paths |
-| `shadow` | Best-effort append after business write; failures logged, request still succeeds |
-| `dual` | Await history append; `409 REVISION_CONFLICT` / `IDEMPOTENCY_KEY_REUSED` propagate |
+| `off` (default) | 实时路径无历史写入 |
+| `shadow` | 业务写入后尽力追加；失败记日志，请求仍成功 |
+| `dual` | 等待历史追加；`409 REVISION_CONFLICT` / `IDEMPOTENCY_KEY_REUSED` 向上传播 |
 
 Env: `HISTORY_WRITE_DEFAULT`, `HISTORY_ENTITY_SHOT`, `HISTORY_ENTITY_PROMPT_VERSION`, `HISTORY_ENTITY_OUTPUT`, `HISTORY_ENTITY_APPEARANCE_VARIANT`, `HISTORY_ENTITY_VISUAL_REQUIREMENT`.
 
-Wired call sites (no-op until flags enabled): Shot create/patch, PromptVersion create/approve, Output complete/fail, AppearanceVariant approve, VisualRequirement approve.
+已接线调用点（标志启用前为 no-op）：Shot create/patch、PromptVersion create/approve、Output complete/fail、AppearanceVariant approve、VisualRequirement approve。
 
-## Out of H3 (still later)
+## H3 范围外（仍属后续）
 
-- No Presentation Timeline / World Time APIs (H4+)
-- No CreativeBranch (H10)
-- Not every write path is wired yet (workflow mock-runner bulk paths remain for later)
+- 无 Presentation Timeline / World Time API（H4+）
+- 无 CreativeBranch（H10）
+- 并非每条写入路径都已接线（workflow mock-runner 批量路径留待后续）

@@ -1,28 +1,28 @@
 # ADR-0003: Provide local infrastructure through Docker Compose
 
-- **Status:** Accepted
+- **Status:** 已接受
 - **Date:** 2026-07-20
-- **Deciders:** Phase 0 team
+- **Deciders:** Phase 0 团队
 - **Class:** Standard
-- **Reversibility:** Reversible
+- **Reversibility:** 可逆
 
-> Migrated from the root `ARCHITECTURE-DECISIONS.md` (formerly ADR-003) on 2026-07-22.
-> This record predates the Architecture Constitution; the *Principles at Stake*
-> analysis has not been retrofitted.
+> 于 2026-07-22 自根目录 `ARCHITECTURE-DECISIONS.md`（原 ADR-003）迁入。
+> 本记录早于架构宪章；*Principles at Stake（攸关原则）*
+> 分析尚未回溯补全。
 
-## Context
+## 背景
 
-Development and tests require a relational database, queue/cache, and S3-compatible object
-storage on Windows and Linux.
+开发与测试需要在 Windows 与 Linux 上具备关系型数据库、队列/缓存，以及
+S3 兼容的对象存储。
 
-## Decision
+## 决策
 
-Use PostgreSQL 16, Redis 7, and MinIO through Docker Compose. Named volumes preserve local
-development data. Health checks gate setup completion, and a one-shot MinIO client creates
-the private media bucket idempotently.
+通过 Docker Compose 使用 PostgreSQL 16、Redis 7 与 MinIO。命名卷保留本地
+开发数据。健康检查作为 setup 完成的门禁，一次性 MinIO client 以幂等方式创建
+私有媒体 bucket。
 
-## Consequences
+## 后果
 
-Local services closely match production capabilities without requiring native installs.
-Production deployments may use managed equivalents, provided they preserve PostgreSQL,
-Redis, and S3-compatible contracts.
+本地服务在能力上贴近生产环境，且无需本机原生安装。
+生产部署可使用托管等价物，前提是保持 PostgreSQL、
+Redis 与 S3 兼容契约。

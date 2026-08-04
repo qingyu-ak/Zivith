@@ -1,262 +1,288 @@
-# Zivith Architecture Principles
+# Zivith 架构原则
 
-> The Architectural Constitution of Zivith
+> Zivith 的架构宪章
 >
-> Version: 1.0
+> Version: 1.1
 >
 > Status: Ratified — living document, amendable only by explicit ADR
 >
 > Horizon: 5–10 years
 >
-> Related: Design-Philosophy.md, Core-Domain-Model.md, Technical-Architecture.md, AI-Agent-Collaboration.md, entity-state-timeline-track.md, adr/0007-preserve-current-state-with-immutable-creative-history.md
+> Related: [Product-Positioning.md](../product/Product-Positioning.md), [Design-Philosophy.md](../product/Design-Philosophy.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md), [Entity + State + Timeline + Track](entity-state-timeline-track.md), [ADR-0007](adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0008](adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)
 
 ---
 
-## About This Document
+## 关于本文档
 
-This is not an implementation document. It names no framework, no database, no queue, no programming language, and no AI model — deliberately. Everything it omits is expected to be replaced several times within its horizon. Everything it states is expected to survive those replacements.
+本文档不是实现说明书。它刻意不点名任何框架、数据库、队列、编程语言或 AI 模型。凡是它省略的，都预期会在其视野期内被替换多次；凡是它陈述的，都预期能在那些替换中幸存。
 
-Every future ADR, RFC, and implementation plan must be able to answer one question: **which principle in this document does your decision serve, and which does it strain?** A decision that strains a principle is not forbidden — but it must say so explicitly and argue its case. A decision that quietly contradicts this document is void.
+未来每一份 ADR、RFC 与实现计划都必须能回答一个问题：**你的决策服务本文档中的哪条原则，又牵制了哪条？** 牵制原则的决策并非禁止——但必须明确说出并论证。默默与本文档相悖的决策无效。
 
-Where earlier architecture reviews produced recommendations that conflict with each other, this document does not preserve both. Each conflict is resolved here, once, with reasoning. These resolutions are marked **Resolved Tension** throughout.
+若早期架构评审产生了彼此冲突的建议，本文档不会两者兼收。每处冲突在此一次解决，并给出理由。这些解决在全文中标记为 **已解决张力（Resolved Tension）**。
 
 ---
 
-## 1. Vision
+## 1. 愿景
 
-Zivith is an AI-native creative operating system for filmmaking.
+**Zivith 不是 AI 生成工具。Zivith 是可被 AI 理解的 IP 创作系统。**
 
-"Operating system" is not a marketing metaphor. It is an architectural commitment with three pillars, and this entire constitution is an elaboration of them:
+模型执行生成。Zivith 管理生成所无法承载的东西：创作意图、世界规则、角色关系、时间演进，以及制作语境。完整的 IP 永远不会「一句话就成」——需求要被探索，方向要被修订，世界规则要被维护，关系要在多年中演化。由此得出一个反直觉却经久的结论：**生成模型越强，管理创作语境的系统就越有价值**（[ADR-0008](adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
 
-| Pillar | OS analogue | Zivith commitment |
+电影制作仍是该 IP 的首要且最深表达。`Story → Scene → Shot → Output` 是被管理世界的表达与输出层——不是系统的顶层目的。
+
+其架构形态是操作系统。「操作系统」不是营销隐喻，而是带有三根支柱的架构承诺；整部宪章都是对它们的展开：
+
+| 支柱 | OS 类比 | Zivith 承诺 |
 |--------|-------------|-------------------|
-| **State** | File system | A persistent, semantic, exportable model of creative intent — the creative universe |
-| **Interface** | System calls | A programmable core that humans and machines invoke as equals |
-| **Scheduling** | Process model | Workflows as declarative, interruptible, resumable processes with human authority built into the engine |
+| **State（状态）** | 文件系统 | IP 世界持久、语义化、可导出的模型——创作意图、其实体，及其随时间变化的状态 |
+| **Interface（接口）** | 系统调用 | 人类与机器以同等身份调用的可编程核心 |
+| **Scheduling（调度）** | 进程模型 | 工作流作为声明式、可中断、可恢复的进程，引擎内建人类权威 |
 
-An AI video generator turns a prompt into a file. An operating system manages state, exposes interfaces, and schedules work — so that *other* things, including things not yet invented, can run on top of it.
+AI 视频生成器把提示词变成文件。操作系统管理状态、暴露接口、调度工作——以便*其他*事物（包括尚未发明的事物）可以运行其上。
 
-The [Entity + State + Timeline + Track](entity-state-timeline-track.md) architecture (ADR-0007 Accepted) makes the State pillar concrete without replacing the semantic domain model: dedicated entity tables remain current-state authority, immutable revisions preserve evolution, and one creative Timeline uses Presentation Time as its stable axis with optional Project-defined World Time bindings. Fictional calendars and parallel-world dimensions are not normalized into one clock. Alternative versions, if later needed, are CreativeBranches rather than Tracks. Canonical snapshot/ChangeEvent schemas are frozen (Track H H1); history tables and Timeline runtime are still rolling out.
+[Entity + State + Timeline + Track](entity-state-timeline-track.md) 架构（ADR-0007 Accepted）使 State 支柱具体化，而不取代语义领域模型：专用实体表仍是当前状态权威，不可变修订保留演进，一条创意 Timeline 以 Presentation Time 为稳定轴，并可选绑定 Project 定义的 World Time。虚构历法与平行世界维度不会被归一成同一时钟。若日后需要替代版本，那是 CreativeBranch，而非 Track。规范快照 / ChangeEvent schema 已冻结（Track H H1）；历史表与 Timeline 运行时仍在推进。
 
-The vision holds regardless of AI progress because it is not a bet on any model's capability. It is a bet on three invariants:
+该愿景不依赖 AI 进度，因为它不是对任何模型能力的押注。它押注三条不变量：
 
-1. **Creative IP compounds.** Characters, worlds, and aesthetic decisions accumulate value over years; individual outputs do not.
-2. **Callers diversify.** The clients of a creative system — human interfaces, autonomous agents, other products — multiply and change shape faster than the system itself.
-3. **The pipeline will deform.** Every improvement in AI capability changes where humans need to intervene and how many steps creation requires. The only certainty about today's pipeline is that its shape is temporary.
-
----
-
-## 2. Core Architectural Principles
-
-These eight principles are load-bearing. Everything else in this document derives from them.
-
-### P1 — Creative intent is the asset; outputs are disposable
-
-The source of truth is always the structured description of intent (the Shot, the Scene, the Character), never the generated artifact. Any output must be regenerable from its intent, and any output that cannot be traced to its intent is a defect.
-
-*Why it holds:* models improve; outputs age; intent does not. A Shot described in 2026 can be regenerated in 2031 by a model that did not exist when it was written — and the result will be better. This principle converts every model improvement into an automatic upgrade of the entire accumulated catalogue.
-
-### P2 — The domain model is a contract, not a schema
-
-The creative hierarchy and its semantics (ownership, inheritance, traceability, approval states) constitute a versioned contract. It evolves only through explicit, compatible, documented migration. No component — including the persistence layer that happens to store it — owns it.
-
-*Why it holds:* every implementation detail around the model will be rewritten; the model is what users have entrusted their creative universes to. Breaking it silently is the one failure the product cannot recover from.
-
-### P3 — The core is headless; every surface is a client
-
-Every capability exists first as a durable, idempotent, programmable operation. The human interface is client number one — privileged in design attention, unprivileged in capability. Nothing may be possible only through the UI.
-
-*Why it holds:* the ratio of machine-initiated to human-initiated work will only increase. A system whose capabilities live in its UI cannot participate in that future without a rewrite.
-
-### P4 — Volatility is quarantined behind capability boundaries
-
-External AI models are peripherals. The system addresses them by capability (write, depict, animate, voice) through stable boundaries, never by vendor. No provider concept may appear in the domain. Adding, replacing, or losing a provider must never require a domain change.
-
-*Why it holds:* the model landscape has the shortest half-life of anything the system touches. Quarantining it is what makes the rest of the system long-lived.
-
-### P5 — Workflow is data; orchestration is an engine; gates are primitives
-
-The shape of the creative process — which stages exist, in what order, with what parallelism, with which review gates — is declarative data, interpreted by an orchestration engine whose primitives are: durable steps, interruption, resumption, fan-out, and partial recomputation. Pipelines are instances, not code.
-
-*Why it holds:* see invariant 3. When stages merge because a model can do in one step what took three, the response must be editing a definition, not rewriting a system.
-
-### P6 — Human authority is architectural; its granularity is policy
-
-The *capability* for human review, override, and veto at any point in any workflow is a permanent architectural guarantee. *Where* review is mandatory, and how much automation a given creator accepts, is configurable policy that will legitimately shift as AI reliability improves.
-
-**Resolved Tension.** Earlier documents simultaneously promise a `full_auto` automation level and declare certain review gates permanently unbypassable. Both cannot be absolute. Resolution: the architecture guarantees that any gate *can* exist everywhere and that gate placement is policy — including the policy that some gates are mandatory today. Mandatory gates are product decisions, revisitable by ADR as evidence accumulates; the *machinery* of human authority is constitutional and not revisitable. We refuse to hard-code today's gate positions into the architecture for the same reason we refuse to hard-code today's pipeline: both encode a snapshot of 2026 model reliability.
-
-### P7 — Every generation is a recorded, priced, reproducible transaction
-
-Each act of generation carries full provenance (what intent, what configuration, what model class, who approved) and full accounting (what it cost, against whose budget). No anonymous generation exists.
-
-*Why it holds:* three independent forces converge on this requirement — reproducibility (P1 is impossible without it), economics (autonomous agents with spending power require metering *before* they exist, not after the first incident), and society (disclosure and provenance obligations for AI-generated media will only tighten).
-
-### P8 — Memory compounds
-
-The system must know more about a creative universe after a year of use than after a day. Review decisions, recurring corrections, and stylistic preferences are signals to be captured into project knowledge — not exhaust to be discarded after a single retry.
-
-*Why it holds:* this is the difference between a creative partner and a creative tool, and it is the one advantage that cannot be replicated by a competitor with a better model, because the memory belongs to the user's history, not to the technology.
-
-Immutable history is not equivalent to Event Sourcing. Zivith may preserve committed revisions and facts while continuing to read current state from dedicated domain tables. Workflow steps, queue attempts, and video-editing tracks retain separate semantics; they must not be collapsed into creative history merely because they are ordered.
+1. **创意 IP 会复利。** 角色、世界与美学决策在多年中积累价值；单次输出不会。
+2. **调用方会多样化。** 创意系统的客户端——人类界面、自治代理、其他产品——增殖与变形的速度超过系统本身。
+3. **流水线会变形。** AI 能力的每一次提升都会改变人类需要介入的位置，以及创作所需步数。关于今日流水线的唯一确定之事：其形状是暂时的。
 
 ---
 
-## 3. Domain Model Philosophy
+## 2. 核心架构原则
 
-**The hierarchy is semantic, not organizational.** Project → Story → Scene → Shot is not a folder tree. Each level carries meaning: the Project is a creative universe, the Scene is a continuity of place and mood, the Shot is the smallest unit of directorial intent. Features that treat the hierarchy as mere nesting misunderstand the model.
+这八条原则是承重墙。本文档其余一切皆由它们派生。
 
-**Inheritance expresses intent, not convenience.** A field left unset means "defer to my context" — a genuine creative statement, resolved at read time against the current state of ancestors. This is why upstream edits propagate: the child never copied the value, it referenced the context. Any mechanism that flattens inheritance into copied values severs this and is prohibited.
+### P1 — 创作意图是资产；输出可弃
 
-**Identity is permanent; content is versioned.** A Shot keeps its identity across arbitrarily many revisions and regenerations. History accretes; it is never rewritten. Deletion is an end-state annotation, not an erasure — a creative universe with holes in its memory cannot be trusted with a decade of work.
+唯一真相源始终是意图的结构化描述（Shot、Scene、Character），绝非生成产物。任何输出都必须能从其意图再生；无法追溯到意图的输出即为缺陷。
 
-**The model grows by deepening, not widening.** New capability should be expressed through the existing hierarchy and asset semantics wherever possible. Every new top-level concept must justify why it cannot be an enrichment of an existing one. A domain model that adds a concept per feature will not survive ten years; one that deepens per feature will.
+*为何成立：* 模型会进步；输出会过时；意图不会。2026 年描述的 Shot 可在 2031 年由当时尚不存在的模型再生——且结果更好。本原则把每一次模型进步，都转化为整部已积累目录的自动升级。
 
-**The assembly of shots into a watchable whole is domain, not tooling.** A film is more than the set of its generated shots. The composition of outputs into a deliverable cut belongs *inside* the domain model — it is creative intent like everything else, with the same identity, versioning, and provenance rules. (Its scope at V1 is deliberately minimal; see §11.)
+### P2 — 领域模型是契约，不是 schema
 
----
+创意层级及其语义（所有权、继承、可追溯性、审批状态）构成版本化契约。它只能通过显式、兼容、有文档的迁移演进。没有任何组件——包括碰巧存储它的持久化层——拥有它。
 
-## 4. Creative Asset Philosophy
+*为何成立：* 模型周围的一切实现细节都会被重写；模型是用户托付其创意宇宙之所。默默破坏它，是产品无法从中恢复的唯一失败。
 
-**Assets belong to the universe, not the production.** Characters, locations, styles, and knowledge are owned by the Project and survive every Story, Scene, and Shot that references them. An asset's value is measured across years of reuse, not within a single video.
+### P3 — 核心无头；每个界面都是客户端
 
-**Two kinds of persistence: nouns and experience.** Persisting the nouns (a character's design, a location's description) is necessary but insufficient. The *experience* accumulated around them — what was approved, what was rejected and why, which stylistic corrections recur — must also persist and flow back into future generation (P8). An asset that never learns from its usage is a record; an asset that does is a collaborator.
+每项能力首先作为持久、幂等、可编程的操作存在。人类界面是一号客户端——在设计注意力上享有特权，在能力上不享有特权。不得存在仅能通过 UI 完成之事。
 
-**Provenance is part of the asset.** Every asset and output carries its chain of origin: what produced it, from what inputs, under whose approval. This chain is inseparable from the asset itself.
+*为何成立：* 机器发起与人类发起工作之比只会上升。能力活在 UI 里的系统，若不重写就无法参与那个未来。
 
-**Assets must be able to leave.** Everything a creator builds must be exportable in a complete and usable form. This is a trust position, not a feature: creators will only deposit decade-scale IP in a system that demonstrably cannot hold it hostage. Lock-in through data captivity is prohibited as a retention strategy; retention must be earned by the system's compounding value (P8), not by exit costs.
+### P4 — 波动性被隔离在能力边界之后
 
-**Resolved Tension.** One review recommendation urged treating the domain model as a *public, open format* immediately (trust through openness); the deferral analysis warned against publishing a format before the model stabilizes. Resolution: the **export guarantee is constitutional and immediate** — creators can always take everything out, from V1 onward. The **public format specification is deferred** — publishing a format is a compatibility promise to third parties, and making that promise while the domain model is still learning what it needs to be would either freeze the model prematurely or betray early adopters of the format. Openness of exit now; openness of specification when the model has earned stability (§11).
+外部 AI 模型是外设。系统按能力（写作、描绘、动画、配音）通过稳定边界寻址它们，绝不按厂商。领域中不得出现 provider 概念。增加、替换或失去某个 provider，绝不得要求领域变更。
 
----
+*为何成立：* 模型版图是系统所触之物中半衰期最短者。隔离它，才能让系统其余部分长寿。
 
-## 5. Workflow Philosophy
+### P5 — 工作流是数据；编排是引擎；门禁是原语
 
-**Assume the pipeline is wrong.** Today's stages and gate positions encode today's model limitations. The architecture must make the pipeline cheap to reshape: stages defined as data, interpreted by an engine, versioned like everything else. When a future model collapses three stages into one, the correct system change is a new workflow definition — nothing else.
+创作过程的形状——存在哪些阶段、何顺序、何并行、何评审门禁——是声明式数据，由编排引擎解释；引擎原语为：持久步骤、中断、恢复、扇出、局部重算。流水线是实例，不是代码。
 
-**Interruption is a first-class outcome.** A workflow step that pauses for human judgment is not an error path or an edge case; it is one of the two normal outcomes of any step. The engine treats waiting — for hours or weeks — as a healthy persistent state, indistinguishable in robustness from running.
+*为何成立：* 见不变量 3。当阶段因模型能一步完成原先三步而合并时，响应必须是编辑定义，而非重写系统。
 
-**Parallelism follows structure.** Independent creative units (scenes within a story, shots within a scene) are independent work. The domain hierarchy *is* the dependency graph; the engine derives parallelism from it rather than declaring it ad hoc.
+### P6 — 人类权威是架构性的；其粒度是策略
 
-**Change propagates; recomputation is scoped.** When upstream intent changes, the system must know exactly what downstream work is invalidated and re-derive only that — never everything, never nothing. Approved work is protected from silent invalidation. This scoped-recomputation mechanic is what makes "Everything is Editable" true at scale; without it, editability decays into "editable until the project gets big."
+在任何工作流的任意点进行人类评审、覆盖与否决的*能力*，是永久架构保证。*何处*必须评审、某位创作者接受多少自动化，是可配置策略，将随 AI 可靠性提升而正当变化。
 
-**Workflows compound like assets.** A proven workflow configuration is itself creative capital — nameable, reusable, and eventually shareable. This follows automatically from workflow-as-data and requires no additional machinery to be architecturally possible.
+**已解决张力（Resolved Tension）。** 早期文档同时承诺 `full_auto` 自动化级别，又宣称某些评审门禁永久不可绕过。两者不能同时绝对。决议：架构保证任何门禁*可以*存在于各处，且门禁放置是策略——包括「今日某些门禁为强制」的策略。强制门禁是产品决策，可随证据积累经 ADR 再议；人类权威的*机制*是宪章性的，不可再议。我们拒绝把今日门禁位置硬编码进架构，理由与拒绝硬编码今日流水线相同：两者都编码了 2026 年模型可靠性的快照。
 
-**Resolved Tension.** "Workflow is data" gestures toward node-graph tools, while the product philosophy mandates *Simple by Default* and rejects a node canvas as the primary experience. These do not conflict once separated by layer: workflow-as-data is an **engine commitment**, invisible to most users, whose default surface remains the guided creative hierarchy. A graph *visualization* may someday exist as an advanced, secondary view (§11) — but the declarative engine is justified entirely by reshapeability and reuse, not by any UI. We would build it even if no user ever saw a graph.
+### P7 — 每一次生成都是有记录、有计价、可复现的交易
 
----
+每一次生成行为携带完整溯源（何种意图、何种配置、何类模型、谁批准）与完整核算（花费多少、记入谁的预算）。不存在匿名生成。
 
-## 6. Human–AI Collaboration Philosophy
+*为何成立：* 三股独立力量汇聚于此——可复现性（没有它则 P1 不可能）、经济学（拥有消费能力的自治代理要求在其存在*之前*计量，而非首次事故之后）、社会（对 AI 生成媒体的披露与溯源义务只会收紧）。
 
-**AI proposes; humans decide.** This is the permanent division of authority. AI may draft every artifact in the system; only human approval transitions an artifact into a state that downstream work depends on. As automation levels rise, approval may become batched, sampled, or exception-based — but the authority relation never inverts.
+### P8 — 记忆会复利
 
-**Automation is a dial, not a mode.** Creators set their own point on the spectrum from reviewing everything to reviewing nothing, per stage and per project. The architecture's obligation is to make every point on that dial safe: full manual must not be punishing, and full auto must not be unaccountable (P7 makes even unattended work fully auditable and budget-bounded).
+系统在一年使用后对创意宇宙的了解，必须多于一天。评审决策、反复修正与风格偏好是应捕获进项目知识的信号——不是单次重试后丢弃的废气。
 
-**Disagreement is data.** Every human correction — a rejected candidate, an edited prompt, a recurring note — is the most valuable training signal the system will ever receive about this creative universe. Capturing it into durable project knowledge (P8) is an architectural duty. A system that asks for the same correction twice has failed this section.
+*为何成立：* 这是创意伙伴与创意工具之别，也是拥有更好模型的竞争者无法复制的优势——因为记忆属于用户历史，不属于技术。
 
-**Transparency over magic.** Creators can always see what was generated, from what inputs, and why. No stage of the system may be a black box whose output must be accepted on faith — this applies equally to external models and to Zivith's own orchestration decisions.
-
-**Advisory surfaces never acquire authority.** Conversational assistants may explain, navigate, and propose. They act only through the same gated operations as every other client, with explicit confirmation, and may never bypass a review gate. The creative hierarchy is the workspace; conversation is at most a companion to it.
+不可变历史不等于 Event Sourcing。Zivith 可保留已提交修订与事实，同时继续从专用领域表读取当前状态。工作流步骤、队列尝试与视频剪辑轨保留各自语义；不得仅因其有序就坍缩进创意历史。
 
 ---
 
-## 7. Headless & API Philosophy
+## 3. 领域模型哲学
 
-**Two doors, one house.** Humans and machine agents enter through different doors — an interface designed for judgment and craft, an API designed for autonomy and scale — into the *same* rooms: identical capabilities, identical state, identical gates and accounting. Neither door is an afterthought of the other.
+**层级是语义的，不是组织的。** Project → Story → Scene → Shot 不是文件夹树。每一层携带意义：Project 是创意宇宙，Scene 是场所与情绪的连续性，Shot 是导演意图的最小单元。把层级当纯嵌套的功能误解了模型。
 
-**The deliverable is a resumable project, never a file.** When an agent creates through Zivith, it hands back a living project a human can open, judge, and continue — and vice versa: work a human pauses, an agent can resume. This handoff loop is the practical meaning of "operating system": humans and machines as alternating operators of shared, persistent state.
+**继承表达意图，不是图方便。** 字段留空意味着「交给我的上下文」——这是真实的创作声明，在读取时相对祖先的当前状态解析。这就是上游编辑会传播的原因：子级从未拷贝该值，它引用了上下文。任何把继承拍平成拷贝值的机制都会切断这一点，因而被禁止。
 
-**Operations are durable and idempotent.** Any invocation may be retried, replayed, or resumed without duplicating effects. Long-running work is observable in progress and survives the disconnection of whoever started it. These are preconditions for machine callers, and they discipline the human experience too.
+**身份永久；内容版本化。** Shot 在任意多次修订与再生中保持其身份。历史只增不改。删除是终态标注，不是抹除——记忆有洞的创意宇宙，不能被托付十年工作。
 
-**Governance precedes autonomy.** Identity, permission, budget, and rate constraints are enforced at the boundary *before* any autonomous caller is admitted — in that order, always. An ungoverned programmable entry to systems that spend money is not an open platform; it is an incident.
+**模型靠加深生长，不靠加宽。** 新能力应尽可能通过既有层级与资产语义表达。每个新顶层概念都必须论证为何不能是既有概念的 enrichment。每功能加一个概念的领域模型活不过十年；每功能加深一次的可以。
 
-**Machine-initiated work meets a higher bar, not a lower one.** Agent traffic arrives without human judgment attached, so it must carry *more* explicit intent, budget, and accountability than a human click — never less.
+**世界层加深层级；不与之并行。** IP 世界——`Character`、`Location`、`Object`、`WorldEvent`、`Organization`，以及它们之间的 `Relationship`——通过 Entity 身份、State 历史与 Timeline（ADR-0007）表达，而不是旁立于 `Project → Story → Scene → Shot` 的第二套层级。三条后果随之成立且具约束力。*IP 就是 `Project`*：该词命名既有创意宇宙，绝非新顶层实体。*世界中的场所是 `Location`*：`Scene` 保留其叙事含义——拥有 `Shot` 的场所、时间与情绪的连续单元——绝不可被重定义为世界位置。*世界事件是 `WorldEvent`*：已提交的系统事实仍是 `ChangeEvent`，二者不得因碰巧有序而合并。新世界实体一次引入一个，各自须用真实项目证据挣得一席之地（[IP World Model Repositioning RFC](rfc/IP-World-Model-Repositioning-RFC.md)）。
 
----
+**能力不是领域。** 把世界状态转换为生成请求的层——产品讨论中称为 `Skill`——是能力边界（P4），不是领域实体。它没有身份、没有修订、没有所有权，且从不出现在存储或导出的创意数据中。增强 AI 能力意味着强化 Skill 实现或替换 provider 适配器，绝不是向领域添加模型形状的对象（[ADR-0009](adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md)）。
 
-## 8. Evolution Principles
-
-**Absorb capability jumps by reconfiguration first.** When AI takes a leap, the ordered response is: (1) swap models behind capability boundaries (P4); (2) reshape workflow definitions (P5); (3) shift gate policy (P6); (4) deepen the domain model (§3); and only then (5) amend this constitution. A jump that seems to demand step 5 before steps 1–4 have been exhausted has been misdiagnosed.
-
-**Strangle; do not rewrite.** Subsystems are replaced incrementally behind stable boundaries while the system keeps running. A proposal to rewrite the whole is a confession that boundaries have already failed — fix the boundaries.
-
-**Classify decisions by reversibility.** Reversible decisions should be made quickly, locally, and without ceremony. Irreversible decisions — anything touching the domain contract, stored creative data, or public promises — require an ADR that cites this document. Spending ceremony on reversible decisions is as much an error as skipping it on irreversible ones.
-
-**Compatibility debts are repaid, never defaulted.** Every versioned artifact — domain schema, workflow definitions, exported data — is migrated forward with a documented path. If a capability must die, its data must have somewhere to go. Silent breakage of anything a creator stored is the unforgivable failure mode.
-
-**The constitution amends; it does not drift.** This document changes only by explicit, argued amendment recorded as an ADR. If practice diverges from principle, one of them is wrong — and the divergence itself must be surfaced and adjudicated, not normalized.
+**将镜头装配为可观看整体属于领域，不是工具。** 影片不止于其生成镜头的集合。把输出编排成可交付剪辑属于领域模型*之内*——它与其他一切一样是创作意图，遵守同样的身份、版本与溯源规则。（V1 范围刻意最小；见 §11。）
 
 ---
 
-## 9. What Zivith Will Never Become
+## 4. 创意资产哲学
 
-These are permanent negatives. Each one is a real gravitational pull that adjacent products have succumbed to; naming them is how we resist.
+**资产属于宇宙，不属于单次制作。** 角色、地点、风格与知识由 Project 拥有，并在引用它们的每一个 Story、Scene、Shot 之后继续存活。资产价值按多年复用衡量，不是按单支视频。
 
-1. **A prompt-to-video generator.** The interaction "type a sentence, receive a film, discard, retry" is the black box Zivith exists to replace. However good models become, collapsing the creative process into a single opaque hop is abandonment of the vision, not achievement of it.
+**两种持久化：名词与经验。** 持久化名词（角色设计、地点描述）必要但不充分。围绕它们积累的*经验*——批准了什么、拒绝了什么及原因、哪些风格修正反复出现——也必须持久化并回流到未来生成（P8）。从不从用法中学习的资产是记录；会学习的是协作者。
 
-2. **A chatbot.** Conversation may assist creation; it will never *be* the creation surface. A chat log is the weakest possible representation of a creative universe — unstructured, unversionable, unshareable, unreviewable.
+**溯源是资产的一部分。** 每个资产与输出携带其起源链：由什么产生、来自何种输入、经谁批准。该链与资产本身不可分割。
 
-3. **A node-graph tool.** Exposing raw computational plumbing as the primary creative surface trades the semantic hierarchy — Zivith's moat — for the home turf of engine-style tools, and taxes every beginner with an expert's mental model.
+**资产必须能够离开。** 创作者构建的一切必须以完整可用的形式可导出。这是信任立场，不是功能：创作者只会把十年量级 IP 存放在可证明无法将其挟持的系统中。通过数据囚禁实现锁定作为留存策略被禁止；留存必须由系统的复利价值（P8）挣得，而非退出成本。
 
-4. **A data prison.** Retention through export friction, proprietary captivity, or deletion resistance is prohibited in perpetuity (§4). Zivith keeps users by compounding value, or it deserves to lose them.
-
-5. **A vendor's front-end.** No single AI provider — however dominant — may ever be load-bearing for the domain, the workflow engine, or the stored creative record. The day Zivith cannot survive a provider's disappearance is the day it has stopped being an operating system.
-
-6. **An autonomous creator.** Zivith automates execution, never authorship. A system that publishes creative work no human has judged has inverted P6, whatever its settings claim.
+**已解决张力（Resolved Tension）。** 一份评审建议敦促立即把领域模型当作*公开开放格式*（以开放建立信任）；延期分析则警告在模型稳定前发布格式。决议：**导出保证是宪章性的且立即生效**——创作者从 V1 起总能带走一切。**公开格式规范延期**——发布格式是对第三方的兼容承诺；在领域模型仍在学习自身所需时做出该承诺，要么过早冻结模型，要么背叛格式的早期采用者。现在开放退出；在模型赢得稳定性后再开放规范（§11）。
 
 ---
 
-## 10. Long-Term North Star
+## 5. 工作流哲学
 
-**Zivith aspires to be the layer that AI-native storytelling assumes** — the way production assumes a file system: the place where creative universes live, where human and machine collaborators meet as governed equals, and where the passage of time makes work more valuable instead of obsolete.
+**假定流水线是错的。** 今日的阶段与门禁位置编码了今日的模型局限。架构必须让流水线廉价可重塑：阶段定义为数据、由引擎解释、像其他一切一样版本化。当未来模型把三步坍成一步时，正确的系统变更是新的工作流定义——别无其他。
 
-The measures of progress toward that star, in ascending order of ambition:
+**中断是一等结果。** 为人类判断而暂停的工作流步骤不是错误路径或边角情况；它是任何步骤的两种正常结果之一。引擎把等待——数小时或数周——当作健康的持久状态，在稳健性上与运行无异。
 
-1. **Regeneration superiority** — work described years ago renders better today, automatically, because intent outlived the models that first served it (P1, P4).
-2. **Compounding universes** — long-lived projects visibly outperform fresh ones, because memory compounds (P8) and assets accrue (§4).
-3. **Alternating operators** — substantial real work is started by machines and finished by humans, or the reverse, through the resumable-project loop (§7).
-4. **An assumed substrate** — third parties build products, agents, and businesses *on* Zivith's programmable core and interchange format without asking permission, the way software assumes an OS.
+**并行跟随结构。** 独立创意单元（故事内的场景、场景内的镜头）是独立工作。领域层级*就是*依赖图；引擎从中派生并行，而非临时声明。
 
-When a strategic choice is unclear, prefer the option that moves toward the highest of these that is currently within reach.
+**变更传播；重算有范围。** 上游意图变更时，系统必须确切知道下游哪些工作失效，并只重导那些——绝不是一切，也绝不是什么都不做。已批准工作受保护，免遭默默失效。这种有范围的重算机制，使「Everything is Editable」在规模上成立；没有它，可编辑性会退化成「项目变大前可编辑」。
+
+**工作流像资产一样复利。** 经过验证的工作流配置本身就是创意资本——可命名、可复用、最终可共享。这从工作流即数据自然得出，架构上无需额外机制即可可能。
+
+**已解决张力（Resolved Tension）。** 「工作流是数据」指向节点图工具，而产品哲学要求*默认简单*并拒绝以节点画布作为主体验。一旦按层分离，二者并不冲突：工作流即数据是**引擎承诺**，对多数用户不可见，其默认界面仍是引导式创意层级。图*可视化*将来可作为高级、次要视图存在（§11）——但声明式引擎的正当性完全来自可重塑与复用，而非任何 UI。即便从没有用户见过图，我们也会建造它。
 
 ---
 
-## 11. Architecture Decisions Deferred Until V1/V2
+## 6. 人机协作哲学
 
-Deferral is an architectural act, not an omission. Each direction below is recognized as **correct** — aligned with this constitution and expected to happen — and is postponed deliberately, because building it before its preconditions exist would create premature complexity, premature promises, or both. For each: what is deferred, why deferring is safe, and what triggers the revisit.
+**AI 提议；人类决定。** 这是权威的永久划分。AI 可起草系统中每一件产物；只有人类批准才能把产物转入下游依赖的状态。随自动化水平上升，批准可变为批量、抽样或异常驱动——但权威关系永不倒置。
 
-### D1 — Do not publish the `.ziv` project format yet
+**自动化是旋钮，不是模式。** 创作者按阶段、按项目在「事事评审」到「几乎不评审」的光谱上设定自己的点。架构的义务是让旋钮上每一点都安全：全手动不得惩罚性，全自动不得无责任（P7 使无人值守工作仍完全可审计且预算有界）。
 
-Keep the domain schema internal, versioned, and migration-disciplined; publish nothing as a specification. The export guarantee (§4) is **not** deferred — creators can always leave with everything. What is deferred is the *promise to third parties* that the format is stable, because a published format freezes exactly the thing that most needs freedom to evolve right now: the domain model itself.
-**Revisit when:** the domain contract has survived multiple releases without breaking migration, and external parties are consuming exports seriously enough to want a specification.
+**分歧是数据。** 每一次人类修正——被拒候选、编辑后的提示、反复出现的备注——都是系统关于该创意宇宙所能收到的最有价值训练信号。将其捕获进持久项目知识（P8）是架构职责。两次索要同一修正的系统，已在本节失败。
 
-### D2 — Do not build a plugin ecosystem or marketplace yet
+**透明优于魔法。** 创作者总能看见生成了什么、来自何种输入、为何如此。系统任何阶段都不得成为必须凭信仰接受输出的黑箱——这对外部模型与 Zivith 自身的编排决策同等适用。
 
-Extensibility is the fourth North Star measure, and it is strictly downstream of stable extension points: a data-defined workflow engine, a settled domain contract, and governance at the boundary. A plugin API published before those stabilize becomes a compatibility millstone — every internal improvement breaks someone's plugin, and the ecosystem meant to accelerate the platform instead vetoes its evolution.
-**Revisit when:** workflow-as-data has been in production long enough that its shapes have stopped churning, and D1 has been resolved.
+**顾问面永不获得权威。** 对话式助手可以解释、导航、提议。它们只通过与其他客户端相同的门禁操作行动，须显式确认，且绝不可绕过评审门禁。创意层级是工作区；对话最多是其伴侣。
 
-### D3 — Do not make a node-based workflow canvas the primary user experience — and do not rush it as a secondary one
+---
 
-The primary-surface question is settled permanently in §9. Even as a secondary "advanced view," a graph UI is deferred: it is expensive, it serves the smallest user segment, and the engine it would visualize (P5) must exist and stabilize first. The declarative engine is justified without any canvas; the canvas, if it ever comes, is a rendering of the engine — never the reverse.
-**Revisit when:** workflow definitions are user-visible data and advanced users demonstrably outgrow the configuration surfaces built for them.
+## 7. 无头与 API 哲学
 
-### D4 — Do not build a full nonlinear video editor
+**两扇门，同一所房子。** 人类与机器代理从不同门进入——一扇为判断与工艺设计的界面，一扇为自治与规模设计的 API——进入*相同*的房间：相同能力、相同状态、相同门禁与核算。任一扇门都不是另一扇的事后补丁。
 
-The constitution requires assembly to live in the domain (§3): a Cut — an ordered arrangement of shot outputs with elementary transitions and sound — so that "a film" is a real, versioned, exportable entity from V1. What is deferred is everything an editor's craft demands beyond that: multi-track timelines, frame-accurate trimming, effects, grading. That is a decade-deep product in itself, adjacent to Zivith's actual differentiation, and — through export (§4) — already served by dedicated tools that creators trust.
+**交付物是可恢复的项目，绝非文件。** 当代理通过 Zivith 创作时，交还的是人类可打开、判断并继续的活项目——反之亦然：人类暂停的工作，代理可恢复。这一交接循环是「操作系统」的实践含义：人类与机器作为共享持久状态的交替操作者。
 
-The proposed Entity State Timeline does not activate D4: its Tracks organize Character, Event, Shot, Camera, Prompt, and other semantic State on a Presentation-led creative axis with optional World Time overlays. It does not provide frame-accurate media layering, effects, grading, or NLE ownership of source media.
-**Revisit when:** creators routinely export cuts only to perform trivial adjustments elsewhere — evidence that a slightly deeper native assembly would retain the whole loop.
+**操作持久且幂等。** 任何调用都可重试、重放或恢复而不重复副作用。长时工作进度可观察，并在启动者断开后仍存活。这些是机器调用方的前提，也约束人类体验。
 
-### D5 — Delay enterprise-only capabilities until the core is mature
+**治理先于自治。** 身份、权限、预算与速率约束在边界处*先于*任何自治调用方准入而强制——始终按此顺序。通往会花钱系统的无治理可编程入口不是开放平台；那是事故。
 
-Organizational hierarchies, single sign-on, compliance certification, fine-grained administrative policy, on-premise deployment: all legitimate, all eventually necessary, all premature. Enterprise machinery hardens whatever structures exist when it arrives; installed too early, it fossilizes a domain model and permission system that still need to move. The constitution already reserves the load-bearing hooks — identity, membership, audit, and boundary governance (P7, §7) — so nothing built now blocks the enterprise later.
-**Revisit when:** the domain contract and governance boundary are stable, and real organizations (not hypothetical ones) are blocked from adopting.
+**机器发起工作的门槛更高，不是更低。** 代理流量到达时不附带人类判断，因此必须携带*更多*显式意图、预算与问责——绝不能更少。
 
-### D6 — Do not build real-time multi-user co-editing yet
+---
 
-The collaboration model that matters first is *asynchronous*: gated review, alternating human/agent operation, durable handoff (§7). Live cursors and concurrent editing are a different and costly discipline (conflict resolution, presence, latency) that presumes the asynchronous loop is already excellent. Sequencing them backwards produces a system that is simultaneously fragile and shallow.
-**Revisit when:** asynchronous collaboration is demonstrably strong and teams report the review loop itself — not generation — as their bottleneck.
+## 8. 演进原则
+
+**能力跃迁优先通过重配置吸收。** AI 跃迁时，有序响应为：(1) 在能力边界后换模型（P4）；(2) 重塑工作流定义（P5）；(3) 调整门禁策略（P6）；(4) 加深领域模型（§3）；仅在那时才 (5) 修订本宪章。若跃迁似乎在 1–4 未耗尽前就要求第 5 步，则诊断有误。
+
+**绞杀，不重写。** 子系统在稳定边界后增量替换，系统保持运行。提议整体重写，等于承认边界已失败——先修边界。
+
+**按可逆性分类决策。** 可逆决策应迅速、局部、无仪式地做出。不可逆决策——任何触及领域契约、已存创意数据或公开承诺者——需要引用本文档的 ADR。在可逆决策上耗仪式，与在不可逆决策上跳过仪式，同样是错误。
+
+**兼容债务要偿还，永不违约。** 每个版本化产物——领域 schema、工作流定义、导出数据——都带着有文档的路径向前迁移。若能力必须消亡，其数据必须有去处。默默破坏创作者存储的任何东西，是不可宽恕的失败模式。
+
+**宪章可修订；不漂移。** 本文档仅通过记录为 ADR 的显式、论证过的修订而变更。若实践偏离原则，二者之一为错——偏离本身必须被浮现并裁决，而非被常态化。
+
+---
+
+## 9. Zivith 永不成为什么
+
+这些是永久否定。每一条都是相邻产品曾屈从的真实引力；命名它们，是我们抵抗的方式。
+
+1. **提示词到视频的生成器。** 「打一句话、收一部片、丢弃、重试」的交互，正是 Zivith 存在以取代的黑箱。无论模型多好，把创作过程坍缩为单次不透明跳跃，是对愿景的放弃，不是达成。
+
+2. **聊天机器人。** 对话可辅助创作；它永远不会*成为*创作界面。聊天日志是创意宇宙最弱的可能表示——无结构、不可版本、不可共享、不可评审。
+
+   *边界澄清（ADR-0010）。* 本条禁止把聊天日志当作创意产物；并不禁止自然语言作为收集意图的手段。有界的入门向导，其输出为结构化草稿实体——可在结构化工作区中评审、版本化、编辑——不违反本条。无论叫什么，把对话本身当作工作而持久化的，则违反。
+
+3. **节点图工具。** 把原始计算管线暴露为主创作界面，是用引擎类工具的主场换掉语义层级——Zivith 的护城河——并以专家心智模型向每位初学者征税。
+
+4. **数据监狱。** 通过导出摩擦、专有囚禁或删除阻力实现留存，永久禁止（§4）。Zivith 靠复利价值留住用户，否则理应失去他们。
+
+5. **某厂商的前端。** 任何单一 AI provider——无论多主导——都不得成为领域、工作流引擎或已存创意记录的承重件。Zivith 无法在某 provider 消失后存活之日，就是它停止作为操作系统之日。
+
+6. **自治创作者。** Zivith 自动化执行，永不自动化作者身份。发布未经人类判断的创意作品的系统，无论其设置如何声称，都已倒置 P6。
+
+7. **模型铸造厂。** Zivith 不训练基础模型，也不自建生成模型——不为视频、不为图像、不为音频。模型是按能力寻址的外设（P4）；开始建造本为在替换中生存而设计的外设，等于混淆了自身所处层级。两条邻近诱惑以同一理由排除：**专业非线性剪辑**属于通过导出抵达的专用工具（§4，D4——Zivith 仅保留领域内 Cut），**3D 引擎开发**是扩展面，不是核心能力。若追求 3D、游戏或虚拟世界等长期方向，Zivith 的部分仍是世界管理；渲染是别人的事。
+
+---
+
+## 10. 长期北极星
+
+> **Zivith 不是 AI 生成工具。Zivith 是可被 AI 理解的 IP 创作系统。**
+
+**Zivith 立志成为 AI 原生叙事所默认的那一层**——正如制作默认文件系统：创意宇宙栖居之处，人类与机器协作者以受治理的平等身份相遇之处，时间流逝使工作更有价值而非过时之处。模型生成；Zivith 理解、组织、管理与转换——AI 创作时代人类与模型之间的桥梁。
+
+迈向该星的进度度量，按雄心升序：
+
+1. **世界理解** — AI 协作者能回答这个世界处于何种状态、谁与谁处于何种关系、哪些事件把它带到此处，而无需在每个提示中重述（P8，§3 世界层）。
+2. **复利宇宙** — 长寿项目明显优于全新项目，因为记忆复利（P8）且资产积累（§4）。
+3. **再生优越性** — 数年前描述的工作今日自动渲染得更好，因为意图活过了最初服务它的模型（P1，P4）。
+4. **交替操作者** — 实质真实工作由机器启动、人类完成，或相反，通过可恢复项目循环（§7）。
+5. **被默认的基底** — 第三方在 Zivith 的可编程核心与交换格式*之上*构建产品、代理与业务而无需请求许可，正如软件默认 OS。
+
+当战略选择不明时，优先选择迈向这些中当前可达的最高者。
+
+**功能检验。** 一项提案若对 *IP 理解*、*世界管理* 或 *创作者控制* 均无加强，多半不是核心。它仍可能被建造——作为防御性工作、债务偿还或扩展——但必须诚实说明，而非借用本节权威。
+
+---
+
+## 11. 延至 V1/V2 的架构决策
+
+延期是架构行为，不是遗漏。下列每一方向都被认定为**正确**——与本宪章一致且预期会发生——并被有意推迟，因为在前提条件存在前建造会制造过早复杂度、过早承诺，或两者兼有。对每一项：延期什么、为何延期安全、何时触发再议。
+
+### D1 — 暂不发布 `.ziv` 项目格式
+
+保持领域 schema 内部、版本化、有迁移纪律；不以规范形式发布任何内容。导出保证（§4）**不**延期——创作者总能带走一切。延期的是向第三方承诺格式稳定，因为已发布格式会冻结当下最需自由演进之物：领域模型本身。
+**再议时机：** 领域契约已在多次发布中经受不破坏迁移的考验，且外部方认真消费导出、足以需要规范时。
+
+### D2 — 暂不构建插件生态或市场
+
+可扩展性是北极星第四度量，严格位于稳定扩展点下游：数据定义的工作流引擎、已稳定的领域契约、边界处的治理。在这些稳定前发布插件 API 会成为兼容重负——每次内部改进都会弄坏某人的插件，本意加速平台的生态反而否决其演进。
+**再议时机：** 工作流即数据已在生产中足够久、其形状停止 churn，且 D1 已解决时。
+
+### D3 — 不以基于节点的工作流画布作为主用户体验——也不急于作为次要体验
+
+主界面问题在 §9 已永久解决。即便作为次要「高级视图」，图 UI 也延期：成本高、服务最小用户群，且它要可视化的引擎（P5）须先存在并稳定。声明式引擎无需任何画布即可正当；画布若终将来临，是引擎的渲染——永不反过来。
+**再议时机：** 工作流定义成为用户可见数据，且高级用户可证明已超出为其建造的配置界面时。
+
+### D4 — 不构建完整非线性视频编辑器
+
+宪章要求装配住在领域内（§3）：Cut——带基本转场与声音的镜头输出有序编排——使「一部影片」从 V1 起就是真实、版本化、可导出的实体。延期的是剪辑工艺在此之外的一切：多轨时间线、帧级修剪、特效、调色。那本身是十年深的产品，邻近而非等于 Zivith 的真正差异化，且——经由导出（§4）——已由创作者信任的专用工具服务。
+
+拟议的 Entity State Timeline 不激活 D4：其 Track 在以 Presentation 主导、可选 World Time 叠加的创意轴上组织 Character、Event、Shot、Camera、Prompt 及其他语义 State。它不提供帧级媒体叠层、特效、调色，或 NLE 对源媒体的所有权。
+**再议时机：** 创作者常规导出剪辑只为在别处做琐碎调整——证明稍深的原生装配会留住整个循环时。
+
+### D5 — 将企业专属能力延至核心成熟之后
+
+组织层级、单点登录、合规认证、细粒度管理策略、本地部署：皆正当、终将必要、皆过早。企业机制会硬化其到达时已有的结构；安装过早，会化石化仍需移动的领域模型与权限系统。宪章已预留承重钩子——身份、成员资格、审计与边界治理（P7，§7）——因此现在建造的任何东西都不阻挡日后企业能力。
+**再议时机：** 领域契约与治理边界已稳定，且真实组织（非假想组织）因缺失而被阻采用时。
+
+### D6 — 暂不构建实时多用户协同编辑
+
+首先要紧的协作模型是*异步*：门禁评审、交替人/代理操作、持久交接（§7）。实时光标与并发编辑是不同且昂贵的纪律（冲突解决、在场、延迟），预设异步循环已足够优秀。顺序颠倒会产生既脆弱又浅薄的系统。
+**再议时机：** 异步协作可证明强劲，且团队报告瓶颈是评审循环本身——而非生成——时。
 
 ---
 
 *Ratified 2026-07-22. Amendments require an ADR citing the principles they modify and the evidence that motivated the change.*
+
+## 修订记录
+
+| Version | Date | Amending ADR | Sections changed |
+|---------|------|--------------|------------------|
+| 1.0 | 2026-07-22 | — | Ratified |
+| 1.1 | 2026-07-31 | [ADR-0008](adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md) (Constitutional Amendment) | §1 Vision restated around the IP world; §3 gained the world-layer and capability-is-not-domain rules; §9.2 gained a boundary clarification and §9 gained item 7 (a model foundry); §10 restated the North Star and reordered its measures |
+
+修订仅追加。较晚修订通过显式 ADR 取代较早者；本表永不重写以隐藏被取代状态。

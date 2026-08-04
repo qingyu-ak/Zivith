@@ -8,7 +8,7 @@
 >
 > Reviewed: 2026-07-23（基于 waoowaoo main 分支 v0.4.1 时点的公开代码结构，未复制任何代码）
 >
-> Related: architecture-principles.md, Asset-Model.md, AI-Agent-Collaboration.md, Looser-Creative-Flow-RFC.md, Next-Tasks.md
+> Related: [architecture-principles.md](../architecture-principles.md), [Asset-Model.md](../../domain/Asset-Model.md), [AI-Agent-Collaboration.md](../../domain/AI-Agent-Collaboration.md), [Looser-Creative-Flow-RFC.md](../rfc/Looser-Creative-Flow-RFC.md), [Next-Tasks.md](../../planning/Next-Tasks.md)
 
 ---
 
@@ -223,7 +223,7 @@ waoowaoo **没有** RAG——它把角色介绍/道具描述整段塞 prompt。�
 
 ## 附：建议的落地顺序（对齐现有 backlog）
 
-> **2026-07-23 更新**：本节已由正式计划取代 — 见 [V0.4-Modification-Plan.md](../../V0.4-Modification-Plan.md)（W2→W1→W3→W4→W5→W6→W7）与 [ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md)（Story 有序分组已裁决）。以下为评审时点的原始建议，保留作历史记录。
+> **2026-07-23 更新**：本节已由正式计划取代 — 见 [V0.4-Modification-Plan.md](../../archive/V0.4-Modification-Plan.md)（W2→W1→W3→W4→W5→W6→W7）与 [ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md)（Story 有序分组已裁决）。以下为评审时点的原始建议，保留作历史记录。
 
 ```text
 1. A2 参考图注入管线（新任务，建议插队为最高优先级）

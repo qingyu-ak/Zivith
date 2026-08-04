@@ -4,36 +4,36 @@
 >
 > Version: 0.1
 >
-> Status: Draft — scope lock only; not an implementation spec
+> Status: 草案 — 仅范围锁定；非实现规格
 >
-> Decided: 2026-07-21 (product Q&A)
+> Decided: 2026-07-21（产品问答）
 >
-> Related: Design-Philosophy.md, AI-Agent-Collaboration.md, Implementation-Plan.md, Next-Tasks.md, AI-Creative-IDE-RFC.md, Agent-Effort-Control-RFC.md
+> Related: [Design-Philosophy.md](../../product/Design-Philosophy.md), [AI-Agent-Collaboration.md](../../domain/AI-Agent-Collaboration.md), [Implementation-Plan.md](../../planning/Implementation-Plan.md), [Next-Tasks.md](../../planning/Next-Tasks.md), [AI-Creative-IDE-RFC.md](AI-Creative-IDE-RFC.md), [Agent-Effort-Control-RFC.md](Agent-Effort-Control-RFC.md)
 
 ---
 
-## 1. Purpose
+## 1. 目的
 
-Record the product boundary for a **project-scoped Director Copilot** so later work does not drift into a global chatbot or a bypass around the creative hierarchy.
+记录**以项目为范围的 Director Copilot**的产品边界，使后续工作不漂移成全局聊天机器人，或绕过创作层级的旁路。
 
-Zivith remains a structured filmmaking OS (Story → Scene → Visual Prep → Shot → Prompt → Video). The Copilot is a **side assistant**, not the primary creation surface.
+Zivith 仍是结构化影视制作 OS（Story → Scene → Visual Prep → Shot → Prompt → Video）。Copilot 是**侧边助手**，不是主要创作面。
 
 ---
 
-## 2. Decisions (locked)
+## 2. 决策（已锁定）
 
-| Topic | Decision |
+| 主题 | 决策 |
 |-------|----------|
-| Placement | **Project page only**, bound to the current `projectId` |
-| Not | No studio-global chat; no standalone “chat home” |
-| v1 capability | **Q&A only** — explain project state, hierarchy, and where the workflow is stuck |
-| Later capability | **C then D**: propose/execute workflow commands with confirmation; then edit domain objects with confirmation |
-| Review gates | Copilot **must not** bypass mandatory gates (e.g. visual-assets, prompt review) |
-| Schedule | **Phase 3+**; does **not** block Phase 2.5 provider work |
+| 放置位置 | **仅项目页**，绑定当前 `projectId` |
+| 不是 | 无工作室全局聊天；无独立「聊天首页」 |
+| v1 能力 | **仅问答** — 解释项目状态、层级，以及工作流卡在何处 |
+| 后续能力 | **先 C 后 D**：提议/执行工作流命令并需确认；再编辑领域对象并需确认 |
+| 审核门禁 | Copilot **不得**绕过强制门禁（如 visual-assets、prompt review） |
+| 排期 | **Phase 3+**；**不**阻塞 Phase 2.5 提供商工作 |
 
 ---
 
-## 3. Positioning
+## 3. 定位
 
 ```text
 User ↔ Project sidebar Copilot
@@ -44,93 +44,93 @@ User ↔ Project sidebar Copilot
                     with explicit user confirmation
 ```
 
-- **Is:** project co-pilot / director’s aide  
-- **Is not:** end-to-end video chatbot; replacement for Shot Editor or WorkflowPanel  
-- Aligns with Design Philosophy: *Zivith is not an AI chatbot*
+- **是：** 项目副驾驶 / 导演助手  
+- **不是：** 端到端视频聊天机器人；Shot Editor 或 WorkflowPanel 的替代品  
+- 对齐设计哲学：*Zivith 不是 AI 聊天机器人*
 
 ---
 
-## 4. Capability ramp
+## 4. 能力递进
 
-### v1 — Answer only (Phase 3+ first slice)
+### v1 — 仅回答（Phase 3+ 首个切片）
 
-In scope:
+范围内：
 
-- Summarize current project structure (stories, scenes, shots, assets)
-- Explain active or latest workflow run status and awaiting review step
-- Point users to the right screen (e.g. “去工作流审核提示词”“打开某镜头编辑”)
-- Answer “what does this gate mean?” style questions
+- 汇总当前项目结构（stories、scenes、shots、assets）
+- 解释活动或最近工作流运行状态，以及等待审核的步骤
+- 指引用户到正确界面（如「去工作流审核提示词」「打开某镜头编辑」）
+- 回答「这个门禁是什么意思？」类问题
 
-Out of scope for v1:
+v1 范围外：
 
-- Starting or retrying workflows
-- Approving review gates
-- Mutating Story / Scene / Shot / Asset fields
-- Calling real video/image providers directly
+- 启动或重试工作流
+- 批准审核门禁
+- 突变 Story / Scene / Shot / Asset 字段
+- 直接调用真实视频/图像提供商
 
-### Later — Command then edit (after v1 proves useful)
+### 后续 — 先命令后编辑（在 v1 证明有用之后）
 
-1. **Commands (C):** with confirmation, start/retry a workflow stage, adjust automation levels, cancel a run — always through existing Orchestrator APIs; never skip mandatory reviews  
-2. **Edits (D):** with confirmation, patch domain objects via existing CRUD; Copilot drafts the change, human confirms
+1. **命令（C）：** 经确认后，启动/重试工作流阶段、调整自动化级别、取消运行 — 始终通过既有 Orchestrator API；永不跳过强制审核  
+2. **编辑（D）：** 经确认后，经既有 CRUD 修补领域对象；Copilot 起草变更，人类确认
 
-Suggested next-step *advice* inside answers is allowed in v1 (text only). Actually performing those steps is C/D.
+v1 允许在回答中给出建议的下一步*建议*（仅文本）。真正执行这些步骤属于 C/D。
 
 ---
 
-## 5. Relationship to existing agents
+## 5. 与既有 agent 的关系
 
-| Component | Role vs Copilot |
+| 组件 | 相对 Copilot 的角色 |
 |-----------|-----------------|
-| Orchestrator | Source of truth for workflow; Copilot may later *request* plans, not replace the DAG |
-| Story / Scene / Shot / Prompt / Asset Agents | Stage specialists; Copilot does not absorb their jobs |
-| WorkflowPanel | Human review UI remains authoritative for gates |
-| Shot Editor | Authoritative for field-level creative edits |
+| Orchestrator | 工作流真相源；Copilot 后续可*请求*计划，不替代 DAG |
+| Story / Scene / Shot / Prompt / Asset Agents | 阶段专家；Copilot 不吞并其职责 |
+| WorkflowPanel | 人类审核 UI 对门禁仍具权威 |
+| Shot Editor | 字段级创作编辑的权威面 |
 
-Copilot may use the same LLM provider adapter as other text agents (e.g. DeepSeek after Phase 2.5), but with a **read-mostly** tool surface in v1.
-
----
-
-## 6. UI sketch (non-binding)
-
-- Current-page first slice: collapsible **right sidebar** on the project page
-- Future AI Creative IDE: the same Project-scoped capability may appear as the lower **Director Console**; placement changes, authority and scope do not
-- Thread scoped to `projectId` (optional: clear thread / new thread)
-- Show “只读问答” badge in v1
-- Deep links into workflow panel or shot routes when relevant
-- Fast / Balanced / Deep, if shown, follows Agent Effort policy and cannot expand Copilot permissions
-
-Exact layout, persistence, and streaming UX are governed by [AI Creative IDE RFC](AI-Creative-IDE-RFC.md) before implementation.
+Copilot 可使用与其他文本 agent 相同的 LLM 提供商适配器（例如 Phase 2.5 之后的 DeepSeek），但 v1 的工具面为**以读为主**。
 
 ---
 
-## 7. Explicit non-goals
+## 6. UI 草图（非约束）
 
-- Global chat across all projects as the default home  
-- Auto-approving mandatory review gates from chat  
-- Generating final videos solely from a free-form conversation  
-- Shipping Copilot before or instead of Phase 2.5 providers  
+- 当前页首个切片：项目页可折叠的**右侧栏**
+- 未来 AI Creative IDE：同一 Project 范围能力可出现为下方的 **Director Console**；放置位置可变，权威与范围不变
+- 线程以 `projectId` 为范围（可选：清空线程 / 新线程）
+- v1 显示「只读问答」徽章
+- 相关时深链到工作流面板或镜头路由
+- 若展示 Fast / Balanced / Deep，须遵循 Agent Effort 策略，且不能扩大 Copilot 权限
 
----
-
-## 8. When to expand this RFC
-
-Before implementation, expand with Q&A on:
-
-- Tool/function list and permissions  
-- Context packing (what Project state is injected)  
-- Confirmation UX for C/D  
-- Audit logging of Copilot-initiated actions  
-- Retention of chat transcripts  
-
-Until then, treat this document as a **scope lock**, not a build checklist.
+确切布局、持久化与流式 UX 在实现前由 [AI Creative IDE RFC](AI-Creative-IDE-RFC.md) 管辖。
 
 ---
 
-## 9. Traceability
+## 7. 明确非目标
 
-| Source | Choice |
+- 以跨所有项目的全局聊天作为默认首页  
+- 从聊天自动批准强制审核门禁  
+- 仅靠自由对话生成最终视频  
+- 在 Phase 2.5 提供商之前或取而代之地交付 Copilot  
+
+---
+
+## 8. 何时扩展本 RFC
+
+实现前，用问答扩展以下内容：
+
+- 工具/函数列表与权限  
+- 上下文打包（注入哪些 Project 状态）  
+- C/D 的确认 UX  
+- Copilot 发起动作的审计日志  
+- 聊天记录保留策略  
+
+在此之前，将本文档视为**范围锁定**，而非构建清单。
+
+---
+
+## 9. 可追溯性
+
+| 来源 | 选择 |
 |--------|--------|
-| Q1 Placement | A — project page only |
-| Q2 Capability | A first; later C then D |
-| Q3 Gates | A — cannot bypass mandatory gates |
-| Q4 Schedule | A — Phase 3+; Phase 2.5 unblocked |
+| Q1 放置位置 | A — 仅项目页 |
+| Q2 能力 | 先 A；后续先 C 后 D |
+| Q3 门禁 | A — 不能绕过强制门禁 |
+| Q4 排期 | A — Phase 3+；Phase 2.5 不被阻塞 |

@@ -1,22 +1,22 @@
-# Zivith Design Philosophy (Historical RFC)
+# Zivith 设计哲学（历史 RFC）
 
 > Version: v0.1
 >
-> Status: **Historical** — superseded by [`../Design-Philosophy.md`](../Design-Philosophy.md)
+> Status: **历史** — 已被 [`../Design-Philosophy.md`](../product/Design-Philosophy.md) 取代
 >
 > Last Updated: 2026-07
 >
 > Archived: 2026-07-21
 >
-> Do not use this file as an implementation source of truth.
+> 请勿将本文件作为实现的真相来源。
 
 ---
 
-# Chapter 1 · The Creative Hierarchy
+# 第 1 章 · 创作层级
 
-## Why Zivith?
+## 为什么是 Zivith？
 
-Most AI video tools are built around a single interaction.
+多数 AI 视频工具围绕单一交互构建。
 
 ```
 Prompt
@@ -24,25 +24,25 @@ Prompt
 Video
 ```
 
-When the generated result is unsatisfactory, users usually have to regenerate everything from scratch.
+当生成结果不满意时，用户通常不得不从头重新生成一切。
 
-This workflow treats video generation as a one-time process rather than a creative process.
+这种工作流把视频生成当作一次性过程，而非创作过程。
 
-Zivith takes a different approach.
+Zivith 采取不同路径。
 
-Instead of generating videos directly, Zivith models the entire filmmaking workflow.
+Zivith 不直接生成视频，而是对整个影视制作工作流建模。
 
-Every creative artifact becomes reusable, editable and reviewable.
+每一个创作产物都变得可复用、可编辑、可审核。
 
-The goal of Zivith is not to generate a video.
+Zivith 的目标不是生成一条视频。
 
-The goal is to build a complete AI-native film production workflow.
+目标是构建完整的 AI 原生影视制作工作流。
 
 ---
 
-# Creative Hierarchy
+# 创作层级
 
-Every project inside Zivith follows the same creative hierarchy.
+Zivith 内的每一个项目都遵循相同的创作层级。
 
 ```
 Project
@@ -56,26 +56,26 @@ Shot
 Video
 ```
 
-Each layer represents a different level of abstraction.
+每一层代表不同的抽象级别。
 
 ---
 
 ## Project
 
-A Project is **not** a video.
+Project **不是**一条视频。
 
-A Project represents an entire creative universe.
+Project 代表整个创作宇宙。
 
-It contains everything required to consistently create content within the same IP.
+它包含在同一 IP 内持续一致地创作内容所需的一切。
 
-Examples:
+示例：
 
 - Journey to the West
 - Cyberpunk City
 - My Original Novel
 - Brand Commercial Campaign
 
-Project owns:
+Project 拥有：
 
 - Knowledge Base
 - Characters
@@ -84,17 +84,17 @@ Project owns:
 - Stories
 - Generated Videos
 
-Projects are designed to evolve over time rather than being discarded after one export.
+Project 被设计为随时间演化，而非在一次导出后丢弃。
 
 ---
 
 ## Story
 
-A Story represents one chapter or one complete narrative.
+Story 代表一章或一个完整叙事。
 
-A Project may contain multiple stories.
+一个 Project 可包含多个故事。
 
-Examples:
+示例：
 
 Journey to the West
 
@@ -102,17 +102,17 @@ Journey to the West
 - Chapter 2
 - Chapter 3
 
-A personal novel may also contain dozens of chapters.
+一部个人小说也可能包含数十章。
 
-Each Story shares the same Project-level knowledge and assets.
+每一个 Story 共享同一 Project 级知识与资产。
 
 ---
 
 ## Scene
 
-A Scene represents one continuous location or narrative segment.
+Scene 代表一个连续地点或叙事片段。
 
-Examples:
+示例：
 
 Chapter 1
 
@@ -128,19 +128,19 @@ Scene 3
 
 Dragon Palace
 
-Characters, environments, lighting and atmosphere usually remain stable inside one Scene.
+角色、环境、光照与氛围通常在一个 Scene 内保持稳定。
 
-A Scene exists to organize multiple Shots.
+Scene 存在的目的是组织多个 Shot。
 
 ---
 
 ## Shot
 
-Shot is the smallest creative unit inside Zivith.
+Shot 是 Zivith 内最小的创作单元。
 
-Everything eventually becomes a Shot.
+最终一切都会落到 Shot。
 
-A Shot contains:
+一个 Shot 包含：
 
 - Camera
 - Composition
@@ -150,47 +150,47 @@ A Shot contains:
 - Prompt
 - Video Result
 
-Shots can be regenerated independently.
+Shot 可独立再生。
 
-They can also be reordered, replaced or refined without affecting the rest of the Story.
+它们也可重排、替换或精炼，而不影响 Story 的其余部分。
 
-Shot is the core object of the entire system.
+Shot 是整个系统的核心对象。
 
 ---
 
 ## Video
 
-A Video is an output.
+Video 是产出。
 
-It is **not** the source of truth.
+它**不是**真相来源。
 
-Videos can always be regenerated from their corresponding Shot.
+Video 始终可从其对应 Shot 再生。
 
-This makes future model upgrades possible without losing creative assets.
-
----
-
-# Design Principles
-
-## Story First
-
-Every creative work begins with a story.
+这使得未来模型升级成为可能，而不会丢失创作资产。
 
 ---
 
-## Scene Organizes Narrative
+# 设计原则
 
-Scenes organize the structure of storytelling.
+## 故事优先
 
----
-
-## Shot Is the Core
-
-Every AI operation eventually targets one or more Shots.
+每一件创作工作都从故事开始。
 
 ---
 
-## Assets Are Persistent
+## 场景组织叙事
+
+Scene 组织叙事结构。
+
+---
+
+## 镜头是核心
+
+每一次 AI 操作最终都指向一个或多个 Shot。
+
+---
+
+## 资产持久
 
 Characters.
 
@@ -202,28 +202,28 @@ Reference Images.
 
 Styles.
 
-These belong to the Project rather than individual Stories.
+这些属于 Project，而非个别 Story。
 
 ---
 
-## Outputs Are Disposable
+## 产出可弃
 
-Videos can always be regenerated.
+Video 始终可以再生。
 
-Creative assets should never be lost.
+创作资产绝不应当丢失。
 
-Knowledge is permanent.
+知识是永久的。
 
-Shots are editable.
+Shot 可编辑。
 
-Videos are reproducible.
+Video 可复现。
 
 ---
 
-# Vision
+# 愿景
 
-Zivith is not an AI video generator.
+Zivith 不是 AI 视频生成器。
 
-Zivith is an AI-native film production studio.
+Zivith 是 AI 原生影视制作工作室。
 
-It manages the entire creative process rather than only generating the final result.
+它管理整个创作过程，而不仅仅生成最终结果。

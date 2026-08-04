@@ -1,95 +1,95 @@
 # ADR-0007: Preserve current domain state alongside immutable creative history
 
-- **Status:** Accepted
+- **Status:** 已接受
 - **Date:** 2026-07-29
-- **Accepted:** 2026-07-30 (Track H scheduled on `feat/track-h-entity-history`)
-- **Deciders:** Project owner / architecture maintainer
+- **Accepted:** 2026-07-30（Track H 排期于 `feat/track-h-entity-history`）
+- **Deciders:** 项目所有者 / 架构维护者
 - **Class:** Standard
-- **Reversibility:** Costly
+- **Reversibility:** 代价高
 
-## Context
+## 背景
 
-Zivith stores current creative state in dedicated Project, Story, Scene, Shot, Asset, PromptVersion, Output, and related tables. Selected actions also write `AuditLog`; workflow and generation execution have separate persistence. This supports current reads, but it does not preserve a complete immutable State history or provide a stable foundation for visualizing Entity State across world chronology and work presentation order.
+Zivith 将当前创意状态存储在专用的 Project、Story、Scene、Shot、Asset、PromptVersion、Output 及相关表中。选定动作还会写入 `AuditLog`；工作流与生成执行另有持久化。这支持当前读取，但并未保存完整的不可变 State 历史，也无法为跨世界编年与作品呈现顺序可视化 Entity State 提供稳定基础。
 
-Product design requires:
+产品设计要求：
 
-- persistent Entity identity;
-- current State plus immutable State history;
-- one creative Timeline led by Presentation Time, with World Time as a variable following dimension;
-- semantic Tracks such as Character, Event, Shot, Camera, Prompt, and Model.
+- 持久的 Entity 身份；
+- 当前 State 加上不可变 State 历史；
+- 一条以 Presentation Time 为主导的创意 Timeline，World Time 作为跟随维度的变量；
+- 诸如 Character、Event、Shot、Camera、Prompt 与 Model 等语义 Track。
 
-This changes provenance and versioning semantics and requires stored-data migration, so an ADR is mandatory. The detailed proposal is [Entity + State + Timeline + Track](../entity-state-timeline-track.md).
+这会改变溯源与版本语义，并需要已存数据迁移，因此 ADR 为强制。详细提案见 [Entity + State + Timeline + Track](../entity-state-timeline-track.md)。
 
-## Principles at Stake
+## 攸关原则
 
-- **Serves P1:** generated results can identify the committed Entity revisions that produced them.
-- **Serves P2:** dedicated domain entities remain authoritative instead of moving to a generic JSON entity model.
-- **Serves P3:** State history and Timeline behavior are programmable operations, not UI-only features.
-- **Serves P7:** generation provenance references exact Shot, Prompt, and visual revisions.
-- **Serves P8:** world changes and human decisions become durable Project memory.
-- **Strains simplicity and storage cost:** participating writes gain immutable history and projection work. Staged rollout and derived Tracks contain the cost.
-- **Strains D4 if misunderstood:** a semantic creative Timeline could drift into a nonlinear video editor. Track kinds and explicit non-goals preserve the boundary.
+- **Serves P1：** 生成结果可标识产生它们的已提交 Entity revision。
+- **Serves P2：** 专用领域实体保持权威，而不是迁到通用 JSON 实体模型。
+- **Serves P3：** State 历史与 Timeline 行为是可编程操作，而非仅 UI 功能。
+- **Serves P7：** 生成溯源引用确切的 Shot、Prompt 与视觉 revision。
+- **Serves P8：** 世界变更与人类决策成为可持久的 Project 记忆。
+- **Strains 简单性与存储成本：** 参与写入会增加不可变历史与投影工作。分阶段 rollout 与派生 Track 控制成本。
+- **若被误解则 Strains D4：** 语义创意 Timeline 可能滑向非线性视频编辑器。Track 种类与明确的非目标守住边界。
 
-## Decision
+## 决策
 
-We keep dedicated domain tables as the authority for current State and add append-only Entity revisions as the authority for State history. Presentation Time is the Timeline's stable primary axis. World Time follows it by default and uses optional Project-defined bindings for relative, approximate, ranged, or parallel-world time; Zivith does not standardize fictional calendar values. Tracks are semantic lanes within that Timeline.
+我们保留专用领域表作为当前 State 的权威，并增加仅追加的 Entity revision 作为 State 历史的权威。Presentation Time 是 Timeline 的稳定主轴。World Time 默认跟随它，并对相对、近似、区间或平行世界时间使用可选的 Project 定义绑定；Zivith 不标准化虚构历法值。Track 是该 Timeline 内的语义泳道。
 
-Committed system facts use the distinct name `ChangeEvent`. Alternative creative versions, if later introduced, use `CreativeBranch`, not Track. This is not Event Sourcing and not a nonlinear video editor.
+已提交的系统事实使用独立名称 `ChangeEvent`。若日后引入备选创意版本，使用 `CreativeBranch`，而非 Track。这不是 Event Sourcing，也不是非线性视频编辑器。
 
-## Alternatives Considered
+## 已考虑的备选方案
 
-### Full Event Sourcing
+### 完整 Event Sourcing
 
-Events become the only source of truth. This offers replay, but requires rewriting current persistence and projections before users receive Timeline value. It loses because the migration and operational burden are disproportionate.
+事件成为唯一真相源。这提供回放能力，但要求在用户获得 Timeline 价值之前重写当前持久化与投影。它落败，因为迁移与运维负担不成比例。
 
-### Snapshot-only current state
+### 仅快照的当前状态
 
-Keep only current rows and approved snapshots. This is simple, but cannot display Character evolution, historical world state, exact generation provenance, or world-time deviations from work order. It loses because those are primary requirements.
+只保留当前行与已批准快照。这很简单，但无法展示 Character 演化、历史世界状态、精确生成溯源，或相对作品顺序的世界时间偏离。它落败，因为这些是主要需求。
 
-### Treat audit events as Timeline
+### 把审计事件当作 Timeline
 
-Order `AuditLog` or ChangeEvents and display them directly. This records database change chronology, not world chronology or presentation order. It cannot express flashback, repeated presentation, or planned future state. It loses because it conflates three different times.
+对 `AuditLog` 或 ChangeEvent 排序并直接展示。这记录的是数据库变更编年，不是世界编年或呈现顺序。它无法表达闪回、重复呈现或计划中的未来状态。它落败，因为混淆了三种不同时间。
 
-### Use Track for creative branches
+### 用 Track 表示创意分支
 
-Model Track as a Git-like branch. Branching is useful, but product Track means Character/Scene/Event/Shot/Camera/Prompt lanes. It loses because shared terminology would make UI, API, and domain contracts ambiguous. The distinct term is `CreativeBranch`.
+把 Track 建模成类 Git 的分支。分支有用，但产品中的 Track 指 Character/Scene/Event/Shot/Camera/Prompt 泳道。它落败，因为共用术语会使 UI、API 与领域契约含糊。独立术语是 `CreativeBranch`。
 
-### Generic Entity table
+### 通用 Entity 表
 
-Move every domain object into a polymorphic JSON table. This simplifies generic history mechanics but weakens domain constraints, ownership, queryability, and migration clarity. It contradicts P2 and loses.
+把每个领域对象搬进多态 JSON 表。这简化通用历史机制，但削弱领域约束、所有权、可查询性与迁移清晰度。它与 P2 矛盾并落败。
 
-## Trade-off Record
+## 权衡记录
 
-| We gained | We gave up | Horizon |
+| 我们得到的 | 我们放弃的 | 再审视视野 |
 |-----------|------------|---------|
-| Immutable Entity evolution | Lower write-path complexity | Revisit if history writes dominate latency |
-| Variable World Time over a stable Presentation axis | Globally sortable standardized world chronology | Revisit only when real projects prove a shared calendar contract is necessary |
-| Stable Track semantics | Reusing one term for branches and lanes | Permanent unless product vocabulary changes by superseding ADR |
-| Incremental migration preserving current APIs | Immediate universal Timeline editing | Promote each phase only after consistency evidence |
-| Derived Camera/Style/Model Tracks | Fully independent editing of every lane | Revisit when a real use case cannot map to existing Entity State |
+| 不可变的 Entity 演化 | 更低的写入路径复杂度 | 若历史写入主导延迟则再议 |
+| 稳定 Presentation 轴上的可变 World Time | 可全局排序的标准化世界编年 | 仅当真实项目证明需要共享历法契约时再议 |
+| 稳定的 Track 语义 | 用同一术语兼指分支与泳道 | 永久，除非产品词汇被 superseding ADR 改变 |
+| 保留当前 API 的增量迁移 | 立刻普及的 Timeline 编辑 | 仅在一致性证据出现后推进各阶段 |
+| 派生的 Camera/Style/Model Track | 每条泳道完全独立编辑 | 当真实用例无法映射到既有 Entity State 时再议 |
 
-## Consequences
+## 后果
 
-- Every participating Entity command atomically updates current State, appends EntityRevision, and records ChangeEvent.
-- TimelineItem position is separate from Entity State; moving an item cannot silently mutate Entity content.
-- Presentation Time is the required Story/content order, not Workflow execution time or database time.
-- World Time defaults to following Presentation Time and cannot assume UTC, one calendar, or one scalar dimension.
-- The core standardizes only a binding envelope; Project-defined time values remain opaque.
-- Track becomes reserved for semantic Timeline lanes.
-- CreativeBranch is optional and scheduled after Entity + State and Timeline + Track.
-- Existing approval snapshots remain frozen and cannot be rewritten by later Timeline or upstream changes.
-- `AuditLog` remains during migration and is retired only after equivalence is verified.
-- Runtime table dual-write does not begin until Track H H2+; H1 freezes schemas only. CreativeBranch merge APIs stay deferred (H10).
+- 每个参与的 Entity 命令原子地更新当前 State、追加 EntityRevision，并记录 ChangeEvent。
+- TimelineItem 位置与 Entity State 分离；移动条目不能静默突变 Entity 内容。
+- Presentation Time 是必需的 Story/内容顺序，不是 Workflow 执行时间或数据库时间。
+- World Time 默认跟随 Presentation Time，且不能假定 UTC、单一历法或单一标量维度。
+- 核心仅标准化绑定信封；Project 定义的时间值保持不透明。
+- Track 保留给语义 Timeline 泳道。
+- CreativeBranch 可选，排在 Entity + State 与 Timeline + Track 之后。
+- 既有审批快照保持冻结，不能被后续 Timeline 或上游变更改写。
+- 迁移期间保留 `AuditLog`，仅在验证等价后才退役。
+- 运行时表双写在 Track H H2+ 之前不开始；H1 仅冻结模式。CreativeBranch 合并 API 继续延期（H10）。
 
-## Compliance
+## 合规
 
-- APIs and schemas must not use `TimelineEvent` for audit/change facts; use `ChangeEvent`.
-- APIs and schemas must not use `CreativeTrack` for a branch; use `CreativeBranch`.
-- Every first-release TimelineItem has Presentation Time.
-- Missing WorldTime bindings mean `follow`; explicit bindings identify a dimension and relation/mode without requiring standardized values.
-- EntityRevision and ChangeEvent are append-only at the database permission boundary.
-- Concurrent stale `expected_revision` writes return conflict.
-- Generation completion traces to input Entity revision IDs.
-- Derived Tracks cannot become a second source of domain truth.
-- Timeline and Agent UI cannot bypass existing review or budget authority.
-- The acceptance and rollback checks in the detailed architecture document are release gates.
+- API 与模式不得对审计/变更事实使用 `TimelineEvent`；使用 `ChangeEvent`。
+- API 与模式不得对分支使用 `CreativeTrack`；使用 `CreativeBranch`。
+- 每个首发 TimelineItem 都有 Presentation Time。
+- 缺失 WorldTime 绑定意味着 `follow`；显式绑定标识维度与关系/模式，但不要求标准化值。
+- EntityRevision 与 ChangeEvent 在数据库权限边界上仅追加。
+- 并发的过期 `expected_revision` 写入返回冲突。
+- 生成完成追溯到输入 Entity revision ID。
+- 派生 Track 不能成为领域真相的第二来源。
+- Timeline 与 Agent UI 不能绕过既有评审或预算权威。
+- 详细架构文档中的验收与回滚检查是发布门禁。

@@ -1,27 +1,27 @@
 # ADR-0004: Commit environment templates only; keep secrets external
 
-- **Status:** Accepted
+- **Status:** 已接受
 - **Date:** 2026-07-20
-- **Deciders:** Phase 0 team
+- **Deciders:** Phase 0 团队
 - **Class:** Standard
-- **Reversibility:** Reversible
+- **Reversibility:** 可逆
 
-> Migrated from the root `ARCHITECTURE-DECISIONS.md` (formerly ADR-004) on 2026-07-22.
-> This record predates the Architecture Constitution; the *Principles at Stake*
-> analysis has not been retrofitted.
+> 于 2026-07-22 自根目录 `ARCHITECTURE-DECISIONS.md`（原 ADR-004）迁入。
+> 本记录早于架构宪章；*Principles at Stake（攸关原则）*
+> 分析尚未回溯补全。
 
-## Context
+## 背景
 
-Development, test, and production need different endpoints and credentials. Real secrets
-must not enter source control.
+开发、测试与生产需要不同的端点与凭证。真实密钥
+不得进入源码控制。
 
-## Decision
+## 决策
 
-Commit example templates only. Ignore all populated `.env` variants. Development and test
-values are explicitly disposable placeholders; production values reference an external
-secret manager.
+仅提交示例模板。忽略所有已填充的 `.env` 变体。开发与测试
+值为明确可丢弃的占位符；生产值引用外部
+密钥管理器。
 
-## Consequences
+## 后果
 
-Deployments must inject secrets at runtime. Applications must fail fast when required
-production values are unresolved and must never expose server-only values to the frontend.
+部署必须在运行时注入密钥。应用在所需
+生产值未解析时必须快速失败，且绝不可将仅服务端可用的值暴露给前端。

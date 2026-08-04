@@ -1,55 +1,55 @@
 # ADR-0006: Story segments are ordered Scene groupings inside a Story
 
-- **Status:** Accepted
+- **Status:** 已接受
 - **Date:** 2026-07-23
-- **Deciders:** Project owner (AK)
+- **Deciders:** 项目所有者（AK）
 - **Class:** Standard
-- **Reversibility:** Costly (adds a stored domain entity; removal would require data migration)
+- **Reversibility:** 代价高（新增已存领域实体；移除将需要数据迁移）
 
-## Context
+## 背景
 
-Creators experience today's Story stage as one monolithic block: the Story Agent emits a single story artifact, the story review gate approves it wholesale, and downstream Scene decomposition happens in one pass. Users have explicitly asked for chapter/act-wise drafting and review (「像小说一章一章、剧本一段一段那样推进」).
+创作者今天体验到的 Story 阶段是一整块：Story Agent 产出单一故事产物，故事评审门禁整份批准，下游 Scene 分解也一次性完成。用户已明确要求按章/幕起草与评审（「像小说一章一章、剧本一段一段那样推进」）。
 
-[Looser-Creative-Flow-RFC](../rfc/Looser-Creative-Flow-RFC.md) Slice C deferred this exact question to a domain ADR: is an act/chapter a new hierarchy node, a Story field structure, or Scene grouping metadata?
+[Looser-Creative-Flow-RFC](../rfc/Looser-Creative-Flow-RFC.md) Slice C 把这个问题精确推迟到领域 ADR：幕/章是新的层级节点、Story 的字段结构，还是 Scene 分组元数据？
 
-New evidence arrived via the [waoowaoo architecture review](../review/Zivith-Architecture-Review-Based-on-waoowaoo.md): that project's Episode→Clip segmentation demonstrates that segmentation units earn their keep by **driving production in slices** (draft → storyboard → voice per segment), not by modeling literary structure. It also shows the cost of making segments top-level: waoowaoo has no Story entity at all, so Episode had to absorb story responsibilities.
+新证据来自 [waoowaoo 架构评审](../review/Zivith-Architecture-Review-Based-on-waoowaoo.md)：该项目的 Episode→Clip 切分表明，切分单元之所以值得存在，是因为它们能**按片驱动制作**（每段：draft → storyboard → voice），而不是为了建模文学结构。它也显示了把 segment 做成顶层的代价：waoowaoo 根本没有 Story 实体，于是 Episode 不得不吸收故事职责。
 
-Forces in tension: Constitution §3 (deepen, don't widen — no new top-level concepts), RFC Slice C rule (no fake UI segments without a persisted entity), P2 (domain is a stored contract — users' data lives against it), and Simple by Default (ungrouped small stories must stay valid).
+张力中的力量：宪章 §3（加深，勿加宽——不新增顶层概念）、RFC Slice C 规则（没有持久化实体就不要做假 UI segment）、P2（领域是已存契约——用户数据依其存储），以及 Simple by Default（未分组的小故事必须仍然有效）。
 
-## Principles at Stake
+## 攸关原则
 
-- **Serves:** §3 deepen-don't-widen — segmentation deepens Story instead of adding a Project-level Chapter concept.
-- **Serves:** P5/P6 — segments give partial recomputation and review a finer, stable unit to address.
-- **Serves:** P1 — per-segment draft text is stored intent; downstream artifacts stay regenerable from it.
-- **Strains:** Simple by Default — one more entity in the mental model. Acceptable because segments are optional: a Story with zero segments behaves exactly as today.
+- **Serves:** §3 加深而非加宽 —— 切分加深 Story，而不是增加 Project 级的 Chapter 概念。
+- **Serves:** P5/P6 —— segment 为局部重算与评审提供更细、稳定的寻址单元。
+- **Serves:** P1 —— 每段草稿文本是已存意图；下游产物可据此再生成。
+- **Strains:** Simple by Default —— 心智模型多了一个实体。可接受，因为 segment 可选：零 segment 的 Story 行为与今天完全一致。
 
-## Decision
+## 决策
 
-We introduce **StorySegment**: a child entity of Story that is an **ordered grouping of Scenes**. A segment carries its own identity, order, title, synopsis/draft text, and approval state. A Scene remains owned by its Story (`story_id` unchanged) and gains an **optional** `segment_id` grouping reference. StorySegment is not a Project-level entity, not a document/file model, and does not change the Project → Story → Scene → Shot spine.
+我们引入 **StorySegment**：Story 的子实体，是 **Scene 的有序分组**。segment 自带身份、顺序、标题、梗概/草稿文本与审批状态。Scene 仍由其 Story 拥有（`story_id` 不变），并获得一个**可选**的 `segment_id` 分组引用。StorySegment 不是 Project 级实体，不是文档/文件模型，也不改变 Project → Story → Scene → Shot 主脊。
 
-## Alternatives Considered
+## 已考虑的备选方案
 
-1. **Top-level Chapter node between Story and Scene** (Scene re-parents to Chapter). Offers the cleanest-looking hierarchy. Rejected: it widens the domain contract (§3), forces an irreversible re-parenting migration of every stored Scene, and the waoowaoo evidence shows top-level segments only make sense when no Story entity exists.
-2. **JSON acts/beats structure inside the Story row.** Cheapest to ship. Rejected: segments would have no stable identity, so review gates, scoped recompute, and provenance (P7) could not reference them — violating "identity is permanent, content is versioned."
-3. **Scene metadata label** (a `segment: string` tag on Scene). Rejected: labels cannot carry per-segment draft text or approval state, which is precisely what chapter-wise drafting/review requires; it would be the "fake UI segments" the RFC forbids.
+1. **在 Story 与 Scene 之间增加顶层 Chapter 节点**（Scene 改挂到 Chapter）。层级看起来最干净。否决：它加宽领域契约（§3），迫使对每个已存 Scene 做不可逆的再挂载迁移，且 waoowaoo 证据表明顶层 segment 仅在不存在 Story 实体时才说得通。
+2. **在 Story 行内用 JSON 表示 acts/beats 结构。** 上线成本最低。否决：segment 没有稳定身份，评审门禁、作用域重算与溯源（P7）无法引用它们——违反「身份永久，内容可版本化」。
+3. **Scene 元数据标签**（Scene 上的 `segment: string` 标签）。否决：标签无法承载每段草稿文本或审批状态，而这正是按章起草/评审所需；这将是 RFC 禁止的「假 UI segment」。
 
-## Trade-off Record
+## 权衡记录
 
-| We gained | We gave up | Horizon |
+| 我们得到的 | 我们放弃的 | 再审视视野 |
 |-----------|------------|---------|
-| Finer generation/review units with stable identity; additive (non-breaking) migration | Story-stage simplicity: one more entity, one more ordering to maintain | Re-examine if segments start needing their own assets or inheritance overrides — that would signal they want to be a true hierarchy node (new ADR) |
-| Ungrouped stories stay valid (optionality preserved) | A single canonical reading order now has two sources (scene order + segment order) that must be kept consistent | Re-examine when `.ziv` export (D1) is specified — segment serialization becomes a public promise then |
+| 具有稳定身份的更细生成/评审单元；可加性（非破坏性）迁移 | Story 阶段的简单性：多一个实体、多一层需维护的排序 | 若 segment 开始需要自有资产或继承覆盖，应重新审视——那将表明它们想成为真正的层级节点（新 ADR） |
+| 未分组故事仍然有效（保留可选性） | 单一规范阅读顺序现在有两个来源（scene order + segment order），必须保持一致 | 当指定 `.ziv` 导出（D1）时重新审视——届时 segment 序列化将成为公开承诺 |
 
-## Consequences
+## 后果
 
-- `packages/domain` gains StorySegment types/schemas; `packages/database` gains an **additive** migration (`story_segments` table + nullable `scenes.segment_id`). No existing rows change meaning.
-- Story Agent may emit segmented drafts; the story review gate may iterate per segment. This is gate *policy* within the existing story gate, not a new mandatory gate class (no further ADR needed for that).
-- Scene ordering within a segment must remain consistent with story-level scene order; domain tests owed.
-- Docs owed: Core-Domain-Model.md (hierarchy note), Looser-Creative-Flow-RFC Slice C (unblocked), Next-Tasks Track E3, V0.4-Modification-Plan W3.
-- Negative: two-level ordering invites off-by-one/reorder bugs; segment deletion must detach (not delete) its Scenes.
+- `packages/domain` 获得 StorySegment 类型/模式；`packages/database` 获得**可加性**迁移（`story_segments` 表 + 可空的 `scenes.segment_id`）。既有行的含义不变。
+- Story Agent 可产出分段草稿；故事评审门禁可按 segment 迭代。这是既有故事门禁内的门禁*策略*，不是新的强制门禁类别（为此无需再写 ADR）。
+- segment 内的 Scene 排序必须与故事级 scene order 保持一致；欠领域测试。
+- 欠文档：Core-Domain-Model.md（层级说明）、Looser-Creative-Flow-RFC Slice C（已解阻）、Next-Tasks Track E3、V0.4-Modification-Plan W3。
+- 负面：两级排序容易引入 off-by-one/重排 bug；删除 segment 必须分离（而非删除）其 Scene。
 
-## Compliance
+## 合规
 
-- PR review: no UI may render chapter/segment affordances that are not backed by persisted StorySegment rows (RFC Slice C rule).
-- Segment operations exist as API/Orchestrator operations first (P3); WorkflowPanel consumes them.
-- Domain test suite covers: optional grouping (null `segment_id`), segment reorder, segment delete detaches Scenes, per-segment approval state transitions.
+- PR 评审：UI 不得渲染没有持久化 StorySegment 行支撑的章/段交互（RFC Slice C 规则）。
+- Segment 操作首先作为 API/Orchestrator 操作存在（P3）；WorkflowPanel 消费它们。
+- 领域测试套件覆盖：可选分组（空 `segment_id`）、segment 重排、删除 segment 时分离 Scene、每段审批状态转换。

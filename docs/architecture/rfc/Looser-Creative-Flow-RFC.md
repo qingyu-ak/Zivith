@@ -1,74 +1,74 @@
 # Looser Creative Flow RFC (Thin)
 
-> Zivith「更松创作流」方向稿 — partial recompute, asset-first visuals, optional story segmentation
+> Zivith「更松创作流」方向稿 — 局部重算、资产优先视觉、可选故事分段
 >
 > Version: 0.2
 >
-> Status: Accepted (2026-07-23) — scope lock + capability ramp; not an implementation checklist
+> Status: 已接受（2026-07-23）— 范围锁定 + 能力递进；非实现清单
 >
-> Opened: 2026-07-22 (product direction); 0.2 update 2026-07-23 — Slice C domain ADR accepted ([ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md)); implementation scheduled via [V0.4-Modification-Plan.md](../../V0.4-Modification-Plan.md) (Slice A = W4, Slice B asset side = W2, Slice C = W3)
+> Opened: 2026-07-22（产品方向）；0.2 更新 2026-07-23 — Slice C 领域 ADR 已接受（[ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md)）；实现排期见 [V0.4-Modification-Plan.md](../../archive/V0.4-Modification-Plan.md)（Slice A = W4，Slice B 资产侧 = W2，Slice C = W3）
 >
-> Related: architecture-principles.md (P5, P6), AI-Agent-Collaboration.md §4–5, Asset-Model.md, Design-Philosophy.md, Next-Tasks.md, Director-Copilot-RFC.md
+> Related: [architecture-principles.md](../architecture-principles.md)（P5、P6），[AI-Agent-Collaboration.md](../../domain/AI-Agent-Collaboration.md) §10–11，[Asset-Model.md](../../domain/Asset-Model.md)，[Design-Philosophy.md](../../product/Design-Philosophy.md)，[Next-Tasks.md](../../planning/Next-Tasks.md)，[Director-Copilot-RFC.md](Director-Copilot-RFC.md)
 
 ---
 
-## 1. Purpose
+## 1. 目的
 
-Record how Zivith moves from today’s **single linear Story→Video run** (MVP guided path) toward a **looser, still hierarchical** creative loop — without becoming a node canvas, a chapter-file editor, or a gate-bypass chat.
+记录 Zivith 如何从今天的**单次线性 Story→Video 运行**（MVP 引导路径）走向**更松、但仍分层**的创作循环——而不变成节点画布、章节文件编辑器，或绕过门禁的聊天。
 
-Creators today can finish a full mock/real pipeline, but feel the flow is “绑死”: story arrives as one block; visuals exist mainly inside the workflow gate; scene/shot work cannot be locally re-run without cancel+restart. That friction is real; the architecture already names the cure (workflow-as-data, partial recomputation) but the product surface has not landed it yet.
-
----
-
-## 2. Problem statement (user world)
-
-A creator who has approved earlier gates cannot:
-
-1. **Re-run only one Scene / Shot / visual requirement** after a local edit without restarting the whole run.
-2. **Grow Character/Location key art in the asset library** independently of an active Story→Video run, then reuse those images at Visual Prep.
-3. **Iterate story in smaller narrative units** (e.g. by act / scene beat) instead of one monolithic Story Agent output.
-
-Cost: abandoned runs, duplicated briefs, approving placeholder visuals just to unblock the DAG, and loss of trust that “Shot is the core / assets persist.”
+创作者今天可以跑完完整的 mock/真实管线，但感觉流程被「绑死」：故事以一整块到达；视觉主要存在于工作流门禁内；场景/镜头工作无法在本地重跑，除非取消+重启。这种摩擦是真实的；架构已点名解药（工作流即数据、局部重算），但产品面尚未落地。
 
 ---
 
-## 3. Vision alignment
+## 2. 问题陈述（用户世界）
 
-Advances **alternating operators** (human directs at finer grain) and **compounding universes** (assets and approved visuals accumulate outside a single run). Regeneration superiority improves when partial recompute is first-class. This is not substrate work.
+已批准更早门禁的创作者无法：
+
+1. **在局部编辑后只重跑一个 Scene / Shot / 视觉需求**，而无需重启整次运行。
+2. **在资产库中独立生长 Character/Location 关键艺术**，不依赖活动中的 Story→Video 运行，并在 Visual Prep 复用这些图像。
+3. **以更小的叙事单元迭代故事**（例如按幕 / 场景节拍），而非一整块 Story Agent 输出。
+
+代价：被放弃的运行、重复的 brief、仅为打通 DAG 而批准占位视觉，以及对「Shot 是核心 / 资产会持久」失去信任。
 
 ---
 
-## 4. Constitutional check
+## 3. 愿景对齐
 
-| Principle | Effect |
+推进**交替操作者**（人类以更细粒度导演）与**可复利宇宙**（资产与已批准视觉在单次运行之外累积）。当局部重算成为一等能力时，再生优势随之提升。这不是底层 substrate 工作。
+
+---
+
+## 4. 宪章核对
+
+| 原则 | 影响 |
 |-----------|--------|
-| **P5** Workflow is data; primitives include fan-out and **partial recomputation** | **Serves** — this RFC is the product face of those primitives |
-| **P6** Human authority is architectural; gate placement is policy | **Serves** — finer loops must keep review capability; mandatory gates (visual-assets, prompt) stay unless a separate ADR moves them |
-| **P1** Intent is asset; outputs disposable | **Serves** — local regen regenerates outputs from intent |
-| **P3** Headless core | **Serves** — every new action is an API/Orchestrator operation first |
-| **§3 deepen, don’t widen** | **Constraint** — prefer deepening Story/Scene/Shot/Asset + Orchestrator; no new top-level “Chapter file” product unless ADR proves hierarchy insufficient |
-| **D3** No node canvas as primary UX | **Must not violate** — guided hierarchy + panels remain default |
-| **Never list / Copilot** | Advisory surfaces must not bypass gates (same rule as Director Copilot) |
+| **P5** 工作流即数据；原语包含扇出与**局部重算** | **服务** — 本 RFC 是这些原语的产品面 |
+| **P6** 人类权威是架构性的；门禁放置是策略 | **服务** — 更细循环必须保留审核能力；强制门禁（visual-assets、prompt）保留，除非另有 ADR 移动它们 |
+| **P1** 意图即资产；产出可弃 | **服务** — 局部再生从意图再生产出 |
+| **P3** 无头核心 | **服务** — 每一个新动作首先是 API/Orchestrator 操作 |
+| **§3 加深，不加宽** | **约束** — 优先加深 Story/Scene/Shot/Asset + Orchestrator；除非 ADR 证明层级不足，不新增顶层「Chapter 文件」产品 |
+| **D3** 不以节点画布为主要 UX | **不得违反** — 引导式层级 + 面板仍为默认 |
+| **Never list / Copilot** | 咨询面不得绕过门禁（与 Director Copilot 同一规则） |
 
-**Strains:** richer recompute UX can tax *Simple by Default*. Mitigation: keep the linear Story→Video start form as the default; looser actions appear on existing entities (Scene, Shot, Asset) and current-gate retry — not a second home screen.
+**张力：** 更丰富的重算 UX 可能冲击*默认简单*。缓解：保留线性 Story→Video 启动表单为默认；更松的动作出现在既有实体（Scene、Shot、Asset）与当前门禁重试上——而非第二个首页。
 
 ---
 
-## 5. Decisions (locked for v0.1)
+## 5. 决策（v0.1 已锁定）
 
-| Topic | Decision |
+| 主题 | 决策 |
 |-------|----------|
-| Default path | Keep **guided linear Story→Video** as the simple default start |
-| Not the primary UX | **No** node-graph canvas; **no** free-form “chapter document” as the workspace |
-| Engine direction | Implement **partial recomputation** against existing Orchestrator + domain IDs |
-| Gate policy | Mandatory **visual-assets** and **prompt** reviews remain; finer loops still stop at those gates when applicable |
-| Time-travel | **Arbitrary reopen of any past gate** stays **out of scope** (same as Next-Tasks D4) — use current-gate reject/retry, entity unfreeze, cancel+restart, or scoped recompute |
-| Story segmentation | **ADR resolved (2026-07-23):** [ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md) — segments are ordered Scene groupings inside Story (`StorySegment`), not a top-level Chapter; UI segments must be backed by persisted entities |
-| Schedule | Does **not** block finishing Phase 2.5 C7/C8; Slice A may start in parallel after this RFC is accepted |
+| 默认路径 | 保留**引导式线性 Story→Video** 作为简单默认启动 |
+| 非主要 UX | **无**节点图画布；**无**自由形式「章节文档」作为工作区 |
+| 引擎方向 | 针对既有 Orchestrator + 领域 ID 实现**局部重算** |
+| 门禁策略 | 强制 **visual-assets** 与 **prompt** 审核保留；更细循环在适用时仍停在这些门禁 |
+| 时间旅行 | **任意重开任意过去门禁**保持**范围外**（与 Next-Tasks D4 相同）— 使用当前门禁拒绝/重试、实体解冻、取消+重启，或有范围重算 |
+| 故事分段 | **ADR 已决议（2026-07-23）：** [ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md) — 分段是 Story 内有序的 Scene 分组（`StorySegment`），不是顶层 Chapter；UI 分段必须由持久化实体支撑 |
+| 排期 | **不**阻塞完成 Phase 2.5 C7/C8；本 RFC 接受后 Slice A 可并行启动 |
 
 ---
 
-## 6. Capability ramp
+## 6. 能力递进
 
 ```text
 Slice A  Partial recompute (Scene / Shot / visual requirement)
@@ -78,46 +78,46 @@ Slice B  Asset-library image generate + approve → Visual Prep reuse
 Slice C  Story segmentation (acts / beats) — only after domain ADR
 ```
 
-### Slice A — Partial recompute (first build)
+### Slice A — 局部重算（首建）
 
-**In scope:**
+**范围内：**
 
-- From an existing Story / Scene / Shot / `VisualAssetRequirement`, request **scoped** agent+generation work through Orchestrator APIs
-- Mark downstream **non-approved** artifacts stale per [AI-Agent-Collaboration.md §4.1](../../AI-Agent-Collaboration.md); require re-approval where gates already apply
-- UI entry points on entity pages / WorkflowPanel current gate (“重跑本场景视觉准备”“重跑本镜头提示词/视频”) — Chinese copy
-- Provenance: each recompute is a recorded generation/workflow transaction (P7)
+- 从既有 Story / Scene / Shot / `VisualAssetRequirement`，经 Orchestrator API 请求**有范围**的 agent+生成工作
+- 按 [AI-Agent-Collaboration.md §10.1](../../domain/AI-Agent-Collaboration.md) 将下游**未批准**产物标为过期；在已适用门禁处要求重新批准
+- 实体页 / WorkflowPanel 当前门禁上的 UI 入口（「重跑本场景视觉准备」「重跑本镜头提示词/视频」）— 中文文案
+- 溯源：每一次重算都是已记录的生成/工作流事务（P7）
 
-**Out of scope for Slice A:**
+**Slice A 范围外：**
 
-- Reopening completed gates as editable history (D4)
-- Parallel multi-run editing of the same Shot without conflict rules
-- Story act/beat model
+- 将已完成门禁重开为可编辑历史（D4）
+- 无冲突规则时对同一 Shot 的并行多运行编辑
+- Story 幕/节拍模型
 
-**Promotion evidence → Slice B:** at least one operator completes “edit one Scene field → recompute visuals → approve → continue” without cancel+restart, with tests covering stale marking.
+**晋级证据 → Slice B：** 至少一名操作者完成「编辑一个 Scene 字段 → 重算视觉 → 批准 → 继续」，无需取消+重启，且测试覆盖过期标记。
 
-### Slice B — Asset-first visuals
+### Slice B — 资产优先视觉
 
-**In scope:**
+**范围内：**
 
-- Asset Agent / asset library: generate Character/Location reference images **outside** Story→Video
-- Approved Media written to Asset `reference_images[]`; Visual Prep **prefers reuse** when Scene bindings allow ([Asset-Model.md](../../Asset-Model.md))
-- Same image providers/adapters as Phase 2.5; no provider concepts in domain (P4)
+- Asset Agent / 资产库：在 Story→Video **之外**生成 Character/Location 参考图
+- 已批准 Media 写入 Asset `reference_images[]`；当 Scene 绑定允许时，Visual Prep **优先复用**（[Asset-Model.md](../../domain/Asset-Model.md)）
+- 与 Phase 2.5 相同的图像提供商/适配器；领域中无提供商概念（P4）
 
-**Out of scope for Slice B:** full Prop/Style/Knowledge taxonomy UI (Phase 4); global cross-project asset library
+**Slice B 范围外：** 完整 Prop/Style/Knowledge 分类 UI（Phase 4）；全局跨项目资产库
 
-**Promotion evidence → Slice C:** creator can produce approved key art with zero workflow run, then start Story→Video and see reuse recommendations.
+**晋级证据 → Slice C：** 创作者可在零工作流运行下产出已批准关键艺术，然后启动 Story→Video 并看到复用建议。
 
-### Slice C — Story segmentation
+### Slice C — 故事分段
 
-**ADR question answered** by [ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md) (Accepted 2026-07-23): an act/chapter is a **StorySegment — an ordered grouping of Scenes inside a Story**, carrying its own draft text and approval state; not a new hierarchy node, not a document file. Scene ownership (`story_id`) is unchanged; `segment_id` is an optional grouping reference.
+**ADR 问题已由** [ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md) **回答**（已接受 2026-07-23）：幕/章是 **StorySegment — Story 内有序的 Scene 分组**，自带草稿文本与批准状态；不是新的层级节点，也不是文档文件。Scene 所有权（`story_id`）不变；`segment_id` 是可选分组引用。
 
-Implementation is scheduled as [V0.4-Modification-Plan.md](../../V0.4-Modification-Plan.md) **W3**: segmented Story Agent output, per-segment story review within the existing story gate, Scene Agent expansion per approved segment.
+实现排期为 [V0.4-Modification-Plan.md](../../archive/V0.4-Modification-Plan.md) **W3**：分段的 Story Agent 输出、在既有 story 门禁内按分段做故事审核、按已批准分段展开 Scene Agent。
 
-Standing rule remains: **no** UI segments without persisted StorySegment rows.
+常设规则仍是：**无**无持久化 StorySegment 行支撑的 UI 分段。
 
 ---
 
-## 7. Positioning
+## 7. 定位
 
 ```text
 Default:  Brief → linear WorkflowPanel gates (unchanged simple path)
@@ -130,126 +130,126 @@ Loose:    Project hierarchy entities
                     └─ all paths still hit Orchestrator + review gates
 ```
 
-- **Is:** finer-grained direction on the existing hierarchy  
-- **Is not:** second product; chatbot; node IDE; bypass of visual-assets / prompt gates  
+- **是：** 在既有层级上的更细粒度导演  
+- **不是：** 第二个产品；聊天机器人；节点 IDE；绕过 visual-assets / prompt 门禁  
 
 ---
 
-## 8. Relationship to existing systems
+## 8. 与既有系统的关系
 
-| Component | Role |
+| 组件 | 角色 |
 |-----------|------|
-| `WorkflowOrchestrator` / workflow-as-data | Gains scoped recompute plans; remains SoT for runs |
-| `MockWorkflowRunner` / agents | Stage specialists invoked for a **subset** of entities |
-| Asset Agent + Asset CRUD | Primary surface for Slice B |
-| WorkflowPanel | Remains gate UI; gains “scoped retry” affordances, not a canvas |
-| Shot Editor | Remains field-level SoT; triggers Shot-scoped regen |
-| Director Copilot | May later *explain* or *propose* scoped recompute (C); never auto-approve |
+| `WorkflowOrchestrator` / workflow-as-data | 获得有范围重算计划；仍是运行的 SoT |
+| `MockWorkflowRunner` / agents | 为实体**子集**调用的阶段专家 |
+| Asset Agent + Asset CRUD | Slice B 的主表面 |
+| WorkflowPanel | 仍是门禁 UI；获得「有范围重试」可触点，而非画布 |
+| Shot Editor | 仍是字段级 SoT；触发 Shot 范围再生 |
+| Director Copilot | 后续可*解释*或*提议*有范围重算（C）；永不自动批准 |
 
-Docs already describe partial regen and Asset Agent outside the main pipeline; this RFC makes that the **scheduled product track**, not aspirational text.
-
----
-
-## 9. Explicit non-goals
-
-- Node-based workflow canvas as primary (or rushed secondary) experience — Constitution **D3**
-- Arbitrary step time-travel / reopen any passed gate as first-class — Next-Tasks **D4**
-- Replacing Project → Story → Scene → Shot with a novel/script document model
-- Auto-approving mandatory gates from any assistant
-- Collapsing Visual Prep away without an ADR on gate policy
-- Blocking Phase 2.5 BYOK/usage (C7/C8) on this work
+文档已描述主管线外的局部再生与 Asset Agent；本 RFC 使之成为**已排期的产品轨道**，而非愿景文本。
 
 ---
 
-## 10. Risks (fixed categories)
+## 9. 明确非目标
 
-| Category | Assessment | Mitigation / owner |
+- 节点式工作流画布作为主要（或仓促的次要）体验 — 宪章 **D3**
+- 任意步骤时间旅行 / 将任意已过门禁作为一等能力重开 — Next-Tasks **D4**
+- 用小说/剧本文档模型替换 Project → Story → Scene → Shot
+- 由任何助手自动批准强制门禁
+- 在无门禁策略 ADR 的情况下折叠掉 Visual Prep
+- 以本工作阻塞 Phase 2.5 BYOK/usage（C7/C8）
+
+---
+
+## 10. 风险（固定类别）
+
+| 类别 | 评估 | 缓解 / 负责人 |
 |----------|------------|--------------------|
-| Domain contract | Slice C could tempt a new top-level entity | Slice C blocked on ADR; deepen Story first — author + domain reviewer |
-| Stored-data | Scoped recompute might orphan Media or leave stale approvals | Explicit stale/pending states; never silent reinterpret — API owner |
-| Promise | “Recompute” API shapes may churn | Keep behind Orchestrator; version run `input`/`state` — engine owner |
-| Authority | Scoped path might skip visual-assets / prompt | Hard rule: same gates when regenerating those artifacts — product decider |
-| Economic | Fan-out recompute can multiply spend | Meter each job (P7); confirm before batch regen — generation owner |
-| Lock-in | None expected if adapters stay behind ports | P4 review on PRs |
-| Complexity | Two mental models (linear vs loose) | Default remains linear start; loose actions contextual — UX reviewer |
+| 领域契约 | Slice C 可能诱惑新增顶层实体 | Slice C 阻塞于 ADR；先加深 Story — 作者 + 领域评审人 |
+| 持久数据 | 有范围重算可能孤立 Media 或留下过期批准 | 显式过期/待处理状态；永不静默重解释 — API 负责人 |
+| 承诺 | 「重算」API 形态可能变动 | 置于 Orchestrator 之后；版本化运行 `input`/`state` — 引擎负责人 |
+| 权威 | 有范围路径可能跳过 visual-assets / prompt | 硬规则：再生这些产物时同一门禁 — 产品决策人 |
+| 经济 | 扇出重算可放大花费 | 计量每一作业（P7）；批量再生前确认 — 生成负责人 |
+| 锁定 | 若适配器留在端口后则预期无 | PR 上做 P4 评审 |
+| 复杂度 | 两种心智模型（线性 vs 更松） | 默认仍是线性启动；更松动作情境化 — UX 评审人 |
 
 ---
 
-## 11. Migration plan
+## 11. 迁移计划
 
-1. **Forward:** Existing `story_to_video` runs keep current semantics; new scoped APIs are additive.
-2. **In-flight:** Runs paused at a gate continue under old runner behavior until completed/cancelled; scoped recompute targets **entities**, not rewriting mid-gate history.
-3. **Rollback:** Disable scoped UI/flags; linear panel remains; no forced data rewrite.
-4. **Coexistence:** Linear default + scoped actions indefinitely is intended (not two engines forever — one engine, two entry styles).
-5. **External consumers:** No public `.ziv` format change (D1 untouched).
-
----
-
-## 12. Acceptance criteria
-
-### Problem criteria
-
-- [ ] Creator can recompute **one Scene’s visual prep** (or one Shot’s prompt/video) without cancelling the parent story-to-video philosophy (Slice A).
-- [ ] Creator can generate and approve Character/Location key art from the asset library with **no** active Story→Video run (Slice B).
-- [ ] Linear brief→gates path still works for a newcomer in one sitting (Simple by Default).
-
-### Constitutional criteria
-
-- [ ] P1–P4, P6–P8 checklist from rfc-guide §6 layer 2 holds for each slice.
-- [ ] D3 not violated (no primary node canvas).
-- [ ] D4 not contradicted (no arbitrary gate time-travel).
-
-### Governance criteria
-
-- [x] Slice C ADR written before any act/beat UI — [ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md), Accepted 2026-07-23.
-- [ ] Next-Tasks Track E updated per slice; Implementation-Plan checkboxes synced.
-- [ ] Irreversible gate-policy changes spawn ADRs.
+1. **向前：** 既有 `story_to_video` 运行保持当前语义；新的有范围 API 为增量。
+2. **进行中：** 停在门禁的运行在完成/取消前继续旧 runner 行为；有范围重算针对**实体**，不改写门禁中历史。
+3. **回滚：** 禁用有范围 UI/开关；线性面板保留；无强制数据改写。
+4. **共存：** 线性默认 + 有范围动作无限期共存是有意的（并非永远两个引擎 — 一个引擎，两种入口风格）。
+5. **外部消费者：** 无公开 `.ziv` 格式变更（D1 不动）。
 
 ---
 
-## 13. Traceability (product Q&A)
+## 12. 验收标准
 
-| Question | Choice |
+### 问题标准
+
+- [ ] 创作者可重算**一个 Scene 的视觉准备**（或一个 Shot 的提示词/视频），而无需取消父级 story-to-video 哲学（Slice A）。
+- [ ] 创作者可在资产库生成并批准 Character/Location 关键艺术，且**无**活动中的 Story→Video 运行（Slice B）。
+- [ ] 线性 brief→门禁路径仍可让新手一次坐下来跑通（默认简单）。
+
+### 宪章标准
+
+- [ ] 每一切片满足 rfc-guide §6 第 2 层的 P1–P4、P6–P8 清单。
+- [ ] 不违反 D3（无主要节点画布）。
+- [ ] 不与 D4 矛盾（无任意门禁时间旅行）。
+
+### 治理标准
+
+- [x] 在任何幕/节拍 UI 之前写好 Slice C ADR — [ADR-0006](../adr/0006-story-segments-are-ordered-scene-groupings.md)，已接受 2026-07-23。
+- [ ] 按切片更新 Next-Tasks Track E；Implementation-Plan 复选框同步。
+- [ ] 不可逆的门禁策略变更须产生 ADR。
+
+---
+
+## 13. 可追溯性（产品问答）
+
+| 问题 | 选择 |
 |----------|--------|
-| Keep linear default? | **Yes** |
-| First slice? | **A — partial recompute** |
-| Asset-library out-of-band depict? | **Yes — Slice B** |
-| Story act/beat now? | **Yes — ADR-0006 accepted; ordered Scene groupings inside Story (V0.4 W3)** |
-| Node canvas / time-travel gates? | **No** |
+| 保留线性默认？ | **是** |
+| 首个切片？ | **A — 局部重算** |
+| 资产库带外描绘？ | **是 — Slice B** |
+| 现在做 Story 幕/节拍？ | **是 — ADR-0006 已接受；Story 内有序 Scene 分组（V0.4 W3）** |
+| 节点画布 / 时间旅行门禁？ | **否** |
 
 ---
 
-## 14. Slice A — Scoped recompute (implemented V0.4 W4)
+## 14. Slice A — 有范围重算（已实现于 V0.4 W4）
 
-### API shapes
+### API 形态
 
-| Method | Path | Scope | Effect |
+| 方法 | 路径 | 范围 | 效果 |
 |--------|------|-------|--------|
-| `POST` | `/scenes/:id/recompute-visual-prep` | One Scene | Mark non-approved requirements pending; rerun Visual Prep for that Scene; record `workflow_step_attempts` |
-| `POST` | `/shots/:id/recompute-prompt` | One Shot | Rerun Prompt Agent; leave approved shots alone (409); record attempt |
-| `POST` | `/shots/:id/recompute-video` | One Shot | Rerun video generation if prompt approved; leave approved shots alone (409); record attempt |
+| `POST` | `/scenes/:id/recompute-visual-prep` | 一个 Scene | 将未批准需求标为 pending；为该 Scene 重跑 Visual Prep；记录 `workflow_step_attempts` |
+| `POST` | `/shots/:id/recompute-prompt` | 一个 Shot | 重跑 Prompt Agent；不动已批准镜头（409）；记录 attempt |
+| `POST` | `/shots/:id/recompute-video` | 一个 Shot | 若提示词已批准则重跑视频生成；不动已批准镜头（409）；记录 attempt |
 
-Orchestrator: `beginScopedRecompute` / `finishScopedRecompute` / `mergeStepOutput` — does **not** advance `current_step_index`. Linear `runUntilGate` remains SoT for newcomer path.
+Orchestrator：`beginScopedRecompute` / `finishScopedRecompute` / `mergeStepOutput` — **不**推进 `current_step_index`。线性 `runUntilGate` 仍是新手路径的 SoT。
 
-### Stale-propagation matrix
+### 过期传播矩阵
 
-| Trigger | Marks stale | Untouched |
+| 触发 | 标为过期 | 不动 |
 |---------|-------------|-----------|
-| Scene visual recompute | That Scene’s non-`approved` `VisualAssetRequirement` → `pending`; non-approved Shots in Scene → `prompting` + clear unapproved prompt approvals | Approved requirements; approved Shots |
-| Shot prompt recompute | Target Shot → `prompting` (if not approved) | Approved Shot (rejected) |
-| Shot video recompute | New Output only | Approved Shot (rejected); prior Media/Output history |
+| Scene 视觉重算 | 该 Scene 的非 `approved` `VisualAssetRequirement` → `pending`；Scene 内未批准 Shot → `prompting` + 清除未批准提示词批准 | 已批准需求；已批准 Shot |
+| Shot 提示词重算 | 目标 Shot → `prompting`（若未批准） | 已批准 Shot（拒绝） |
+| Shot 视频重算 | 仅新 Output | 已批准 Shot（拒绝）；先前 Media/Output 历史 |
 
-### Conflict rules
+### 冲突规则
 
-Lock key in run `state.scoped_locks`: `{kind}:{entity_type}:{entity_id}`.
+运行 `state.scoped_locks` 中的锁键：`{kind}:{entity_type}:{entity_id}`。
 
-If a second scoped recompute hits the same key while an attempt is `running` → **409 `RECOMPUTE_IN_PROGRESS`**.
+若第二次有范围重算在 attempt 为 `running` 时命中同一键 → **409 `RECOMPUTE_IN_PROGRESS`**。
 
-Identical `input_hash` across completed attempts is recorded on the new attempt’s `usage.identical_input_attempt` (recognizable; skip optimization optional later).
+跨已完成 attempt 的相同 `input_hash` 记录在新 attempt 的 `usage.identical_input_attempt` 上（可识别；跳过优化可后续可选）。
 
-### UI copy (Chinese)
+### UI 文案（中文）
 
-- Scene / WorkflowPanel visual gate:「重跑本场景视觉准备」
-- Shot / WorkflowPanel prompt|video:「重跑本镜头提示词」/「重跑本镜头视频」
+- Scene / WorkflowPanel 视觉门禁：「重跑本场景视觉准备」
+- Shot / WorkflowPanel prompt|video：「重跑本镜头提示词」/「重跑本镜头视频」
 
-Until further slices, treat remaining RFC sections as scope lock for B/C only.
+在后续切片之前，将其余 RFC 章节仅视为 B/C 的范围锁定。

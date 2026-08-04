@@ -1,30 +1,30 @@
 # ADR-0001: Use a pnpm workspace orchestrated by Turborepo
 
-- **Status:** Accepted
+- **Status:** 已接受
 - **Date:** 2026-07-20
-- **Deciders:** Phase 0 team
+- **Deciders:** Phase 0 团队
 - **Class:** Standard
-- **Reversibility:** Costly
+- **Reversibility:** 代价高
 
-> Migrated from the root `ARCHITECTURE-DECISIONS.md` (formerly ADR-001) on 2026-07-22.
-> This record predates the Architecture Constitution; the *Principles at Stake*
-> analysis has not been retrofitted.
+> 于 2026-07-22 自根目录 `ARCHITECTURE-DECISIONS.md`（原 ADR-001）迁入。
+> 本记录早于架构宪章；*Principles at Stake（攸关原则）*
+> 分析尚未回溯补全。
 
-## Context
+## 背景
 
-Zivith contains independently deployable applications and shared TypeScript packages.
-The repository needs fast local orchestration, deterministic dependency ownership, and
-task caching without coupling package implementations.
+Zivith 包含可独立部署的应用与共享 TypeScript 包。
+仓库需要快速的本地编排、确定性的依赖归属，以及
+任务缓存，同时不把各包的实现耦合在一起。
 
-## Decision
+## 决策
 
-Use pnpm 10 workspaces for package management and Turborepo 2 for task orchestration.
-Applications live in `apps/*`; shared code lives in `packages/*`. Root commands delegate
-to package scripts through Turborepo.
+使用 pnpm 10 workspace 管理包，使用 Turborepo 2 编排任务。
+应用位于 `apps/*`；共享代码位于 `packages/*`。根命令通过
+Turborepo 委托到各包脚本。
 
-## Consequences
+## 后果
 
-Packages retain control of their own build and test tools while sharing one dependency
-graph. Every participating package must provide consistently named scripts. CI currently
-installs without a frozen lockfile until the first complete workspace install generates
-`pnpm-lock.yaml`; the workflow should switch to `--frozen-lockfile` once that file exists.
+各包保留对自己构建与测试工具的控制权，同时共享一张依赖
+图。每个参与包必须提供命名一致的脚本。CI 当前在
+无冻结锁文件的情况下安装，直至首次完整 workspace 安装生成
+`pnpm-lock.yaml`；该文件存在后，工作流应切换为 `--frozen-lockfile`。
