@@ -43,21 +43,22 @@ function requireString(
 export async function applyProposal(
   db: PrismaClient,
   proposal: Proposal,
+  fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
   switch (proposal.kind) {
     case 'create_project':
       return applyCreateProject(db, proposal);
     case 'create_world_event':
-      return applyCreateWorldEvent(db, proposal);
+      return applyCreateWorldEvent(db, proposal, fallbackProjectId);
     case 'create_character':
     case 'create_location':
-      return applyCreateAsset(db, proposal);
+      return applyCreateAsset(db, proposal, fallbackProjectId);
     case 'create_scene':
-      return applyCreateScene(db, proposal);
+      return applyCreateScene(db, proposal, fallbackProjectId);
     case 'create_relationship':
-      return applyCreateRelationship(db, proposal);
+      return applyCreateRelationship(db, proposal, fallbackProjectId);
     case 'update_entity':
-      return applyUpdateEntity(db, proposal);
+      return applyUpdateEntity(db, proposal, fallbackProjectId);
     default:
       throw new ApiError(400, 'UNSUPPORTED_PROPOSAL', '不支持的提案类型');
   }
@@ -100,8 +101,9 @@ async function applyCreateProject(
 async function applyCreateWorldEvent(
   db: PrismaClient,
   proposal: Proposal,
+  fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
-  const projectId = requireProjectId(proposal);
+  const projectId = requireProjectId(proposal, fallbackProjectId);
   const payload = proposal.payload;
   const input = worldEventCreateSchema.parse(payload);
 
@@ -135,8 +137,9 @@ async function applyCreateWorldEvent(
 async function applyCreateAsset(
   db: PrismaClient,
   proposal: Proposal,
+  fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
-  const projectId = requireProjectId(proposal);
+  const projectId = requireProjectId(proposal, fallbackProjectId);
   const payload = proposal.payload;
   const name = requireString(payload, 'name', '实体名称');
   const description =
@@ -179,8 +182,9 @@ async function applyCreateAsset(
 async function applyCreateScene(
   db: PrismaClient,
   proposal: Proposal,
+  fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
-  const projectId = requireProjectId(proposal);
+  const projectId = requireProjectId(proposal, fallbackProjectId);
   const payload = proposal.payload;
   const title = requireString(payload, 'title', '场景标题');
   const storyId = requireString(payload, 'story_id', '所属故事 story_id');
@@ -231,8 +235,9 @@ async function applyCreateScene(
 async function applyCreateRelationship(
   db: PrismaClient,
   proposal: Proposal,
+  fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
-  const projectId = requireProjectId(proposal);
+  const projectId = requireProjectId(proposal, fallbackProjectId);
   const input = relationshipCreateSchema.parse(proposal.payload);
 
   // Validate polymorphic refs point at real entities inside the project.
@@ -296,8 +301,9 @@ async function assertEntityRefExists(
 async function applyUpdateEntity(
   db: PrismaClient,
   proposal: Proposal,
+  fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
-  const projectId = requireProjectId(proposal);
+  const projectId = requireProjectId(proposal, fallbackProjectId);
   const payload = proposal.payload;
   const type = requireString(payload, 'type', '实体类型');
   const id = requireString(payload, 'id', '实体 id');

@@ -11,6 +11,13 @@ import {
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { applyProposal } from '../contexts/world/proposal-applier.js';
+import {
+  WorldBuilderAgent,
+  inferWorldStage,
+  type WorldBuilderChatMessage,
+} from '../contexts/world-builder/world-builder-agent.js';
+import { buildWorldContext } from '../contexts/world-builder/world-context.js';
+import type { LLMAdapter } from '../ports/llm.js';
 
 const idSchema = z.string().min(1).max(128);
 const projectParams = z.object({ projectId: idSchema }).strict();
@@ -41,12 +48,17 @@ async function requireTimeline(db: PrismaClient, projectId: string) {
   return timeline;
 }
 
-export function registerWorldRoutes(app: FastifyInstance, db: PrismaClient) {
+export function registerWorldRoutes(
+  app: FastifyInstance,
+  db: PrismaClient,
+  llm?: LLMAdapter,
+  llmModel?: string,
+) {
   registerProjectResources(app, db);
   registerWorldEventRoutes(app, db);
   registerRelationshipRoutes(app, db);
   registerTimelineRoutes(app, db);
-  registerCreatorChatRoutes(app, db);
+  registerCreatorChatRoutes(app, db, llm, llmModel);
 }
 
 // ---------------------------------------------------------------------------
@@ -403,7 +415,27 @@ const sendMessageBody = z
 
 const applyProposalBody = z.object({ proposal_key: z.string().max(256).optional() }).strict();
 
-function registerCreatorChatRoutes(app: FastifyInstance, db: PrismaClient) {
+function registerCreatorChatRoutes(
+  app: FastifyInstance,
+  db: PrismaClient,
+  llm?: LLMAdapter,
+  llmModel?: string,
+) {
+  const builder = new WorldBuilderAgent(
+    llm ??
+      ({
+        provider: 'mock',
+        supportedModels: [],
+        complete: () => {
+          throw new ApiError(503, 'LLM_UNAVAILABLE', 'LLM 不可用');
+        },
+        completeStructured: () => {
+          throw new ApiError(503, 'LLM_UNAVAILABLE', 'LLM 不可用');
+        },
+      } as LLMAdapter),
+    llmModel ?? 'mock-text-v1',
+  );
+
   app.post('/creator-chats', async (request, reply) => {
     const body = createThreadBody.parse(request.body ?? {});
     if (body.project_id) await requireProject(db, body.project_id);
@@ -448,7 +480,7 @@ function registerCreatorChatRoutes(app: FastifyInstance, db: PrismaClient) {
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const message = await db.creatorChatMessage.create({
+    const userMessage = await db.creatorChatMessage.create({
       data: {
         threadId,
         role: body.role,
@@ -462,11 +494,57 @@ function registerCreatorChatRoutes(app: FastifyInstance, db: PrismaClient) {
           : {}),
       },
     });
+
+    // User turns trigger the World Builder: read world → reply → propose.
+    let assistantMessage = null;
+    if (body.role === 'user') {
+      const rows = await db.creatorChatMessage.findMany({
+        where: { threadId },
+        orderBy: { createdAt: 'asc' },
+        take: 40,
+      });
+      const history: WorldBuilderChatMessage[] = rows.map((row) => ({
+        role:
+          row.role === 'user' || row.role === 'assistant' || row.role === 'system'
+            ? row.role
+            : 'system',
+        content: row.content,
+      }));
+      const world = thread.projectId
+        ? await buildWorldContext(db, thread.projectId)
+        : null;
+      const response = await builder.respond({
+        history,
+        world,
+        stage: inferWorldStage(world),
+      });
+      const proposalKey =
+        response.proposals.length > 0
+          ? `p_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+          : null;
+      assistantMessage = await db.creatorChatMessage.create({
+        data: {
+          threadId,
+          role: 'assistant',
+          content: response.reply,
+          ...(response.proposals.length > 0
+            ? {
+                proposal: response.proposals as unknown as Prisma.InputJsonValue,
+                proposalKey,
+                proposalState: 'pending',
+              }
+            : {}),
+        },
+      });
+    }
+
     await db.creatorChatThread.update({
       where: { id: threadId },
       data: { updatedAt: new Date() },
     });
-    return reply.status(201).send(message);
+    return reply
+      .status(201)
+      .send({ user_message: userMessage, assistant_message: assistantMessage });
   });
 
   app.post('/creator-chats/:threadId/proposals/:messageId/apply', async (request) => {
@@ -475,6 +553,9 @@ function registerCreatorChatRoutes(app: FastifyInstance, db: PrismaClient) {
       .strict()
       .parse(request.params);
     const body = applyProposalBody.parse(request.body ?? {});
+
+    const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
+    if (!thread) throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
 
     const message = await db.creatorChatMessage.findFirst({
       where: { id: messageId, threadId },
@@ -491,7 +572,7 @@ function registerCreatorChatRoutes(app: FastifyInstance, db: PrismaClient) {
     }
 
     const proposal = proposalSchema.parse(message.proposal);
-    const result = await applyProposal(db, proposal);
+    const result = await applyProposal(db, proposal, thread.projectId);
 
     await db.creatorChatMessage.update({
       where: { id: messageId },

@@ -148,9 +148,13 @@ export async function buildApp(options: BuildAppOptions = {}) {
       });
       registerStubRoutes(api);
       // Creator layer (ADR-0013): local single user, no auth on world routes.
+      const worldProviders = instrumentProviderBundle(
+        db,
+        createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+      );
       api.register(
         (worldApi, _worldOptions, worldDone) => {
-          registerWorldRoutes(worldApi, db);
+          registerWorldRoutes(worldApi, db, worldProviders.llm, worldProviders.llmModel);
           worldDone();
         },
         { prefix: '/world' },
