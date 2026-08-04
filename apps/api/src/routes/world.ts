@@ -542,6 +542,7 @@ function registerCreatorChatRoutes(
         ? await buildWorldContext(db, thread.projectId)
         : null;
       const response = await builder.respond({
+        text: userMessage.content,
         history,
         world,
         stage: inferWorldStage(world),
@@ -611,11 +612,14 @@ function registerCreatorChatRoutes(
 
     const applied: Array<{ kind: string; project_id: string; entity_type: string; entity_id: string; title: string }> =
       [];
+    // Track the project across a proposal batch: create_project may appear
+    // alongside entity proposals in the same message.
+    let currentProjectId = thread.projectId;
     for (const proposal of proposals) {
-      if (proposal.kind === 'create_project' && thread.projectId) {
+      if (proposal.kind === 'create_project' && currentProjectId) {
         throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
       }
-      const result = await applyProposal(db, proposal, thread.projectId);
+      const result = await applyProposal(db, proposal, currentProjectId);
       applied.push({
         kind: result.kind,
         project_id: result.projectId,
@@ -624,6 +628,7 @@ function registerCreatorChatRoutes(
         title: result.title,
       });
       if (result.entityType === 'project') {
+        currentProjectId = result.projectId;
         await db.creatorChatThread.update({
           where: { id: threadId },
           data: { projectId: result.projectId },

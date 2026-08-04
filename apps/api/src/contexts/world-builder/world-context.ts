@@ -87,8 +87,22 @@ export async function buildWorldContext(
     projectId: project.id,
     projectName: project.name,
     stories,
-    characters,
-    locations,
+    characters: characters.map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      tags: Array.isArray(c.tags)
+        ? (c.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+        : [],
+    })),
+    locations: locations.map((l) => ({
+      id: l.id,
+      name: l.name,
+      description: l.description,
+      tags: Array.isArray(l.tags)
+        ? (l.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+        : [],
+    })),
     scenes,
     worldEvents: worldEvents.map((e) => ({
       id: e.id,

@@ -12,6 +12,8 @@ export interface WorldBuilderChatMessage {
 }
 
 export interface WorldBuilderInput {
+  /** The latest user message (may also appear at the end of history). */
+  text: string;
   history: WorldBuilderChatMessage[];
   world: WorldContext | null;
   stage: WorldStage;
@@ -67,6 +69,25 @@ function mockProposal(
   return { kind, project_id: projectId, payload };
 }
 
+/** Extract a likely entity name from user text ("记录艾拉为角色", "记录角色：杰克", "主角叫林澈"…). */
+function extractEntityName(text: string): string | null {
+  const candidates = [
+    // "记录角色：杰克" / "记录一个地点：雾都"
+    /[:：]\s*([\u4e00-\u9fa5A-Za-z0-9·]{1,12})/,
+    // "记录艾拉为角色" / "设定林澈为主角"
+    /(?:记录|创建|新增|添加|设定)([\u4e00-\u9fa5A-Za-z0-9·]{1,12})(?:为|作为|是)?(?:角色|人物|主角|地点|城市|场景|事件)/,
+    // "主角叫林澈" / "主角是艾拉"
+    /主角(?:是|叫|的名字叫|的名字是|叫作|名为)?([\u4e00-\u9fa5A-Za-z0-9·]{1,12})/,
+    // "她叫艾拉" / "名叫雾都"
+    /(?:名叫|名字叫|名为|叫做|叫)([\u4e00-\u9fa5A-Za-z0-9·]{1,12})/,
+  ];
+  for (const pattern of candidates) {
+    const match = text.match(pattern);
+    if (match && match[1] && match[1].trim().length >= 1) return match[1].trim();
+  }
+  return null;
+}
+
 export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilderResponse {
   const world = input.world;
   const projectId = world?.projectId ?? null;
@@ -101,25 +122,31 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
   const hasLocations = world.locations.length > 0;
   const hasEvents = world.worldEvents.length > 0;
 
-  if (/主角|角色|人物|who|characters?/i.test(text) && !hasCharacters) {
+  // Signals for declaring a new entity vs. merely asking about an existing one.
+  const wantsCharacter = /角色|人物|主角|characters?/i.test(text);
+  const wantsLocation = /地点|城市|场景|环境|where|location/i.test(text);
+  const wantsEvent = /事件|发生了什么|历史|event/i.test(text);
+  const incremental = /增加|添加|新增|再|又|还有|记录|补充|设定|创建|加入|登场/i.test(text);
+
+  if (wantsCharacter && (!hasCharacters || incremental)) {
     proposals.push(
       mockProposal('create_character', projectId, {
-        name: '未命名主角',
-        description: text.length > 40 ? text.slice(0, 200) : '由对话引导创建的主要角色',
+        name: extractEntityName(text) ?? (hasCharacters ? '新角色' : '未命名主角'),
+        description: text.length > 40 ? text.slice(0, 200) : '由对话引导创建的角色',
       }),
     );
     return {
       reply:
-        '我来帮你建立主角档案。为了更准确，告诉我主角的：\n1. 名字和身份\n2. 性格核心（比如：冷静、热血、偏执）\n3. 他/她的目标或欲望是什么？',
+        '我来帮你建立角色档案。为了更准确，告诉我角色的：\n1. 名字和身份\n2. 性格核心（比如：冷静、热血、偏执）\n3. 他/她的目标或欲望是什么？',
       proposals,
-      world_state: { stage: 'growing', open_questions: ['主角名字', '性格核心', '目标欲望'], conflicts },
+      world_state: { stage: 'growing', open_questions: ['角色名字', '性格核心', '目标欲望'], conflicts },
     };
   }
 
-  if (/地点|城市|世界|环境|where|location/i.test(text) && !hasLocations) {
+  if (wantsLocation && (!hasLocations || incremental)) {
     proposals.push(
       mockProposal('create_location', projectId, {
-        name: '未命名地点',
+        name: extractEntityName(text) ?? (hasLocations ? '新地点' : '未命名地点'),
         description: '由对话引导创建的核心地点',
       }),
     );
@@ -130,10 +157,10 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
     };
   }
 
-  if (/事件|发生了什么|时间|历史|event/i.test(text) && !hasEvents) {
+  if (wantsEvent && (!hasEvents || incremental)) {
     proposals.push(
       mockProposal('create_world_event', projectId, {
-        title: '关键事件',
+        title: extractEntityName(text) ?? (hasEvents ? '新事件' : '关键事件'),
         description: '由对话引导创建的世界事件',
         world_time_envelope: { order: 1 },
       }),
@@ -145,7 +172,11 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
     };
   }
 
-  if (/关系|和|与|relationship/i.test(text) && hasCharacters && world.relationships.length === 0) {
+  if (
+    /关系|和|与|relationship/i.test(text) &&
+    hasCharacters &&
+    (world.relationships.length === 0 || incremental)
+  ) {
     const a = world.characters[0];
     if (!a) {
       return {
@@ -235,6 +266,20 @@ export class WorldBuilderAgent {
       worldBuilderResponseSchema,
     );
     // Re-parse so defaults (proposals/open_questions/conflicts) are always materialized.
-    return worldBuilderResponseSchema.parse(completion.data);
+    const parsed = worldBuilderResponseSchema.parse(completion.data);
+
+    // LLMs sometimes answer with prose only and forget to emit proposals.
+    // Fall back to rule-based extraction so user-provided settings still
+    // surface as confirmable proposals (ADR-0010 fence).
+    if (parsed.proposals.length === 0) {
+      const fallback = mockWorldBuilderResponse(input);
+      if (fallback.proposals.length > 0) {
+        parsed.proposals.push(...fallback.proposals);
+        parsed.reply = `${parsed.reply}\n\n（检测到你提供了新的设定信息，我已整理成提案，请确认后写入世界档案。）`;
+        parsed.world_state.open_questions = fallback.world_state.open_questions;
+      }
+    }
+
+    return parsed;
   }
 }
