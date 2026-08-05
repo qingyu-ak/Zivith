@@ -5,7 +5,8 @@
  *   1. 在当前进程内用 mock LLM（规则引擎，零外部调用）构建一个临时 API 实例，
  *      监听随机端口，走真实 HTTP 路由层（含错误映射 / snake_case 序列化）。
  *   2. 模拟一段多实体创建对话流：建项目 → 角色 → 地点 → 事件 → 增量角色 → 关系，
- *      每轮断言提案 kind、apply 结果与数据库落库。
+ *      每轮断言提案 kind、apply 结果，并直接查库验证字段级落库完整性
+ *      （project/asset/world_event/relationship 的关键字段 + 归属 + 状态）。
  *   3. 覆盖错误路径：无提案 apply(400)、重复 apply(409)、已有项目再建项目(400)。
  *   4. 结束后清理测试数据并关闭实例。
  *
@@ -160,6 +161,101 @@ function main(): Promise<number> {
     let appliedMessageId: string | null = null;
     let cleanupOk = true;
 
+    // —— 数据库落库完整性断言 helper：直接查库验证字段级持久化 ——
+    // 注：期望值来自 mock 规则引擎（world-builder-agent.ts）的确定性输出，
+    // 若 mock 规则调整，需同步更新此处期望。
+    const expectAssetRow = async (
+      entityId: string | undefined,
+      expected: {
+        label: string;
+        name: string;
+        type: 'character' | 'location';
+        description: string;
+      },
+    ) => {
+      const row = entityId ? await prisma.asset.findUnique({ where: { id: entityId } }) : null;
+      check(
+        `DB: ${expected.label} 基础字段（name/type/state/project）`,
+        Boolean(
+          row &&
+            row.name === expected.name &&
+            row.type === expected.type &&
+            row.state === 'draft' &&
+            row.deletedAt === null &&
+            row.projectId === projectId,
+        ),
+        row ? `${row.name}/${row.type}/${row.state}` : '—',
+      );
+      check(
+        `DB: ${expected.label} description 已持久化`,
+        row?.description === expected.description,
+        row?.description ?? '—',
+      );
+      return row;
+    };
+
+    const expectWorldEventRow = async (entityId: string | undefined, titleSubstr: string) => {
+      const row = entityId ? await prisma.worldEvent.findUnique({ where: { id: entityId } }) : null;
+      check(
+        'DB: 事件 title/description/state 持久化',
+        Boolean(
+          row &&
+            typeof row.title === 'string' &&
+            row.title.includes(titleSubstr) &&
+            row.description === '由对话引导创建的世界事件' &&
+            row.state === 'draft' &&
+            row.deletedAt === null &&
+            row.projectId === projectId,
+        ),
+        row ? `${row.title} / ${row.state}` : '—',
+      );
+      check(
+        'DB: 事件 world_time_envelope 持久化',
+        Boolean(row && (row.worldTimeEnvelope as Json | null)?.order === 1),
+        JSON.stringify(row?.worldTimeEnvelope ?? null),
+      );
+      check(
+        'DB: 事件 presentation_order=1（项目内首个事件）',
+        row?.presentationOrder === 1,
+        String(row?.presentationOrder ?? '—'),
+      );
+      return row;
+    };
+
+    const expectRelationshipRow = async (entityId: string | undefined) => {
+      const row = entityId ? await prisma.relationship.findUnique({ where: { id: entityId } }) : null;
+      check(
+        'DB: 关系 kind/sourceType/targetType 持久化',
+        Boolean(
+          row &&
+            row.kind === 'bond' &&
+            row.sourceType === 'asset' &&
+            row.targetType === 'asset' &&
+            row.projectId === projectId,
+        ),
+        row ? `${row.kind}/${row.sourceType}/${row.targetType}` : '—',
+      );
+      check(
+        'DB: 关系 direction/label/description/state 持久化',
+        Boolean(
+          row &&
+            row.direction === 'undirected' &&
+            row.label === '同伴' &&
+            row.description === '由对话引导创建的角色关系' &&
+            row.state === 'draft',
+        ),
+        row ? `${row.direction}/${row.label ?? '—'}/${row.state}` : '—',
+      );
+      if (row) {
+        const [src, tgt] = await Promise.all([
+          prisma.asset.findFirst({ where: { id: row.sourceId, projectId: projectId! } }),
+          prisma.asset.findFirst({ where: { id: row.targetId, projectId: projectId! } }),
+        ]);
+        check('DB: 关系两端引用项目内真实角色', Boolean(src) && Boolean(tgt), `${row.sourceId} / ${row.targetId}`);
+      }
+      return row;
+    };
+
     try {
       console.log('\n== 1. 创建会话 + 首条世界观消息 ==');
       const thread = await request(base, 'POST', '/world/creator-chats', { title: '验证对话流' });
@@ -186,6 +282,34 @@ function main(): Promise<number> {
       projectId = (applied1[0] as Json | undefined)?.project_id as string | null;
       appliedMessageId = m1;
 
+      // DB 层：项目字段完整性（apply 直接查库验证）
+      const dbProject = projectId
+        ? await prisma.project.findUnique({ where: { id: projectId } })
+        : null;
+      check(
+        'DB: project.name/description 持久化',
+        dbProject?.name === '新 IP 世界' &&
+          dbProject?.description === '由 Creator Chat 引导创建的世界',
+        dbProject ? `${dbProject.name} / ${dbProject.description ?? '—'}` : '—',
+      );
+      check(
+        'DB: project.ownerId 已关联本地用户',
+        Boolean(dbProject?.ownerId),
+        dbProject?.ownerId ?? '—',
+      );
+      check(
+        'DB: project.defaults/settings 持久化',
+        JSON.stringify(dbProject?.defaults ?? {}) === JSON.stringify({ language: 'zh-CN' }) &&
+          JSON.stringify(dbProject?.settings ?? {}) === JSON.stringify({ creator_layer: true }),
+        JSON.stringify(dbProject?.defaults) + ' / ' + JSON.stringify(dbProject?.settings),
+      );
+      const dbTimeline = projectId
+        ? await prisma.projectTimeline.findFirst({ where: { projectId, deletedAt: null } })
+        : null;
+      check('DB: 建项目自动创建 World Line timeline', dbTimeline?.name === 'World Line', dbTimeline?.name ?? '—');
+      const dbThread = threadId ? await prisma.creatorChatThread.findUnique({ where: { id: threadId } }) : null;
+      check('DB: thread.project_id 已持久化', dbThread?.projectId === projectId, dbThread?.projectId ?? '—');
+
       const after = await request(base, 'GET', `/world/creator-chats/${threadId}`);
       check(
         '会话已关联项目（关联修复点）',
@@ -206,6 +330,15 @@ function main(): Promise<number> {
       appliedMessageId = m2;
       const charTitle = ((apply2?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check('角色「韩立」已入库', charTitle === '韩立', String(charTitle));
+      const hanId = ((apply2?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
+        | string
+        | undefined;
+      await expectAssetRow(hanId, {
+        label: '韩立',
+        name: '韩立',
+        type: 'character',
+        description: '由对话引导创建的角色',
+      });
 
       console.log('\n== 4. 地点消息 ==');
       const m3 = await expectKinds(
@@ -219,6 +352,15 @@ function main(): Promise<number> {
       const apply3 = await expectApply(base, threadId!, m3, 200, null, 'apply 地点提案返回 200');
       const locTitle = ((apply3?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check('地点「天南大陆」已入库', locTitle === '天南大陆', String(locTitle));
+      const locId = ((apply3?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
+        | string
+        | undefined;
+      await expectAssetRow(locId, {
+        label: '天南大陆',
+        name: '天南大陆',
+        type: 'location',
+        description: '由对话引导创建的核心地点',
+      });
 
       console.log('\n== 5. 事件消息 ==');
       const m4 = await expectKinds(
@@ -236,6 +378,10 @@ function main(): Promise<number> {
         typeof eventTitle === 'string' && eventTitle.includes('灵气枯竭'),
         String(eventTitle),
       );
+      const eventId = ((apply4?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
+        | string
+        | undefined;
+      await expectWorldEventRow(eventId, '灵气枯竭');
 
       console.log('\n== 6. 增量角色消息（已有角色再添角色）==');
       const m5 = await expectKinds(
@@ -249,6 +395,15 @@ function main(): Promise<number> {
       const apply5 = await expectApply(base, threadId!, m5, 200, null, 'apply 增量角色返回 200');
       const wanTitle = ((apply5?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check('角色「南宫婉」已入库', wanTitle === '南宫婉', String(wanTitle));
+      const wanId = ((apply5?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
+        | string
+        | undefined;
+      await expectAssetRow(wanId, {
+        label: '南宫婉',
+        name: '南宫婉',
+        type: 'character',
+        description: '由对话引导创建的角色',
+      });
 
       console.log('\n== 7. 关系消息 ==');
       const m6 = await expectKinds(
@@ -262,6 +417,10 @@ function main(): Promise<number> {
       const apply6 = await expectApply(base, threadId!, m6, 200, null, 'apply 关系提案返回 200');
       const relTitle = ((apply6?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check('关系已入库', Boolean(relTitle), String(relTitle));
+      const relId = ((apply6?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
+        | string
+        | undefined;
+      await expectRelationshipRow(relId);
 
       console.log('\n== 8. 提问消息（不应误触发提案）==');
       const m7 = await expectKinds(
@@ -332,6 +491,16 @@ function main(): Promise<number> {
       check('resources: 1 地点', locations.includes('天南大陆'), locations.join(', '));
       check('resources: 1 事件', worldEvents.length >= 1, String(worldEvents.length));
       check('resources: 1 关系', relationships.length >= 1, String(relationships.length));
+
+      console.log('\n== 11. DB 汇总计数（防多余/缺失实体）==');
+      const dbCounts = await Promise.all([
+        prisma.asset.count({ where: { projectId: projectId!, deletedAt: null } }),
+        prisma.worldEvent.count({ where: { projectId: projectId!, deletedAt: null } }),
+        prisma.relationship.count({ where: { projectId: projectId!, deletedAt: null } }),
+      ]);
+      check('DB: 项目内 3 个 asset（韩立/南宫婉/天南大陆）', dbCounts[0] === 3, String(dbCounts[0]));
+      check('DB: 项目内 1 个 world_event', dbCounts[1] === 1, String(dbCounts[1]));
+      check('DB: 项目内 1 个 relationship', dbCounts[2] === 1, String(dbCounts[2]));
     } catch (error) {
       console.error('验证流程异常:', error);
     } finally {
