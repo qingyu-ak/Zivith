@@ -127,8 +127,14 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
   const wantsLocation = /地点|城市|场景|环境|where|location/i.test(text);
   const wantsEvent = /事件|发生了什么|历史|event/i.test(text);
   const incremental = /增加|添加|新增|再|又|还有|记录|补充|设定|创建|加入|登场/i.test(text);
+  // 明确声明信号（记录/创建/新增…）优先于疑问句检测，避免「主角还有什么秘密？」被误判为角色声明。
+  const declaring = /记录|创建|新增|添加|设定|补充|登场|加入|增加|叫|名为/.test(text);
+  const asking =
+    !declaring &&
+    (/\?|？/.test(text) ||
+      /什么|哪里|为什么|怎么|如何|是谁|在哪|吗$/.test(text));
 
-  if (wantsCharacter && (!hasCharacters || incremental)) {
+  if (wantsCharacter && !asking && (!hasCharacters || incremental)) {
     proposals.push(
       mockProposal('create_character', projectId, {
         name: extractEntityName(text) ?? (hasCharacters ? '新角色' : '未命名主角'),
@@ -143,7 +149,7 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
     };
   }
 
-  if (wantsLocation && (!hasLocations || incremental)) {
+  if (wantsLocation && !asking && (!hasLocations || incremental)) {
     proposals.push(
       mockProposal('create_location', projectId, {
         name: extractEntityName(text) ?? (hasLocations ? '新地点' : '未命名地点'),
@@ -157,7 +163,7 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
     };
   }
 
-  if (wantsEvent && (!hasEvents || incremental)) {
+  if (wantsEvent && !asking && (!hasEvents || incremental)) {
     proposals.push(
       mockProposal('create_world_event', projectId, {
         title: extractEntityName(text) ?? (hasEvents ? '新事件' : '关键事件'),
@@ -173,6 +179,7 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
   }
 
   if (
+    !asking &&
     /关系|和|与|relationship/i.test(text) &&
     hasCharacters &&
     (world.relationships.length === 0 || incremental)
