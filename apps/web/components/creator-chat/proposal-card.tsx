@@ -167,9 +167,9 @@ export function ProposalCard({
         <div className="mt-4">
           <Link
             className="inline-flex min-h-10 items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink transition hover:bg-lime-300"
-            href={`/projects/${createdProject.project_id}`}
+            href={`/projects/${createdProject.project_id}/world`}
           >
-            进入项目工作区
+            进入世界线工作区
           </Link>
         </div>
       )}

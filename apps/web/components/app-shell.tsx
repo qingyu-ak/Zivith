@@ -15,6 +15,7 @@ const navigation: Array<{
 }> = [
   { label: '创作聊天', href: '/creator-chats', icon: '◉' },
   { label: '项目', href: '/projects', icon: '◇' },
+  { label: '世界线', suffix: '/world', icon: '▚' },
   { label: '故事', suffix: '', icon: '▤' },
   { label: '角色与场景', suffix: '/assets', icon: '◎' },
 ];
@@ -26,8 +27,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
 
   useEffect(() => {
-    // Creator layer (ADR-0013) needs no auth: creator-chats must stay reachable.
-    if (!session.getToken() && !pathname.startsWith('/creator-chats')) {
+    // Creator layer (ADR-0013) needs no auth: creator-chats and the read-only
+    // world workspace must stay reachable without a session.
+    if (
+      !session.getToken() &&
+      !pathname.startsWith('/creator-chats') &&
+      !pathname.includes('/world')
+    ) {
       router.replace('/login');
       return;
     }
@@ -101,9 +107,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ? pathname.startsWith('/creator-chats')
                 : item.suffix === '/assets'
                   ? pathname.includes('/assets')
-                  : item.label === '项目'
-                    ? pathname === '/projects'
-                    : Boolean(params.projectId) && !pathname.includes('/assets');
+                  : item.suffix === '/world'
+                    ? pathname.includes('/world')
+                    : item.label === '项目'
+                      ? pathname === '/projects'
+                      : Boolean(params.projectId) &&
+                        !pathname.includes('/assets') &&
+                        !pathname.includes('/world');
             return (
               <Link
                 key={item.label}

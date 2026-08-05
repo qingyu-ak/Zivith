@@ -54,6 +54,7 @@ export interface SceneDTO {
   mood?: string | null;
   shot_count?: number;
   state?: 'draft' | 'review' | 'approved';
+  created_at?: string;
 }
 
 export interface ShotCharacterDTO {
@@ -165,6 +166,7 @@ export interface AssetDTO {
   cover_image?: MediaDTO | null;
   /** Location design-sheet prompt draft */
   location_sheet_prompt?: string;
+  created_at?: string;
 }
 
 export interface AppearanceVariantMediaDTO {
@@ -364,7 +366,6 @@ export interface GenerationTaskDTO {
 }
 
 export type ProviderId = 'mock' | 'deepseek' | 'siliconflow';
-
 export interface ProviderModelsDTO {
   llm: string;
   /** 文生图 T2I */
@@ -406,3 +407,95 @@ export interface ProviderCatalogDTO {
     status?: string;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Stage F — World Line workspace（世界线三栏视图，v1 只读）
+// 数据源：GET /world/projects/:projectId/resources（无认证，ADR-0013）
+// ---------------------------------------------------------------------------
+
+export interface WorldEventDTO {
+  id: string;
+  project_id: string;
+  anchor_story_id?: string | null;
+  title: string;
+  description?: string | null;
+  world_time_envelope?: Record<string, unknown> | null;
+  presentation_order?: number | null;
+  state: string;
+  character_ids?: string[];
+  scene_ids?: string[];
+  created_at: string;
+}
+
+export interface WorldRelationshipDTO {
+  id: string;
+  project_id: string;
+  kind: string;
+  source_type: string;
+  source_id: string;
+  target_type: string;
+  target_id: string;
+  direction?: string | null;
+  label?: string | null;
+  description?: string | null;
+  state: string;
+  created_at: string;
+}
+
+export interface WorldResourcesDTO {
+  project: { id: string; name: string };
+  entities: {
+    stories: StoryDTO[];
+    characters: AssetDTO[];
+    locations: AssetDTO[];
+    scenes: SceneDTO[];
+    world_events: WorldEventDTO[];
+    relationships: WorldRelationshipDTO[];
+  };
+}
+
+/** 世界线条目（前端从 resources 派生；anchorOrder 用于非均匀刻度定位） */
+export type WorldLineEntityType = 'character' | 'location' | 'scene' | 'world_event';
+
+export interface WorldLineItem {
+  id: string;
+  entityType: WorldLineEntityType;
+  title: string;
+  description?: string | null;
+  tags?: string[];
+  /** 刻度位置：事件=presentation_order，场景=order，角色/地点=锚点插值 */
+  anchorOrder: number;
+  createdAt: string;
+  /** 实体特有属性（Inspector 展示用） */
+  extra?: Record<string, unknown>;
+}
+
+export interface WorldLineTrack {
+  kind: 'character' | 'scene' | 'world_event';
+  title: string;
+  items: WorldLineItem[];
+}
+
+export interface WorldLineRelationship {
+  id: string;
+  label?: string | null;
+  sourceItemId: string | null;
+  targetItemId: string | null;
+  sourceType: string;
+  targetType: string;
+  state: string;
+}
+
+export interface WorldLineModel {
+  projectId: string;
+  projectName: string;
+  tracks: WorldLineTrack[];
+  relationships: WorldLineRelationship[];
+  /** 刻度轴锚点（世界时间刻度 domain） */
+  scaleDomain: { min: number; max: number };
+}
+
+/** 世界线工作区选中项（Explorer / Timeline 联动，Inspector 展示） */
+export type WorldSelection =
+  | { kind: 'character' | 'location' | 'scene' | 'world_event' | 'story' | 'project'; id: string }
+  | null;
