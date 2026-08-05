@@ -482,3 +482,59 @@ class MockGenerationAdapter implements VideoGenerationAdapter {
 - [ ] 生产代码中无 console.log
 - [ ] 无硬编码凭证或 API 密钥
 - [ ] 公共接口有文档注释
+
+---
+
+# 13. 开发策略：分层复用与开源借鉴
+
+> 2026-08-05 采纳。目标：不重复造轮子，用成熟方案快速落地，同时保持模块独立、可替换。
+
+## 13.1 模块独立分层
+
+各模块按边界独立开发，层与层之间只通过稳定契约（`@zivith/domain` zod schema / Prisma 模型 / API DTO）通信，不跨层直接调用内部实现：
+
+| 层 | 位置 | 职责 | 依赖规则 |
+|----|------|------|----------|
+| 领域契约 | `packages/domain` | 类型、schema、错误码 | 零依赖，被所有层引用 |
+| 数据层 | `packages/database` | Prisma 模型、client | 只依赖 domain |
+| API 应用 | `apps/api/src/contexts/*` | 按领域上下文聚合（world / world-builder / generation / workflow…） | 依赖 domain + database |
+| API 路由 | `apps/api/src/routes/*` | 薄路由层：校验 → 调 context → 序列化 | 不写业务逻辑 |
+| Web | `apps/web/components/*`、`app/**` | UI + 客户端数据层 | 只消费 API DTO |
+
+落地要点：
+
+- 新功能先落在 `contexts/` 下独立目录，不塞进既有 context
+- 跨模块复用只允许通过 domain 契约或公开 service 接口，禁止复制实现
+- 更换实现（如 LLM 提供商、存储适配器、队列）通过接口 + adapter 完成，业务层无感
+- 模块可独立演进：一个模块的失败/回滚不影响其他模块（参见 Track J 绊线）
+
+## 13.2 开源借鉴优先，从零重写兜底
+
+**原则：开发新模块前，先调研 GitHub 上成熟的同类开源方案，提取思路与架构，再结合本项目约束落地——不是复制代码，而是借力。**
+
+类比：写游戏不从引擎开始写，而是选成熟引擎（Unreal/Unity/Godot）。Zivith 同样优先复用成熟领域库与开源参考，把精力留给「AI 可理解的世界模型」这一差异化核心。
+
+### 13.2.1 调研流程（每个新模块开工前）
+
+1. **识别可借鉴领域**：本模块本质上是哪个成熟领域？例如——世界线时间线 ≈ 交互式时间线/甘特图（visx、vis-timeline、d3-scale）；实体 Explorer ≈ 树/目录面板（递归组件 + 拖拽库）；对话 Agent 流 ≈ Codex/Claude Code 的持续对话架构（SSE 流式、工具调用围栏）；提案确认围栏 ≈ 代码审阅/补丁审批流
+2. **GitHub 检索候选**：按「领域 + 技术栈」关键词找 star 高、维护活跃、文档全的仓库；优先官方维护与用了相同技术栈（React/Next.js/Fastify/Prisma）的
+3. **提取思路而非复制**：研究其数据模型、状态管理、组件拆分、边界划分；产出「借鉴清单」：哪些抽象直接采用、哪些要裁剪、哪些不适合
+4. **确认许可合规**：MIT/Apache-2.0 可直接参考思路或少量借鉴；GPL/AGPL 只借鉴思路、不引入代码；复制代码必须保留版权声明
+5. **落地记录**：将借鉴来源与采纳点记入开发记录（Development-Log.md），便于追溯
+
+### 13.2.2 借鉴清单（已识别候选，后续模块逐个落实）
+
+| 模块 | 借鉴领域 | 候选参考 |
+|------|----------|----------|
+| 世界线视图（Track K / H4-H5） | 交互式时间线 / 甘特图 | visx、vis-timeline、d3-scale（非均匀刻度 + 轨道化） |
+| 实体 Explorer（Track K 左栏） | 树状目录 / 递归导航 | 成熟 React tree 组件 + 现有 App Shell 导航模式 |
+| Creator Chat 流式（Track J 后续） | Agent 持续对话 | Codex / Claude Code 的会话 + 提案/工具围栏交互模式 |
+| 提案确认围栏（已完成） | 审阅/补丁审批流 | 现有 ProposalCard + apply 模式（本项目首创落地） |
+| 视频生成管线 | 媒体生成任务编排 | 现有 WorkflowOrchestrator + BullMQ（已完成，不重写） |
+
+### 13.2.3 禁止事项
+
+- 禁止把调研时间花在已有轮子上：monorepo 内已有能力（orchestrator、provider registry、usage 记录）一律复用
+- 禁止直接 copy-paste 大型第三方组件树而不理解其状态流
+- 禁止引入新的重型依赖来完成本可基于现有库组合的功能（引入前先问：现有依赖能否做到？）
+- 禁止跳过许可检查引入开源代码

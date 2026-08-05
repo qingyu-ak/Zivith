@@ -110,6 +110,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 |----------|-------------|
 | [Next Tasks](planning/Next-Tasks.md) | 当前工程 backlog（Track H 进行中：H3 Done → H4 Timeline；Phase 3 稍后） |
 | [Implementation Plan](planning/Implementation-Plan.md) | 分阶段路线图与实时进度勾选 |
+| [Development Log](planning/Development-Log.md) | 逐次修改的开发记录（每次提交同步追加） |
 
 ### architecture/ — 决策
 
