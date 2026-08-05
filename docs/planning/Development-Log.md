@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-08-05 · `5d95566` · feat(web) · 世界线三栏工作区（阶段 F，v1 只读）
+
+新增 `/projects/:projectId/world` 世界线工作区，IDE 式三栏布局：左实体 Explorer（角色/地点/场景/事件/故事分组树）、中 SVG 世界线时间轴（非均匀刻度 + 轨道化 + 关系连线）+ 副驾驶占位面板、右 Inspector（右上世界线属性、右下创作线属性占位）；选中项三栏联动。数据源 `GET /world/projects/:pid/resources`（无认证，ADR-0013）。App shell 导航新增「世界线」，auth guard 放行 `/world`；proposal-card「进入项目工作区」直链世界线。
+
+开源借鉴评估落地（按 Code-Agent-Design-Guide §13.2）：vis-timeline 不采用（命令式 API、强绑定日历时间、7.x 后维护停滞）；借鉴其「轨道+条目」数据模型与 d3-scale 的 domain→range 刻度抽象，零依赖手写 `lib/world-scale.ts`（createOrderScale / interpolateOrders / integerTicks）+ `lib/world-line.ts`（resources 派生模型纯函数）。
+
+- 模块：`apps/web/app/(studio)/projects/[projectId]/world/`、`apps/web/components/world/`、`apps/web/lib/world-line.ts`、`apps/web/lib/world-scale.ts`、`apps/web/lib/types.ts`、`apps/web/components/app-shell.tsx`
+- 验证：tsc --noEmit 通过；SSR 200 + 世界线标记渲染；派生模型纯函数用真实数据 9 项断言全 PASS（3 轨道、韩立/南宫婉落位、事件锚点、关系连线映射、scaleDomain 有效）
+
 ## 2026-08-05 · `7b71079` · test(api) · 提案流脚本增加数据库落库完整性断言
 
 在 `verify-proposal-flow.ts` 中新增 20 项 DB 层断言：每一步 apply 后直接查库验证字段级持久化——project（name/description/ownerId/defaults/settings + 自动 World Line timeline + thread.project_id）、asset（name/type/state= draft/projectId/description，覆盖韩立、南宫婉、天南大陆）、world_event（title/description/state/world_time_envelope/presentation_order）、relationship（kind/sourceType/targetType/direction/label/description/state + 两端引用项目内真实实体），末尾增加 DB 汇总计数防多余/缺失实体。检查数 28 → 48，全部通过。

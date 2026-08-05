@@ -526,7 +526,7 @@ class MockGenerationAdapter implements VideoGenerationAdapter {
 
 | 模块 | 借鉴领域 | 候选参考 |
 |------|----------|----------|
-| 世界线视图（Track K / H4-H5） | 交互式时间线 / 甘特图 | visx、vis-timeline、d3-scale（非均匀刻度 + 轨道化） |
+| 世界线视图（Track K / H4-H5，v1 已落地 2026-08-05） | 交互式时间线 / 甘特图 | 评估结论：vis-timeline 不采用（命令式 API、强绑定日历时间、7.x 后维护停滞）；借鉴其「轨道+条目」数据模型 + d3-scale 的 domain→range 抽象，零依赖手写（`lib/world-scale.ts`） |
 | 实体 Explorer（Track K 左栏） | 树状目录 / 递归导航 | 成熟 React tree 组件 + 现有 App Shell 导航模式 |
 | Creator Chat 流式（Track J 后续） | Agent 持续对话 | Codex / Claude Code 的会话 + 提案/工具围栏交互模式 |
 | 提案确认围栏（已完成） | 审阅/补丁审批流 | 现有 ProposalCard + apply 模式（本项目首创落地） |

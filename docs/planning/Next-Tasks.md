@@ -171,8 +171,8 @@
 | H1 | 规范 Entity 快照 + ChangeEvent schemas | `@zivith/domain` `history/*`；Shot/PromptVersion/Output/AppearanceVariant/VisualRequirement；ADR-0007 Accepted | 已完成 2026-07-30 |
 | H2 | EntityRevision/ChangeEvent 表与基线回填 | Prisma 表 + `backfillEntityBaselines`；无读路径切换 | 已完成 2026-07-30 |
 | H3 | 先影子写再事务性 State 双写 | 功能开关默认 **关**；经 env 按 Entity 使用 `shadow` / `dual` | 已完成 2026-07-30 |
-| H4 | 只读 Presentation Timeline | 导入既有 Scene/Shot 顺序；World Time 默认跟随；**2026-08-04 起以世界线视图优先落地**（非均匀刻度 + 轨道化） | 进行中（feat/creator-layer-first） |
-| H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；首发无高级 track 或编辑 | 进行中（feat/creator-layer-first） |
+| H4 | 只读 Presentation Timeline | 导入既有 Scene/Shot 顺序；World Time 默认跟随；**2026-08-04 起以世界线视图优先落地**（非均匀刻度 + 轨道化）；**2026-08-05 世界线 v1 已落地（`/projects/:id/world`）** | 进行中（feat/creator-layer-first） |
+| H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；首发无高级 track 或编辑；**2026-08-05 三轨道 + 关系连线 v1 已落地** | 进行中（feat/creator-layer-first） |
 | H6 | 可变 WorldTime 绑定 | 自定义维度、模糊/区间/相对/平行时间 | 计划中 |
 | H7 | 高级派生 Track 投影 | 先 Camera/Prompt/Model；Style 稍后 | 计划中 |
 | H8 | Object/Event/Organization Entity 扩展 | **已被 Track I 取代** — 世界实体扩展现有独立的分片门禁轨道 | 已取代 2026-07-31 |
@@ -232,9 +232,9 @@
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
 | K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | 进行中（feat/creator-layer-first） |
-| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector 上下分栏（右上世界线属性、右下创作线属性）；v1 只读 | 进行中 — 受 **H4** 门禁 |
+| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector 上下分栏（右上世界线属性、右下创作线属性）；**2026-08-05 v1 只读已落地（`/projects/:id/world`）** | 已完成 v1 只读（feat/creator-layer-first） |
 | K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；侧栏「创作对话」常驻可达 | 进行中 — 受 Track J 门禁 |
-| K4 | World View 先行 | **一条** Timeline 的两种视图；v1 只做世界视图（非均匀刻度 + 轨道化 + 关系连线），Production 视图置灰标「后续」 | 进行中 — 受 Track I 门禁 |
+| K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），Production 视图置灰标「后续」 | 进行中 — 世界视图 v1 完成，Production 视图待做 |
 
 **Timeline 决策（2026-07-31）：** World View 与 Production View 是单一 `ProjectTimeline` 的两种投影，不是两条持久化时间线。独立世界轴需要全局可排序的世界年表 — 这正是 [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md) 放弃的，因为虚构历法、模糊时段与平行世界无法合并为一条序列。ADR-0007 保持不变；无需新 ADR。工作流运行与生成任务完全不在 Timeline 上 — 执行时间是第三种时间，位于 `/production`。
 
