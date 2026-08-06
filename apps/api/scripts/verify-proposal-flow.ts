@@ -513,6 +513,64 @@ function main(): Promise<number> {
       check('DB: 项目内 3 个 asset（韩立/南宫婉/天南大陆）', dbCounts[0] === 3, String(dbCounts[0]));
       check('DB: 项目内 1 个 world_event', dbCounts[1] === 1, String(dbCounts[1]));
       check('DB: 项目内 1 个 relationship', dbCounts[2] === 1, String(dbCounts[2]));
+
+      // 混合批次回归：LLM 误产出 create_project 与真实实体提案混在同一消息，
+      // 已有项目时应跳过 create_project（不阻断），实体照常应用。
+      console.log('\n== 12. 混合批次（误报 create_project + 真实实体）==');
+      const mixed = await prisma.creatorChatMessage.create({
+        data: {
+          threadId: threadId,
+          role: 'assistant',
+          content: '（构造：混合批次——误报 create_project + 新增角色）',
+          proposal: [
+            {
+              kind: 'create_project',
+              project_id: null,
+              payload: { name: '重复项目' },
+            },
+            {
+              kind: 'create_character',
+              project_id: projectId,
+              payload: {
+                name: '测试混合角色',
+                description: '由混合批次创建（create_project 应被跳过）',
+              },
+            },
+          ],
+          proposalKey: `mixed-${Date.now()}`,
+          proposalState: 'pending',
+        },
+      });
+      const mixedRes = await request(
+        base,
+        'POST',
+        `/world/creator-chats/${threadId}/proposals/${mixed.id}/apply`,
+        {},
+      );
+      check(
+        '混合批次 apply → 200（不被 PROJECT_ALREADY_EXISTS 阻断）',
+        mixedRes.status === 200,
+        `status=${mixedRes.status}`,
+      );
+      const mixedJson = mixedRes.json as Json | undefined;
+      const mixedApplied = ((mixedJson?.applied as Json[] | undefined) ?? []).map((item) => item as Json);
+      const mixedSkipped = ((mixedJson?.skipped as Json[] | undefined) ?? []).map((item) => item as Json);
+      check(
+        '混合批次：create_project 被跳过（skipped 1 项）',
+        mixedSkipped.length === 1 && (mixedSkipped[0] as Record<string, unknown>).kind === 'create_project',
+        JSON.stringify(mixedSkipped),
+      );
+      check(
+        '混合批次：create_character 已应用（applied 1 项）',
+        mixedApplied.length === 1 && (mixedApplied[0] as Record<string, unknown>).entity_type === 'asset',
+        JSON.stringify(mixedApplied),
+      );
+      const mixedAsset = await prisma.asset.findFirst({
+        where: { projectId: projectId, name: '测试混合角色', deletedAt: null },
+      });
+      check('混合批次：角色已落库（draft）', Boolean(mixedAsset && mixedAsset.state === 'draft'));
+      const mixedMsg = await prisma.creatorChatMessage.findUnique({ where: { id: mixed.id } });
+      check('混合批次：消息已标记 applied', mixedMsg?.proposalState === 'applied', String(mixedMsg?.proposalState));
     } catch (error) {
       console.error('验证流程异常:', error);
     } finally {

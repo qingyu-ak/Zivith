@@ -73,6 +73,7 @@ export function ProposalCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [results, setResults] = useState<ApplyProposalResultDTO[]>([]);
+  const [skipped, setSkipped] = useState<Array<{ kind: string; reason: string }>>([]);
 
   const descriptions = useMemo(
     () =>
@@ -86,11 +87,15 @@ export function ProposalCard({
     setBusy(true);
     setError('');
     try {
-      const value = await api<{ applied: ApplyProposalResultDTO[] }>(
+      const value = await api<{
+        applied: ApplyProposalResultDTO[];
+        skipped?: Array<{ kind: string; reason: string }>;
+      }>(
         `/world/creator-chats/${threadId}/proposals/${messageId}/apply`,
         { method: 'POST', body: {} },
       );
       setResults(value.applied);
+      setSkipped(value.skipped ?? []);
       onApplied?.(value.applied);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -161,6 +166,12 @@ export function ProposalCard({
             </li>
           ))}
         </ul>
+      )}
+
+      {skipped.length > 0 && (
+        <p className="mt-3 rounded-lg bg-amber-500/10 p-2.5 text-xs text-amber-300" role="status">
+          项目已存在，已跳过「创建项目」提案；其余实体提案已应用。
+        </p>
       )}
 
       {createdProject && (

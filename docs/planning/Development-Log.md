@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-08-06 · `(pending commit)` · fix(api,web) · 混合批次跳过重复 create_project，实体提案照常应用
+
+LLM 偶尔在项目已存在时仍误产出 `create_project`，与真实实体提案混在同一批。原 apply 逻辑只要遇到 `create_project` 且项目已存在就抛 `PROJECT_ALREADY_EXISTS`，导致整批实体提案（角色/地点/事件等）全部无法应用，表现为「新出现的实体不能添加到世界」。
+
+- **fix(api)** `apps/api/src/routes/world.ts`：批内遍历改为「跳过 + 继续」——`create_project` 与既有项目冲突时记录到 `skipped` 并继续应用其余提案；仅当全部提案均被跳过（纯重复建项目）才保留原 400 语义；响应改为 `{ applied, skipped }`
+- **fix(web)** `proposal-card.tsx`：消费 `skipped`，成功后显示琥珀色提示「项目已存在，已跳过「创建项目」提案；其余实体提案已应用。」
+- **test** `verify-proposal-flow.ts`：新增第 12 节「混合批次」回归——构造 create_project + create_character 同消息，断言 apply 200 不被阻断、skipped 含 create_project、applied 含 asset、角色已落库 draft、消息标记 applied
+- 验证：`verify-proposal-flow.ts` **53/53 全过**（旧语义保留：纯 create_project 仍 400）；api/web `tsc --noEmit` 0 error
+- 模块：`apps/api/src/routes/world.ts`、`apps/web/components/creator-chat/proposal-card.tsx`、`apps/api/scripts/verify-proposal-flow.ts`
+
 ## 2026-08-06 · `ee2c801` / `a26dfac` · feat(web) · Studio Production 视图（K4 完成）
 
 「一条 Timeline 的两种视图」补齐制作视图：世界线工作区顶部新增「世界 / 制作」tab 切换，制作视图沿 Presentation 顺序展示制作链路——故事（Story）轨道 + 场景（Scene）轨道（全局展示序号定位，非均匀刻度 + 轨道化复用世界时间线布局），左栏切换为故事列表，右栏 Inspector 复用（story/scene 选中展示）。数据复用 `GET /world/projects/:id/resources` 的 `entities.stories/scenes`，零后端改动；`StoryDTO` 补 `order` 字段；`buildProductionLineModel` 纯函数派生（mock 断言 5 项全过：双轨道/锚点连续/scaleDomain/无连线）。Shot 轨道与高级 track 留后续（K4 状态已更新）。

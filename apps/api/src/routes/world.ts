@@ -631,39 +631,46 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'NO_PROPOSAL', '该消息没有可应用的提案');
     }
 
-    const applied: Array<{ kind: string; project_id: string; entity_type: string; entity_id: string; title: string }> =
-      await db.$transaction(async (tx) => {
-        const results: Array<{ kind: string; project_id: string; entity_type: string; entity_id: string; title: string }> =
-          [];
-        // Track the project across a proposal batch: create_project may appear
-        // alongside entity proposals in the same message.
-        let currentProjectId = thread.projectId;
-        for (const proposal of proposals) {
-          if (proposal.kind === 'create_project' && currentProjectId) {
-            throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
-          }
-          const result = await applyProposal(tx, proposal, currentProjectId, memberUserId);
-          results.push({
-            kind: result.kind,
-            project_id: result.projectId,
-            entity_type: result.entityType,
-            entity_id: result.entityId,
-            title: result.title,
-          });
-          if (result.entityType === 'project') {
-            currentProjectId = result.projectId;
-            await tx.creatorChatThread.update({
-              where: { id: threadId },
-              data: { projectId: result.projectId },
-            });
-          }
+    const { results, skipped } = await db.$transaction(async (tx) => {
+      const results: Array<{ kind: string; project_id: string; entity_type: string; entity_id: string; title: string }> =
+        [];
+      const skipped: Array<{ kind: string; reason: string }> = [];
+      // Track the project across a proposal batch: create_project may appear
+      // alongside entity proposals in the same message.
+      let currentProjectId = thread.projectId;
+      for (const proposal of proposals) {
+        if (proposal.kind === 'create_project' && currentProjectId) {
+          // 已有关联项目时，LLM 偶尔会误产出 create_project（创作者意图是向已有
+          // 项目添加实体，而非重复建项目）。跳过该提案而不阻断整批实体提案；
+          // 全部提案均被跳过时才报错（保留「纯重复建项目」的原语义）。
+          skipped.push({ kind: proposal.kind, reason: 'PROJECT_ALREADY_EXISTS' });
+          continue;
         }
-        await tx.creatorChatMessage.update({
-          where: { id: messageId },
-          data: { proposalState: 'applied' },
+        const result = await applyProposal(tx, proposal, currentProjectId, memberUserId);
+        results.push({
+          kind: result.kind,
+          project_id: result.projectId,
+          entity_type: result.entityType,
+          entity_id: result.entityId,
+          title: result.title,
         });
-        return results;
+        if (result.entityType === 'project') {
+          currentProjectId = result.projectId;
+          await tx.creatorChatThread.update({
+            where: { id: threadId },
+            data: { projectId: result.projectId },
+          });
+        }
+      }
+      if (results.length === 0 && skipped.length > 0) {
+        throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
+      }
+      await tx.creatorChatMessage.update({
+        where: { id: messageId },
+        data: { proposalState: 'applied' },
       });
-    return { applied };
+      return { results, skipped };
+    });
+    return { applied: results, skipped };
   });
 }
