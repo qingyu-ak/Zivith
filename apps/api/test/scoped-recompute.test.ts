@@ -8,7 +8,7 @@ import {
   sceneVisualInputSnapshot,
   stableInputHash,
 } from '../src/contexts/workflow/scoped-recompute.js';
-import { ApiError } from '../src/errors.js';
+import type { ApiError } from '../src/errors.js';
 
 describe('scoped recompute helpers', () => {
   it('produces stable input hashes for the same scene snapshot', () => {

@@ -12,6 +12,72 @@
 
 ---
 
+## 2026-08-05 · `(pending commit)` · chore(data) · 三个同名「凡人修仙传」合并为一个（保留全部数据）
+
+排查「对话有角色但 Studio 没有」时发现库内存在三个同名「凡人修仙传」：`239cb924`（韩立/天南大陆/2 事件/已确认对话）、`b62f238b`（1 条对话含 pending 韩立提案，无实体）、`4c50e7cc`（验证项目，无数据）。用户确认合并为一个、保留所有数据。
+
+以 `239cb924` 为主体执行事务合并：① `b62f238b` 的对话（thread `1a27122d`）projectId 迁移至主体，对话历史/消息原样保留；② 处理该对话的 pending 提案——`create_project` 项移除（主体项目已存在，保留会在确认时 PROJECT_ALREADY_EXISTS）、韩立描述并入主体已有韩立 asset（目标项目已有韩立，无需重复落库）、提案标记 `applied` 不留 pending 残留；③ 空壳 timeline 与其余两个项目软删（`deletedAt`，数据保留可恢复）。
+
+- 验证：全库计数无损——threads 9→9、assets 74→74、worldEvents 3→3，projects(active) 7→5；`GET /projects`（demo）只剩 1 个「凡人修仙传」+「UI 回归验证项目」；`resources` 返回韩立（描述已并入两段）/天南大陆/2 事件；`/world/creator-chats` 2 条对话均归属主体项目、无对话指向已归档项目；浏览器回归：/projects 1 张卡片、工作区可见韩立/天南大陆/2 事件、两条对话「进入 Studio →」均指向 `239cb924`，无报错
+- 模块：数据操作（无代码变更，脚本已清理）；说明：对话标题 `?????` 为早期测试乱码残留，非本次引入
+
+## 2026-08-05 · `(pending commit)` · feat(api/web) · Studio Inspector 项目属性内联编辑（K5 衍生）
+
+右栏 Inspector 支持项目级内联编辑：名称/描述/题材/核心设定/世界规则/补充 六项可改可存，保存后刷新持久化。进入工作区 → 左栏选中「项目」节点 → Inspector 顶部右上「编辑」→ 修改 → 保存（成功后自动刷新资源并回显）。编辑按钮置于「世界线属性」区块标题右上角，符合「动作按钮右上角快速可达」的交互偏好。
+
+- API `PATCH /projects/:id` 扩展支持 `worldview` 字段：`projectBody` 新增 `worldview: z.record(z.unknown()).optional()`（导出 schema 便于契约单测）；**编辑器整组替换语义**——保存时以 `parseWorldview(body.worldview)` 规范化并整体落库，允许清空单个字段（与 agent 侧 `mergeWorldview` 部分合并语义区分，见 proposal-applier）；`POST /projects` 同步支持带 worldview 创建
+- Web `inspector-panel.tsx`：project 分支加内联编辑表单（六输入框 + 保存/取消 + 错误提示 + 保存中态）；草稿随 `resources` 刷新重置、切换选择自动退出编辑态；保存调 `PATCH /projects/:id`，成功回调 `onProjectUpdated` 触发父级 `load()` 刷新；世界工作区 header 徽标由「v1 只读」改为「v1」
+- 验证：typecheck api/web ✓ 0 error（顺带修复 Next 16 dev 生成的 `.next/dev/types/*.ts` 截断问题——重启 dev server 并清除 `.next` 缓存后重新生成）；lint ✓ 0 error；单测 `resource-contracts.test.ts` 新增「project worldview patch contract」2 例（Inspector 载荷规范化 + 清空字段整组替换语义）8/8 ✓；API 级闭环冒烟 ✓（建临时项目 → PATCH worldview 六字段 → GET 持久化 → 清空语义 genre="" rules=[] → 删除）；浏览器端到端（127.0.0.1:3100）全 PASS：登录 → /projects 见「凡人修仙传」→ 世界工作区三栏 → 选项目节点 → 编辑 → 追加描述与规则 → 保存 → 刷新后持久化确认
+- 说明：上一轮清理已移除 chat 测试建的「凡人修仙传」；库内仅存两个早期孤立「凡人修仙传」（`b62f238b`/`239cb924`，owner=local 且无 ProjectMember，不在 /projects 列表、PATCH 403）。本轮验证另建 demo-owned 的「凡人修仙传」`4c50e7cc`（已带成员、可编辑），是否保留待用户确认
+- 模块：`apps/api/src/routes/resources.ts`、`apps/api/test/resource-contracts.test.ts`、`apps/web/components/world/{inspector-panel,world-workspace}.tsx`
+
+## 2026-08-05 · `(pending commit)` · feat(api/web/domain) · 世界观 Chat→Studio 核心闭环（K5）
+
+愿景核对报告 + 核心闭环落地：Creator Chat 引导 IP → 自动识别世界观 → 落库 → Studio 三栏展示 → 副驾驶摘要 → 切换入口。Chat 引导/Studio 三栏/实体列表/timeline/Inspector 与愿景对齐；补齐世界观单点表示与自动识别。
+
+- `Project.worldview Json @default("{}")`（genre/premise/rules/notes）+ additive 迁移 `20260805051706_add_project_worldview`
+- `@zivith/domain`：`worldviewSchema` / `parseWorldview` / `mergeWorldview`（rules 整组替换）+ 6 项单测
+- proposal-applier：`create_project` 支持 payload.worldview；`update_entity` 新增 `type='project'` 分支（merge 落库）
+- world-builder：mock 正则识别世界观信号（题材/设定/规则/力量体系…，优先于实体分支）产出 `update_entity` 提案；LLM system prompt 加入世界观提炼指令；`buildWorldContext` 注入世界观到「世界现状」插槽
+- `GET /world/projects/:pid/resources` 返回 `project.worldview` + `stage`（bootstrap/growing/mature）
+- Web：`WorldviewDTO`/`WorldStage` 类型；新组件 `co-pilot-panel.tsx`（只读世界状态摘要）替换中栏占位；Explorer 顶部「世界观」组；Inspector project 分支展示世界观属性；chat header 常驻「进入 Studio →」入口
+
+- 模块：`packages/database/prisma/schema.prisma`、`packages/domain/src/world.ts`、`packages/domain/test/world.test.ts`、`apps/api/src/contexts/world/proposal-applier.ts`、`apps/api/src/contexts/world-builder/{world-builder-agent,prompt,world-context}.ts`、`apps/api/src/routes/world.ts`、`apps/web/lib/types.ts`、`apps/web/components/world/{co-pilot-panel,entity-explorer,world-workspace,inspector-panel}.tsx`、`apps/web/components/creator-chat/chat-panel.tsx`
+- 验证：typecheck（api/web/domain）✓ 0 error；lint ✓ 0 error；单测 domain 54 / api 95 / web 11 全过；E2E `verify-proposal-flow.ts` 48/48 ✓；API 级世界观闭环冒烟 ✓（世界观提案 → apply → worldview 落库 → resources 返回）；浏览器回归（127.0.0.1:3100，mock API）A–E 五点全 PASS（Chat 引导世界观提案/确认落库 → header 常驻「进入 Studio →」跳转 → 左栏世界观组 → 副驾驶面板阶段+摘要+计数 → Inspector 世界观属性）
+- 回归期修复 6 处：① `update_entity` 的 `type='project'` 且 payload 缺 `id` 时兜底为 projectId（LLM/mock 漏带）；② mock 世界观提案显式带 `id: projectId`；③ mock 世界观 premise 正则优化（移除「设定：」前缀捕获）；④ CoPilotPanel/InspectorPanel 补 `worldview ?? { rules: [] }` 空值防护（防旧版 API 契约缺失崩溃）；⑤ **真实 LLM 占位 project_id 修复**：LLM 会在提案里填 `project_placeholder`/`proj-001` 等占位 ID，`requireProjectId` 改为上下文归属（批量 apply 的 currentProjectId / thread.projectId）优先，`type='project'` 的实体 id 恒用 projectId；apply 循环包进 `db.$transaction`（失败整体回滚、提案保持 pending 可重试，消除部分应用与重复确认死锁）。定向复测 7 项全过（占位 ID apply 200 + 角色落库于正确项目 + 批量失败回滚 + pending 可重试 + 4xx 非 500）；⑥ **Creator Chat 项目进 /projects 列表**：applyCreateProject 建项目时自动写入 `ProjectMember`（优先当前登录用户——world 路由无 auth 但前端统一带 Bearer token，apply 端点可选 `jwtVerify` 解析；匿名/无 token 回退 local owner），与手动建项目（resources.ts nested create）行为一致，按成员过滤的 /projects 列表可见。定向验证 + 浏览器端到端全 PASS（chat 建项目 → /projects 列表出现 → 可进入工作区）
+
+## 2026-08-05 · `(pending commit)` · feat(web) · K3 Creator Chat 设为应用默认页 `/`
+
+Track K3 落地：根路由 `apps/web/app/page.tsx` 重定向由 `/projects` 改为 `/creator-chats`，打开应用即进入持续对话创作面（Track J 门禁已满足）。
+
+- 模块：`apps/web/app/page.tsx`
+- 验证：web typecheck ✓ / eslint ✓ / 浏览器回归（127.0.0.1:3100）：`/` 正确重定向 `/creator-chats`，侧栏「创作聊天」激活，对话列表与新建入口可用，`/projects` 回归正常，无 500
+
+## 2026-08-05 · `(pending commit)` · feat(web) · K1 项目首页拆分为 World Overview + /production + /settings
+
+Track K1 落地（世界优先 UI 第一步，只搬不移逻辑）：项目页移除 `ProviderPanel`/`UsageSummaryCard`/`WorkflowPanel`/`GenerationQueuePanel`，改为 World Overview（顶部项目名 + 「本地创作」徽标 + 「去创作对话」入口 + 分区导航：世界工作区/故事/实体库/制作/设置）；新增 `apps/web/app/(studio)/projects/[projectId]/production/page.tsx`（WorkflowPanel + GenerationQueuePanel）与 `settings/page.tsx`（ProviderPanel + UsageSummaryCard）；新增 `apps/web/components/project-sub-nav.tsx` 分区导航组件；侧栏新增「制作」「设置」入口并修正激活态逻辑。
+
+- 模块：`apps/web/app/(studio)/projects/[projectId]/{page,production/page,settings/page}.tsx`、`apps/web/components/{project-sub-nav,app-shell}.tsx`
+- 验证：web typecheck ✓ / eslint 5 文件 0 错误 ✓ / 浏览器回归（browser_use 对 3100 dev server）5 页全过：projects 列表、World Overview、/production、/settings、/world 均正常渲染，无 500 / 无应用级红色报错
+- 已知遗留（非本任务）：API 大多数路由仍强制 JWT（仅 `/world` 免认证），ADR-0013「打开即用」后端未闭环；浏览器验证时以 seed 账号 `demo@zivith.local` 登录，并新建了「UI 回归验证项目」（ID `38701dd8-46cc-465d-a725-afebb93cb7b7`）作为验证载体，可删除
+
+## 2026-08-05 · `(pending commit)` · test(api/domain/web) · 测试基线修复 + lint 清理 + 阶段 G 零 DB 单测补齐
+
+复盘全量测试基线：API 95 单测、Domain 23 单测、提案流 E2E 48 项全部通过。修复 `history-baseline.test.ts` 2 项回归（mock db 缺 `worldEvent` 模型 → 补 `findMany` mock）。lint 清理 535 → 45：删除 `apps/web/scripts/syntax-check/` webpack 残留（~500 项噪音），新代码 lint 清零（剩余为既有文件基线债务，非本任务范围）。阶段 G 新增零 DB 单测：`packages/domain/test/world.test.ts`（25 项：worldEvent/relationship/timeline schema parse、世界时间信封 opaque、快照序列化、HISTORY_ENTITY_TYPES 扩展）+ `apps/web/lib/world-scale.test.ts`（11 项：createOrderScale/interpolateOrders/integerTicks 刻度算法），`apps/web/package.json` 接入 `test` 脚本（`vitest run`，依赖 workspace hoisted vitest v2.1.9）。补齐 B3 缺口：`HISTORY_ENTITY_TYPES` 增加 `'relationship'`，新增 `serializeRelationshipSnapshot` 并并入 `serializeHistorySnapshot` 分发。
+
+- 模块：`apps/api/test/history-baseline.test.ts`、`packages/domain/src/history/{types,snapshots}.ts`、`packages/domain/test/world.test.ts`（新增）、`apps/web/lib/world-scale.test.ts`（新增）、`apps/web/package.json`
+- 验证：api / web / domain typecheck 全绿；api 95 单测 ✓、domain 48 单测 ✓（+25）、web 11 单测 ✓；新文件 eslint 0 错误
+- 环境备注：本机 Node v24 触发 `engine-strict`，pnpm 命令需带 `--config.engine-strict=false`；`pnpm install` 会因「包管理器不一致」移动 node_modules 到 `.ignored` 并崩溃，勿在本机运行（已发生过一次，已手动恢复）
+
+## 2026-08-05 · `(pending commit)` · fix(infra) · dev server 进程风暴修复 + 免登录可用落地
+
+解决「浏览器 502 / 登录页点了没反应 / 页面卡死」三连问题，根因是 dev server 编译 worker 崩溃-重启死循环（458 个僵尸 node 进程占满 CPU，webpack 产物损坏：login chunk 0 字节、chunk 加载超时）。
+
+修复：① 杀光崩溃循环 worker，仅保留 API/DB/Redis 服务进程；② 删除 `.next` 损坏产物（长路径 API 逐文件清理）；③ 弃用 `--webpack`，改用 Next 16 默认 Turbopack 启动（`pnpm next dev --hostname 127.0.0.1 --port 3100`）；④ 产物验证：3 个路由 chunk 大小正常、全部页面 SSR 200。同时按产品意图落地「免登录可用」（与 TRAE 一致，登录仅为未来云服务保留）：移除 `app-shell.tsx` 的强制登录跳转，未登录时正常渲染所有本地页面，API 401 优雅降级为空态而非跳转 `/login`。保留登录入口供云服务阶段使用。
+
+- 模块：`apps/web/components/app-shell.tsx`、`apps/web/next.config.mjs`（移除无效 envDir）、`apps/web/.env`（新增，注入 NEXT_PUBLIC_API_URL=http://127.0.0.1:4000/api/v1）、`apps/web/components/workflow-panel.tsx`（fallback 改 127.0.0.1）
+- 验证：world / projects / login / creator-chats 全部 SSR 200；无 token 请求 `/api/v1/projects` 返回 401（前端降级）；dev server 日志零错误
+
 ## 2026-08-05 · `5d95566` · feat(web) · 世界线三栏工作区（阶段 F，v1 只读）
 
 新增 `/projects/:projectId/world` 世界线工作区，IDE 式三栏布局：左实体 Explorer（角色/地点/场景/事件/故事分组树）、中 SVG 世界线时间轴（非均匀刻度 + 轨道化 + 关系连线）+ 副驾驶占位面板、右 Inspector（右上世界线属性、右下创作线属性占位）；选中项三栏联动。数据源 `GET /world/projects/:pid/resources`（无认证，ADR-0013）。App shell 导航新增「世界线」，auth guard 放行 `/world`；proposal-card「进入项目工作区」直链世界线。

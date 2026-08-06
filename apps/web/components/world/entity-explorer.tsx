@@ -21,6 +21,7 @@ const GROUP_COLORS: Record<string, string> = {
   scene: 'border-l-[#60a5fa]',
   world_event: 'border-l-[#fbbf24]',
   story: 'border-l-[#f472b6]',
+  project: 'border-l-zinc-400',
 };
 
 function Group({
@@ -109,10 +110,24 @@ export function EntityExplorer({
     title: item.title,
     subtitle: item.logline || undefined,
   }));
+  const hasWorldview =
+    Boolean(resources.project.worldview?.genre?.trim()) ||
+    Boolean(resources.project.worldview?.premise?.trim()) ||
+    (resources.project.worldview?.rules ?? []).length > 0;
+  const worldviewItems: GroupItem[] = [
+    {
+      id: resources.project.id,
+      title: resources.project.name,
+      subtitle:
+        resources.project.worldview?.premise?.trim() ||
+        resources.project.worldview?.genre?.trim() ||
+        '未设定世界观',
+    },
+  ];
 
   const handleSelect = (item: GroupItem, kind: string) => {
     onSelect({
-      kind: kind as 'character' | 'location' | 'scene' | 'world_event' | 'story',
+      kind: kind as 'character' | 'location' | 'scene' | 'world_event' | 'story' | 'project',
       id: item.id,
     });
   };
@@ -123,6 +138,14 @@ export function EntityExplorer({
         <h1 className="text-sm font-semibold text-white">实体 Explorer</h1>
         <p className="mt-0.5 text-xs text-zinc-500">{resources.project.name}</p>
       </div>
+      <Group
+        label="世界观"
+        kind="project"
+        count={hasWorldview ? 1 : 0}
+        items={worldviewItems}
+        selection={selection}
+        onSelect={handleSelect}
+      />
       <Group
         label="角色"
         kind="character"

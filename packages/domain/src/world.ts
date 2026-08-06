@@ -37,6 +37,55 @@ export const entityRefSchema = z
 
 export type WorldEntityRef = z.infer<typeof entityRefSchema>;
 
+// ---------------------------------------------------------------------------
+// Worldview — Project 轻量结构化世界观字段（Creator Chat 自动提炼并落库）
+// ---------------------------------------------------------------------------
+
+export const worldviewSchema = z
+  .object({
+    /** 题材，如「东方玄幻」「赛博朋克」 */
+    genre: z.string().trim().max(200).optional(),
+    /** 核心设定 / 一句话世界观 */
+    premise: z.string().trim().max(10_000).optional(),
+    /** 世界规则 / 力量体系（整组替换语义） */
+    rules: z.array(z.string().trim().max(2_000)).max(64).default([]),
+    /** 补充说明 */
+    notes: z.string().trim().max(20_000).optional(),
+  })
+  .strict();
+
+export type Worldview = z.infer<typeof worldviewSchema>;
+
+/** 规范化任意 world/view 输入为合法 Worldview（失败则返回空对象）。 */
+export function parseWorldview(value: unknown): Worldview {
+  const parsed = worldviewSchema.safeParse(value ?? {});
+  return parsed.success ? parsed.data : { rules: [] };
+}
+
+/** 浅合并：patch 非空字段覆盖 current；rules 为整组替换。返回规范化对象。 */
+export function mergeWorldview(current: unknown, patch: unknown): Worldview {
+  const base = parseWorldview(current);
+  if (patch === null || patch === undefined || typeof patch !== 'object') return base;
+  const patchRecord = patch as Record<string, unknown>;
+  const next: Worldview = { ...base };
+  if (typeof patchRecord.genre === 'string' && patchRecord.genre.trim()) {
+    next.genre = patchRecord.genre.trim();
+  }
+  if (typeof patchRecord.premise === 'string' && patchRecord.premise.trim()) {
+    next.premise = patchRecord.premise.trim();
+  }
+  if (Array.isArray(patchRecord.rules) && patchRecord.rules.length > 0) {
+    next.rules = patchRecord.rules
+      .filter((rule): rule is string => typeof rule === 'string' && rule.trim().length > 0)
+      .map((rule) => rule.trim())
+      .slice(0, 64);
+  }
+  if (typeof patchRecord.notes === 'string' && patchRecord.notes.trim()) {
+    next.notes = patchRecord.notes.trim();
+  }
+  return parseWorldview(next);
+}
+
 export const approvalStateSchema = z.enum(['draft', 'review', 'approved']);
 
 // ---------------------------------------------------------------------------

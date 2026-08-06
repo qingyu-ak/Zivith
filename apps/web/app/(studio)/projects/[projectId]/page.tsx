@@ -4,14 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Button, Card, EmptyState, Field, Input, Spinner, Textarea } from '@zivith/ui';
+import { Badge, Button, Card, EmptyState, Field, Input, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormText } from '@/lib/form-data';
 import type { ProjectDTO, StoryDTO } from '@/lib/types';
-import { WorkflowPanel } from '@/components/workflow-panel';
-import { GenerationQueuePanel } from '@/components/generation-queue-panel';
-import { ProviderPanel } from '@/components/provider-panel';
-import { UsageSummaryCard } from '@/components/usage-summary-card';
+import { ProjectSubNav } from '@/components/project-sub-nav';
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -88,20 +85,24 @@ export default function ProjectPage() {
           <Link className="text-sm text-zinc-500 hover:text-accent" href="/projects">
             ← 所有项目
           </Link>
-          <h1 className="mt-3 text-3xl font-semibold">{project?.name ?? '项目'}</h1>
+          <h1 className="mt-3 flex items-center gap-3 text-3xl font-semibold">
+            {project?.name ?? '项目'}
+            <Badge tone="neutral">本地创作</Badge>
+          </h1>
           <p className="mt-2 text-zinc-400">
             {project?.description || '从一个故事开始构建你的创意宇宙。'}
           </p>
         </div>
         <div className="flex gap-3">
-          <Link href={`/projects/${projectId}/assets`}>
-            <Button variant="secondary">资产库</Button>
+          <Link href="/creator-chats">
+            <Button>去创作对话</Button>
           </Link>
-          <Button onClick={() => setShowForm((value) => !value)}>
+          <Button variant="secondary" onClick={() => setShowForm((value) => !value)}>
             {showForm ? '取消' : '新建故事'}
           </Button>
         </div>
       </header>
+      <ProjectSubNav projectId={projectId} />
       {error && (
         <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
           {error}
@@ -140,10 +141,6 @@ export default function ProjectPage() {
           </form>
         </Card>
       )}
-      <ProviderPanel />
-      <UsageSummaryCard projectId={projectId} />
-      <WorkflowPanel projectId={projectId} onArtifactsChanged={load} />
-      <GenerationQueuePanel projectId={projectId} />
       {stories.length === 0 ? (
         <EmptyState
           title="项目还是空的"

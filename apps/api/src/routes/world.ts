@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Prisma, PrismaClient } from '@zivith/database';
 import {
+  parseWorldview,
   proposalSchema,
   relationshipCreateSchema,
   timelineItemCreateSchema,
@@ -30,7 +31,7 @@ const worldEventPatchBody = worldEventPatchSchema
 async function requireProject(db: PrismaClient, projectId: string) {
   const project = await db.project.findFirst({
     where: { id: projectId, deletedAt: null },
-    select: { id: true, name: true },
+    select: { id: true, name: true, description: true, worldview: true },
   });
   if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', '项目不存在');
   return project;
@@ -98,11 +99,19 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
         }),
       ]);
 
+    const entityCount =
+      stories.length + characters.length + locations.length + worldEvents.length;
+    const stage =
+      entityCount === 0 ? 'bootstrap' : entityCount < 5 ? 'growing' : 'mature';
+
     return {
       project: {
         id: project.id,
         name: project.name,
+        description: project.description,
+        worldview: parseWorldview(project.worldview),
       },
+      stage,
       entities: {
         stories,
         characters,
@@ -583,6 +592,18 @@ function registerCreatorChatRoutes(
       .parse(request.params);
     const body = applyProposalBody.parse(request.body ?? {});
 
+    // World routes are unauthenticated (ADR-0013), but the web client still sends
+    // a Bearer token. Resolve the signed-in user when present so new projects get
+    // a member record visible in /projects; anonymous callers fall back to the
+    // local owner inside applyCreateProject.
+    let memberUserId: string | null = null;
+    try {
+      await request.jwtVerify();
+      memberUserId = (request.user as { sub?: string } | undefined)?.sub ?? null;
+    } catch {
+      memberUserId = null;
+    }
+
     const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
     if (!thread) throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
 
@@ -611,35 +632,38 @@ function registerCreatorChatRoutes(
     }
 
     const applied: Array<{ kind: string; project_id: string; entity_type: string; entity_id: string; title: string }> =
-      [];
-    // Track the project across a proposal batch: create_project may appear
-    // alongside entity proposals in the same message.
-    let currentProjectId = thread.projectId;
-    for (const proposal of proposals) {
-      if (proposal.kind === 'create_project' && currentProjectId) {
-        throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
-      }
-      const result = await applyProposal(db, proposal, currentProjectId);
-      applied.push({
-        kind: result.kind,
-        project_id: result.projectId,
-        entity_type: result.entityType,
-        entity_id: result.entityId,
-        title: result.title,
-      });
-      if (result.entityType === 'project') {
-        currentProjectId = result.projectId;
-        await db.creatorChatThread.update({
-          where: { id: threadId },
-          data: { projectId: result.projectId },
+      await db.$transaction(async (tx) => {
+        const results: Array<{ kind: string; project_id: string; entity_type: string; entity_id: string; title: string }> =
+          [];
+        // Track the project across a proposal batch: create_project may appear
+        // alongside entity proposals in the same message.
+        let currentProjectId = thread.projectId;
+        for (const proposal of proposals) {
+          if (proposal.kind === 'create_project' && currentProjectId) {
+            throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
+          }
+          const result = await applyProposal(tx, proposal, currentProjectId, memberUserId);
+          results.push({
+            kind: result.kind,
+            project_id: result.projectId,
+            entity_type: result.entityType,
+            entity_id: result.entityId,
+            title: result.title,
+          });
+          if (result.entityType === 'project') {
+            currentProjectId = result.projectId;
+            await tx.creatorChatThread.update({
+              where: { id: threadId },
+              data: { projectId: result.projectId },
+            });
+          }
+        }
+        await tx.creatorChatMessage.update({
+          where: { id: messageId },
+          data: { proposalState: 'applied' },
         });
-      }
-    }
-
-    await db.creatorChatMessage.update({
-      where: { id: messageId },
-      data: { proposalState: 'applied' },
-    });
+        return results;
+      });
     return { applied };
   });
 }

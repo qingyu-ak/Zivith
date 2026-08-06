@@ -18,6 +18,8 @@ const navigation: Array<{
   { label: '世界线', suffix: '/world', icon: '▚' },
   { label: '故事', suffix: '', icon: '▤' },
   { label: '角色与场景', suffix: '/assets', icon: '◎' },
+  { label: '制作', suffix: '/production', icon: '⚙' },
+  { label: '设置', suffix: '/settings', icon: '☰' },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -27,22 +29,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
 
   useEffect(() => {
-    // Creator layer (ADR-0013) needs no auth: creator-chats and the read-only
-    // world workspace must stay reachable without a session.
-    if (
-      !session.getToken() &&
-      !pathname.startsWith('/creator-chats') &&
-      !pathname.includes('/world')
-    ) {
-      router.replace('/login');
-      return;
-    }
+    // Creator layer (local-first): no forced login. 未登录也能使用本地功能
+    //（与 TRAE 一致），登录仅为将来云服务保留。API 401 时优雅降级为空态。
     api<ProjectDTO[] | { data?: ProjectDTO[]; items?: ProjectDTO[] }>('/projects')
       .then((value) => setProjects(unwrapList(value)))
       .catch(() => {
-        if (!session.getToken() && !pathname.startsWith('/creator-chats')) {
-          router.replace('/login');
-        }
+        // 未登录 / 网络不可用：保持空态，不跳转登录页
+        setProjects([]);
       });
   }, [pathname, router]);
 
@@ -109,11 +102,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   ? pathname.includes('/assets')
                   : item.suffix === '/world'
                     ? pathname.includes('/world')
-                    : item.label === '项目'
-                      ? pathname === '/projects'
-                      : Boolean(params.projectId) &&
-                        !pathname.includes('/assets') &&
-                        !pathname.includes('/world');
+                    : item.suffix === '/production'
+                      ? pathname.includes('/production')
+                      : item.suffix === '/settings'
+                        ? pathname.includes('/settings')
+                        : item.label === '项目'
+                          ? pathname === '/projects'
+                          : Boolean(params.projectId) &&
+                            !pathname.includes('/assets') &&
+                            !pathname.includes('/world') &&
+                            !pathname.includes('/production') &&
+                            !pathname.includes('/settings');
             return (
               <Link
                 key={item.label}

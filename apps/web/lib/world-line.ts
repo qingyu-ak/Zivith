@@ -89,7 +89,6 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
   ];
   const baseMin = anchorOrders.length ? Math.min(...anchorOrders) : 1;
   const baseMax = anchorOrders.length ? Math.max(...anchorOrders) : Math.max(baseMin, 1);
-  const span = Math.max(baseMax - baseMin, 1);
 
   // 角色/地点无显式 order：按 createdAt 序在 [baseMin, baseMax] 内均匀插值
   const byCreated = (a: AssetDTO, b: AssetDTO) =>

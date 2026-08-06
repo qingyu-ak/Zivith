@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@zivith/database';
+import { type Worldview, parseWorldview } from '@zivith/domain';
 
 /**
  * World context for the World Builder agent.
@@ -10,6 +11,7 @@ import type { PrismaClient } from '@zivith/database';
 export interface WorldContext {
   projectId: string;
   projectName: string;
+  worldview: Worldview;
   stories: Array<{ id: string; title: string; genre: string | null; logline: string | null }>;
   characters: Array<{ id: string; name: string; description: string | null; tags: string[] }>;
   locations: Array<{ id: string; name: string; description: string | null; tags: string[] }>;
@@ -37,7 +39,7 @@ export async function buildWorldContext(
 ): Promise<WorldContext | null> {
   const project = await db.project.findFirst({
     where: { id: projectId, deletedAt: null },
-    select: { id: true, name: true },
+    select: { id: true, name: true, worldview: true },
   });
   if (!project) return null;
 
@@ -86,6 +88,7 @@ export async function buildWorldContext(
   return {
     projectId: project.id,
     projectName: project.name,
+    worldview: parseWorldview(project.worldview),
     stories,
     characters: characters.map((c) => ({
       id: c.id,
@@ -136,6 +139,22 @@ function entityLabel(context: WorldContext, type: string, id: string): string {
 export function worldContextToPrompt(context: WorldContext | null): string {
   if (!context) return '（还没有项目。需要先创建 IP 项目。）';
   const lines: string[] = [`项目名称：${context.projectName}`, ''];
+  const { worldview } = context;
+  const hasWorldview =
+    Boolean(worldview.genre?.trim()) ||
+    Boolean(worldview.premise?.trim()) ||
+    worldview.rules.length > 0 ||
+    Boolean(worldview.notes?.trim());
+  if (hasWorldview) {
+    lines.push('## 世界观');
+    if (worldview.genre) lines.push(`- 题材：${worldview.genre}`);
+    if (worldview.premise) lines.push(`- 核心设定：${worldview.premise}`);
+    if (worldview.rules.length > 0) {
+      lines.push(`- 世界规则：${worldview.rules.map((rule) => `「${rule}」`).join('；')}`);
+    }
+    if (worldview.notes) lines.push(`- 补充：${worldview.notes}`);
+    lines.push('');
+  }
   if (context.stories.length === 0 && context.characters.length === 0 && context.locations.length === 0) {
     lines.push('世界状态：全新世界，还没有任何实体。');
   }

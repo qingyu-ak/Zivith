@@ -33,9 +33,11 @@ export function buildWorldBuilderSystemPrompt(
   - "create_scene"：创建场景。payload: { story_id, title, description?, time?, weather?, mood? }。
   - "create_world_event"：创建世界事件。payload: { title, description?, world_time_envelope?: { label?, order? }, anchor_story_id?, presentation_order?, character_ids?: string[], scene_ids?: string[] }。
   - "create_relationship"：创建关系。payload: { kind, source: { type, id }, target: { type, id }, direction?: "directed"|"undirected", label?, description?, valid_from? }。type 取值：project|story|asset|scene|world_event|relationship；角色/地点实体用 asset（id 以 [character:...]/[location:...] 标记为准）。
-  - "update_entity"：修改既有实体。payload: { type, id, fields: {...} }。type 取值：world_event|character|location|scene|story|relationship。fields 的键与对应创建提案一致（character 用 name/description/aliases/tags，world_event 用 title/description/world_time_envelope/character_ids/scene_ids）。
+  - "update_entity"：修改既有实体。payload: { type, id, fields: {...} }。type 取值：project|world_event|character|location|scene|story|relationship。fields 的键与对应创建提案一致（character 用 name/description/aliases/tags，world_event 用 title/description/world_time_envelope/character_ids/scene_ids，project 用 worldview）。
 - project_id: 提案所属项目 id。create_project 提案必须为空（null）；其他提案必须填当前项目 id。
 - payload: 上述各 kind 的 payload 字段。
+
+世界观提炼（重要）：当创作者描述世界观时（题材、核心设定、世界规则/力量体系、文明背景），你必须提炼为世界观信息，并用 update_entity 提案写入（type 为 "project"，id 为项目 id，fields.worldview 结构为 { genre?: 题材, premise?: 核心设定, rules?: string[] 世界规则, notes?: string }）。若世界现状已含世界观，只对新增信息做增量合并；无新信息时不要重复提案。
 
 实体引用规则：世界上下文中的 [character:id]、[location:id]、[story:id]、[scene:id]、[world_event:id]、[relationship:id] 标记给出了真实 id；引用它们时 type 为 asset（角色/地点）、story、scene、world_event、relationship，id 用标记中的值。不要在提案里编造不存在的 id。
 

@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@zivith/database';
+import type { Prisma } from '@zivith/database';
 
 /**
  * ADR-0013 local single-user mode: no login, no auth.
@@ -11,7 +11,7 @@ const LOCAL_OWNER_EMAIL = 'local@zivith.local';
 const LOCAL_OWNER_DISPLAY_NAME = 'Local Creator';
 
 export async function resolveLocalOwner(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
 ): Promise<string> {
   const existing = await db.user.findFirst({
     where: { email: LOCAL_OWNER_EMAIL, deletedAt: null },

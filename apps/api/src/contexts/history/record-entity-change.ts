@@ -189,7 +189,7 @@ export async function recordEntityChange(
       payload: {
         ...eventPayload,
         __fingerprint: fingerprint,
-      } as Prisma.InputJsonValue,
+      },
       occurredAt,
     },
   });

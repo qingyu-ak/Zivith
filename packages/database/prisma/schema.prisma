@@ -127,6 +127,8 @@ model Project {
   ownerId     String          @map("owner_id")
   name        String
   description String?
+  // 世界观轻量结构化字段（genre/premise/rules/notes），由 Creator Chat 自动提炼并随提案落库
+  worldview   Json            @default("{}")
   defaults    Json            @default("{}")
   settings    Json            @default("{}")
   createdAt   DateTime        @default(now()) @map("created_at")

@@ -5,6 +5,7 @@ import {
   serializeHistorySnapshot,
   serializeOutputSnapshot,
   serializePromptVersionSnapshot,
+  serializeRelationshipSnapshot,
   serializeShotSnapshot,
   serializeVisualRequirementSnapshot,
   serializeWorldEventSnapshot,
@@ -44,6 +45,7 @@ function emptyCounts(): BaselineBackfillResult['byType'] {
     appearance_variant: { scanned: 0, created: 0, skipped: 0 },
     visual_requirement: { scanned: 0, created: 0, skipped: 0 },
     world_event: { scanned: 0, created: 0, skipped: 0 },
+    relationship: { scanned: 0, created: 0, skipped: 0 },
   };
 }
 
@@ -73,7 +75,7 @@ async function loadCandidates(db: Db, projectId?: string): Promise<Candidate[]> 
       entityType: 'shot',
       entityId: shot.id,
       projectId: shot.projectId,
-      row: shot as unknown as Record<string, unknown>,
+      row: shot,
       occurredAt: shot.createdAt,
     });
   }
@@ -87,7 +89,7 @@ async function loadCandidates(db: Db, projectId?: string): Promise<Candidate[]> 
       entityType: 'prompt_version',
       entityId: row.id,
       projectId: row.shot.projectId,
-      row: row as unknown as Record<string, unknown>,
+      row,
       occurredAt: row.createdAt,
     });
   }
@@ -101,7 +103,7 @@ async function loadCandidates(db: Db, projectId?: string): Promise<Candidate[]> 
       entityType: 'output',
       entityId: row.id,
       projectId: row.shot.projectId,
-      row: row as unknown as Record<string, unknown>,
+      row,
       occurredAt: row.createdAt,
     });
   }
@@ -118,7 +120,7 @@ async function loadCandidates(db: Db, projectId?: string): Promise<Candidate[]> 
       entityType: 'appearance_variant',
       entityId: row.id,
       projectId: row.asset.projectId,
-      row: row as unknown as Record<string, unknown>,
+      row,
       occurredAt: row.createdAt,
     });
   }
@@ -135,7 +137,7 @@ async function loadCandidates(db: Db, projectId?: string): Promise<Candidate[]> 
       entityType: 'visual_requirement',
       entityId: row.id,
       projectId: row.scene.projectId,
-      row: row as unknown as Record<string, unknown>,
+      row,
       occurredAt: row.createdAt,
     });
   }
@@ -151,7 +153,23 @@ async function loadCandidates(db: Db, projectId?: string): Promise<Candidate[]> 
       entityType: 'world_event',
       entityId: row.id,
       projectId: row.projectId,
-      row: row as unknown as Record<string, unknown>,
+      row,
+      occurredAt: row.createdAt,
+    });
+  }
+
+  const relationships = await db.relationship.findMany({
+    where: {
+      deletedAt: null,
+      ...(projectId ? { projectId } : {}),
+    },
+  });
+  for (const row of relationships) {
+    out.push({
+      entityType: 'relationship',
+      entityId: row.id,
+      projectId: row.projectId,
+      row,
       occurredAt: row.createdAt,
     });
   }
@@ -173,9 +191,11 @@ function serializeCandidate(candidate: Candidate) {
       return serializeVisualRequirementSnapshot(candidate.row);
     case 'world_event':
       return serializeWorldEventSnapshot(candidate.row);
+    case 'relationship':
+      return serializeRelationshipSnapshot(candidate.row);
     default: {
       const _exhaustive: never = candidate.entityType;
-      throw new Error(`Unsupported entity type: ${_exhaustive}`);
+      throw new Error(`Unsupported entity type: ${String(_exhaustive)}`);
     }
   }
 }

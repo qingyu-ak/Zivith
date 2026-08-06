@@ -228,7 +228,7 @@ export interface CreatorChatMessageDTO {
   content: string;
   proposal?: Record<string, unknown> | null;
   proposal_key?: string | null;
-  proposal_state?: 'pending' | 'applied' | 'rejected' | string | null;
+  proposal_state?: 'pending' | 'applied' | 'rejected' | (string & {}) | null;
   created_at: string;
 }
 
@@ -244,7 +244,14 @@ export type ProposalKind =
 export interface ApplyProposalResultDTO {
   kind: ProposalKind;
   project_id: string;
-  entity_type: 'project' | 'world_event' | 'asset' | 'scene' | 'relationship' | 'story' | string;
+  entity_type:
+    | 'project'
+    | 'world_event'
+    | 'asset'
+    | 'scene'
+    | 'relationship'
+    | 'story'
+    | (string & {});
   entity_id: string;
   title: string;
 }
@@ -322,7 +329,12 @@ export interface WorkflowMediaDTO {
     model?: string;
     generation_error?: string;
     generation_prompt?: string;
-    reference_injection?: 'none' | 'applied' | 'skipped_unsupported' | 'skipped_error' | string;
+    reference_injection?:
+      | 'none'
+      | 'applied'
+      | 'skipped_unsupported'
+      | 'skipped_error'
+      | (string & {});
     reference_media_ids?: string[];
     reference_labels?: string[];
   } | null;
@@ -442,8 +454,23 @@ export interface WorldRelationshipDTO {
   created_at: string;
 }
 
+export interface WorldviewDTO {
+  genre?: string;
+  premise?: string;
+  rules?: string[];
+  notes?: string;
+}
+
+export type WorldStage = 'bootstrap' | 'growing' | 'mature';
+
 export interface WorldResourcesDTO {
-  project: { id: string; name: string };
+  project: {
+    id: string;
+    name: string;
+    description?: string | null;
+    worldview: WorldviewDTO;
+  };
+  stage: WorldStage;
   entities: {
     stories: StoryDTO[];
     characters: AssetDTO[];

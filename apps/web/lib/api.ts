@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+// 用 127.0.0.1 而非 localhost：系统代理开启时（如 nano/Clash 类软件），浏览器会把
+// localhost 域名请求劫持到代理导致 502/连接失败；127.0.0.1 回环地址被代理规则放行。
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000/api/v1';
 const TOKEN_KEY = 'zivith_token';
 const REFRESH_TOKEN_KEY = 'zivith_refresh_token';
 

@@ -6,6 +6,7 @@ import {
   characterSchema,
   locationSchema,
   mergeInherited,
+  parseWorldview,
   shotCreateSchema,
   shotPatchSchema,
 } from '@zivith/domain';
@@ -51,10 +52,11 @@ const newOrderReorderSchema = z
   })
   .strict();
 const reorderSchema = z.union([orderedIdsReorderSchema, newOrderReorderSchema]);
-const projectBody = z.object({
+export const projectBody = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(10_000).nullable().optional(),
   defaults: z.record(z.unknown()).optional(),
+  worldview: z.record(z.unknown()).optional(),
 });
 export const storyBodySchema = z.object({
   title: z.string().trim().min(1).max(300),
@@ -440,6 +442,7 @@ export function registerResourceRoutes(
         name: body.name,
         description: body.description,
         defaults: json(body.defaults ?? {}),
+        worldview: body.worldview ? json(parseWorldview(body.worldview)) : undefined,
         members: { create: { userId: request.user.sub, role: 'owner' as const } },
       }),
     });
@@ -462,6 +465,10 @@ export function registerResourceRoutes(
         name: body.name,
         description: body.description,
         defaults: body.defaults ? json(body.defaults) : undefined,
+        // 编辑器语义：worldview 为整组替换（parseWorldview 规范化），
+        // 允许清空单个字段；agent 侧走 mergeWorldview（proposal-applier）。
+        worldview:
+          body.worldview === undefined ? undefined : json(parseWorldview(body.worldview)),
       }),
     });
   });
@@ -750,7 +757,7 @@ export function registerResourceRoutes(
       projectId,
       entityType: 'shot',
       entityId: shot.id,
-      row: shot as unknown as Record<string, unknown>,
+      row: shot,
       changeKind: 'create',
       eventType: 'entity.created',
       idempotencyKey: `shot:create:${shot.id}`,
@@ -869,7 +876,7 @@ export function registerResourceRoutes(
       projectId,
       entityType: 'shot',
       entityId: id,
-      row: updated as unknown as Record<string, unknown>,
+      row: updated,
       changeKind: 'update',
       eventType: 'entity.changed',
       idempotencyKey: `shot:update:${id}:${updated.updatedAt.toISOString()}`,

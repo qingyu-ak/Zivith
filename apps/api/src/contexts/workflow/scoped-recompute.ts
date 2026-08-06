@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { Prisma, type PrismaClient } from '@zivith/database';
+import type { Prisma} from '@zivith/database';
+import { type PrismaClient } from '@zivith/database';
 
 export type RecomputeKind = 'visual_prep' | 'prompt' | 'video';
 export type RecomputeEntityType = 'scene' | 'shot';

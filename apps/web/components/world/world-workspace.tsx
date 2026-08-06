@@ -10,6 +10,7 @@ import { buildWorldLineModel } from '@/lib/world-line';
 import { EntityExplorer } from './entity-explorer';
 import { WorldTimeline } from './world-timeline';
 import { InspectorPanel } from './inspector-panel';
+import { CoPilotPanel } from './co-pilot-panel';
 
 export function WorldWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -92,7 +93,7 @@ export function WorldWorkspace() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-white">{resources.project.name}</h1>
-            <Badge tone="neutral">v1 只读</Badge>
+            <Badge tone="neutral">v1</Badge>
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">
             {entityCount} 个实体 · {model.relationships.length} 条关系
@@ -139,22 +140,17 @@ export function WorldWorkspace() {
               />
             )}
           </div>
-          {/* 副驾驶 Agent 面板（v1 占位） */}
-          <div className="shrink-0 border-t border-line px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-accent/80" aria-hidden />
-              <h3 className="text-sm font-medium text-zinc-200">副驾驶</h3>
-              <span className="text-xs text-zinc-600">coming soon</span>
-            </div>
-            <p className="mt-1.5 text-xs leading-5 text-zinc-500">
-              世界线副驾驶 Agent 将在这里与创作者协作：发现冲突、建议补充设定、定位时间线缺口。v1 为只读视图。
-            </p>
-          </div>
+          {/* 副驾驶 Agent 面板（v1 只读世界状态摘要） */}
+          <CoPilotPanel resources={resources} />
         </section>
 
         {/* 右栏：Inspector */}
         <aside className="min-h-0 border-l border-line">
-          <InspectorPanel resources={resources} selection={selection} />
+          <InspectorPanel
+            resources={resources}
+            selection={selection}
+            onProjectUpdated={() => void load()}
+          />
         </aside>
       </div>
     </div>

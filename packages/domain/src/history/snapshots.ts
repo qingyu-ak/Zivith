@@ -17,7 +17,7 @@ function asString(value: unknown): string | null {
   if (typeof value === 'string') return value;
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'bigint') return value.toString();
-  return String(value);
+  return JSON.stringify(value) ?? '';
 }
 
 function asIso(value: unknown): string | null {
@@ -188,6 +188,27 @@ export function serializeWorldEventSnapshot(row: Row): CanonicalSnapshotEnvelope
   });
 }
 
+export function serializeRelationshipSnapshot(row: Row): CanonicalSnapshotEnvelope {
+  return envelope('relationship', {
+    id: asString(pick(row, 'id')),
+    project_id: asString(pick(row, 'project_id', 'projectId')),
+    kind: asString(pick(row, 'kind')),
+    source_type: asString(pick(row, 'source_type', 'sourceType')),
+    source_id: asString(pick(row, 'source_id', 'sourceId')),
+    target_type: asString(pick(row, 'target_type', 'targetType')),
+    target_id: asString(pick(row, 'target_id', 'targetId')),
+    direction: asString(pick(row, 'direction')),
+    label: asString(pick(row, 'label')),
+    description: asString(pick(row, 'description')),
+    valid_from: asJson(pick(row, 'valid_from', 'validFrom')),
+    valid_until: asJson(pick(row, 'valid_until', 'validUntil')),
+    state: asString(pick(row, 'state')),
+    created_at: asIso(pick(row, 'created_at', 'createdAt')),
+    updated_at: asIso(pick(row, 'updated_at', 'updatedAt')),
+    deleted_at: asIso(pick(row, 'deleted_at', 'deletedAt')),
+  });
+}
+
 export function serializeHistorySnapshot(
   entityType: HistoryEntityType,
   row: Row,
@@ -205,9 +226,11 @@ export function serializeHistorySnapshot(
       return serializeVisualRequirementSnapshot(row);
     case 'world_event':
       return serializeWorldEventSnapshot(row);
+    case 'relationship':
+      return serializeRelationshipSnapshot(row);
     default: {
       const _exhaustive: never = entityType;
-      throw new Error(`Unsupported history entity type: ${_exhaustive}`);
+      throw new Error(`Unsupported history entity type: ${String(_exhaustive)}`);
     }
   }
 }

@@ -19,7 +19,7 @@ describe('persistRemoteImage', () => {
       url: 'https://s3.siliconflow.cn/temporary/outputs/demo.png',
       storageKey: 'visual-assets/a.png',
       storage,
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl: fetchImpl,
     });
 
     expect(result.persisted).toBe(true);

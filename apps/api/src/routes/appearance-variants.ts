@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { Prisma, type PrismaClient } from '@zivith/database';
+import type { Prisma} from '@zivith/database';
+import { type PrismaClient } from '@zivith/database';
 import {
   appearanceVariantCreateSchema,
   appearanceVariantKeySchema,
@@ -10,7 +11,6 @@ import {
   DEFAULT_APPEARANCE_VARIANT_KEY,
   isCharacterSheetVariantKey,
   resolveAppearanceWithVariant,
-  type CharacterAppearance,
 } from '@zivith/domain';
 import { z } from 'zod';
 import {
@@ -408,7 +408,7 @@ export function registerAppearanceVariantRoutes(
     const variant = await variantForAsset(db, asset.id, key);
     const body = generateBody.parse(request.body ?? {});
     const appearance = resolveAppearanceWithVariant(
-      appearanceFromAsset(asset.appearance) as CharacterAppearance,
+      appearanceFromAsset(asset.appearance),
       variant,
     );
     const appearanceBits = Object.values(appearance)
@@ -516,7 +516,7 @@ export function registerAppearanceVariantRoutes(
       projectId: asset.projectId,
       entityType: 'appearance_variant',
       entityId: approved.id,
-      row: approved as unknown as Record<string, unknown>,
+      row: approved,
       changeKind: 'transition',
       eventType: 'review.decided',
       idempotencyKey: `appearance_variant:approve:${approved.id}:${mediaId}`,

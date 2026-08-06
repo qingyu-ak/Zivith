@@ -12,6 +12,7 @@ const ENV_KEYS: Record<HistoryEntityType, string> = {
   appearance_variant: 'HISTORY_ENTITY_APPEARANCE_VARIANT',
   visual_requirement: 'HISTORY_ENTITY_VISUAL_REQUIREMENT',
   world_event: 'HISTORY_ENTITY_WORLD_EVENT',
+  relationship: 'HISTORY_ENTITY_RELATIONSHIP',
 };
 
 function parseMode(raw: string | undefined): HistoryWriteMode | undefined {

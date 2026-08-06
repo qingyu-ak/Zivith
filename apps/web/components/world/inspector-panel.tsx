@@ -1,20 +1,8 @@
 'use client';
 
-import type {
-  AssetDTO,
-  SceneDTO,
-  WorldResourcesDTO,
-  WorldSelection,
-} from '@/lib/types';
-
-const KIND_LABEL: Record<string, string> = {
-  character: '角色',
-  location: '地点',
-  scene: '场景',
-  world_event: '事件',
-  story: '故事',
-  project: '项目',
-};
+import { useEffect, useState } from 'react';
+import type { WorldResourcesDTO, WorldSelection } from '@/lib/types';
+import { api, errorMessage } from '@/lib/api';
 
 const KIND_COLOR: Record<string, string> = {
   character: 'text-[#b7ff4a] border-[#b7ff4a]/40 bg-[#b7ff4a]/10',
@@ -41,7 +29,7 @@ function JsonValue({ value }: { value: unknown }) {
   try {
     return JSON.stringify(value, null, 1);
   } catch {
-    return String(value);
+    return Object.prototype.toString.call(value);
   }
 }
 
@@ -76,13 +64,89 @@ function tagsOf(tags?: string[]): string {
   return tags.join(' · ');
 }
 
+const fieldClass =
+  'w-full rounded-md border border-line bg-white/5 px-2.5 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-accent/60';
+
+interface ProjectDraft {
+  name: string;
+  description: string;
+  genre: string;
+  premise: string;
+  rulesText: string;
+  notes: string;
+}
+
 export function InspectorPanel({
   resources,
   selection,
+  onProjectUpdated,
 }: {
   resources: WorldResourcesDTO;
   selection: WorldSelection;
+  onProjectUpdated?: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [draft, setDraft] = useState<ProjectDraft>({
+    name: '',
+    description: '',
+    genre: '',
+    premise: '',
+    rulesText: '',
+    notes: '',
+  });
+
+  // 切换选择（或离开 project）时退出编辑态。
+  useEffect(() => {
+    setEditing(false);
+  }, [selection]);
+
+  // 项目数据刷新后重置草稿（含保存后回显）。
+  useEffect(() => {
+    const worldview = resources.project.worldview ?? {};
+    setDraft({
+      name: resources.project.name ?? '',
+      description: resources.project.description ?? '',
+      genre: worldview.genre ?? '',
+      premise: worldview.premise ?? '',
+      rulesText: (worldview.rules ?? []).join('\n'),
+      notes: worldview.notes ?? '',
+    });
+  }, [resources]);
+
+  const updateDraft = (key: keyof ProjectDraft, value: string) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+
+  async function handleSaveProject() {
+    setSaving(true);
+    setEditError('');
+    try {
+      await api(`/projects/${resources.project.id}`, {
+        method: 'PATCH',
+        body: {
+          name: draft.name.trim(),
+          description: draft.description.trim(),
+          worldview: {
+            genre: draft.genre.trim(),
+            premise: draft.premise.trim(),
+            rules: draft.rulesText
+              .split('\n')
+              .map((rule) => rule.trim())
+              .filter(Boolean),
+            notes: draft.notes.trim(),
+          },
+        },
+      });
+      setEditing(false);
+      onProjectUpdated?.();
+    } catch (reason) {
+      setEditError(errorMessage(reason));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   let detail: React.ReactNode = null;
 
   if (selection) {
@@ -91,7 +155,7 @@ export function InspectorPanel({
       case 'character': {
         const asset = entities.characters.find((item) => item.id === selection.id);
         if (asset) {
-          const appearance = asset.appearance as AssetDTO['appearance'] | undefined;
+          const appearance = asset.appearance;
           detail = (
             <EntityDetail
               kind="character"
@@ -197,16 +261,116 @@ export function InspectorPanel({
         break;
       }
       case 'project': {
-        detail = (
-          <EntityDetail
-            kind="project"
-            label="项目"
-            fields={[
-              { label: '名称', value: resources.project.name },
-              { label: 'ID', value: resources.project.id },
-            ]}
-          />
-        );
+        const worldview = resources.project.worldview ?? { rules: [] };
+        if (editing) {
+          detail = (
+            <div className="px-4 py-3">
+              <div className="mb-3 flex items-center gap-2">
+                <span
+                  className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs ${KIND_COLOR.project}`}
+                >
+                  项目
+                </span>
+                <span className="text-xs text-zinc-500">编辑属性</span>
+              </div>
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-500">名称</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.name}
+                    onChange={(event) => updateDraft('name', event.target.value)}
+                    placeholder="项目名称"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-500">描述</span>
+                  <textarea
+                    className={fieldClass}
+                    value={draft.description}
+                    onChange={(event) => updateDraft('description', event.target.value)}
+                    rows={3}
+                    placeholder="项目一句话描述"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-500">题材</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.genre}
+                    onChange={(event) => updateDraft('genre', event.target.value)}
+                    placeholder="如：东方玄幻"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-500">核心设定</span>
+                  <textarea
+                    className={fieldClass}
+                    value={draft.premise}
+                    onChange={(event) => updateDraft('premise', event.target.value)}
+                    rows={3}
+                    placeholder="一句话世界观 / 核心设定"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-500">世界规则</span>
+                  <textarea
+                    className={fieldClass}
+                    value={draft.rulesText}
+                    onChange={(event) => updateDraft('rulesText', event.target.value)}
+                    rows={4}
+                    placeholder="每行一条规则，如：灵气浓度决定修行上限"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-500">补充</span>
+                  <textarea
+                    className={fieldClass}
+                    value={draft.notes}
+                    onChange={(event) => updateDraft('notes', event.target.value)}
+                    rows={3}
+                    placeholder="其他补充说明"
+                  />
+                </label>
+                {editError ? <p className="text-xs text-red-400">{editError}</p> : null}
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void handleSaveProject()}
+                    className="rounded-md border border-accent/60 bg-accent/10 px-3 py-1.5 text-xs text-accent transition hover:bg-accent/20 disabled:opacity-50"
+                  >
+                    {saving ? '保存中…' : '保存'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setEditing(false)}
+                    className="rounded-md border border-line px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-white/5 disabled:opacity-50"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        } else {
+          detail = (
+            <EntityDetail
+              kind="project"
+              label="项目"
+              fields={[
+                { label: '名称', value: resources.project.name },
+                { label: '描述', value: resources.project.description },
+                { label: '题材', value: worldview.genre },
+                { label: '核心设定', value: worldview.premise },
+                { label: '世界规则', value: (worldview.rules ?? []).join(' · ') },
+                { label: '补充', value: worldview.notes },
+                { label: 'ID', value: resources.project.id },
+              ]}
+            />
+          );
+        }
         break;
       }
     }
@@ -223,8 +387,17 @@ export function InspectorPanel({
     <div className="flex h-full flex-col overflow-y-auto">
       {/* 右上：世界线属性 */}
       <section className="border-b border-line">
-        <header className="px-4 pt-4 pb-2">
+        <header className="flex items-center justify-between px-4 pt-4 pb-2">
           <h2 className="text-xs font-semibold tracking-wider text-zinc-500">世界线属性</h2>
+          {selection?.kind === 'project' && !editing ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-300 transition hover:bg-white/5 hover:text-white"
+            >
+              编辑
+            </button>
+          ) : null}
         </header>
         {selection ? (
           detail

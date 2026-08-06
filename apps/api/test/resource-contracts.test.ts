@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { parseWorldview } from '@zivith/domain';
 import {
   assetDto,
   computeReorderIds,
   parseAssetCreateInput,
   parseAssetPatchInput,
+  projectBody,
   sceneBodySchema,
   sceneDto,
   storyBodySchema,
@@ -125,5 +127,35 @@ describe('asset contracts', () => {
     expect(response.weather_default).toBe('rainy');
     expect(response.referenceImages).toEqual(['media_1']);
     expect(response.data).toEqual({ type: 'interior', weather_default: 'rainy' });
+  });
+});
+
+describe('project worldview patch contract', () => {
+  it('accepts the Inspector inline-edit worldview payload and normalizes rules', () => {
+    const body = projectBody.partial().parse({
+      name: '凡人修仙传',
+      description: '一个凡人踏入修仙之路的故事',
+      worldview: {
+        genre: '东方玄幻',
+        premise: '灵气复苏，凡人亦可逆天改命',
+        rules: [' 灵气浓度决定修行上限 ', '功法品阶分天地玄黄'],
+        notes: '补充说明',
+      },
+    });
+    const normalized = parseWorldview(body.worldview);
+
+    expect(normalized.genre).toBe('东方玄幻');
+    expect(normalized.premise).toBe('灵气复苏，凡人亦可逆天改命');
+    expect(normalized.rules).toEqual(['灵气浓度决定修行上限', '功法品阶分天地玄黄']);
+    expect(normalized.notes).toBe('补充说明');
+  });
+
+  it('replaces the whole worldview so cleared fields can persist', () => {
+    const next = parseWorldview({ genre: '', premise: '', rules: [], notes: '' });
+
+    expect(next.genre).toBe('');
+    expect(next.premise).toBe('');
+    expect(next.rules).toEqual([]);
+    expect(next.notes).toBe('');
   });
 });

@@ -4,7 +4,7 @@
 >
 > Status: Active
 >
-> Synced: 2026-08-04
+> Synced: 2026-08-05
 >
 > Priority policy: **创造层优先进行中**，分支 `feat/creator-layer-first`：IP 核心数据库（Track I，[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md) / [ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）+ Creator Chat 持续对话（Track J 重写，[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 修订）+ 世界线视图（Track K，H4/H5 以世界线视图优先落地）。Track H 的 H3 已完成；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
 >
@@ -171,8 +171,8 @@
 | H1 | 规范 Entity 快照 + ChangeEvent schemas | `@zivith/domain` `history/*`；Shot/PromptVersion/Output/AppearanceVariant/VisualRequirement；ADR-0007 Accepted | 已完成 2026-07-30 |
 | H2 | EntityRevision/ChangeEvent 表与基线回填 | Prisma 表 + `backfillEntityBaselines`；无读路径切换 | 已完成 2026-07-30 |
 | H3 | 先影子写再事务性 State 双写 | 功能开关默认 **关**；经 env 按 Entity 使用 `shadow` / `dual` | 已完成 2026-07-30 |
-| H4 | 只读 Presentation Timeline | 导入既有 Scene/Shot 顺序；World Time 默认跟随；**2026-08-04 起以世界线视图优先落地**（非均匀刻度 + 轨道化）；**2026-08-05 世界线 v1 已落地（`/projects/:id/world`）** | 进行中（feat/creator-layer-first） |
-| H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；首发无高级 track 或编辑；**2026-08-05 三轨道 + 关系连线 v1 已落地** | 进行中（feat/creator-layer-first） |
+| H4 | 只读 Presentation Timeline | 导入既有 Scene/Shot 顺序；World Time 默认跟随；**2026-08-04 起以世界线视图优先落地**（非均匀刻度 + 轨道化）；**2026-08-05 世界线 v1 已落地（`/projects/:id/world`）** | **已完成 v1（2026-08-05）** — Production 视图后续 |
+| H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；首发无高级 track 或编辑；**2026-08-05 三轨道 + 关系连线 v1 已落地** | **已完成 v1（2026-08-05）** — 高级 track/编辑后续 |
 | H6 | 可变 WorldTime 绑定 | 自定义维度、模糊/区间/相对/平行时间 | 计划中 |
 | H7 | 高级派生 Track 投影 | 先 Camera/Prompt/Model；Style 稍后 | 计划中 |
 | H8 | Object/Event/Organization Entity 扩展 | **已被 Track I 取代** — 世界实体扩展现有独立的分片门禁轨道 | 已取代 2026-07-31 |
@@ -191,8 +191,8 @@
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
 | I0 | `WorldEvent` 进入领域契约的 ADR | 所有权、字段、与 `ChangeEvent` 的边界、继承参与（预期无） | **已完成 2026-08-04（[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md)）** |
-| I1 | `WorldEvent` 建模 + 落库（draft） | 项目级：世界时间信封、受影响 Entity、前置条件、后果；v1 只读 + 创建 draft，不参与 Shot 依赖与继承解析；挂世界线视图事件轨道 | 进行中（feat/creator-layer-first） |
-| I2 | `Relationship` 可查询性 | **晋级为独立实体（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）**：独立表、多态 EntityRef、directed/undirected、可选世界时间有效期；`GET /projects/:pid/relationships`；v1 不做 `at=` 回溯 | 进行中（feat/creator-layer-first） |
+| I1 | `WorldEvent` 建模 + 落库（draft） | 项目级：世界时间信封、受影响 Entity、前置条件、后果；v1 只读 + 创建 draft，不参与 Shot 依赖与继承解析；挂世界线视图事件轨道 | **已完成 2026-08-05**（建模 + draft 落库 + 世界线事件轨道；`verify-proposal-flow` 48 项 E2E 断言全过） |
+| I2 | `Relationship` 可查询性 | **晋级为独立实体（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）**：独立表、多态 EntityRef、directed/undirected、可选世界时间有效期；`GET /projects/:pid/relationships`；v1 不做 `at=` 回溯 | **已完成 2026-08-05**（独立表 + 多态 EntityRef + 查询面 + 世界线关系连线；`at=` 回溯后续） |
 | I3 | ADR + `Organization` 实体 | 晋级证据不变；`Relationship` 晋级已由 ADR-0012 提前完成 | 计划中（后续） |
 
 **晋级证据：**
@@ -209,10 +209,10 @@
 
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
-| J1 | 会话运行时 + World Builder Agent | `creator_chat_*` 表（**无 userId**）；`world-builder-agent` + 中英双语文案；mock 分支可演示落库（[AI-Agent-Collaboration.md §2](../domain/AI-Agent-Collaboration.md)） | 进行中（feat/creator-layer-first） |
-| J2 | 提案 → 确认 → 落库 | `apply-intent` 按 kind 分发既有 service（project/character/location/world_event/relationship）；全部 `draft`；幂等键 `message_id + proposal_key`；确认「创建世界」自动建 Project 并回绑线程 | 进行中（feat/creator-layer-first） |
-| J3 | 世界知识上下文 + 世界状态面板 | `buildWorldKnowledgeSummary` 聚合 project/stories/assets/world_events/relationships → prompt 插槽 + 右侧面板 | 进行中（feat/creator-layer-first） |
-| J4 | 与结构化工作区联动 | 右侧面板/实体跳转 `/projects/[pid]/world`；对话与 Studio 双向可达 | 进行中（feat/creator-layer-first） |
+| J1 | 会话运行时 + World Builder Agent | `creator_chat_*` 表（**无 userId**）；`world-builder-agent` + 中英双语文案；mock 分支可演示落库（[AI-Agent-Collaboration.md §2](../domain/AI-Agent-Collaboration.md)） | **已完成 2026-08-05**（会话运行时 + Agent + mock 落库 E2E） |
+| J2 | 提案 → 确认 → 落库 | `apply-intent` 按 kind 分发既有 service（project/character/location/world_event/relationship）；全部 `draft`；幂等键 `message_id + proposal_key`；确认「创建世界」自动建 Project 并回绑线程 | **已完成 2026-08-05**（提案→确认→落库 + 幂等 + 自动建世界；错误路径 400/409 覆盖） |
+| J3 | 世界知识上下文 + 世界状态面板 | `buildWorldContext` 聚合 project/stories/assets/world_events/relationships → prompt 插槽；右侧世界摘要面板（角色/地点/事件/关系计数 + 最近实体，点击跳 `/projects/[pid]/world`） | 进行中 — 后端 `buildWorldContext` 已完成；chat 页右侧世界状态面板待补 |
+| J4 | 与结构化工作区联动 | 右侧面板/实体跳转 `/projects/[pid]/world`；对话与 Studio 双向可达 | **已完成 2026-08-05**（侧栏「创作聊天 ↔ 世界线」双向可达；proposal-card「进入项目工作区」直链） |
 
 **退出标准：** 每个落库动作都有可观测的用户确认记录；产物一律为通过既有 review gate 的结构化 `draft` 实体；对话记录不作为创作产物存储、不进领域模型、不参与导出；不绕过任何强制门禁；每次生成携带 usage 埋点与 provenance（P7）。
 
@@ -231,10 +231,11 @@
 
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
-| K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | 进行中（feat/creator-layer-first） |
-| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector 上下分栏（右上世界线属性、右下创作线属性）；**2026-08-05 v1 只读已落地（`/projects/:id/world`）** | 已完成 v1 只读（feat/creator-layer-first） |
-| K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；侧栏「创作对话」常驻可达 | 进行中 — 受 Track J 门禁 |
+| K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | **已完成 2026-08-05**（World Overview：项目名 + 「本地创作」徽标 + 「去创作对话」入口 + 分区导航；`/production` `/settings` 承接原面板只搬不移；侧栏新增 制作/设置；浏览器回归 5 页全过） |
+| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector 上下分栏（右上世界线属性、右下创作线属性）；**2026-08-05 v1 只读已落地（`/projects/:id/world`）**；**2026-08-05 世界观核心闭环：左栏新增「世界观」组（选中展示世界观属性）、中栏副驾驶占位替换为只读世界状态摘要（阶段/世界观/实体计数）** | 已完成 v1 只读（feat/creator-layer-first） |
+| K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；侧栏「创作对话」常驻可达 | **已完成 2026-08-05**（根路径 `/` 重定向 `/creator-chats`；浏览器验证：重定向生效、侧栏「创作聊天」激活、列表与新建入口可用、`/projects` 回归正常） |
 | K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），Production 视图置灰标「后续」 | 进行中 — 世界视图 v1 完成，Production 视图待做 |
+| K5 | 世界观 Chat→Studio 核心闭环 | 世界观自动识别 → 落库 → Studio 展示：`Project.worldview Json`（genre/premise/rules/notes，additive 迁移）+ mock/LLM 自动提炼（`update_entity` type='project'）+ resources 返回 worldview/stage + chat header 常驻「进入 Studio」入口 | **已完成 2026-08-05**（愿景核对报告：Chat 引导/Studio 三栏/实体列表/timeline/Inspector 均已对齐；补齐世界观单点表示与识别、副驾驶摘要） |
 
 **Timeline 决策（2026-07-31）：** World View 与 Production View 是单一 `ProjectTimeline` 的两种投影，不是两条持久化时间线。独立世界轴需要全局可排序的世界年表 — 这正是 [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md) 放弃的，因为虚构历法、模糊时段与平行世界无法合并为一条序列。ADR-0007 保持不变；无需新 ADR。工作流运行与生成任务完全不在 Timeline 上 — 执行时间是第三种时间，位于 `/production`。
 
@@ -272,7 +273,7 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
          Phase 3 (generation productionize) — continues to defer, per ADR-0008
 
    Track K (world-first UI) runs alongside, each step gated on its supply:
-         K1 (in progress) → K2 (world workspace, after H4 world-line first) → K3 (default page `/`, after Track J) → K4 (World View first, after Track I)
+         K1 ✓ 2026-08-05 → K2 ✓ (world workspace v1, after H4 world-line first) → K3 ✓ 2026-08-05 (default page `/`, after Track J) → K4 (World View first, after Track I) → K5 ✓ 2026-08-05 (世界观 Chat→Studio 核心闭环)
 ```
 
 创造层优先计划（2026-08-04）已把 H4/H5、Track I、Track J（重写为持续对话）、Track K 串入同一分支 `feat/creator-layer-first`：先 IP 核心数据库 + Creator Chat，再世界线视图。生产制作功能（Story→Shot、Provider、usage）只搬不移、保持可用。

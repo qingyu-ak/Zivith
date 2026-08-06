@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { Prisma, type PrismaClient } from '@zivith/database';
+import type { Prisma} from '@zivith/database';
+import { type PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 

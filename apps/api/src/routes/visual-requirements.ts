@@ -323,7 +323,7 @@ export function registerVisualRequirementRoutes(
       projectId: asset.projectId,
       entityType: 'visual_requirement',
       entityId: approved.id,
-      row: approved as unknown as Record<string, unknown>,
+      row: approved,
       changeKind: 'transition',
       eventType: 'review.decided',
       idempotencyKey: `visual_requirement:approve:${approved.id}:${mediaId}`,

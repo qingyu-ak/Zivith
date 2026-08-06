@@ -1,6 +1,7 @@
-import type { Prisma, PrismaClient } from '@zivith/database';
+import type { Prisma } from '@zivith/database';
 import {
   type Proposal,
+  mergeWorldview,
   worldEventCreateSchema,
   relationshipCreateSchema,
 } from '@zivith/domain';
@@ -23,7 +24,9 @@ export type ApplyProposalResult = {
 };
 
 function requireProjectId(proposal: Proposal, fallback?: string | null): string {
-  const id = proposal.project_id ?? fallback ?? undefined;
+  // 上下文归属（批量 apply 的 currentProjectId / thread.projectId）优先：
+  // 真实 LLM 可能给占位 project_id（如 project_placeholder），会绕过上下文导致外键失败。
+  const id = fallback ?? proposal.project_id ?? undefined;
   if (!id) throw new ApiError(400, 'PROJECT_REQUIRED', '该提案缺少 project_id');
   return id;
 }
@@ -41,13 +44,14 @@ function requireString(
 }
 
 export async function applyProposal(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   proposal: Proposal,
   fallbackProjectId?: string | null,
+  memberUserId?: string | null,
 ): Promise<ApplyProposalResult> {
   switch (proposal.kind) {
     case 'create_project':
-      return applyCreateProject(db, proposal);
+      return applyCreateProject(db, proposal, memberUserId);
     case 'create_world_event':
       return applyCreateWorldEvent(db, proposal, fallbackProjectId);
     case 'create_character':
@@ -65,8 +69,9 @@ export async function applyProposal(
 }
 
 async function applyCreateProject(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   proposal: Proposal,
+  memberUserId?: string | null,
 ): Promise<ApplyProposalResult> {
   const payload = proposal.payload;
   const name = requireString(payload, 'name', '项目名称');
@@ -76,13 +81,22 @@ async function applyCreateProject(
       : null;
 
   const ownerId = await resolveLocalOwner(db);
+  const worldview =
+    payload.worldview && typeof payload.worldview === 'object'
+      ? mergeWorldview({}, payload.worldview)
+      : undefined;
   const project = await db.project.create({
     data: {
       ownerId,
       name,
       description,
-      defaults: { language: 'zh-CN' } as Prisma.InputJsonValue,
-      settings: { creator_layer: true } as Prisma.InputJsonValue,
+      ...(worldview ? { worldview } : {}),
+      defaults: { language: 'zh-CN' },
+      settings: { creator_layer: true },
+      // 与手动创建项目一致：建项目同时写入 owner 成员记录。优先写当前登录用户
+      // （world 路由无 auth，但前端会带 Bearer token 进来），无则回退 local owner，
+      // 否则按成员过滤的项目列表（/projects）看不到 Creator Chat 建的项目。
+      members: { create: { userId: memberUserId ?? ownerId, role: 'owner' } },
     },
   });
   // A fresh world always owns a presentation timeline (world line).
@@ -99,7 +113,7 @@ async function applyCreateProject(
 }
 
 async function applyCreateWorldEvent(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   proposal: Proposal,
   fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
@@ -135,7 +149,7 @@ async function applyCreateWorldEvent(
 }
 
 async function applyCreateAsset(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   proposal: Proposal,
   fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
@@ -180,7 +194,7 @@ async function applyCreateAsset(
 }
 
 async function applyCreateScene(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   proposal: Proposal,
   fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
@@ -233,7 +247,7 @@ async function applyCreateScene(
 }
 
 async function applyCreateRelationship(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   proposal: Proposal,
   fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
@@ -274,7 +288,7 @@ async function applyCreateRelationship(
 }
 
 async function assertEntityRefExists(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   projectId: string,
   ref: { type: string; id: string },
 ): Promise<void> {
@@ -299,14 +313,15 @@ async function assertEntityRefExists(
 }
 
 async function applyUpdateEntity(
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   proposal: Proposal,
   fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
   const projectId = requireProjectId(proposal, fallbackProjectId);
   const payload = proposal.payload;
   const type = requireString(payload, 'type', '实体类型');
-  const id = requireString(payload, 'id', '实体 id');
+  // 世界观更新目标恒为当前项目本身：忽略 LLM 可能填写的占位 id（如 proj-001）。
+  const id = type === 'project' ? projectId : requireString(payload, 'id', '实体 id');
   const fields = payload.fields as Record<string, unknown> | undefined;
 
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
@@ -327,7 +342,7 @@ async function applyUpdateEntity(
       }
       if (typeof fields.description === 'string') data.description = fields.description.trim();
       if (fields.world_time_envelope && typeof fields.world_time_envelope === 'object') {
-        data.worldTimeEnvelope = fields.world_time_envelope as Prisma.InputJsonValue;
+        data.worldTimeEnvelope = fields.world_time_envelope;
       }
       if (typeof fields.presentation_order === 'number') {
         data.presentationOrder = fields.presentation_order;
@@ -363,7 +378,7 @@ async function applyUpdateEntity(
         data.tags = fields.tags.filter((x): x is string => typeof x === 'string');
       }
       if (fields.data && typeof fields.data === 'object') {
-        data.data = fields.data as Prisma.InputJsonValue;
+        data.data = fields.data;
       }
       await db.asset.update({ where: { id }, data });
       return { kind: proposal.kind, projectId, entityType: 'asset', entityId: id, title };
@@ -416,13 +431,34 @@ async function applyUpdateEntity(
       if (typeof fields.description === 'string') data.description = fields.description.trim() || null;
       if (typeof fields.direction === 'string') data.direction = fields.direction;
       if (fields.valid_from && typeof fields.valid_from === 'object') {
-        data.validFrom = fields.valid_from as Prisma.InputJsonValue;
+        data.validFrom = fields.valid_from;
       }
       if (fields.valid_until && typeof fields.valid_until === 'object') {
-        data.validUntil = fields.valid_until as Prisma.InputJsonValue;
+        data.validUntil = fields.valid_until;
       }
       await db.relationship.update({ where: { id }, data });
       return { kind: proposal.kind, projectId, entityType: 'relationship', entityId: id, title };
+    }
+    case 'project': {
+      if (id !== projectId) throw new ApiError(400, 'REF_NOT_IN_PROJECT', '引用不属于该项目');
+      const entity = await db.project.findFirst({
+        where: { id, deletedAt: null },
+      });
+      if (!entity) throw new ApiError(404, 'ENTITY_NOT_FOUND', '项目不存在');
+      const data: Prisma.ProjectUpdateInput = {};
+      if (typeof fields.worldview === 'object' && fields.worldview !== null) {
+        data.worldview = mergeWorldview(entity.worldview, fields.worldview);
+      }
+      await db.project.update({ where: { id }, data });
+      const premise =
+        typeof fields.worldview === 'object' && fields.worldview !== null
+          ? (fields.worldview as Record<string, unknown>).premise
+          : undefined;
+      title =
+        typeof premise === 'string' && premise.trim()
+          ? premise.trim()
+          : entity.name;
+      return { kind: proposal.kind, projectId, entityType: 'project', entityId: id, title };
     }
     default:
       throw new ApiError(400, 'UNSUPPORTED_ENTITY_TYPE', `不支持的实体类型: ${type}`);

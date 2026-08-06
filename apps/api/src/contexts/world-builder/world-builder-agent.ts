@@ -88,13 +88,64 @@ function extractEntityName(text: string): string | null {
   return null;
 }
 
+const WORLDVIEW_GENRE_PATTERN =
+  /(赛博朋克|蒸汽朋克|废土|末世|玄幻|修真|仙侠|武侠|奇幻|西幻|科幻|都市|悬疑|推理|历史|神话|克苏鲁|校园|恋爱|战争|恐怖|惊悚|冒险|机甲)/;
+
+/** Extract a compact worldview from user text (题材/核心设定/世界规则/补充). */
+function extractWorldview(text: string): {
+  genre?: string;
+  premise?: string;
+  rules: string[];
+  notes?: string;
+} {
+  const rules: string[] = [];
+  let genre: string | undefined;
+  let premise: string | undefined;
+
+  const genreMatch = text.match(/(?:题材|类型)(?:是|为|叫作|叫|：|:)?\s*([\u4e00-\u9fa5A-Za-z0-9·]{1,20})/);
+  if (genreMatch && genreMatch[1]) genre = genreMatch[1].trim();
+  if (!genre) {
+    const fallback = text.match(WORLDVIEW_GENRE_PATTERN);
+    if (fallback && fallback[1]) genre = fallback[1];
+  }
+
+  const ruleMatch = text.match(
+    /(?:世界规则|力量体系|规则)(?:是|为|：|:|如下)?\s*([^。；;？?\n]{2,200})/,
+  );
+  if (ruleMatch && ruleMatch[1]) {
+    rules.push(
+      ...ruleMatch[1]
+        .split(/、|，|,|；|;/)
+        .map((part) => part.trim())
+        .filter((part) => part.length >= 2),
+    );
+  }
+
+  const premiseMatch = text.match(
+    /(?:核心设定|世界背景|世界观|这是一个关于|这是一个)(?:设定)?(?:是|为|：|:)?\s*([^。；;？?\n]{4,200})/,
+  );
+  if (premiseMatch && premiseMatch[1]) premise = premiseMatch[1].trim();
+
+  if (!premise && !rules.length) {
+    const cleaned = text
+      .replace(/^(?:请|帮我|我想|让我们|我们来|我要|设定|记录|补充)/, '')
+      .trim();
+    if (cleaned.length >= 4) premise = cleaned.slice(0, 200);
+  }
+
+  return {
+    ...(genre ? { genre } : {}),
+    ...(premise ? { premise } : {}),
+    rules: rules.slice(0, 64),
+  };
+}
+
 export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilderResponse {
   const world = input.world;
   const projectId = world?.projectId ?? null;
   const latest = latestUserMessage(input.history);
   const text = input.text.trim() || (latest?.content ?? '');
   const conflicts: string[] = [];
-  const openQuestions: string[] = [];
   const proposals: Proposal[] = [];
 
   // No project yet — always propose creating one.
@@ -126,6 +177,8 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
   const wantsCharacter = /角色|人物|主角|characters?/i.test(text);
   const wantsLocation = /地点|城市|场景|环境|where|location/i.test(text);
   const wantsEvent = /事件|发生了什么|历史|event/i.test(text);
+  const wantsWorldview =
+    /世界观|设定|规则|力量体系|题材|类型|文明|时代背景|世界背景|背景故事/i.test(text);
   const incremental = /增加|添加|新增|再|又|还有|记录|补充|设定|创建|加入|登场/i.test(text);
   // 明确声明信号（记录/创建/新增…）优先于疑问句检测，避免「主角还有什么秘密？」被误判为角色声明。
   const declaring = /记录|创建|新增|添加|设定|补充|登场|加入|增加|叫|名为/.test(text);
@@ -133,6 +186,34 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
     !declaring &&
     (/\?|？/.test(text) ||
       /什么|哪里|为什么|怎么|如何|是谁|在哪|吗$/.test(text));
+
+  // 世界观自动识别（优先于实体分支）：提炼题材/核心设定/世界规则 → update_entity(type='project')
+  if (wantsWorldview && !asking) {
+    const extracted = extractWorldview(text);
+    const hasContent =
+      Boolean(extracted.genre) ||
+      extracted.rules.length > 0 ||
+      Boolean(extracted.premise && extracted.premise.length >= 4);
+    if (hasContent) {
+      const worldview: Record<string, unknown> = {};
+      if (extracted.genre) worldview.genre = extracted.genre;
+      if (extracted.premise) worldview.premise = extracted.premise;
+      if (extracted.rules.length > 0) worldview.rules = extracted.rules;
+      proposals.push(
+        mockProposal('update_entity', projectId, {
+          type: 'project',
+          id: projectId,
+          fields: { worldview },
+        }),
+      );
+      return {
+        reply:
+          '我提炼了你的世界观设定，已整理成提案。请确认后写入世界档案；如有遗漏可以直接补充，例如：「规则：魔法需要消耗生命值」。',
+        proposals,
+        world_state: { stage: 'growing', open_questions: ['题材细节', '世界规则', '补充设定'], conflicts },
+      };
+    }
+  }
 
   if (wantsCharacter && !asking && (!hasCharacters || incremental)) {
     proposals.push(

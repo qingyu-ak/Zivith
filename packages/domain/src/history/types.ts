@@ -11,13 +11,14 @@ export const HISTORY_ENTITY_TYPES = [
   'appearance_variant',
   'visual_requirement',
   'world_event',
+  'relationship',
 ] as const;
 
 export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
 
 export interface EntityRef {
   project_id: string;
-  entity_type: HistoryEntityType | string;
+  entity_type: HistoryEntityType | (string & {});
   entity_id: string;
 }
 
