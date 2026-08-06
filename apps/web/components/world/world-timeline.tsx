@@ -22,12 +22,14 @@ const TRACK_COLORS: Record<string, TrackColor> = {
   character: { fill: 'rgba(183,255,74,0.14)', stroke: '#b7ff4a', text: '#eaf9d2' },
   scene: { fill: 'rgba(96,165,250,0.14)', stroke: '#60a5fa', text: '#dbeafe' },
   world_event: { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24', text: '#fef3c7' },
+  story: { fill: 'rgba(244,114,182,0.14)', stroke: '#f472b6', text: '#fce7f3' },
 };
 
 const KIND_LABEL: Record<string, string> = {
   character: '角色',
   scene: '场景',
   world_event: '事件',
+  story: '故事',
 };
 
 /** 估算文本像素宽度（中文 14px/字，拉丁 8px/字），用于自适应条带宽度。 */

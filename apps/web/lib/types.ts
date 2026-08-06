@@ -27,6 +27,8 @@ export interface StoryDTO {
   theme?: string | null;
   target_audience?: string | null;
   status?: string;
+  /** 故事在项目内的展示顺序（数据库 order 字段） */
+  order?: number;
   scene_count?: number;
   segments?: StorySegmentDTO[];
 }
@@ -482,7 +484,7 @@ export interface WorldResourcesDTO {
 }
 
 /** 世界线条目（前端从 resources 派生；anchorOrder 用于非均匀刻度定位） */
-export type WorldLineEntityType = 'character' | 'location' | 'scene' | 'world_event';
+export type WorldLineEntityType = 'character' | 'location' | 'scene' | 'world_event' | 'story';
 
 export interface WorldLineItem {
   id: string;
@@ -498,7 +500,7 @@ export interface WorldLineItem {
 }
 
 export interface WorldLineTrack {
-  kind: 'character' | 'scene' | 'world_event';
+  kind: 'character' | 'scene' | 'world_event' | 'story';
   title: string;
   items: WorldLineItem[];
 }

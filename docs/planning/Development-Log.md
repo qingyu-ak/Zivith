@@ -12,7 +12,22 @@
 
 ---
 
-## 2026-08-05 · `(pending commit)` · chore(data) · 三个同名「凡人修仙传」合并为一个（保留全部数据）
+## 2026-08-06 · `ee2c801` / `a26dfac` · feat(web) · Studio Production 视图（K4 完成）
+
+「一条 Timeline 的两种视图」补齐制作视图：世界线工作区顶部新增「世界 / 制作」tab 切换，制作视图沿 Presentation 顺序展示制作链路——故事（Story）轨道 + 场景（Scene）轨道（全局展示序号定位，非均匀刻度 + 轨道化复用世界时间线布局），左栏切换为故事列表，右栏 Inspector 复用（story/scene 选中展示）。数据复用 `GET /world/projects/:id/resources` 的 `entities.stories/scenes`，零后端改动；`StoryDTO` 补 `order` 字段；`buildProductionLineModel` 纯函数派生（mock 断言 5 项全过：双轨道/锚点连续/scaleDomain/无连线）。Shot 轨道与高级 track 留后续（K4 状态已更新）。
+
+- 模块：`apps/web/lib/world-line.ts`、`apps/web/lib/types.ts`、`apps/web/components/world/{world-workspace,world-timeline}.tsx`、`docs/planning/Next-Tasks.md`
+
+## 2026-08-06 · `0188241` + `ee2c801` + `a26dfac` · feat(web,api,domain) · 世界优先 Studio 阶段成果提交 + Creator Chat Trae 三栏
+
+一次性提交此前累积的未提交工作（世界优先 Studio UI + 世界观闭环 + 生产/设置页 + 世界实体后端），并叠加本次 Creator Chat 改造：
+
+- **fix(api)** `0188241`：`verify-proposal-flow.ts` 类型修复——`logger: false`（原 `{level:'error'}` 类型不符）、threadId/projectId 非空守卫、关系两端 `row?.sourceId/targetId` 收窄 + `projectId ?? undefined`、`asString` 安全转字符串（47+/35-）
+- **feat(web)** `ee2c801`：Creator Chat 改为 Trae 风格三栏——左会话边栏（常驻历史会话列表 + 内联新建对话表单）、中对话流（assistant 头像气泡 + 输入区圆角容器 + Enter/Shift+Enter 提示）、右世界状态面板（`world-status-panel.tsx`：阶段徽标/世界观摘要/实体计数/最近实体/进入 Studio，复用 resources 接口）；API 失败降级为三栏骨架 +「对话加载失败」可重试卡片（不再误报「对话不存在」）
+- **feat(web,api,domain)** `a26dfac`：Project.worldview 结构化字段 + parse/merge 助手、resources 读写、production/settings 页承接原面板、Inspector/Explorer/副驾驶摘要增强、世界实体后端（world 路由/proposal-applier/world-builder-agent）、history baseline 修复、docs 同步（49 files，1511+/181-）
+
+- 验证：web `tsc --noEmit` ✓ 0 error；dev 编译 ✓；browser_use 沙箱验证 Creator Chat 三栏骨架渲染 + 无 JS 崩溃 + 降级逻辑稳定；本机 HTTP 确认 resources 数据源（stage/实体计数）；API 运行正常
+- 模块：`apps/api/scripts/verify-proposal-flow.ts`、`apps/web/components/creator-chat/{chat-panel,world-status-panel}.tsx`、`apps/web/app/(studio)/projects/[projectId]/{production,settings}`、`docs/*`
 
 排查「对话有角色但 Studio 没有」时发现库内存在三个同名「凡人修仙传」：`239cb924`（韩立/天南大陆/2 事件/已确认对话）、`b62f238b`（1 条对话含 pending 韩立提案，无实体）、`4c50e7cc`（验证项目，无数据）。用户确认合并为一个、保留所有数据。
 

@@ -153,3 +153,76 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
     scaleDomain: { min, max },
   };
 }
+
+/**
+ * 制作视图模型（K4 "一条 Timeline 的两种视图"）：
+ * 沿 Presentation 顺序展示制作链路——故事（Story）→ 场景（Scene）。
+ * 故事按 order 排布；场景以 (story.order, scene.order) 全局展示序号定位，
+ * 刻度锚点即展示序号，只读派生，无关系连线。镜头（Shot）轨道留待后续。
+ */
+export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLineModel {
+  const { stories, scenes } = resources.entities;
+
+  const sortedStories = [...stories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const storyOrder = new Map(sortedStories.map((story, index) => [story.id, story.order ?? index + 1]));
+
+  // 全局展示序号：story 主序 → scene 内序（presentationOrder 仅用于排序）
+  const sortedScenes = [...scenes]
+    .map((scene) => ({
+      scene,
+      presentationOrder: (storyOrder.get(scene.story_id) ?? 1) * 1000 + (scene.order ?? 0),
+    }))
+    .sort((a, b) => a.presentationOrder - b.presentationOrder)
+    .map((entry, index) => ({ scene: entry.scene, order: index + 1 }));
+
+  const tracks: WorldLineTrack[] = [
+    {
+      kind: 'story',
+      title: '故事',
+      items: sortedStories.map((story) => ({
+        id: story.id,
+        entityType: 'story',
+        title: story.title,
+        description: story.logline ?? story.synopsis ?? null,
+        anchorOrder: storyOrder.get(story.id) ?? 0,
+        createdAt: '',
+        extra: {
+          status: story.status ?? 'draft',
+          scene_count: story.scene_count ?? 0,
+        },
+      })),
+    },
+    {
+      kind: 'scene',
+      title: '场景',
+      items: sortedScenes.map(({ scene, order }) => ({
+        id: scene.id,
+        entityType: 'scene',
+        title: scene.title,
+        description: scene.summary,
+        anchorOrder: order,
+        createdAt: scene.created_at ?? '',
+        extra: {
+          story_id: scene.story_id,
+          order: scene.order ?? 0,
+          state: scene.state ?? 'draft',
+        },
+      })),
+    },
+  ];
+
+  const orders = [
+    ...sortedStories.map((story) => storyOrder.get(story.id) ?? 0),
+    ...sortedScenes.map((entry) => entry.order),
+  ];
+  const min = orders.length ? Math.min(...orders) : 1;
+  const max = orders.length ? Math.max(...orders) : Math.max(min, 1);
+
+  return {
+    projectId: resources.project.id,
+    projectName: resources.project.name,
+    tracks,
+    relationships: [],
+    scaleDomain: { min, max },
+  };
+}
