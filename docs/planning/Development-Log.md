@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-06 · `(pending commit)` · fix(api,web) · 混合批次跳过重复 create_project，实体提案照常应用
+## 2026-08-06 · `6eb58cb` · fix(api,web) · 混合批次跳过重复 create_project，实体提案照常应用
 
 LLM 偶尔在项目已存在时仍误产出 `create_project`，与真实实体提案混在同一批。原 apply 逻辑只要遇到 `create_project` 且项目已存在就抛 `PROJECT_ALREADY_EXISTS`，导致整批实体提案（角色/地点/事件等）全部无法应用，表现为「新出现的实体不能添加到世界」。
 
