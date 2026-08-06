@@ -78,6 +78,16 @@ function check(label: string, ok: boolean, detail?: string): void {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
 }
 
+/** 安全转字符串：未知类型（含对象）避免隐式 '[object Object]'。 */
+function asString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  return JSON.stringify(value) ?? '';
+}
+
 function kindsOf(response: HttpResponse): string[] {
   const assistant = response.json?.assistant_message as Json | undefined;
   const proposal = assistant?.proposal;
@@ -143,7 +153,7 @@ function main(): Promise<number> {
     let app: Awaited<ReturnType<typeof buildApp>>;
     try {
       app = await buildApp({
-        logger: { level: 'error' },
+        logger: false,
         jwtSecret: 'verify-proposal-flow-local-secret-000',
       });
     } catch (error) {
@@ -246,10 +256,10 @@ function main(): Promise<number> {
         ),
         row ? `${row.direction}/${row.label ?? '—'}/${row.state}` : '—',
       );
-      if (row) {
+      if (row?.sourceId && row?.targetId) {
         const [src, tgt] = await Promise.all([
-          prisma.asset.findFirst({ where: { id: row.sourceId, projectId: projectId! } }),
-          prisma.asset.findFirst({ where: { id: row.targetId, projectId: projectId! } }),
+          prisma.asset.findFirst({ where: { id: row.sourceId, projectId: projectId ?? undefined } }),
+          prisma.asset.findFirst({ where: { id: row.targetId, projectId: projectId ?? undefined } }),
         ]);
         check('DB: 关系两端引用项目内真实角色', Boolean(src) && Boolean(tgt), `${row.sourceId} / ${row.targetId}`);
       }
@@ -261,10 +271,11 @@ function main(): Promise<number> {
       const thread = await request(base, 'POST', '/world/creator-chats', { title: '验证对话流' });
       threadId = thread.json?.id as string | null;
       check('创建会话返回 201 且含 id', thread.status === 201 && Boolean(threadId));
+      if (!threadId) return 1;
 
       const m1 = await expectKinds(
         base,
-        threadId!,
+        threadId,
         '我想做一个玄幻世界，主角叫韩立，一个资质平庸的凡人修士',
         ['create_project'],
         '消息1：无项目时产出 create_project',
@@ -272,15 +283,16 @@ function main(): Promise<number> {
       if (!m1) return cleanupOk ? 1 : 1;
 
       console.log('\n== 2. 确认首条提案（创建项目）==');
-      const apply1 = await expectApply(base, threadId!, m1, 200, null, 'apply 项目提案返回 200');
+      const apply1 = await expectApply(base, threadId, m1, 200, null, 'apply 项目提案返回 200');
       const applied1 = (apply1?.json?.applied as Json[] | undefined) ?? [];
       check(
         '应用结果包含 project 实体',
         applied1.some((item) => item.entity_type === 'project'),
-        applied1.map((item) => `${item.entity_type}:${item.title}`).join(', '),
+        applied1.map((item) => `${asString(item.entity_type)}:${asString(item.title)}`).join(', '),
       );
-      projectId = (applied1[0] as Json | undefined)?.project_id as string | null;
+      projectId = applied1[0]?.project_id as string | null;
       appliedMessageId = m1;
+      if (!projectId) return 1;
 
       // DB 层：项目字段完整性（apply 直接查库验证）
       const dbProject = projectId
@@ -314,22 +326,22 @@ function main(): Promise<number> {
       check(
         '会话已关联项目（关联修复点）',
         (after.json?.thread as Json | undefined)?.project_id === projectId,
-        `project_id=${(after.json?.thread as Json | undefined)?.project_id}`,
+        `project_id=${asString((after.json?.thread as Json | undefined)?.project_id)}`,
       );
 
       console.log('\n== 3. 角色消息 ==');
       const m2 = await expectKinds(
         base,
-        threadId!,
+        threadId,
         '主角叫韩立，一个资质平庸的凡人修士',
         ['create_character'],
         '消息2：主角 → create_character',
       );
       if (!m2) return 1;
-      const apply2 = await expectApply(base, threadId!, m2, 200, null, 'apply 角色提案返回 200');
+      const apply2 = await expectApply(base, threadId, m2, 200, null, 'apply 角色提案返回 200');
       appliedMessageId = m2;
       const charTitle = ((apply2?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
-      check('角色「韩立」已入库', charTitle === '韩立', String(charTitle));
+      check('角色「韩立」已入库', charTitle === '韩立', asString(charTitle));
       const hanId = ((apply2?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
         | string
         | undefined;
@@ -343,15 +355,15 @@ function main(): Promise<number> {
       console.log('\n== 4. 地点消息 ==');
       const m3 = await expectKinds(
         base,
-        threadId!,
+        threadId,
         '记录一个地点：天南大陆，修仙者以宗门划分势力',
         ['create_location'],
         '消息3：地点 → create_location',
       );
       if (!m3) return 1;
-      const apply3 = await expectApply(base, threadId!, m3, 200, null, 'apply 地点提案返回 200');
+      const apply3 = await expectApply(base, threadId, m3, 200, null, 'apply 地点提案返回 200');
       const locTitle = ((apply3?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
-      check('地点「天南大陆」已入库', locTitle === '天南大陆', String(locTitle));
+      check('地点「天南大陆」已入库', locTitle === '天南大陆', asString(locTitle));
       const locId = ((apply3?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
         | string
         | undefined;
@@ -365,18 +377,18 @@ function main(): Promise<number> {
       console.log('\n== 5. 事件消息 ==');
       const m4 = await expectKinds(
         base,
-        threadId!,
+        threadId,
         '记录一个事件：三百年后天南大陆灵气枯竭，修仙界大乱',
         ['create_world_event'],
         '消息4：事件 → create_world_event',
       );
       if (!m4) return 1;
-      const apply4 = await expectApply(base, threadId!, m4, 200, null, 'apply 事件提案返回 200');
+      const apply4 = await expectApply(base, threadId, m4, 200, null, 'apply 事件提案返回 200');
       const eventTitle = ((apply4?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check(
         '事件已入库',
         typeof eventTitle === 'string' && eventTitle.includes('灵气枯竭'),
-        String(eventTitle),
+        asString(eventTitle),
       );
       const eventId = ((apply4?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
         | string
@@ -386,15 +398,15 @@ function main(): Promise<number> {
       console.log('\n== 6. 增量角色消息（已有角色再添角色）==');
       const m5 = await expectKinds(
         base,
-        threadId!,
+        threadId,
         '记录一个角色：南宫婉，韩立的道侣',
         ['create_character'],
         '消息5：增量角色 → create_character',
       );
       if (!m5) return 1;
-      const apply5 = await expectApply(base, threadId!, m5, 200, null, 'apply 增量角色返回 200');
+      const apply5 = await expectApply(base, threadId, m5, 200, null, 'apply 增量角色返回 200');
       const wanTitle = ((apply5?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
-      check('角色「南宫婉」已入库', wanTitle === '南宫婉', String(wanTitle));
+      check('角色「南宫婉」已入库', wanTitle === '南宫婉', asString(wanTitle));
       const wanId = ((apply5?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
         | string
         | undefined;
@@ -408,15 +420,15 @@ function main(): Promise<number> {
       console.log('\n== 7. 关系消息 ==');
       const m6 = await expectKinds(
         base,
-        threadId!,
+        threadId,
         '韩立和南宫婉是道侣关系',
         ['create_relationship'],
         '消息6：关系 → create_relationship',
       );
       if (!m6) return 1;
-      const apply6 = await expectApply(base, threadId!, m6, 200, null, 'apply 关系提案返回 200');
+      const apply6 = await expectApply(base, threadId, m6, 200, null, 'apply 关系提案返回 200');
       const relTitle = ((apply6?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
-      check('关系已入库', Boolean(relTitle), String(relTitle));
+      check('关系已入库', Boolean(relTitle), asString(relTitle));
       const relId = ((apply6?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
         | string
         | undefined;
@@ -425,7 +437,7 @@ function main(): Promise<number> {
       console.log('\n== 8. 提问消息（不应误触发提案）==');
       const m7 = await expectKinds(
         base,
-        threadId!,
+        threadId,
         '主角还有什么秘密？天空之城在哪里？',
         [],
         '消息7：纯提问 → 无提案',
@@ -435,7 +447,7 @@ function main(): Promise<number> {
       console.log('\n== 9. 错误路径 ==');
       await expectApply(
         base,
-        threadId!,
+        threadId,
         m7,
         400,
         'NO_PROPOSAL',
@@ -443,8 +455,8 @@ function main(): Promise<number> {
       );
       await expectApply(
         base,
-        threadId!,
-        appliedMessageId!,
+        threadId,
+        appliedMessageId,
         409,
         'PROPOSAL_ALREADY_HANDLED',
         '重复 apply 已应用提案 → 409 PROPOSAL_ALREADY_HANDLED',
@@ -453,7 +465,7 @@ function main(): Promise<number> {
       // Simulate an LLM that wrongly proposes create_project after project exists.
       const rogue = await prisma.creatorChatMessage.create({
         data: {
-          threadId: threadId!,
+          threadId: threadId,
           role: 'assistant',
           content: '（构造：错误的重复建项目提案）',
           proposal: [
@@ -469,7 +481,7 @@ function main(): Promise<number> {
       });
       await expectApply(
         base,
-        threadId!,
+        threadId,
         rogue.id,
         400,
         'PROJECT_ALREADY_EXISTS',
@@ -486,17 +498,17 @@ function main(): Promise<number> {
       check(
         'resources: 2 角色',
         characters.includes('韩立') && characters.includes('南宫婉'),
-        characters.join(', '),
+        characters.map(asString).join(', '),
       );
-      check('resources: 1 地点', locations.includes('天南大陆'), locations.join(', '));
+      check('resources: 1 地点', locations.includes('天南大陆'), locations.map(asString).join(', '));
       check('resources: 1 事件', worldEvents.length >= 1, String(worldEvents.length));
       check('resources: 1 关系', relationships.length >= 1, String(relationships.length));
 
       console.log('\n== 11. DB 汇总计数（防多余/缺失实体）==');
       const dbCounts = await Promise.all([
-        prisma.asset.count({ where: { projectId: projectId!, deletedAt: null } }),
-        prisma.worldEvent.count({ where: { projectId: projectId!, deletedAt: null } }),
-        prisma.relationship.count({ where: { projectId: projectId!, deletedAt: null } }),
+        prisma.asset.count({ where: { projectId: projectId, deletedAt: null } }),
+        prisma.worldEvent.count({ where: { projectId: projectId, deletedAt: null } }),
+        prisma.relationship.count({ where: { projectId: projectId, deletedAt: null } }),
       ]);
       check('DB: 项目内 3 个 asset（韩立/南宫婉/天南大陆）', dbCounts[0] === 3, String(dbCounts[0]));
       check('DB: 项目内 1 个 world_event', dbCounts[1] === 1, String(dbCounts[1]));
