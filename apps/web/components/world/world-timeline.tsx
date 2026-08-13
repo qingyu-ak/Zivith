@@ -23,6 +23,7 @@ const TRACK_COLORS: Record<string, TrackColor> = {
   scene: { fill: 'rgba(96,165,250,0.14)', stroke: '#60a5fa', text: '#dbeafe' },
   world_event: { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24', text: '#fef3c7' },
   story: { fill: 'rgba(244,114,182,0.14)', stroke: '#f472b6', text: '#fce7f3' },
+  shot: { fill: 'rgba(251,113,133,0.16)', stroke: '#fb7185', text: '#ffe4e6' },
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -30,6 +31,7 @@ const KIND_LABEL: Record<string, string> = {
   scene: '场景',
   world_event: '事件',
   story: '故事',
+  shot: '镜头',
 };
 
 /** 估算文本像素宽度（中文 14px/字，拉丁 8px/字），用于自适应条带宽度。 */
@@ -164,28 +166,38 @@ export function WorldTimeline({
 
         {/* 关系连线层（条目之下） */}
         <g>
-          {links.map((link) => (
-            <g key={link.id} className="pointer-events-none">
-              <path
-                d={link.d}
-                fill="none"
-                stroke="rgba(244,244,245,0.32)"
-                strokeWidth="1.25"
-                strokeDasharray="4 3"
-              />
-              {link.label && (
-                <text
-                  x={link.midX}
-                  y={link.midY}
-                  fill="#a1a1aa"
-                  fontSize="10"
-                  textAnchor="middle"
-                >
-                  {link.label}
-                </text>
-              )}
-            </g>
-          ))}
+          {links.map((link) => {
+            const active = selection?.kind === 'relationship' && selection.id === link.id;
+            return (
+              <g
+                key={link.id}
+                className="cursor-pointer"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect({ kind: 'relationship', id: link.id });
+                }}
+              >
+                <path
+                  d={link.d}
+                  fill="none"
+                  stroke={active ? 'rgba(251,191,36,0.9)' : 'rgba(244,244,245,0.32)'}
+                  strokeWidth={active ? 2.25 : 1.25}
+                  strokeDasharray="4 3"
+                />
+                {link.label && (
+                  <text
+                    x={link.midX}
+                    y={link.midY}
+                    fill={active ? '#fbbf24' : '#a1a1aa'}
+                    fontSize="10"
+                    textAnchor="middle"
+                  >
+                    {link.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </g>
 
         {/* 顶部刻度轴：非均匀刻度（事件 presentation_order 为锚点） */}

@@ -37,11 +37,11 @@
 | 2.5 polish（Track G） | **已完成** | 真实密钥 Story→Video E2E；Wan 加固 + MinIO 持久化 + 余额告警 + 无自动重复计费 |
 | **IP Core foundation（Track H）** | H3 已完成；H4/H5 世界线 v1 已落地 | Entity + State + Timeline + Track。双写助手 + 按 Entity 开关（默认关）；H4/H5 世界线视图 v1 于 2026-08-05 在 `feat/creator-layer-first` 落地（`/projects/:id/world` 三轨道 + 关系连线），Production 视图后续 |
 | **IP Core world entities（Track I）** | I1 / I2 已落地 | WorldEvent 已落库（[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md)）；Relationship 已提升为独立实体（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）；Organization 待偿 |
-| **Creator Chat 持续对话（Track J）** | 主体已落地 | 世界优先的持续对话创作面；后端（会话运行时 + World Builder Agent + 提案→确认→落库 + 知识上下文）与 Web 对话页/提案卡片已落地（E2E 48 项全过）；chat 页右侧世界状态面板待补。由 ADR-0010（2026-08-04 修订）划界 |
+| **Creator Chat 持续对话（Track J）** | 已落地 | 世界优先的持续对话创作面；后端（会话运行时 + World Builder Agent + 提案→确认→落库 + 知识上下文）与 Web 对话页/提案卡片/右侧世界状态面板已落地。由 ADR-0010（2026-08-04 修订）划界 |
 | **World-first UI（Track K）** | K1/K3/K5 已完成；K2/K4 世界视图 v1 | 项目首页已拆分为 World Overview + `/production` + `/settings`（2026-08-05，侧栏新增 制作/设置）；Creator Chat 已为默认页 `/`（2026-08-05）；`/world` 三栏工作区 v1 只读（2026-08-05）；**世界观 Chat→Studio 核心闭环已落地（2026-08-05）：`Project.worldview Json` + 自动提炼落库 + Explorer「世界观」组 + 副驾驶只读摘要 + chat「进入 Studio」入口**。见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md) |
 | 3–5 | 0% | 生成生产化现排在 IP Core 之后 |
 
-**近期工程待办：** [Next-Tasks.md](Next-Tasks.md) **Track H**（H3 已完成；H4/H5 世界线 v1 已落地 2026-08-05）、Track I（I1/I2 已落地）、Track J（主体已落地）、Track K（K1/K3 已完成 2026-08-05；K5 世界观 Chat→Studio 核心闭环已完成 2026-08-05）已闭环；下一步：J3 右侧世界状态面板 + K4 Production 视图。设定表 / 地点表与 T2I·I2I·T2V·I2V 矩阵见 [Asset-Model.md](../domain/Asset-Model.md)。
+**近期工程待办：** [Next-Tasks.md](Next-Tasks.md) 创造层 v1 已闭环；Inspector 可编辑与制作视图 Shot 轨道已落地。下一步：Creator Chat 流式 SSE → ADR-0013 免登录 API 闭环。设定表 / 地点表与 T2I·I2I·T2V·I2V 矩阵见 [Asset-Model.md](../domain/Asset-Model.md)。
 
 ### Entity + State + Timeline + Track 实施门禁
 

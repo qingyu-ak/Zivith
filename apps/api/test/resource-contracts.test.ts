@@ -128,6 +128,39 @@ describe('asset contracts', () => {
     expect(response.referenceImages).toEqual(['media_1']);
     expect(response.data).toEqual({ type: 'interior', weather_default: 'rainy' });
   });
+
+  it('flattens character data so world resources Inspector can read personality', () => {
+    const response = assetDto({
+      id: 'asset_2',
+      type: 'character',
+      name: '韩立',
+      description: '凡人修士',
+      appearance: { gender: '男' },
+      data: {
+        personality: '谨慎',
+        default_outfit: '青衫',
+      },
+    });
+
+    expect(response.asset_type).toBe('character');
+    expect(response.personality).toBe('谨慎');
+    expect(response.default_outfit).toBe('青衫');
+    expect((response.appearance as { gender?: string }).gender).toBe('男');
+  });
+
+  it('aliases scene description/time for Inspector summary and time_of_day', () => {
+    const response = sceneDto({
+      id: 'scene_1',
+      title: '乱星海',
+      description: '出海求生',
+      time: '黄昏',
+      weather: '阴',
+      mood: '压抑',
+    });
+
+    expect(response.summary).toBe('出海求生');
+    expect(response.time_of_day).toBe('黄昏');
+  });
 });
 
 describe('project worldview patch contract', () => {

@@ -36,18 +36,26 @@ function eventItem(event: WorldEventDTO): WorldLineItem {
   };
 }
 
+function sceneSummary(scene: SceneDTO): string | null | undefined {
+  return scene.summary ?? scene.description;
+}
+
+function sceneTime(scene: SceneDTO): string | null {
+  return scene.time_of_day ?? scene.time ?? null;
+}
+
 function sceneItem(scene: SceneDTO): WorldLineItem {
   return {
     id: scene.id,
     entityType: 'scene',
     title: scene.title,
-    description: scene.summary,
+    description: sceneSummary(scene),
     anchorOrder: scene.order ?? 0,
     createdAt: scene.created_at ?? '',
     extra: {
       story_id: scene.story_id,
       location_id: scene.location_id ?? null,
-      time_of_day: scene.time_of_day ?? null,
+      time_of_day: sceneTime(scene),
       weather: scene.weather ?? null,
       mood: scene.mood ?? null,
       state: scene.state ?? 'draft',
@@ -156,17 +164,15 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
 
 /**
  * 制作视图模型（K4 "一条 Timeline 的两种视图"）：
- * 沿 Presentation 顺序展示制作链路——故事（Story）→ 场景（Scene）。
- * 故事按 order 排布；场景以 (story.order, scene.order) 全局展示序号定位，
- * 刻度锚点即展示序号，只读派生，无关系连线。镜头（Shot）轨道留待后续。
+ * 沿 Presentation 顺序展示制作链路——故事 → 场景 → 镜头。
+ * 故事按 order 排布；场景以全局展示序号定位；镜头嵌在所属场景的刻度区间内。
  */
 export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLineModel {
-  const { stories, scenes } = resources.entities;
+  const { stories, scenes, shots = [] } = resources.entities;
 
   const sortedStories = [...stories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const storyOrder = new Map(sortedStories.map((story, index) => [story.id, story.order ?? index + 1]));
 
-  // 全局展示序号：story 主序 → scene 内序（presentationOrder 仅用于排序）
   const sortedScenes = [...scenes]
     .map((scene) => ({
       scene,
@@ -174,6 +180,38 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
     }))
     .sort((a, b) => a.presentationOrder - b.presentationOrder)
     .map((entry, index) => ({ scene: entry.scene, order: index + 1 }));
+
+  const shotsByScene = new Map<string, typeof shots>();
+  for (const shot of shots) {
+    const list = shotsByScene.get(shot.scene_id) ?? [];
+    list.push(shot);
+    shotsByScene.set(shot.scene_id, list);
+  }
+
+  const shotItems: WorldLineItem[] = [];
+  for (const { scene, order: sceneOrder } of sortedScenes) {
+    const sceneShots = [...(shotsByScene.get(scene.id) ?? [])].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0),
+    );
+    const denom = sceneShots.length + 1;
+    sceneShots.forEach((shot, index) => {
+      shotItems.push({
+        id: shot.id,
+        entityType: 'shot',
+        title: shot.label?.trim() || `镜头 ${shot.order ?? index + 1}`,
+        description: shot.mood ?? null,
+        anchorOrder: sceneOrder + (index + 1) / denom,
+        createdAt: shot.created_at ?? '',
+        extra: {
+          scene_id: shot.scene_id,
+          story_id: scene.story_id,
+          order: shot.order ?? index + 1,
+          state: shot.state ?? 'draft',
+          mood: shot.mood ?? null,
+        },
+      });
+    });
+  }
 
   const tracks: WorldLineTrack[] = [
     {
@@ -199,7 +237,7 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
         id: scene.id,
         entityType: 'scene',
         title: scene.title,
-        description: scene.summary,
+        description: sceneSummary(scene),
         anchorOrder: order,
         createdAt: scene.created_at ?? '',
         extra: {
@@ -209,11 +247,17 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
         },
       })),
     },
+    {
+      kind: 'shot',
+      title: '镜头',
+      items: shotItems,
+    },
   ];
 
   const orders = [
     ...sortedStories.map((story) => storyOrder.get(story.id) ?? 0),
     ...sortedScenes.map((entry) => entry.order),
+    ...shotItems.map((item) => item.anchorOrder),
   ];
   const min = orders.length ? Math.min(...orders) : 1;
   const max = orders.length ? Math.max(...orders) : Math.max(min, 1);

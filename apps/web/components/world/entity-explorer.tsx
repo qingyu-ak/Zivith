@@ -5,6 +5,7 @@ import type {
   SceneDTO,
   StoryDTO,
   WorldEventDTO,
+  WorldRelationshipDTO,
   WorldResourcesDTO,
   WorldSelection,
 } from '@/lib/types';
@@ -22,6 +23,7 @@ const GROUP_COLORS: Record<string, string> = {
   world_event: 'border-l-[#fbbf24]',
   story: 'border-l-[#f472b6]',
   project: 'border-l-zinc-400',
+  relationship: 'border-l-[#f59e0b]',
 };
 
 function Group({
@@ -83,7 +85,8 @@ export function EntityExplorer({
   selection: WorldSelection;
   onSelect: (selection: Exclude<WorldSelection, null>) => void;
 }) {
-  const { stories, characters, locations, scenes, world_events } = resources.entities;
+  const { stories, characters, locations, scenes, world_events, relationships } =
+    resources.entities;
 
   const characterItems: GroupItem[] = characters.map((item: AssetDTO) => ({
     id: item.id,
@@ -98,7 +101,7 @@ export function EntityExplorer({
   const sceneItems: GroupItem[] = scenes.map((item: SceneDTO) => ({
     id: item.id,
     title: item.title,
-    subtitle: item.summary || undefined,
+    subtitle: item.summary || item.description || undefined,
   }));
   const eventItems: GroupItem[] = world_events.map((item: WorldEventDTO) => ({
     id: item.id,
@@ -109,6 +112,11 @@ export function EntityExplorer({
     id: item.id,
     title: item.title,
     subtitle: item.logline || undefined,
+  }));
+  const relationshipItems: GroupItem[] = relationships.map((item: WorldRelationshipDTO) => ({
+    id: item.id,
+    title: item.label || item.kind,
+    subtitle: `${item.source_type} → ${item.target_type}`,
   }));
   const hasWorldview =
     Boolean(resources.project.worldview?.genre?.trim()) ||
@@ -127,7 +135,7 @@ export function EntityExplorer({
 
   const handleSelect = (item: GroupItem, kind: string) => {
     onSelect({
-      kind: kind as 'character' | 'location' | 'scene' | 'world_event' | 'story' | 'project',
+      kind: kind as Exclude<WorldSelection, null>['kind'],
       id: item.id,
     });
   };
@@ -183,6 +191,14 @@ export function EntityExplorer({
         kind="story"
         count={stories.length}
         items={storyItems}
+        selection={selection}
+        onSelect={handleSelect}
+      />
+      <Group
+        label="关系"
+        kind="relationship"
+        count={relationships.length}
+        items={relationshipItems}
         selection={selection}
         onSelect={handleSelect}
       />

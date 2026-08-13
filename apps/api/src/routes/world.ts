@@ -12,6 +12,7 @@ import {
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { applyProposal } from '../contexts/world/proposal-applier.js';
+import { assetDto, sceneDto } from './resources.js';
 import {
   WorldBuilderAgent,
   inferWorldStage,
@@ -71,7 +72,7 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
     const { projectId } = projectParams.parse(request.params);
     const project = await requireProject(db, projectId);
 
-    const [stories, characters, locations, scenes, worldEvents, relationships] =
+    const [stories, characters, locations, scenes, worldEvents, relationships, shots] =
       await Promise.all([
         db.story.findMany({
           where: { projectId, deletedAt: null },
@@ -97,6 +98,20 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
           where: { projectId, deletedAt: null },
           orderBy: { createdAt: 'asc' },
         }),
+        db.shot.findMany({
+          where: { projectId, deletedAt: null },
+          select: {
+            id: true,
+            sceneId: true,
+            projectId: true,
+            order: true,
+            label: true,
+            state: true,
+            mood: true,
+            createdAt: true,
+          },
+          orderBy: { order: 'asc' },
+        }),
       ]);
 
     const entityCount =
@@ -114,11 +129,12 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
       stage,
       entities: {
         stories,
-        characters,
-        locations,
-        scenes,
+        characters: characters.map((row) => assetDto(row as unknown as Record<string, unknown>)),
+        locations: locations.map((row) => assetDto(row as unknown as Record<string, unknown>)),
+        scenes: scenes.map((row) => sceneDto(row as unknown as Record<string, unknown>)),
         world_events: worldEvents,
         relationships,
+        shots,
       },
     };
   });

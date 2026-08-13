@@ -211,7 +211,7 @@
 |----|------|-------|--------|
 | J1 | 会话运行时 + World Builder Agent | `creator_chat_*` 表（**无 userId**）；`world-builder-agent` + 中英双语文案；mock 分支可演示落库（[AI-Agent-Collaboration.md §2](../domain/AI-Agent-Collaboration.md)） | **已完成 2026-08-05**（会话运行时 + Agent + mock 落库 E2E） |
 | J2 | 提案 → 确认 → 落库 | `apply-intent` 按 kind 分发既有 service（project/character/location/world_event/relationship）；全部 `draft`；幂等键 `message_id + proposal_key`；确认「创建世界」自动建 Project 并回绑线程 | **已完成 2026-08-05**（提案→确认→落库 + 幂等 + 自动建世界；错误路径 400/409 覆盖） |
-| J3 | 世界知识上下文 + 世界状态面板 | `buildWorldContext` 聚合 project/stories/assets/world_events/relationships → prompt 插槽；右侧世界摘要面板（角色/地点/事件/关系计数 + 最近实体，点击跳 `/projects/[pid]/world`） | 进行中 — 后端 `buildWorldContext` 已完成；chat 页右侧世界状态面板待补 |
+| J3 | 世界知识上下文 + 世界状态面板 | `buildWorldContext` 聚合 project/stories/assets/world_events/relationships → prompt 插槽；右侧世界摘要面板（角色/地点/事件/关系计数 + 最近实体，点击跳 `/projects/[pid]/world`） | **已完成 2026-08-06**（`ee2c801` Trae 三栏 + `world-status-panel.tsx`） |
 | J4 | 与结构化工作区联动 | 右侧面板/实体跳转 `/projects/[pid]/world`；对话与 Studio 双向可达 | **已完成 2026-08-05**（侧栏「创作聊天 ↔ 世界线」双向可达；proposal-card「进入项目工作区」直链） |
 
 **退出标准：** 每个落库动作都有可观测的用户确认记录；产物一律为通过既有 review gate 的结构化 `draft` 实体；对话记录不作为创作产物存储、不进领域模型、不参与导出；不绕过任何强制门禁；每次生成携带 usage 埋点与 provenance（P7）。
@@ -232,9 +232,9 @@
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
 | K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | **已完成 2026-08-05**（World Overview：项目名 + 「本地创作」徽标 + 「去创作对话」入口 + 分区导航；`/production` `/settings` 承接原面板只搬不移；侧栏新增 制作/设置；浏览器回归 5 页全过） |
-| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector 上下分栏（右上世界线属性、右下创作线属性）；**2026-08-05 v1 只读已落地（`/projects/:id/world`）**；**2026-08-05 世界观核心闭环：左栏新增「世界观」组（选中展示世界观属性）、中栏副驾驶占位替换为只读世界状态摘要（阶段/世界观/实体计数）** | 已完成 v1 只读（feat/creator-layer-first） |
+| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector 上下分栏（右上世界线属性、右下创作线属性）；**2026-08-05 v1 只读已落地（`/projects/:id/world`）**；**2026-08-05 世界观核心闭环：左栏新增「世界观」组（选中展示世界观属性）、中栏副驾驶占位替换为只读世界状态摘要（阶段/世界观/实体计数）**；**2026-08-13 Inspector 内联编辑：角色/地点/事件/关系/场景/故事走既有 PATCH，保存后刷新 resources** | 已完成 v1 + Inspector 可编辑（feat/creator-layer-first） |
 | K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；侧栏「创作对话」常驻可达 | **已完成 2026-08-05**（根路径 `/` 重定向 `/creator-chats`；浏览器验证：重定向生效、侧栏「创作聊天」激活、列表与新建入口可用、`/projects` 回归正常） |
-| K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），**2026-08-06 Production 视图 v1 已落地**（世界/制作 tab 切换；制作视图 = 故事 + 场景轨道，沿 Presentation 顺序展示；Shot 轨道留后续） | **已完成 v1（2026-08-06）** — 世界视图 + 制作视图双视图切换 |
+| K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），**2026-08-06 Production 视图 v1**（世界/制作 tab；故事 + 场景轨道），**2026-08-13 Shot 轨道**：镜头嵌在所属场景刻度区间，Inspector 只读 + 跳转镜头编辑器 | **已完成 v1 + Shot 轨道（2026-08-13）** |
 | K5 | 世界观 Chat→Studio 核心闭环 | 世界观自动识别 → 落库 → Studio 展示：`Project.worldview Json`（genre/premise/rules/notes，additive 迁移）+ mock/LLM 自动提炼（`update_entity` type='project'）+ resources 返回 worldview/stage + chat header 常驻「进入 Studio」入口 | **已完成 2026-08-05**（愿景核对报告：Chat 引导/Studio 三栏/实体列表/timeline/Inspector 均已对齐；补齐世界观单点表示与识别、副驾驶摘要） |
 
 **Timeline 决策（2026-07-31）：** World View 与 Production View 是单一 `ProjectTimeline` 的两种投影，不是两条持久化时间线。独立世界轴需要全局可排序的世界年表 — 这正是 [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md) 放弃的，因为虚构历法、模糊时段与平行世界无法合并为一条序列。ADR-0007 保持不变；无需新 ADR。工作流运行与生成任务完全不在 Timeline 上 — 执行时间是第三种时间，位于 `/production`。

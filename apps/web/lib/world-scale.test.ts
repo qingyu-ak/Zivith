@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+/// <reference types="vitest/globals" />
 import { createOrderScale, integerTicks, interpolateOrders } from './world-scale';
 
 describe('createOrderScale (线性 domain→range 映射 + clamp)', () => {

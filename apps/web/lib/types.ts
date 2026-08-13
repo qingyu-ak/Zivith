@@ -50,8 +50,11 @@ export interface SceneDTO {
   order: number;
   title: string;
   summary?: string | null;
+  /** Prisma column; world resources may expose this before sceneDto aliasing. */
+  description?: string | null;
   location_id?: string | null;
   time_of_day?: string | null;
+  time?: string | null;
   weather?: string | null;
   mood?: string | null;
   shot_count?: number;
@@ -465,6 +468,17 @@ export interface WorldviewDTO {
 
 export type WorldStage = 'bootstrap' | 'growing' | 'mature';
 
+export interface WorldLineShotDTO {
+  id: string;
+  scene_id: string;
+  project_id: string;
+  order: number;
+  label?: string | null;
+  state?: string;
+  mood?: string | null;
+  created_at?: string;
+}
+
 export interface WorldResourcesDTO {
   project: {
     id: string;
@@ -480,11 +494,18 @@ export interface WorldResourcesDTO {
     scenes: SceneDTO[];
     world_events: WorldEventDTO[];
     relationships: WorldRelationshipDTO[];
+    shots?: WorldLineShotDTO[];
   };
 }
 
 /** 世界线条目（前端从 resources 派生；anchorOrder 用于非均匀刻度定位） */
-export type WorldLineEntityType = 'character' | 'location' | 'scene' | 'world_event' | 'story';
+export type WorldLineEntityType =
+  | 'character'
+  | 'location'
+  | 'scene'
+  | 'world_event'
+  | 'story'
+  | 'shot';
 
 export interface WorldLineItem {
   id: string;
@@ -500,7 +521,7 @@ export interface WorldLineItem {
 }
 
 export interface WorldLineTrack {
-  kind: 'character' | 'scene' | 'world_event' | 'story';
+  kind: 'character' | 'scene' | 'world_event' | 'story' | 'shot';
   title: string;
   items: WorldLineItem[];
 }
@@ -526,5 +547,16 @@ export interface WorldLineModel {
 
 /** 世界线工作区选中项（Explorer / Timeline 联动，Inspector 展示） */
 export type WorldSelection =
-  | { kind: 'character' | 'location' | 'scene' | 'world_event' | 'story' | 'project'; id: string }
+  | {
+      kind:
+        | 'character'
+        | 'location'
+        | 'scene'
+        | 'world_event'
+        | 'story'
+        | 'project'
+        | 'relationship'
+        | 'shot';
+      id: string;
+    }
   | null;

@@ -113,7 +113,7 @@ export function WorldWorkspace() {
           <p className="mt-0.5 text-xs text-zinc-500">
             {view === 'world'
               ? `${entityCount} 个实体 · ${model.relationships.length} 条关系`
-              : `${resources.entities.stories.length} 个故事 · ${resources.entities.scenes.length} 个场景`}
+              : `${resources.entities.stories.length} 个故事 · ${resources.entities.scenes.length} 个场景 · ${(resources.entities.shots ?? []).length} 个镜头`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -230,10 +230,10 @@ export function WorldWorkspace() {
 
         {/* 右栏：Inspector */}
         <aside className="min-h-0 border-l border-line">
-          <InspectorPanel
+            <InspectorPanel
             resources={resources}
             selection={selection}
-            onProjectUpdated={() => void load()}
+            onUpdated={() => void load()}
           />
         </aside>
       </div>
