@@ -12,21 +12,12 @@
 
 ---
 
-## 2026-08-13 · `(pending commit)` · feat(web,api) · 制作视图 Shot 轨道（K4 后续 / S2）
+## 2026-08-13 · `b3ea182` · feat(web,api) · editable world inspector and production shot track
 
-制作时间线补齐镜头轨道：`GET /world/projects/:id/resources` 返回精简 shot 列表；`buildProductionLineModel` 第三轨「镜头」，条目嵌在所属场景的 Presentation 刻度区间内（sceneOrder + i/(n+1)）。Inspector 只读展示镜头并链到规格编辑器（不在右栏内联编辑完整 Shot spec）。
+创造层 S1/S2：Studio Inspector 可编辑角色/地点/事件/关系/场景/故事；制作视图补 Shot 轨道（镜头嵌在所属场景刻度区间）。resources 对资产走 `assetDto`、场景走 `sceneDto`。
 
-- 验证：`world-line.test.ts` 嵌套刻度 2 例；api/web `tsc --noEmit`
-- 模块：`apps/api/src/routes/world.ts`、`apps/web/lib/{types,world-line,world-line.test}.ts`、`apps/web/components/world/{world-timeline,world-workspace,inspector-panel}.tsx`
-
-## 2026-08-13 · `(pending commit)` · feat(web,api) · Studio Inspector 实体内联编辑（K2 后续 / S1）
-
-世界工作区右栏从「项目可改、其余只读」扩展为角色 / 地点 / 世界事件 / 关系 / 场景 / 故事均可编辑，保存走既有 PATCH，落库后刷新 `resources`。
-
-- **fix(api)** `GET /world/projects/:id/resources` 对角色/地点走 `assetDto`、场景走 `sceneDto`，把 `data.personality` 与 `description→summary` / `time→time_of_day` 展平，Inspector 才能读到 Chat 落库的字段
-- **feat(web)** Inspector 统一编辑/保存；Explorer 增加「关系」组；时间线关系连线可点击选中；外观 PATCH 与已有 appearance 合并，避免只改性别时冲掉其余特征
-- **test** `resource-contracts.test.ts` 增加 assetDto 展平 personality、sceneDto 别名 2 例
-- 模块：`apps/api/src/routes/world.ts`、`apps/api/test/resource-contracts.test.ts`、`apps/web/components/world/{inspector-panel,entity-explorer,world-workspace,world-timeline}.tsx`、`apps/web/lib/{types,world-line}.ts`、`docs/planning/{Next-Tasks,Implementation-Plan}.md`
+- 黑盒：`apps/api/scripts/verify-inspector-shot-bb.ts` **33/33**（login → 创建并 PATCH 全类实体 → resources 展平/持久化）；页面 SSR `/` 307→`/creator-chats`，`/projects` `/world` `/login` 200。未发现需修复的产品缺陷。
+- 模块：`apps/api/src/routes/world.ts`、`apps/web/components/world/*`、`apps/web/lib/{types,world-line*}`、`docs/planning/*`
 
 ## 2026-08-06 · `6eb58cb` · fix(api,web) · 混合批次跳过重复 create_project，实体提案照常应用
 
