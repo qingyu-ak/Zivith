@@ -479,6 +479,13 @@ export interface WorldLineShotDTO {
   created_at?: string;
 }
 
+export interface WorldConflictDTO {
+  id: string;
+  kind: string;
+  summary: string;
+  entity_refs: Array<{ type: string; id: string }>;
+}
+
 export interface WorldResourcesDTO {
   project: {
     id: string;
@@ -487,6 +494,8 @@ export interface WorldResourcesDTO {
     worldview: WorldviewDTO;
   };
   stage: WorldStage;
+  /** Lore Keeper v1 规则发现；只报告不修复 */
+  conflicts?: WorldConflictDTO[];
   entities: {
     stories: StoryDTO[];
     characters: AssetDTO[];

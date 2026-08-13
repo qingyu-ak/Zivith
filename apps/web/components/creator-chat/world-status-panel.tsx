@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Badge, Button, Spinner } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { WorldResourcesDTO, WorldStage } from '@/lib/types';
+import { WorldConflictList } from '@/components/world/conflict-list';
 
 const STAGE_META: Record<WorldStage, { label: string; tone: 'neutral' | 'warning' | 'success' }> = {
   bootstrap: { label: '萌芽期', tone: 'neutral' },
@@ -13,9 +14,8 @@ const STAGE_META: Record<WorldStage, { label: string; tone: 'neutral' | 'warning
 };
 
 /**
- * Creator Chat 右侧世界状态面板（Track J3）。
- * 复用世界线 resources 接口（K5）：项目阶段 + 世界观摘要 + 实体计数 + 最近实体，
- * 点击「进入 Studio」跳转世界线工作区。未关联项目时展示引导空态。
+ * 世界状态摘要现由 Studio 副驾驶承担（H9 / 世界线工作区）。
+ * Creator Chat 改为简洁对话面，不再挂载本面板。
  */
 export function WorldStatusPanel({ projectId }: { projectId: string | null }) {
   const [resources, setResources] = useState<WorldResourcesDTO | null>(null);
@@ -112,6 +112,8 @@ function WorldStatusContent({ resources }: { resources: WorldResourcesDTO }) {
         </div>
         <Badge tone={stageMeta.tone}>{stageMeta.label}</Badge>
       </div>
+
+      <WorldConflictList conflicts={resources.conflicts ?? []} hint={false} />
 
       <div className="grid grid-cols-5 gap-1.5">
         {counts.map((item) => (

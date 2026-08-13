@@ -26,6 +26,7 @@ export interface WorldContext {
     id: string;
     kind: string;
     label: string | null;
+    direction: string | null;
     sourceType: string;
     sourceId: string;
     targetType: string;
@@ -76,6 +77,7 @@ export async function buildWorldContext(
           id: true,
           kind: true,
           label: true,
+          direction: true,
           sourceType: true,
           sourceId: true,
           targetType: true,
@@ -85,35 +87,62 @@ export async function buildWorldContext(
       }),
     ]);
 
-  return {
+  return assembleWorldContext({
     projectId: project.id,
     projectName: project.name,
-    worldview: parseWorldview(project.worldview),
+    worldview: project.worldview,
     stories,
-    characters: characters.map((c) => ({
-      id: c.id,
-      name: c.name,
-      description: c.description,
-      tags: Array.isArray(c.tags)
-        ? (c.tags as unknown[]).filter((t): t is string => typeof t === 'string')
-        : [],
-    })),
-    locations: locations.map((l) => ({
-      id: l.id,
-      name: l.name,
-      description: l.description,
-      tags: Array.isArray(l.tags)
-        ? (l.tags as unknown[]).filter((t): t is string => typeof t === 'string')
-        : [],
-    })),
+    characters,
+    locations,
     scenes,
-    worldEvents: worldEvents.map((e) => ({
-      id: e.id,
-      title: e.title,
-      description: e.description,
-      order: e.presentationOrder,
+    worldEvents: worldEvents.map((event) => ({
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      order: event.presentationOrder,
     })),
     relationships,
+  });
+}
+
+function stringTags(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((tag): tag is string => typeof tag === 'string')
+    : [];
+}
+
+/** Build a WorldContext from already-loaded rows (resources route + tests). */
+export function assembleWorldContext(input: {
+  projectId: string;
+  projectName: string;
+  worldview: unknown;
+  stories: WorldContext['stories'];
+  characters: Array<{ id: string; name: string; description: string | null; tags?: unknown }>;
+  locations: Array<{ id: string; name: string; description: string | null; tags?: unknown }>;
+  scenes: WorldContext['scenes'];
+  worldEvents: WorldContext['worldEvents'];
+  relationships: WorldContext['relationships'];
+}): WorldContext {
+  return {
+    projectId: input.projectId,
+    projectName: input.projectName,
+    worldview: parseWorldview(input.worldview),
+    stories: input.stories,
+    characters: input.characters.map((character) => ({
+      id: character.id,
+      name: character.name,
+      description: character.description,
+      tags: stringTags(character.tags),
+    })),
+    locations: input.locations.map((location) => ({
+      id: location.id,
+      name: location.name,
+      description: location.description,
+      tags: stringTags(location.tags),
+    })),
+    scenes: input.scenes,
+    worldEvents: input.worldEvents,
+    relationships: input.relationships,
   };
 }
 

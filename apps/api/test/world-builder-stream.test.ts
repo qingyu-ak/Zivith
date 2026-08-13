@@ -68,3 +68,52 @@ describe('world builder reply streaming', () => {
     expect(seen).toEqual(['ab', 'cd', 'ef']);
   });
 });
+
+describe('world builder conflict surfacing', () => {
+  it('reports structured conflicts without emitting a write proposal', () => {
+    const response = mockWorldBuilderResponse({
+      text: '帮我检查一下设定冲突',
+      history: [{ role: 'user', content: '帮我检查一下设定冲突' }],
+      world: {
+        projectId: 'p1',
+        projectName: '测试',
+        worldview: { rules: [] },
+        stories: [],
+        characters: [
+          { id: 'c1', name: '艾拉', description: null, tags: [] },
+          { id: 'c2', name: '艾拉', description: null, tags: [] },
+        ],
+        locations: [],
+        scenes: [],
+        worldEvents: [],
+        relationships: [],
+      },
+      stage: 'growing',
+    });
+    expect(response.proposals).toEqual([]);
+    expect(response.world_state.conflicts.length).toBeGreaterThan(0);
+    expect(response.reply).toContain('不会自动修改');
+    expect(response.reply).toContain('同名');
+  });
+
+  it('does not create a second character when the name already exists', () => {
+    const response = mockWorldBuilderResponse({
+      text: '记录角色：艾拉',
+      history: [{ role: 'user', content: '记录角色：艾拉' }],
+      world: {
+        projectId: 'p1',
+        projectName: '测试',
+        worldview: { rules: [] },
+        stories: [],
+        characters: [{ id: 'c1', name: '艾拉', description: '弓手', tags: [] }],
+        locations: [],
+        scenes: [],
+        worldEvents: [],
+        relationships: [],
+      },
+      stage: 'growing',
+    });
+    expect(response.proposals).toEqual([]);
+    expect(response.reply).toContain('已经在世界档案里');
+  });
+});

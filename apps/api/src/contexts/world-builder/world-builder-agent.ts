@@ -3,6 +3,14 @@ import { proposalSchema, type Proposal } from '@zivith/domain';
 import type { LLMAdapter } from '../../ports/llm.js';
 import { buildWorldBuilderSystemPrompt } from './prompt.js';
 import type { WorldContext } from './world-context.js';
+import {
+  detectWorldConflicts,
+  formatConflictAppendix,
+  formatConflictCheckReply,
+  mergeConflictSummaries,
+  normalizeEntityName,
+  wantsConflictCheck,
+} from './conflict-detector.js';
 
 export type WorldStage = 'bootstrap' | 'growing' | 'mature';
 
@@ -140,7 +148,33 @@ function extractWorldview(text: string): {
   };
 }
 
+function applyDetectedConflicts(
+  response: WorldBuilderResponse,
+  input: WorldBuilderInput,
+): WorldBuilderResponse {
+  const detected = detectWorldConflicts(input.world, { text: input.text });
+  const summaries = mergeConflictSummaries(response.world_state.conflicts, detected);
+  const checking = wantsConflictCheck(input.text);
+  let { reply, proposals } = response;
+  if (checking) {
+    proposals = [];
+    reply = formatConflictCheckReply(detected);
+  } else if (detected.length > 0 && !/设定冲突/.test(reply)) {
+    reply = `${reply}${formatConflictAppendix(detected)}`;
+  }
+  return {
+    ...response,
+    reply,
+    proposals,
+    world_state: { ...response.world_state, conflicts: summaries },
+  };
+}
+
 export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilderResponse {
+  return applyDetectedConflicts(mockWorldBuilderDraft(input), input);
+}
+
+function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
   const world = input.world;
   const projectId = world?.projectId ?? null;
   const latest = latestUserMessage(input.history);
@@ -216,6 +250,21 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
   }
 
   if (wantsCharacter && !asking && (!hasCharacters || incremental)) {
+    const extracted = extractEntityName(text);
+    const existing =
+      extracted &&
+      world.characters.find((character) => normalizeEntityName(character.name) === normalizeEntityName(extracted));
+    if (existing) {
+      return {
+        reply: `角色「${existing.name}」已经在世界档案里。若要改设定，请说明要改哪一项；我不会自动覆盖。`,
+        proposals: [],
+        world_state: {
+          stage: 'growing',
+          open_questions: ['确认是同一人还是需要改名', '要修改的字段'],
+          conflicts: [],
+        },
+      };
+    }
     proposals.push(
       mockProposal('create_character', projectId, {
         name: extractEntityName(text) ?? (hasCharacters ? '新角色' : '未命名主角'),
@@ -231,6 +280,21 @@ export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilder
   }
 
   if (wantsLocation && !asking && (!hasLocations || incremental)) {
+    const extracted = extractEntityName(text);
+    const existing =
+      extracted &&
+      world.locations.find((location) => normalizeEntityName(location.name) === normalizeEntityName(extracted));
+    if (existing) {
+      return {
+        reply: `地点「${existing.name}」已经在世界档案里。若要改设定，请说明要改哪一项；我不会自动覆盖。`,
+        proposals: [],
+        world_state: {
+          stage: 'growing',
+          open_questions: ['确认是同一地点还是需要改名', '要修改的字段'],
+          conflicts: [],
+        },
+      };
+    }
     proposals.push(
       mockProposal('create_location', projectId, {
         name: extractEntityName(text) ?? (hasLocations ? '新地点' : '未命名地点'),
@@ -368,7 +432,7 @@ export class WorldBuilderAgent {
       }
     }
 
-    return parsed;
+    return applyDetectedConflicts(parsed, input);
   }
 
   /**

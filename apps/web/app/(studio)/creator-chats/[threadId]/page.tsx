@@ -6,5 +6,5 @@ export default async function CreatorChatThreadPage({
   params: Promise<{ threadId: string }>;
 }) {
   const { threadId } = await params;
-  return <ChatPanel threadId={threadId} />;
+  return <ChatPanel key={threadId} threadId={threadId} />;
 }

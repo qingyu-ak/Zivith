@@ -181,6 +181,7 @@ Skill 没有 identity、没有 revision、没有 ownership，不落库、不出�
 **Creator Chat 是持续对话创作面，不是一次性向导。** 边界由 [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)（2026-08-04 修订）锁定：
 
 - 写库必须提案且经用户确认，AI 永不自主写库；产物默认 `draft`，gate 不可绕过
+- 设定冲突只报告不修复（H9 v1）；选择哪一则存活是作者权
 - 对话记录是会话工作底稿，**不是**创作产物，不作为创作载体展示或导出
 - 它**不是** Director Copilot，**不是**通用问答助手
 - 对话围绕「世界」持续进行：用户后续创作中可随时回到对话补充事件、调整关系、修订设定

@@ -3,16 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import Link from 'next/link';
-import { Badge, Button, EmptyState, Input, Select, Spinner, Textarea } from '@zivith/ui';
-import { api, errorMessage, sendCreatorChatTurn, unwrapList } from '@/lib/api';
-import type {
-  CreatorChatMessageDTO,
-  CreatorChatThreadDTO,
-  ProjectDTO,
-  ProposalKind,
-} from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { Button, EmptyState, Spinner, Textarea } from '@zivith/ui';
+import { api, errorMessage, sendCreatorChatTurn } from '@/lib/api';
+import {
+  PENDING_CHAT_TURN_KEY,
+  groupThreadsByRecency,
+  relativeTime,
+} from '@/lib/chat-history';
+import type { CreatorChatMessageDTO, CreatorChatThreadDTO, ProposalKind } from '@/lib/types';
 import { ProposalCard, type ChatProposal } from './proposal-card';
-import { WorldStatusPanel } from './world-status-panel';
 
 const PROPOSAL_KINDS: ProposalKind[] = [
   'create_project',
@@ -24,19 +24,11 @@ const PROPOSAL_KINDS: ProposalKind[] = [
   'update_entity',
 ];
 
-function relativeTime(value: string): string {
-  const time = new Date(value).getTime();
-  if (Number.isNaN(time)) return '';
-  const delta = Date.now() - time;
-  const minutes = Math.floor(delta / 60_000);
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes} 分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
-  return new Date(value).toLocaleDateString('zh-CN');
-}
+const STARTERS = [
+  '我想创造一个东方玄幻世界',
+  '先介绍一下主角',
+  '帮我检查设定冲突',
+];
 
 function parseProposals(message: CreatorChatMessageDTO): {
   proposals: ChatProposal[];
@@ -76,21 +68,27 @@ function asChatMessage(value: unknown): CreatorChatMessageDTO | null {
   return record as unknown as CreatorChatMessageDTO;
 }
 
-export function ChatPanel({ threadId }: { threadId: string }) {
+export function ChatPanel({ threadId }: { threadId?: string }) {
+  const router = useRouter();
   const [thread, setThread] = useState<CreatorChatThreadDTO | null>(null);
   const [messages, setMessages] = useState<CreatorChatMessageDTO[]>([]);
   const [threads, setThreads] = useState<CreatorChatThreadDTO[]>([]);
-  const [projects, setProjects] = useState<ProjectDTO[]>([]);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(threadId));
   const [sending, setSending] = useState(false);
   const [streamText, setStreamText] = useState('');
-  const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
+  const pendingConsumed = useRef(false);
 
   const load = useCallback(async () => {
+    if (!threadId) {
+      setThread(null);
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
     try {
       const value = await api<{
         thread: CreatorChatThreadDTO;
@@ -110,31 +108,28 @@ export function ChatPanel({ threadId }: { threadId: string }) {
   }, [load]);
 
   useEffect(() => {
-    // Trae 风格左侧会话边栏：常驻历史会话列表 + 新建表单可选项目。
     api<CreatorChatThreadDTO[]>('/world/creator-chats')
       .then(setThreads)
       .catch(() => setThreads([]));
-    api<ProjectDTO[] | { data?: ProjectDTO[]; items?: ProjectDTO[] }>('/projects')
-      .then((value) => setProjects(unwrapList(value)))
-      .catch(() => setProjects([]));
   }, [threadId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, streamText, sending]);
 
-  async function send(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const content = input.trim();
-    if (!content || sending) return;
-    setError('');
-    setSending(true);
-    setStreamText('');
-    setInput('');
-    let acceptedUser = false;
-    try {
-      let sawError = '';
-      await sendCreatorChatTurn(threadId, content, (event, data) => {
+  const sendingRef = useRef(false);
+
+  const sendContent = useCallback(
+    async (content: string) => {
+      if (!threadId || sendingRef.current) return;
+      sendingRef.current = true;
+      setError('');
+      setSending(true);
+      setStreamText('');
+      let acceptedUser = false;
+      try {
+        let sawError = '';
+        await sendCreatorChatTurn(threadId, content, (event, data) => {
           const record = asRecord(data);
           if (event === 'user') {
             const userMessage = asChatMessage(record?.user_message);
@@ -160,40 +155,65 @@ export function ChatPanel({ threadId }: { threadId: string }) {
             sawError =
               typeof record?.message === 'string' ? record.message : '世界构建者回复失败';
           }
-        },
-      );
-      if (sawError) throw new Error(sawError);
-      setThreads((current) => {
-        const target = current.find((item) => item.id === threadId);
-        if (!target) return current;
-        return [{ ...target, updated_at: new Date().toISOString() }, ...current.filter((item) => item.id !== threadId)];
-      });
-    } catch (reason) {
-      setError(errorMessage(reason));
-      if (!acceptedUser) setInput(content);
-      setStreamText('');
-    } finally {
-      setSending(false);
+        });
+        if (sawError) throw new Error(sawError);
+        setThreads((current) => {
+          const target = current.find((item) => item.id === threadId);
+          if (!target) return current;
+          return [
+            { ...target, updated_at: new Date().toISOString() },
+            ...current.filter((item) => item.id !== threadId),
+          ];
+        });
+      } catch (reason) {
+        setError(errorMessage(reason));
+        if (!acceptedUser) setInput(content);
+        setStreamText('');
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
+      }
+    },
+    [threadId],
+  );
+
+  useEffect(() => {
+    if (!threadId || loading || pendingConsumed.current) return;
+    if (typeof sessionStorage === 'undefined') return;
+    const pending = sessionStorage.getItem(PENDING_CHAT_TURN_KEY);
+    if (!pending) return;
+    pendingConsumed.current = true;
+    sessionStorage.removeItem(PENDING_CHAT_TURN_KEY);
+    void sendContent(pending);
+  }, [loading, sendContent, threadId]);
+
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const content = input.trim();
+    if (!content || sending || busy) return;
+    if (!threadId) {
+      await startThread(content);
+      return;
     }
+    setInput('');
+    await sendContent(content);
   }
 
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function startThread(firstMessage?: string) {
     setError('');
     setBusy(true);
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
     try {
-      const thread = await api<CreatorChatThreadDTO>('/world/creator-chats', {
+      if (firstMessage) {
+        sessionStorage.setItem(PENDING_CHAT_TURN_KEY, firstMessage);
+      }
+      const created = await api<CreatorChatThreadDTO>('/world/creator-chats', {
         method: 'POST',
-        body: {
-          project_id: (form.get('project_id') as string) || null,
-          title: (form.get('title') as string) || null,
-        },
+        body: { project_id: null, title: null },
       });
-      window.location.href = `/creator-chats/${thread.id}`;
+      router.push(`/creator-chats/${created.id}`);
     } catch (reason) {
       setError(errorMessage(reason));
+      if (firstMessage) sessionStorage.removeItem(PENDING_CHAT_TURN_KEY);
       setBusy(false);
     }
   }
@@ -205,8 +225,7 @@ export function ChatPanel({ threadId }: { threadId: string }) {
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
-      const form = event.currentTarget.closest('form');
-      form?.requestSubmit();
+      event.currentTarget.closest('form')?.requestSubmit();
     }
   }
 
@@ -218,103 +237,96 @@ export function ChatPanel({ threadId }: { threadId: string }) {
     );
   }
 
-  const projectId = thread?.project_id ?? null;
+  const studioHref = thread?.project_id ? `/projects/${thread.project_id}/world` : null;
+  const history = groupThreadsByRecency(threads);
+  const empty = (!threadId || messages.length === 0) && !sending && !streamText;
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col lg:h-dvh">
-      <header className="flex items-center gap-3 border-b border-line px-5 py-3.5">
-        <Link href="/creator-chats" className="text-sm text-zinc-400 transition hover:text-white">
-          ← 全部对话
-        </Link>
-        <h1 className="truncate text-base font-semibold text-white">
-          {thread?.title ?? '新世界对话'}
-        </h1>
-        {thread?.project_name ? (
-          <Badge tone="success">{thread.project_name}</Badge>
-        ) : thread ? (
-          <Badge>尚未关联项目</Badge>
-        ) : null}
-      </header>
-
       <div className="flex min-h-0 flex-1">
-        {/* 左侧：会话边栏（Trae 风格） */}
-        <aside className="hidden w-60 shrink-0 flex-col border-r border-line lg:flex">
-          <div className="border-b border-line p-3">
+        <aside className="hidden w-56 shrink-0 flex-col border-r border-line lg:flex">
+          <div className="p-3">
             <Button
-              className="w-full"
+              className="w-full min-h-9 text-sm"
               variant="secondary"
-              onClick={() => setCreating((value) => !value)}
+              disabled={busy}
+              onClick={() => void startThread()}
             >
-              {creating ? '取消新建' : '+ 新建对话'}
+              + 新对话
             </Button>
-            {creating && (
-              <form
-                className="mt-3 grid gap-3"
-                onSubmit={(event) => void create(event)}
-              >
-                <Select name="project_id" defaultValue="">
-                  <option value="">让 AI 自动创建新项目</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </Select>
-                <Input name="title" placeholder="对话标题（可选）" />
-                <Button type="submit" disabled={busy}>
-                  {busy ? '创建中…' : '开始对话'}
-                </Button>
-              </form>
-            )}
           </div>
-          <nav className="min-h-0 flex-1 overflow-y-auto p-2" aria-label="会话列表">
+          <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="会话列表">
             {threads.length === 0 ? (
-              <p className="px-3 py-4 text-xs text-zinc-600">还没有其他对话</p>
+              <p className="px-3 py-4 text-xs text-zinc-600">还没有对话</p>
             ) : (
-              <ul className="grid gap-1">
-                {threads.map((item) => {
-                  const active = item.id === threadId;
-                  return (
-                    <li key={item.id}>
-                      <Link
-                        href={`/creator-chats/${item.id}`}
-                        className={`block rounded-lg px-3 py-2.5 transition ${
-                          active
-                            ? 'bg-white/5 text-white'
-                            : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                        }`}
-                      >
-                        <p className="truncate text-sm font-medium">
-                          {item.title ?? '未命名世界对话'}
-                        </p>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-600">
-                          {item.project_name ? (
-                            <span className="truncate">{item.project_name}</span>
-                          ) : (
-                            <span>新世界</span>
-                          )}
-                          <span>· {relativeTime(item.updated_at)}</span>
-                        </p>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              history.map((group) => (
+                <div key={group.id} className="mb-3">
+                  <p className="px-3 pb-1 text-[11px] uppercase tracking-wider text-zinc-600">
+                    {group.label}
+                  </p>
+                  <ul className="grid gap-0.5">
+                    {group.threads.map((item) => {
+                      const active = item.id === threadId;
+                      return (
+                        <li key={item.id}>
+                          <Link
+                            href={`/creator-chats/${item.id}`}
+                            className={`block rounded-lg px-3 py-2 transition ${
+                              active
+                                ? 'bg-white/5 text-white'
+                                : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                            }`}
+                          >
+                            <p className="truncate text-sm">
+                              {item.title ?? '未命名对话'}
+                            </p>
+                            <p className="mt-0.5 truncate text-[11px] text-zinc-600">
+                              {item.project_name ?? '新世界'} · {relativeTime(item.updated_at)}
+                            </p>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))
             )}
           </nav>
-          <div className="border-t border-line p-2">
-            <Link
-              href="/creator-chats"
-              className="block rounded-lg px-3 py-2 text-xs text-zinc-500 transition hover:bg-white/5 hover:text-white"
-            >
-              查看全部对话 →
-            </Link>
-          </div>
         </aside>
 
-        {/* 中间：对话流 + 输入区 */}
         <div className="flex min-w-0 flex-1 flex-col">
-          {!thread && (
+          <header className="flex h-12 shrink-0 items-center gap-3 px-4 lg:px-6">
+            <Link
+              href="/creator-chats"
+              className="text-sm text-zinc-500 transition hover:text-white lg:hidden"
+            >
+              对话
+            </Link>
+            {threadId ? (
+              <h1 className="min-w-0 flex-1 truncate text-sm text-zinc-300">
+                {thread?.title ?? '新世界对话'}
+              </h1>
+            ) : (
+              <span className="flex-1" />
+            )}
+            {studioHref ? (
+              <Link
+                href={studioHref}
+                className="shrink-0 text-sm text-accent transition hover:underline"
+              >
+                Studio
+              </Link>
+            ) : (
+              <Link
+                href="/projects"
+                className="shrink-0 text-sm text-zinc-500 transition hover:text-zinc-300"
+              >
+                Studio
+              </Link>
+            )}
+          </header>
+
+          {threadId && !thread ? (
             <div className="flex flex-1 items-center justify-center p-8">
               <EmptyState
                 title="对话加载失败"
@@ -323,132 +335,129 @@ export function ChatPanel({ threadId }: { threadId: string }) {
                   <div className="flex items-center justify-center gap-3">
                     <Button onClick={() => void load()}>重试</Button>
                     <Link className="text-sm text-accent hover:underline" href="/creator-chats">
-                      返回对话列表
+                      新对话
                     </Link>
                   </div>
                 }
               />
             </div>
-          )}
-          {thread && (
-            <div className="flex min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
-            <div className="mx-auto flex max-w-3xl flex-col gap-5">
-              {messages.length === 0 && (
-                <EmptyState
-                  title="开始构建你的世界"
-                  description="告诉世界构建者你的创意：题材、主角、想要的世界观。它会不断向你提问，并把确认的设定整理成提案。"
-                />
-              )}
-              {messages.map((message) => {
-                const { proposals, applied } = parseProposals(message);
-                if (message.role === 'system') {
-                  return (
-                    <p
-                      key={message.id}
-                      className="mx-auto rounded-full bg-white/5 px-4 py-1.5 text-center text-xs text-zinc-400"
-                    >
-                      {message.content}
-                    </p>
-                  );
-                }
-                if (message.role === 'user') {
-                  return (
-                    <div key={message.id} className="flex justify-end">
-                      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-accent px-4 py-3 text-sm leading-6 text-ink">
-                        <p className="whitespace-pre-wrap">{message.content}</p>
+          ) : (
+            <>
+              <div
+                className={`min-h-0 flex-1 overflow-y-auto px-4 lg:px-6 ${empty ? 'flex items-center' : 'py-6'}`}
+              >
+                <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+                  {empty && (
+                    <div className="flex flex-col items-center py-10 text-center">
+                      <p className="text-lg font-medium text-white">开始构建你的世界</p>
+                      <p className="mt-2 max-w-md text-sm leading-6 text-zinc-500">
+                        用一句话说设定。确认后的提案会写入草稿，细节在 Studio 里改。
+                      </p>
+                      <div className="mt-6 flex flex-wrap justify-center gap-2">
+                        {STARTERS.map((starter) => (
+                          <button
+                            key={starter}
+                            type="button"
+                            disabled={sending || busy}
+                            className="rounded-full border border-line px-3 py-1.5 text-xs text-zinc-400 transition hover:border-accent/40 hover:text-white disabled:opacity-40"
+                            onClick={() => {
+                              if (!threadId) {
+                                void startThread(starter);
+                                return;
+                              }
+                              void sendContent(starter);
+                            }}
+                          >
+                            {starter}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  );
-                }
-                return (
-                  <div key={message.id} className="flex items-start gap-3">
-                    <span
-                      className="mt-1 grid size-8 shrink-0 place-items-center rounded-full bg-white/5 text-sm text-zinc-400"
-                      aria-hidden
-                    >
-                      ◉
-                    </span>
-                    <div className="max-w-[92%] rounded-2xl rounded-tl-sm border border-line bg-panel px-4 py-3">
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-100">
-                        {message.content}
-                      </p>
-                      {proposals.length > 0 && (
-                        <ProposalCard
-                          threadId={threadId}
-                          messageId={message.id}
-                          proposals={proposals}
-                          applied={applied}
-                          onApplied={handleApplied}
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              {sending && streamText && (
-                <div className="flex items-start gap-3">
-                  <span
-                    className="mt-1 grid size-8 shrink-0 place-items-center rounded-full bg-white/5 text-sm text-zinc-400"
-                    aria-hidden
-                  >
-                    ◉
-                  </span>
-                  <div className="max-w-[92%] rounded-2xl rounded-tl-sm border border-line bg-panel px-4 py-3">
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-100">
+                  )}
+                  {messages.map((message) => {
+                    const { proposals, applied } = parseProposals(message);
+                    if (message.role === 'system') {
+                      return (
+                        <p
+                          key={message.id}
+                          className="mx-auto text-center text-xs text-zinc-500"
+                        >
+                          {message.content}
+                        </p>
+                      );
+                    }
+                    if (message.role === 'user') {
+                      return (
+                        <div key={message.id} className="flex justify-end">
+                          <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-2.5 text-sm leading-6 text-zinc-100">
+                            <p className="whitespace-pre-wrap">{message.content}</p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={message.id} className="min-w-0">
+                        <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-100">
+                          {message.content}
+                        </p>
+                        {proposals.length > 0 && (
+                          <ProposalCard
+                            threadId={threadId ?? message.thread_id}
+                            messageId={message.id}
+                            proposals={proposals}
+                            applied={applied}
+                            onApplied={handleApplied}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                  {sending && streamText && (
+                    <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-100">
                       {streamText}
                     </p>
-                  </div>
+                  )}
+                  {sending && !streamText && (
+                    <p className="text-sm text-zinc-500">正在思考…</p>
+                  )}
+                  <div ref={endRef} />
                 </div>
-              )}
-              {sending && !streamText && (
-                <div className="flex items-center gap-2 pl-1 text-sm text-zinc-400">
-                  <Spinner label="世界构建者正在思考…" />
-                </div>
-              )}
-              <div ref={endRef} />
-            </div>
-          </div>
+              </div>
 
-          <div className="border-t border-line bg-ink/80 px-5 py-4">
-            <div className="mx-auto max-w-3xl">
-              <form
-                className="flex flex-col gap-2 rounded-2xl border border-line bg-white/5 p-3 transition focus-within:border-accent/50"
-                onSubmit={(event) => void send(event)}
-              >
-                {error && (
-                  <p
-                    className="rounded-lg bg-red-500/10 p-2.5 text-xs text-red-300"
-                    role="alert"
-                  >
-                    {error}
-                  </p>
-                )}
-                <Textarea
-                  className="min-h-20 resize-none border-0 bg-transparent px-1 py-1 focus:ring-0"
-                  placeholder="描述你的世界设定，例如：我想做一个玄幻世界，主角是一个凡人修士……"
-                  value={input}
-                  disabled={sending}
-                  onChange={(event) => setInput(event.target.value)}
-                  onKeyDown={handleComposerKeyDown}
-                />
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs text-zinc-600">Enter 发送 · Shift+Enter 换行</span>
-                  <Button type="submit" disabled={sending || input.trim().length === 0}>
-                    {sending ? '发送中…' : '发送'}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-            </div>
+              <div className="px-4 pb-5 pt-1 lg:px-6">
+                <form
+                  className="mx-auto max-w-2xl rounded-2xl border border-line bg-white/[0.04] px-3 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] focus-within:border-zinc-500"
+                  onSubmit={(event) => void send(event)}
+                >
+                  {error && (
+                    <p className="px-1 pb-2 text-xs text-red-300" role="alert">
+                      {error}
+                    </p>
+                  )}
+                  <Textarea
+                    className="min-h-[52px] resize-none border-0 bg-transparent px-1 py-2 focus:ring-0"
+                    placeholder="发给世界构建者…"
+                    value={input}
+                    disabled={sending || busy}
+                    onChange={(event) => setInput(event.target.value)}
+                    onKeyDown={handleComposerKeyDown}
+                  />
+                  <div className="flex items-center justify-between gap-3 px-1 pb-1">
+                    <span className="text-[11px] text-zinc-600">Enter 发送</span>
+                    <button
+                      type="submit"
+                      disabled={sending || busy || input.trim().length === 0}
+                      className="grid size-8 place-items-center rounded-full bg-accent text-sm font-semibold text-ink transition hover:bg-lime-300 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="发送"
+                    >
+                      ↑
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </>
           )}
         </div>
-
-        {/* 右侧：世界状态面板（Track J3） */}
-        <aside className="hidden w-80 shrink-0 border-l border-line xl:flex">
-          <WorldStatusPanel projectId={projectId} />
-        </aside>
       </div>
     </div>
   );

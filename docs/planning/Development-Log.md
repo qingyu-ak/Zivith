@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-08-13 · pending · feat(web,api) · world conflict checks and concise creator chat
+
+H9 规则冲突检测（只报告不落库）+ Creator Chat 收成简洁对话面；世界摘要、冲突列表与 Inspector 放在 Studio。
+
+- **feat(api)** `conflict-detector`：同名、关系循环、事件顺序、题材偏离、极性事实；World Builder 合并进 `world_state.conflicts`
+- **feat(web)** Studio 副驾驶冲突列表；聊天去掉右侧世界状态，提案一行确认
+- 验证：api `conflict-detector` 14 + `world-builder-stream` 7；web `world-conflicts` 2 + `chat-history` 1；api/web `tsc --noEmit` 0 error
+- 模块：`apps/api/src/contexts/world-builder/*`、`apps/web/{components,lib}`、`docs/planning/*`
+
 ## 2026-08-13 · `35eb9e1` · feat(web,api) · character lanes, creator-chat SSE, local no-login API
 
 创造层收尾三块：世界线角色条目叠在同一条「角色」轨内并钳制起点；Creator Chat 流式回复（`Accept: text/event-stream`，JSON 回退）；ADR-0013 无 JWT 自动本地会话，Studio 接口打开即用。

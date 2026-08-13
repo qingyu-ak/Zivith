@@ -124,10 +124,10 @@ User provides world lore → asset stage structures Knowledge → User reviews
 |---|---|
 | 输入 | 实体 State 与修订、WorldEvent、Relationship、Timeline、评审历史 |
 | 输出 | 一致性发现与**提案**——绝不静默修复 |
-| 执行阶段 | 尚无 — 全新能力，无实现 |
+| 执行阶段 | 尚无独立流水线阶段 — v1 挂在 World Builder 回合与 `GET /world/projects/:id/resources` 上只读计算 |
 | 规划为 | Track H **H9**，以及 [AI Creative IDE RFC](../architecture/rfc/AI-Creative-IDE-RFC.md) 的 Slice D |
 
-**状态：全新能力。尚无实现。** 本节在动手之前先划定边界，以免第一刀切片悄然变成自动纠错器。
+**状态：v1 已落地（2026-08-13）。** 规则检测器报告同名重复、关系自指/对向循环、事件顺序撞车、题材偏离与极性事实矛盾；发现进入 `world_state.conflicts` 与 Studio 副驾驶。**不写入任何实体。** 未做：跨修订 State、发现驳回持久化、`Asset(type=knowledge)` 策展。
 
 #### 3.1 职责范围
 
@@ -165,7 +165,7 @@ Lore Keeper **不得静默修改任何实体。** 它发出发现与提案；由
 | [Next-Tasks.md](../planning/Next-Tasks.md) Track H | **H9** | 首个一致性检查切片 — Lore Keeper 的初始落地点 |
 | [AI Creative IDE RFC](../architecture/rfc/AI-Creative-IDE-RFC.md) | **Slice D** | IDE 体验中的一致性界面 |
 
-二者都不排在 Track I、J 之前：Lore Keeper 需要 `WorldEvent` 与 Relationship 先存在，才有实质可查。在实现切片启动之前，它没有 `AgentId`。
+二者都不排在 Track I、J 之前：Lore Keeper 需要 `WorldEvent` 与 Relationship 先存在，才有实质可查。H9 v1 没有独立 `AgentId`，不阻塞流水线。
 
 ### 4. Production Planner Agent
 

@@ -189,7 +189,7 @@ flowchart TD
 
 ## 6. Creator Chat 的落点
 
-**路由：`/`，应用默认页。** 打开即用，无登录（本地单用户模式，[ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)）。Codex 风格持续对话：聊天时自动创建任务（IP / 项目），由智能体引导用户完善世界，询问主角与剧情，自动补充数据库，自动维护，自动检查冲突点。功能按能力爬坡逐步实现（v1：会话运行时 + 世界构建 agent；提案 → 确认 → 落库；世界知识上下文）。
+**路由：`/`，应用默认页。** 打开即用，无登录（本地单用户模式，[ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)）。简洁持续对话（历史边栏 + 居中消息流 + 底部输入）：聊天采集意图并确认提案后写入草稿；世界观摘要、实体表、冲突列表与 Inspector **在 Studio 世界工作区**，不堆在对话里。功能按能力爬坡逐步实现（v1：会话运行时 + 世界构建 agent；提案 → 确认 → 落库；世界知识上下文；冲突检测规则 v1）。
 
 **对话与项目的关系。** 线程在用户确认「创建世界」提案之前没有 `projectId`；确认后经 apply-intent 创建 `Project` 并回绑线程。AI 永不自主写库：写库必须提案且经用户确认，经既有 service 落 `draft`，gate 不可绕过（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 围栏）。
 

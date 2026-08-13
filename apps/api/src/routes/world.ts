@@ -19,7 +19,8 @@ import {
   streamReplyChunks,
   type WorldBuilderChatMessage,
 } from '../contexts/world-builder/world-builder-agent.js';
-import { buildWorldContext } from '../contexts/world-builder/world-context.js';
+import { buildWorldContext, assembleWorldContext } from '../contexts/world-builder/world-context.js';
+import { detectWorldConflicts } from '../contexts/world-builder/conflict-detector.js';
 import { formatSseEvent } from '../lib/sse.js';
 import type { LLMAdapter } from '../ports/llm.js';
 
@@ -121,6 +122,42 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
     const stage =
       entityCount === 0 ? 'bootstrap' : entityCount < 5 ? 'growing' : 'mature';
 
+    const world = assembleWorldContext({
+      projectId: project.id,
+      projectName: project.name,
+      worldview: project.worldview,
+      stories: stories.map((story) => ({
+        id: story.id,
+        title: story.title,
+        genre: story.genre,
+        logline: story.logline,
+      })),
+      characters,
+      locations,
+      scenes: scenes.map((scene) => ({
+        id: scene.id,
+        title: scene.title,
+        description: scene.description,
+        time: scene.time,
+      })),
+      worldEvents: worldEvents.map((event) => ({
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        order: event.presentationOrder,
+      })),
+      relationships: relationships.map((relationship) => ({
+        id: relationship.id,
+        kind: relationship.kind,
+        label: relationship.label,
+        direction: relationship.direction,
+        sourceType: relationship.sourceType,
+        sourceId: relationship.sourceId,
+        targetType: relationship.targetType,
+        targetId: relationship.targetId,
+      })),
+    });
+
     return {
       project: {
         id: project.id,
@@ -129,6 +166,7 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
         worldview: parseWorldview(project.worldview),
       },
       stage,
+      conflicts: detectWorldConflicts(world),
       entities: {
         stories,
         characters: characters.map((row) => assetDto(row as unknown as Record<string, unknown>)),

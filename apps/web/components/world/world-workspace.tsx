@@ -112,7 +112,11 @@ export function WorldWorkspace() {
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">
             {view === 'world'
-              ? `${entityCount} 个实体 · ${model.relationships.length} 条关系`
+              ? `${entityCount} 个实体 · ${model.relationships.length} 条关系${
+                  (resources.conflicts ?? []).length > 0
+                    ? ` · ${resources.conflicts?.length} 处冲突`
+                    : ''
+                }`
               : `${resources.entities.stories.length} 个故事 · ${resources.entities.scenes.length} 个场景 · ${(resources.entities.shots ?? []).length} 个镜头`}
           </p>
         </div>
@@ -225,7 +229,9 @@ export function WorldWorkspace() {
             )}
           </div>
           {/* 副驾驶 Agent 面板（v1 只读世界状态摘要，仅世界视图） */}
-          {view === 'world' && <CoPilotPanel resources={resources} />}
+          {view === 'world' && (
+            <CoPilotPanel resources={resources} onSelect={setSelection} />
+          )}
         </section>
 
         {/* 右栏：Inspector */}
