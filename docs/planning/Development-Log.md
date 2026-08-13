@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-13 · pending · feat(web,api) · character lanes, creator-chat SSE, local no-login API
+## 2026-08-13 · `35eb9e1` · feat(web,api) · character lanes, creator-chat SSE, local no-login API
 
 创造层收尾三块：世界线角色条目叠在同一条「角色」轨内并钳制起点；Creator Chat 流式回复（`Accept: text/event-stream`，JSON 回退）；ADR-0013 无 JWT 自动本地会话，Studio 接口打开即用。
 
