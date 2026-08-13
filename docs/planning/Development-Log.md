@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-13 · pending · feat(web,api) · world conflict checks and concise creator chat
+## 2026-08-13 · `8f2d8f0` · feat(web,api) · world conflict checks and concise creator chat
 
 H9 规则冲突检测（只报告不落库）+ Creator Chat 收成简洁对话面；世界摘要、冲突列表与 Inspector 放在 Studio。
 
