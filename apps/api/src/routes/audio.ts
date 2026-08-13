@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 import { createProviderBundle } from '../providers/registry.js';
 import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
@@ -34,12 +35,7 @@ export function registerAudioRoutes(
       select: { id: true, projectId: true, dialogue: true, label: true },
     });
     if (!shot) throw new ApiError(404, 'SHOT_NOT_FOUND', '镜头不存在');
-    const member = await db.projectMember.findUnique({
-      where: { projectId_userId: { projectId: shot.projectId, userId: request.user.sub } },
-    });
-    if (!member || member.role === 'viewer') {
-      throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
-    }
+    await ensureProjectMember(db, request.user.sub, shot.projectId, true);
 
     const dialogue =
       shot.dialogue && typeof shot.dialogue === 'object' && !Array.isArray(shot.dialogue)

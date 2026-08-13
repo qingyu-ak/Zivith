@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { AgentRuntime } from '../contexts/agent/runtime.js';
 import { PromptAgent, type PromptAgentInput } from '../contexts/agent/prompt-agent.js';
 import { ApiError } from '../errors.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 import { maybeRecordEntityChange } from '../contexts/history/index.js';
 
 const shotParams = z.object({ id: z.string().uuid() });
@@ -31,13 +32,7 @@ async function shotForMember(db: PrismaClient, shotId: string, userId: string, w
     },
   });
   if (!shot) throw new ApiError(404, 'SHOT_NOT_FOUND', '镜头不存在');
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId: shot.projectId, userId } },
-  });
-  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-  if (write && member.role === 'viewer') {
-    throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
-  }
+  await ensureProjectMember(db, userId, shot.projectId, write);
   return shot;
 }
 

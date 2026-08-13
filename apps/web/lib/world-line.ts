@@ -108,6 +108,7 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
 
   const tracks: WorldLineTrack[] = [
     {
+      id: 'character',
       kind: 'character',
       title: '角色',
       items: sortedCharacters.map((character, index) =>
@@ -115,6 +116,7 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
       ),
     },
     {
+      id: 'scene',
       kind: 'scene',
       title: '场景',
       items: [...scenes]
@@ -122,6 +124,7 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
         .map(sceneItem),
     },
     {
+      id: 'world_event',
       kind: 'world_event',
       title: '事件',
       items: [...world_events]
@@ -215,6 +218,7 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
 
   const tracks: WorldLineTrack[] = [
     {
+      id: 'story',
       kind: 'story',
       title: '故事',
       items: sortedStories.map((story) => ({
@@ -231,6 +235,7 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
       })),
     },
     {
+      id: 'scene',
       kind: 'scene',
       title: '场景',
       items: sortedScenes.map(({ scene, order }) => ({
@@ -248,6 +253,7 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
       })),
     },
     {
+      id: 'shot',
       kind: 'shot',
       title: '镜头',
       items: shotItems,

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma, PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 import type { StoragePort } from '../ports/index.js';
 import {
   mergeVisualPromptIntoAssetData,
@@ -51,13 +52,7 @@ async function sceneForMember(db: PrismaClient, sceneId: string, userId: string,
     select: { id: true, projectId: true },
   });
   if (!scene) throw new ApiError(404, 'SCENE_NOT_FOUND', '场景不存在');
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId: scene.projectId, userId } },
-  });
-  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-  if (write && member.role === 'viewer') {
-    throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
-  }
+  await ensureProjectMember(db, userId, scene.projectId, write);
   return scene;
 }
 

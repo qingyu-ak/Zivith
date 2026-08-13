@@ -11,6 +11,9 @@ const TRACK_HEIGHT = 58;
 const TRACK_GAP = 10;
 const PADDING = { top: 14, right: 18, bottom: 14 };
 const ITEM_HEIGHT = 32;
+const ITEM_INSET = 8;
+const CHAR_LANE_GAP = 6;
+const CHAR_LANE_PAD = 8;
 
 interface TrackColor {
   fill: string;
@@ -79,30 +82,58 @@ export function WorldTimeline({
     [model.scaleDomain],
   );
 
-  // 轨道 y 布局 + 条目坐标 + 命中位置
   const layout = useMemo(() => {
     let y = PADDING.top + AXIS_HEIGHT;
-    const tracks: Array<{ title: string; kind: string; trackY: number }> = [];
+    const tracks: Array<{
+      id: string;
+      title: string;
+      kind: string;
+      trackY: number;
+      height: number;
+    }> = [];
     const positions = new Map<
       string,
-      { x: number; y: number; itemWidth: number; kind: string }
+      { x: number; y: number; cx: number; cy: number; itemWidth: number; kind: string }
     >();
+
     for (const track of model.tracks) {
+      const stacked = track.kind === 'character' && track.items.length > 1;
+      const height = stacked
+        ? Math.max(
+            TRACK_HEIGHT,
+            CHAR_LANE_PAD * 2 +
+              track.items.length * ITEM_HEIGHT +
+              Math.max(0, track.items.length - 1) * CHAR_LANE_GAP,
+          )
+        : TRACK_HEIGHT;
       const trackY = y;
-      tracks.push({ title: track.title, kind: track.kind, trackY });
-      for (const item of track.items) {
-        const x = scale(item.anchorOrder);
+      tracks.push({ id: track.id, title: track.title, kind: track.kind, trackY, height });
+
+      track.items.forEach((item, itemIndex) => {
+        const itemWidth = Math.min(Math.max(estimateTextWidth(item.title) + 24, 84), 190);
+        const maxLeft = Math.max(plotLeft + ITEM_INSET, plotRight - itemWidth - ITEM_INSET);
+        const x = Math.min(
+          Math.max(scale(item.anchorOrder) - itemWidth / 2, plotLeft + ITEM_INSET),
+          maxLeft,
+        );
+        const itemY = stacked
+          ? trackY + CHAR_LANE_PAD + itemIndex * (ITEM_HEIGHT + CHAR_LANE_GAP)
+          : trackY + (height - ITEM_HEIGHT) / 2;
         positions.set(item.id, {
           x,
-          y: trackY + TRACK_HEIGHT / 2,
-          itemWidth: Math.min(Math.max(estimateTextWidth(item.title) + 24, 84), 190),
+          y: itemY,
+          cx: x + itemWidth / 2,
+          cy: itemY + ITEM_HEIGHT / 2,
+          itemWidth,
           kind: track.kind,
         });
-      }
-      y += TRACK_HEIGHT + TRACK_GAP;
+      });
+
+      y += height + TRACK_GAP;
     }
+
     return { tracks, positions, totalHeight: y - TRACK_GAP + PADDING.bottom };
-  }, [model.tracks, scale]);
+  }, [model.tracks, plotLeft, plotRight, scale]);
 
   const links = useMemo(
     () =>
@@ -116,14 +147,14 @@ export function WorldTimeline({
             : undefined;
           if (!source || !target) return null;
           // 同点关系（mock 引擎曾把两端都指向同一实体）退化为零长弧线，跳过渲染
-          if (source.x === target.x && source.y === target.y) return null;
-          const sameTrack = source.y === target.y;
-          const curveY = sameTrack ? source.y - 18 : (source.y + target.y) / 2;
+          if (source.cx === target.cx && source.cy === target.cy) return null;
+          const sameTrack = source.cy === target.cy;
+          const curveY = sameTrack ? source.cy - 18 : (source.cy + target.cy) / 2;
           return {
             id: relationship.id,
             label: relationship.label,
-            d: `M ${source.x} ${source.y} C ${source.x} ${curveY}, ${target.x} ${curveY}, ${target.x} ${target.y}`,
-            midX: (source.x + target.x) / 2,
+            d: `M ${source.cx} ${source.cy} C ${source.cx} ${curveY}, ${target.cx} ${curveY}, ${target.cx} ${target.cy}`,
+            midX: (source.cx + target.cx) / 2,
             midY: curveY - 6,
           };
         })
@@ -234,42 +265,38 @@ export function WorldTimeline({
         </g>
 
         {/* 轨道行 + 条目 */}
-        {layout.tracks.map((track) => {
+        {layout.tracks.map((track, index) => {
           const color = TRACK_COLORS[track.kind] ?? TRACK_COLORS.world_event;
-          const trackItems = model.tracks.find((item) => item.kind === track.kind)?.items ?? [];
+          const source = model.tracks[index];
+          const trackItems = source?.items ?? [];
+          const label = track.title || KIND_LABEL[track.kind] || track.kind;
           return (
-            <g key={track.kind}>
-              {/* 轨道背景带（片段式轨道） */}
+            <g key={track.id}>
               <rect
                 x={plotLeft}
                 y={track.trackY}
                 width={plotRight - plotLeft}
-                height={TRACK_HEIGHT}
+                height={track.height}
                 rx="10"
                 fill="rgba(255,255,255,0.02)"
                 stroke="#23262e"
                 strokeWidth="1"
               />
-              {/* 轨道标签 */}
               <text
                 x={TRACK_LABEL_WIDTH - 8}
-                y={track.trackY + TRACK_HEIGHT / 2}
+                y={track.trackY + track.height / 2}
                 fill="#a1a1aa"
                 fontSize="12"
                 fontWeight="600"
                 textAnchor="end"
                 dominantBaseline="middle"
               >
-                {KIND_LABEL[track.kind] ?? track.title}
+                {label}
               </text>
-              {/* 条目条带 */}
               {trackItems.map((item) => {
                 const pos = layout.positions.get(item.id);
                 if (!pos) return null;
                 const active = selection?.id === item.id;
-                const width = pos.itemWidth;
-                const x = pos.x - width / 2;
-                const y = track.trackY + (TRACK_HEIGHT - ITEM_HEIGHT) / 2;
                 return (
                   <g
                     key={item.id}
@@ -277,9 +304,9 @@ export function WorldTimeline({
                     onClick={() => onSelect({ kind: item.entityType, id: item.id })}
                   >
                     <rect
-                      x={x}
-                      y={y}
-                      width={width}
+                      x={pos.x}
+                      y={pos.y}
+                      width={pos.itemWidth}
                       height={ITEM_HEIGHT}
                       rx="8"
                       fill={color.fill}
@@ -289,8 +316,8 @@ export function WorldTimeline({
                       filter={active ? 'url(#selected-glow)' : undefined}
                     />
                     <text
-                      x={x + 10}
-                      y={y + ITEM_HEIGHT / 2}
+                      x={pos.x + 10}
+                      y={pos.y + ITEM_HEIGHT / 2}
                       fill={color.text}
                       fontSize="12"
                       dominantBaseline="middle"

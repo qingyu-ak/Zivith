@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-08-13 · pending · feat(web,api) · character lanes, creator-chat SSE, local no-login API
+
+创造层收尾三块：世界线角色条目叠在同一条「角色」轨内并钳制起点；Creator Chat 流式回复（`Accept: text/event-stream`，JSON 回退）；ADR-0013 无 JWT 自动本地会话，Studio 接口打开即用。
+
+- **fix(web)** 角色不拆成独立轨道；条带左缘不盖住「角色」标签
+- **feat(api,web)** 发消息走 SSE delta，提案仍在 `done` 后确认落库；旧 `POST /messages` 保留
+- **feat(api,web)** `createAuthenticate` 绑定 `local@zivith.local`；`ensureProjectMember` v1 自动放行；`GET /projects` 列出本机项目
+- 验证：api `local-auth` 4 + `world-builder-stream` 5 + `app` 5；web `sse` + `world-line`；api/web `tsc --noEmit` 0 error
+- 模块：`apps/api/src/{routes,contexts,lib}`、`apps/web/{components,lib}`、`docs/planning/*`
+
 ## 2026-08-13 · `b3ea182` · feat(web,api) · editable world inspector and production shot track
 
 创造层 S1/S2：Studio Inspector 可编辑角色/地点/事件/关系/场景/故事；制作视图补 Shot 轨道（镜头嵌在所属场景刻度区间）。resources 对资产走 `assetDto`、场景走 `sceneDto`。

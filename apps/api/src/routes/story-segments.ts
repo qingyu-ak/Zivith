@@ -3,6 +3,7 @@ import type { PrismaClient } from '@zivith/database';
 import { storySegmentCreateSchema, storySegmentPatchSchema } from '@zivith/domain';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 
 const storyParams = z.object({ sid: z.string().uuid() });
 const segmentParams = z.object({
@@ -26,13 +27,7 @@ async function requireStoryMember(
     select: { id: true, projectId: true },
   });
   if (!story) throw new ApiError(404, 'STORY_NOT_FOUND', '故事不存在');
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId: story.projectId, userId } },
-  });
-  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-  if (write && member.role === 'viewer') {
-    throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
-  }
+  await ensureProjectMember(db, userId, story.projectId, write);
   return story;
 }
 

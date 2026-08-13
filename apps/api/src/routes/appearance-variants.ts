@@ -25,6 +25,7 @@ import {
   mergeVisualPromptIntoAssetData,
 } from '../contexts/agent/visual-trait.js';
 import { ApiError } from '../errors.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 import { createProviderBundle } from '../providers/registry.js';
 import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
@@ -66,13 +67,7 @@ async function characterAssetForMember(
   if (asset.type !== 'character') {
     throw new ApiError(400, 'UNSUPPORTED_ASSET_TYPE', '形象变体仅支持角色资产');
   }
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId: asset.projectId, userId } },
-  });
-  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-  if (write && member.role === 'viewer') {
-    throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
-  }
+  await ensureProjectMember(db, userId, asset.projectId, write);
   await ensureDefaultAppearanceVariant(db, asset);
   return asset;
 }

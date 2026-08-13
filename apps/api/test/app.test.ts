@@ -30,10 +30,9 @@ describe('API foundation', () => {
     expect(response.json()).toEqual({ status: 'ok' });
   });
 
-  it('protects project resources', async () => {
+  it('does not require a login token for project resources', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/v1/projects' });
-    expect(response.statusCode).toBe(401);
-    expect(errorMessage(response)).toBe('请先登录');
+    expect(response.statusCode).not.toBe(401);
   });
 
   it('returns Chinese validation errors', async () => {

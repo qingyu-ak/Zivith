@@ -2,21 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma} from '@zivith/database';
 import { type PrismaClient } from '@zivith/database';
 import { z } from 'zod';
-import { ApiError } from '../errors.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 
 const projectParams = z.object({ id: z.string().uuid() });
 
 async function requireProjectMember(db: PrismaClient, projectId: string, userId: string) {
-  const project = await db.project.findFirst({
-    where: { id: projectId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', '项目不存在');
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId, userId } },
-  });
-  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-  return project;
+  return ensureProjectMember(db, userId, projectId);
 }
 
 function num(value: Prisma.Decimal | number | null | undefined): number {

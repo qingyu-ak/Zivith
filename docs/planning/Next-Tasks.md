@@ -220,7 +220,7 @@
 
 **不属于本轨道：** [Director Copilot](../architecture/rfc/Director-Copilot-RFC.md)。那是已有世界的项目级咨询侧栏，Phase 3+，先只读。其范围锁定不因 Track J 改变。
 
-**后续迭代（不阻塞 J1–J4）：** chat SSE 流式、冲突检测、智能体主动引导增强（主动询问剧情节奏）、创作线转换（15 秒镜头提示词）。
+**后续迭代（不阻塞 J1–J4）：** chat SSE 流式 **已落地 2026-08-13**（`POST /world/creator-chats/:threadId/messages/stream`，delta 推 reply，提案仍在 `done` 后由用户确认）；冲突检测、智能体主动引导增强（主动询问剧情节奏）、创作线转换（15 秒镜头提示词）。
 
 ---
 ## Track K — 世界优先 UI 信息架构
@@ -233,7 +233,7 @@
 |----|------|-------|--------|
 | K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | **已完成 2026-08-05**（World Overview：项目名 + 「本地创作」徽标 + 「去创作对话」入口 + 分区导航；`/production` `/settings` 承接原面板只搬不移；侧栏新增 制作/设置；浏览器回归 5 页全过） |
 | K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector 上下分栏（右上世界线属性、右下创作线属性）；**2026-08-05 v1 只读已落地（`/projects/:id/world`）**；**2026-08-05 世界观核心闭环：左栏新增「世界观」组（选中展示世界观属性）、中栏副驾驶占位替换为只读世界状态摘要（阶段/世界观/实体计数）**；**2026-08-13 Inspector 内联编辑：角色/地点/事件/关系/场景/故事走既有 PATCH，保存后刷新 resources** | 已完成 v1 + Inspector 可编辑（feat/creator-layer-first） |
-| K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；侧栏「创作对话」常驻可达 | **已完成 2026-08-05**（根路径 `/` 重定向 `/creator-chats`；浏览器验证：重定向生效、侧栏「创作聊天」激活、列表与新建入口可用、`/projects` 回归正常） |
+| K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；侧栏「创作对话」常驻可达 | **已完成 2026-08-05**；**2026-08-13 ADR-0013 API 闭环**：无 JWT 自动本地会话，`GET /projects` 列出本机全部项目，成员校验 v1 自动放行 |
 | K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），**2026-08-06 Production 视图 v1**（世界/制作 tab；故事 + 场景轨道），**2026-08-13 Shot 轨道**：镜头嵌在所属场景刻度区间，Inspector 只读 + 跳转镜头编辑器 | **已完成 v1 + Shot 轨道（2026-08-13）** |
 | K5 | 世界观 Chat→Studio 核心闭环 | 世界观自动识别 → 落库 → Studio 展示：`Project.worldview Json`（genre/premise/rules/notes，additive 迁移）+ mock/LLM 自动提炼（`update_entity` type='project'）+ resources 返回 worldview/stage + chat header 常驻「进入 Studio」入口 | **已完成 2026-08-05**（愿景核对报告：Chat 引导/Studio 三栏/实体列表/timeline/Inspector 均已对齐；补齐世界观单点表示与识别、副驾驶摘要） |
 

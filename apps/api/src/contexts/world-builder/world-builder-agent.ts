@@ -370,4 +370,43 @@ export class WorldBuilderAgent {
 
     return parsed;
   }
+
+  /**
+   * Run a full turn, then emit the reply in chunks so the chat UI can stream.
+   * Proposals stay off the wire until the complete response is ready (ADR-0010).
+   */
+  async respondStream(
+    input: WorldBuilderInput,
+    onDelta: (chunk: string) => void | Promise<void>,
+    options: { chunkSize?: number; delayMs?: number } = {},
+  ): Promise<WorldBuilderResponse> {
+    const response = await this.respond(input);
+    await streamReplyChunks(response.reply, onDelta, options);
+    return response;
+  }
+}
+
+/** Split a reply into display-sized chunks (CJK-friendly character slices). */
+export function chunkReply(text: string, chunkSize = 8): string[] {
+  if (!text) return [];
+  const size = Math.max(1, chunkSize);
+  const chunks: string[] = [];
+  for (let index = 0; index < text.length; index += size) {
+    chunks.push(text.slice(index, index + size));
+  }
+  return chunks;
+}
+
+export async function streamReplyChunks(
+  text: string,
+  onDelta: (chunk: string) => void | Promise<void>,
+  options: { chunkSize?: number; delayMs?: number } = {},
+): Promise<void> {
+  const delayMs = options.delayMs ?? 0;
+  for (const chunk of chunkReply(text, options.chunkSize ?? 8)) {
+    await onDelta(chunk);
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
 }

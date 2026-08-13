@@ -11,6 +11,7 @@ import { Prisma, type PrismaClient } from '@zivith/database';
 import type { GenerationService } from '../generation/service.js';
 import { QueueWorkBridge } from '../generation/queue-work-bridge.js';
 import { ApiError } from '../../errors.js';
+import { ensureProjectMember } from '../world/local-user.js';
 import { AgentRuntime } from '../agent/runtime.js';
 import { AssetAgent } from '../agent/asset-agent.js';
 import { PromptAgent, type PromptAgentInput } from '../agent/prompt-agent.js';
@@ -533,11 +534,7 @@ export class MockWorkflowRunner {
   }
 
   private async assertProjectEditor(projectId: string, userId: string): Promise<void> {
-    const member = await this.db.projectMember.findUnique({
-      where: { projectId_userId: { projectId, userId } },
-    });
-    if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-    if (member.role === 'viewer') throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
+    await ensureProjectMember(this.db, userId, projectId, true);
   }
 
   private async executeStory(run: WorkflowWithSteps, userId: string): Promise<void> {

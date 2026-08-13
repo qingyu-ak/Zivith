@@ -21,7 +21,7 @@ import { createProviderBundle } from '../providers/registry.js';
 import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
 import { ApiError } from '../errors.js';
-import { authenticate } from './auth.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 import type { StoragePort } from '../ports/index.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 import { maybeRecordEntityChange } from '../contexts/history/index.js';
@@ -275,12 +275,7 @@ function hasValidImageSignature(body: Buffer, mimeType: string): boolean {
 }
 
 async function requireMember(db: PrismaClient, userId: string, projectId: string, write = false) {
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId, userId } },
-  });
-  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-  if (write && member.role === 'viewer') throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
-  return member;
+  return ensureProjectMember(db, userId, projectId, write);
 }
 
 async function projectOfStory(db: PrismaClient, id: string): Promise<string> {
@@ -426,11 +421,9 @@ export function registerResourceRoutes(
   db: PrismaClient,
   storage?: StoragePort,
 ): void {
-  app.addHook('preHandler', authenticate);
-
-  app.get('/projects', async (request) =>
+  app.get('/projects', async () =>
     db.project.findMany({
-      where: { members: { some: { userId: request.user.sub } }, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: { updatedAt: 'desc' },
     }),
   );

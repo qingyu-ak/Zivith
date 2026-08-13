@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 import type { WorldResourcesDTO } from './types';
-import { buildProductionLineModel } from './world-line';
+import { buildProductionLineModel, buildWorldLineModel } from './world-line';
 
 function resources(overrides?: Partial<WorldResourcesDTO['entities']>): WorldResourcesDTO {
   return {
@@ -74,5 +74,47 @@ describe('buildProductionLineModel shot track', () => {
     const shotTrack = model.tracks.find((track) => track.kind === 'shot');
     expect(shotTrack?.items).toEqual([]);
     expect(model.tracks).toHaveLength(3);
+  });
+});
+
+describe('buildWorldLineModel character track', () => {
+  it('keeps one character track and lists each character as an item', () => {
+    const model = buildWorldLineModel(
+      resources({
+        characters: [
+          { id: 'c1', project_id: 'p1', name: '安娜苏', description: '主角', created_at: '2026-01-01' },
+          { id: 'c2', project_id: 'p1', name: '安利', description: '配角', created_at: '2026-01-02' },
+          {
+            id: 'c3',
+            project_id: 'p1',
+            name: '安娜苏的父亲',
+            description: '长辈',
+            created_at: '2026-01-03',
+          },
+        ],
+        scenes: [],
+        shots: [],
+        stories: [],
+      }),
+    );
+
+    expect(model.tracks.map((track) => track.kind)).toEqual(['character', 'scene', 'world_event']);
+    const characterTrack = model.tracks.find((track) => track.kind === 'character');
+    expect(characterTrack?.id).toBe('character');
+    expect(characterTrack?.title).toBe('角色');
+    expect(characterTrack?.items.map((item) => item.id)).toEqual(['c1', 'c2', 'c3']);
+    expect(characterTrack?.items.map((item) => item.title)).toEqual([
+      '安娜苏',
+      '安利',
+      '安娜苏的父亲',
+    ]);
+  });
+
+  it('keeps a single empty character track when the world has no characters', () => {
+    const model = buildWorldLineModel(resources({ characters: [], scenes: [], shots: [], stories: [] }));
+    const characterTracks = model.tracks.filter((track) => track.kind === 'character');
+    expect(characterTracks).toHaveLength(1);
+    expect(characterTracks[0]?.title).toBe('角色');
+    expect(characterTracks[0]?.items).toEqual([]);
   });
 });

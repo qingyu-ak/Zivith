@@ -41,7 +41,7 @@
 | **World-first UI（Track K）** | K1/K3/K5 已完成；K2/K4 世界视图 v1 | 项目首页已拆分为 World Overview + `/production` + `/settings`（2026-08-05，侧栏新增 制作/设置）；Creator Chat 已为默认页 `/`（2026-08-05）；`/world` 三栏工作区 v1 只读（2026-08-05）；**世界观 Chat→Studio 核心闭环已落地（2026-08-05）：`Project.worldview Json` + 自动提炼落库 + Explorer「世界观」组 + 副驾驶只读摘要 + chat「进入 Studio」入口**。见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md) |
 | 3–5 | 0% | 生成生产化现排在 IP Core 之后 |
 
-**近期工程待办：** [Next-Tasks.md](Next-Tasks.md) 创造层 v1 已闭环；Inspector 可编辑与制作视图 Shot 轨道已落地。下一步：Creator Chat 流式 SSE → ADR-0013 免登录 API 闭环。设定表 / 地点表与 T2I·I2I·T2V·I2V 矩阵见 [Asset-Model.md](../domain/Asset-Model.md)。
+**近期工程待办：** [Next-Tasks.md](Next-Tasks.md) 创造层 v1 已闭环；Inspector 可编辑、制作视图 Shot 轨道、Creator Chat 流式 SSE、ADR-0013 免登录 API 已落地。设定表 / 地点表与 T2I·I2I·T2V·I2V 矩阵见 [Asset-Model.md](../domain/Asset-Model.md)。
 
 ### Entity + State + Timeline + Track 实施门禁
 

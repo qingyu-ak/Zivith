@@ -27,8 +27,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
+    setSignedIn(Boolean(session.getToken()));
     // Creator layer (local-first): no forced login. 未登录也能使用本地功能
     //（与 TRAE 一致），登录仅为将来云服务保留。API 401 时优雅降级为空态。
     api<ProjectDTO[] | { data?: ProjectDTO[]; items?: ProjectDTO[] }>('/projects')
@@ -50,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       // Local session removal must still succeed if the API is unavailable.
     }
     session.clear();
-    router.push('/login');
+    router.push('/');
   }
 
   return (
@@ -60,15 +62,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/projects" className="px-2 text-lg font-bold tracking-tight">
             ZIVITH<span className="text-accent">.</span>
           </Link>
-          <Button
-            className="lg:hidden"
-            variant="ghost"
-            onClick={() => {
-              void logout();
-            }}
-          >
-            退出
-          </Button>
+          {signedIn ? (
+            <Button
+              className="lg:hidden"
+              variant="ghost"
+              onClick={() => {
+                void logout();
+              }}
+            >
+              退出
+            </Button>
+          ) : null}
         </div>
         <div className="mt-5">
           <label className="sr-only" htmlFor="project-switcher">
@@ -129,16 +133,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="mt-8 hidden border-t border-line pt-4 lg:block">
-          <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-500 hover:text-white"
-            onClick={() => {
-              void logout();
-            }}
-          >
-            退出登录
-          </button>
-        </div>
+        {signedIn ? (
+          <div className="mt-8 hidden border-t border-line pt-4 lg:block">
+            <button
+              className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-500 hover:text-white"
+              onClick={() => {
+                void logout();
+              }}
+            >
+              退出登录
+            </button>
+          </div>
+        ) : null}
       </aside>
       <main className="min-w-0 lg:col-start-2">{children}</main>
     </div>

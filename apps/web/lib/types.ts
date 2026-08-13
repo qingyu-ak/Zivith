@@ -521,6 +521,7 @@ export interface WorldLineItem {
 }
 
 export interface WorldLineTrack {
+  id: string;
   kind: 'character' | 'scene' | 'world_event' | 'story' | 'shot';
   title: string;
   items: WorldLineItem[];

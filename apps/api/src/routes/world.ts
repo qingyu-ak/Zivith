@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma, PrismaClient } from '@zivith/database';
 import {
   parseWorldview,
@@ -16,9 +16,11 @@ import { assetDto, sceneDto } from './resources.js';
 import {
   WorldBuilderAgent,
   inferWorldStage,
+  streamReplyChunks,
   type WorldBuilderChatMessage,
 } from '../contexts/world-builder/world-builder-agent.js';
 import { buildWorldContext } from '../contexts/world-builder/world-context.js';
+import { formatSseEvent } from '../lib/sse.js';
 import type { LLMAdapter } from '../ports/llm.js';
 
 const idSchema = z.string().min(1).max(128);
@@ -440,6 +442,153 @@ const sendMessageBody = z
 
 const applyProposalBody = z.object({ proposal_key: z.string().max(256).optional() }).strict();
 
+function chatMessageDto(message: {
+  id: string;
+  threadId: string;
+  role: string;
+  content: string;
+  proposal: unknown;
+  proposalKey: string | null;
+  proposalState: string | null;
+  createdAt: Date;
+}) {
+  return {
+    id: message.id,
+    thread_id: message.threadId,
+    role: message.role,
+    content: message.content,
+    proposal: message.proposal,
+    proposal_key: message.proposalKey,
+    proposal_state: message.proposalState,
+    created_at: message.createdAt.toISOString(),
+  };
+}
+
+async function createAssistantReply(
+  db: PrismaClient,
+  builder: WorldBuilderAgent,
+  thread: { id: string; projectId: string | null },
+  userContent: string,
+) {
+  const rows = await db.creatorChatMessage.findMany({
+    where: { threadId: thread.id },
+    orderBy: { createdAt: 'asc' },
+    take: 40,
+  });
+  const history: WorldBuilderChatMessage[] = rows.map((row) => ({
+    role:
+      row.role === 'user' || row.role === 'assistant' || row.role === 'system'
+        ? row.role
+        : 'system',
+    content: row.content,
+  }));
+  const world = thread.projectId ? await buildWorldContext(db, thread.projectId) : null;
+  const response = await builder.respond({
+    text: userContent,
+    history,
+    world,
+    stage: inferWorldStage(world),
+  });
+  const proposalKey =
+    response.proposals.length > 0
+      ? `p_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+      : null;
+  const assistantMessage = await db.creatorChatMessage.create({
+    data: {
+      threadId: thread.id,
+      role: 'assistant',
+      content: response.reply,
+      ...(response.proposals.length > 0
+        ? {
+            proposal: response.proposals as unknown as Prisma.InputJsonValue,
+            proposalKey,
+            proposalState: 'pending',
+          }
+        : {}),
+    },
+  });
+  return { assistantMessage, response };
+}
+
+function wantsEventStream(request: FastifyRequest): boolean {
+  const accept = request.headers.accept;
+  return typeof accept === 'string' && accept.includes('text/event-stream');
+}
+
+async function pipeCreatorChatSse(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  db: PrismaClient,
+  builder: WorldBuilderAgent,
+  thread: { id: string; projectId: string | null },
+  userMessage: {
+    id: string;
+    threadId: string;
+    role: string;
+    content: string;
+    proposal: unknown;
+    proposalKey: string | null;
+    proposalState: string | null;
+    createdAt: Date;
+  },
+): Promise<void> {
+  const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    ...(origin ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}),
+  });
+
+  let closed = false;
+  const writeEvent = (event: string, data: unknown) => {
+    if (closed) return;
+    reply.raw.write(formatSseEvent(event, data));
+  };
+  const cleanup = () => {
+    closed = true;
+    request.raw.off('close', cleanup);
+    try {
+      reply.raw.end();
+    } catch {
+      // stream already closed
+    }
+  };
+  request.raw.on('close', cleanup);
+
+  writeEvent('user', { user_message: chatMessageDto(userMessage) });
+  writeEvent('status', { phase: 'thinking' });
+
+  try {
+    const { assistantMessage, response } = await createAssistantReply(
+      db,
+      builder,
+      thread,
+      userMessage.content,
+    );
+    await db.creatorChatThread.update({
+      where: { id: thread.id },
+      data: { updatedAt: new Date() },
+    });
+    await streamReplyChunks(
+      response.reply,
+      (chunk) => {
+        writeEvent('delta', { text: chunk });
+      },
+      { delayMs: closed ? 0 : 16 },
+    );
+    writeEvent('done', { assistant_message: chatMessageDto(assistantMessage) });
+  } catch (error) {
+    writeEvent('error', {
+      message: error instanceof Error ? error.message : '世界构建者回复失败',
+    });
+  } finally {
+    cleanup();
+  }
+}
+
 function registerCreatorChatRoutes(
   app: FastifyInstance,
   db: PrismaClient,
@@ -548,48 +697,16 @@ function registerCreatorChatRoutes(
       },
     });
 
+    if (body.role === 'user' && wantsEventStream(request)) {
+      await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage);
+      return;
+    }
+
     // User turns trigger the World Builder: read world → reply → propose.
     let assistantMessage = null;
     if (body.role === 'user') {
-      const rows = await db.creatorChatMessage.findMany({
-        where: { threadId },
-        orderBy: { createdAt: 'asc' },
-        take: 40,
-      });
-      const history: WorldBuilderChatMessage[] = rows.map((row) => ({
-        role:
-          row.role === 'user' || row.role === 'assistant' || row.role === 'system'
-            ? row.role
-            : 'system',
-        content: row.content,
-      }));
-      const world = thread.projectId
-        ? await buildWorldContext(db, thread.projectId)
-        : null;
-      const response = await builder.respond({
-        text: userMessage.content,
-        history,
-        world,
-        stage: inferWorldStage(world),
-      });
-      const proposalKey =
-        response.proposals.length > 0
-          ? `p_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-          : null;
-      assistantMessage = await db.creatorChatMessage.create({
-        data: {
-          threadId,
-          role: 'assistant',
-          content: response.reply,
-          ...(response.proposals.length > 0
-            ? {
-                proposal: response.proposals as unknown as Prisma.InputJsonValue,
-                proposalKey,
-                proposalState: 'pending',
-              }
-            : {}),
-        },
-      });
+      const created = await createAssistantReply(db, builder, thread, userMessage.content);
+      assistantMessage = created.assistantMessage;
     }
 
     await db.creatorChatThread.update({
@@ -599,6 +716,28 @@ function registerCreatorChatRoutes(
     return reply
       .status(201)
       .send({ user_message: userMessage, assistant_message: assistantMessage });
+  });
+
+  app.post('/creator-chats/:threadId/messages/stream', async (request, reply) => {
+    const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
+    const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
+    if (!thread) throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
+    const body = sendMessageBody.parse(request.body ?? {});
+    if (body.role !== 'user') {
+      throw new ApiError(400, 'STREAM_USER_ONLY', '流式发送仅支持用户消息');
+    }
+    if (body.proposal || body.proposal_key) {
+      throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
+    }
+
+    const userMessage = await db.creatorChatMessage.create({
+      data: {
+        threadId,
+        role: 'user',
+        content: body.content,
+      },
+    });
+    await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage);
   });
 
   app.post('/creator-chats/:threadId/proposals/:messageId/apply', async (request) => {

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 
 const runParams = z.object({ runId: z.string().uuid() });
 
@@ -44,10 +45,7 @@ export function registerWorkflowEventRoutes(app: FastifyInstance, db: PrismaClie
       include: { steps: { orderBy: { order: 'asc' } } },
     });
     if (!run) throw new ApiError(404, 'WORKFLOW_NOT_FOUND', '工作流不存在');
-    const member = await db.projectMember.findUnique({
-      where: { projectId_userId: { projectId: run.projectId, userId: request.user.sub } },
-    });
-    if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
+    await ensureProjectMember(db, request.user.sub, run.projectId);
 
     reply.hijack();
     reply.raw.writeHead(200, {

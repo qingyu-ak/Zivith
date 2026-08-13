@@ -16,7 +16,7 @@ import { instrumentProviderBundle } from './contexts/usage/instrument.js';
 import { assertAllPromptTemplatesValid } from './contexts/agent/prompt-loader.js';
 import { registerAppearanceVariantRoutes } from './routes/appearance-variants.js';
 import { registerAudioRoutes } from './routes/audio.js';
-import { authenticate, registerAuthRoutes } from './routes/auth.js';
+import { createAuthenticate, registerAuthRoutes } from './routes/auth.js';
 import { registerGenerationRoutes } from './routes/generation.js';
 import {
   getRuntimeModelOverride,
@@ -102,7 +102,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       .split(',')
       .map((origin) => origin.trim()),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
   });
   await app.register(multipart, {
     limits: { files: 1, fileSize: 10 * 1024 * 1024, fields: 10 },
@@ -131,7 +131,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (api, _options, done) => {
       registerAuthRoutes(api, db);
       api.register((protectedApi, _protectedOptions, protectedDone) => {
-        protectedApi.addHook('preHandler', authenticate);
+        protectedApi.addHook('preHandler', createAuthenticate(db));
         registerGenerationRoutes(protectedApi, db, generationService, storage);
         registerResourceRoutes(protectedApi, db, storage);
         registerStorySegmentRoutes(protectedApi, db);

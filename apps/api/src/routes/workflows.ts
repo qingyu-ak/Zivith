@@ -5,6 +5,7 @@ import { MockWorkflowRunner } from '../contexts/workflow/mock-runner.js';
 import { WorkflowOrchestrator } from '../contexts/workflow/orchestrator.js';
 import { GenerationService } from '../contexts/generation/service.js';
 import { ApiError } from '../errors.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 
 const automationLevel = z.enum(['full_manual', 'assisted', 'semi_auto', 'full_auto']);
 const startWorkflowSchema = z
@@ -75,13 +76,7 @@ async function requireProjectMember(
   projectId: string,
   write = false,
 ): Promise<void> {
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId, userId } },
-  });
-  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-  if (write && member.role === 'viewer') {
-    throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
-  }
+  await ensureProjectMember(db, userId, projectId, write);
 }
 
 async function getRunForMember(db: PrismaClient, userId: string, runId: string, write = false) {

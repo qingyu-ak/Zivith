@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { Badge, Button, EmptyState, Input, Select, Spinner, Textarea } from '@zivith/ui';
-import { api, errorMessage, unwrapList } from '@/lib/api';
+import { api, errorMessage, sendCreatorChatTurn, unwrapList } from '@/lib/api';
 import type {
   CreatorChatMessageDTO,
   CreatorChatThreadDTO,
@@ -63,6 +63,19 @@ function parseProposals(message: CreatorChatMessageDTO): {
   return { proposals, applied: message.proposal_state === 'applied' };
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function asChatMessage(value: unknown): CreatorChatMessageDTO | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  if (typeof record.id !== 'string' || typeof record.role !== 'string' || typeof record.content !== 'string') {
+    return null;
+  }
+  return record as unknown as CreatorChatMessageDTO;
+}
+
 export function ChatPanel({ threadId }: { threadId: string }) {
   const [thread, setThread] = useState<CreatorChatThreadDTO | null>(null);
   const [messages, setMessages] = useState<CreatorChatMessageDTO[]>([]);
@@ -71,6 +84,7 @@ export function ChatPanel({ threadId }: { threadId: string }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [streamText, setStreamText] = useState('');
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -107,7 +121,7 @@ export function ChatPanel({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  }, [messages.length, streamText, sending]);
 
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,20 +129,40 @@ export function ChatPanel({ threadId }: { threadId: string }) {
     if (!content || sending) return;
     setError('');
     setSending(true);
+    setStreamText('');
     setInput('');
+    let acceptedUser = false;
     try {
-      const value = await api<{
-        user_message: CreatorChatMessageDTO;
-        assistant_message: CreatorChatMessageDTO | null;
-      }>(`/world/creator-chats/${threadId}/messages`, {
-        method: 'POST',
-        body: { role: 'user', content },
-      });
-      setMessages((current) => [
-        ...current,
-        value.user_message,
-        ...(value.assistant_message ? [value.assistant_message] : []),
-      ]);
+      let sawError = '';
+      await sendCreatorChatTurn(threadId, content, (event, data) => {
+          const record = asRecord(data);
+          if (event === 'user') {
+            const userMessage = asChatMessage(record?.user_message);
+            if (userMessage) {
+              acceptedUser = true;
+              setMessages((current) => [...current, userMessage]);
+            }
+            return;
+          }
+          if (event === 'delta' && typeof record?.text === 'string') {
+            setStreamText((current) => current + record.text);
+            return;
+          }
+          if (event === 'done') {
+            const assistantMessage = asChatMessage(record?.assistant_message);
+            if (assistantMessage) {
+              setMessages((current) => [...current, assistantMessage]);
+            }
+            setStreamText('');
+            return;
+          }
+          if (event === 'error') {
+            sawError =
+              typeof record?.message === 'string' ? record.message : '世界构建者回复失败';
+          }
+        },
+      );
+      if (sawError) throw new Error(sawError);
       setThreads((current) => {
         const target = current.find((item) => item.id === threadId);
         if (!target) return current;
@@ -136,7 +170,8 @@ export function ChatPanel({ threadId }: { threadId: string }) {
       });
     } catch (reason) {
       setError(errorMessage(reason));
-      setInput(content);
+      if (!acceptedUser) setInput(content);
+      setStreamText('');
     } finally {
       setSending(false);
     }
@@ -351,7 +386,22 @@ export function ChatPanel({ threadId }: { threadId: string }) {
                   </div>
                 );
               })}
-              {sending && (
+              {sending && streamText && (
+                <div className="flex items-start gap-3">
+                  <span
+                    className="mt-1 grid size-8 shrink-0 place-items-center rounded-full bg-white/5 text-sm text-zinc-400"
+                    aria-hidden
+                  >
+                    ◉
+                  </span>
+                  <div className="max-w-[92%] rounded-2xl rounded-tl-sm border border-line bg-panel px-4 py-3">
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-100">
+                      {streamText}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {sending && !streamText && (
                 <div className="flex items-center gap-2 pl-1 text-sm text-zinc-400">
                   <Spinner label="世界构建者正在思考…" />
                 </div>

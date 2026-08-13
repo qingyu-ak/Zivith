@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import argon2 from 'argon2';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { PrismaClient } from '@zivith/database';
+import { prisma, type PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
+import { LOCAL_OWNER_EMAIL, resolveLocalOwner } from '../contexts/world/local-user.js';
 
 const credentialsSchema = z.object({
   email: z
@@ -41,15 +42,22 @@ async function issueTokens(
   return { access_token, refresh_token, token_type: 'Bearer', expires_in: 900 };
 }
 
-export async function authenticate(request: FastifyRequest): Promise<void> {
-  try {
-    await request.jwtVerify();
-  } catch {
-    throw new ApiError(401, 'UNAUTHORIZED', '请先登录');
-  }
+export function createAuthenticate(db: PrismaClient) {
+  return async function authenticate(request: FastifyRequest): Promise<void> {
+    try {
+      await request.jwtVerify();
+    } catch {
+      const ownerId = await resolveLocalOwner(db);
+      request.user = { sub: ownerId, email: LOCAL_OWNER_EMAIL };
+    }
+  };
 }
 
+/** Fallback for route modules that register their own preHandler. */
+export const authenticate = createAuthenticate(prisma);
+
 export function registerAuthRoutes(app: FastifyInstance, db: PrismaClient): void {
+  const authenticateLocal = createAuthenticate(db);
   app.post('/auth/signup', async (request, reply) => {
     const body = signupSchema.parse(request.body);
     if (await db.user.findUnique({ where: { email: body.email } })) {
@@ -105,7 +113,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: PrismaClient): void
     });
   });
 
-  app.post('/auth/logout', { preHandler: authenticate }, async (request, reply) => {
+  app.post('/auth/logout', { preHandler: authenticateLocal }, async (request, reply) => {
     const parsed = refreshSchema.safeParse(request.body);
     if (parsed.success) {
       await db.refreshToken.updateMany({
@@ -120,7 +128,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: PrismaClient): void
     return reply.status(204).send();
   });
 
-  app.get('/auth/me', { preHandler: authenticate }, async (request) => {
+  app.get('/auth/me', { preHandler: authenticateLocal }, async (request) => {
     const user = await db.user.findFirst({ where: { id: request.user.sub, deletedAt: null } });
     if (!user) throw new ApiError(404, 'USER_NOT_FOUND', '用户不存在');
     return { id: user.id, email: user.email, display_name: user.displayName };
