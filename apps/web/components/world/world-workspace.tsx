@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { Badge, Spinner } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { WorldResourcesDTO, WorldSelection } from '@/lib/types';
@@ -13,6 +12,7 @@ import { EntityExplorer } from './entity-explorer';
 import { WorldTimeline } from './world-timeline';
 import { InspectorPanel } from './inspector-panel';
 import { CoPilotPanel } from './co-pilot-panel';
+import { ContinueInChatButton } from './continue-in-chat';
 
 export function WorldWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -171,12 +171,11 @@ export function WorldWorkspace() {
               制作
             </button>
           </div>
-          <Link
-            href="/creator-chats"
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
-          >
-            ← 回到创作聊天
-          </Link>
+          <ContinueInChatButton
+            projectId={resources.project.id}
+            label="← 回到创作聊天"
+            className="rounded-lg border border-line px-3 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50"
+          />
         </div>
       </header>
 
@@ -241,14 +240,15 @@ export function WorldWorkspace() {
                       ? '这个世界还没有任何世界线条目。'
                       : '还没有故事与场景，先沿 Presentation 顺序创建制作内容。'}
                   </p>
-                  <Link
-                    href="/creator-chats"
-                    className="mt-3 inline-block text-sm text-accent hover:underline"
-                  >
-                    {view === 'world'
-                      ? '去创作聊天引导创建角色、场景与事件 →'
-                      : '去创作聊天创建故事与场景 →'}
-                  </Link>
+                  <ContinueInChatButton
+                    projectId={resources.project.id}
+                    label={
+                      view === 'world'
+                        ? '去创作聊天引导创建角色、场景与事件 →'
+                        : '去创作聊天创建故事与场景 →'
+                    }
+                    className="mt-3 inline-block text-sm text-accent hover:underline disabled:opacity-50"
+                  />
                 </div>
               </div>
             ) : (

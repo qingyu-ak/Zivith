@@ -12,7 +12,9 @@ import type {
   WorldSelection,
 } from '@/lib/types';
 import { api, errorMessage } from '@/lib/api';
+import { focusFromSelection } from '@/lib/creator-chat-nav';
 import { worldTimeCaption, worldTimeOrder } from '@/lib/world-line';
+import { ContinueInChatButton } from './continue-in-chat';
 
 const KIND_COLOR: Record<string, string> = {
   character: 'text-[#4d6bfe] border-[#4d6bfe]/30 bg-[#4d6bfe]/10',
@@ -360,16 +362,24 @@ export function InspectorPanel({
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       <section className="border-b border-line">
-        <header className="flex items-center justify-between px-4 pt-4 pb-2">
+        <header className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
           <h2 className="text-xs font-semibold tracking-wider text-zinc-500">世界线属性</h2>
           {selection && !editing && selection.kind !== 'shot' ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
-            >
-              编辑
-            </button>
+            <div className="flex items-center gap-2">
+              <ContinueInChatButton
+                projectId={resources.project.id}
+                focus={focusFromSelection(resources, selection)}
+                label="在对话中继续"
+                className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+              >
+                编辑
+              </button>
+            </div>
           ) : null}
         </header>
         {selection ? (

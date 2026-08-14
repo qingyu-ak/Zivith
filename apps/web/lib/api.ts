@@ -141,11 +141,12 @@ export async function sendCreatorChatTurn(
   threadId: string,
   content: string,
   onEvent: (event: string, data: unknown) => void,
+  focus?: { kind: string; id: string; name: string } | null,
 ): Promise<void> {
   const response = await request(`/world/creator-chats/${threadId}/messages`, {
     method: 'POST',
     headers: { Accept: 'text/event-stream' },
-    body: { role: 'user', content },
+    body: { role: 'user', content, ...(focus ? { focus } : {}) },
   });
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('text/event-stream')) {

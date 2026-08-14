@@ -9,9 +9,36 @@ import { worldContextToPrompt } from './world-context.js';
  * The agent NEVER writes to the database — it reads the world, guides the
  * creator, and proposes entities for the creator to confirm (ADR-0010 fence).
  */
+export interface WorldBuilderFocus {
+  kind: 'character' | 'location' | 'scene' | 'world_event' | 'story' | 'relationship' | 'project';
+  id: string;
+  name: string;
+}
+
+const FOCUS_KIND_LABEL: Record<WorldBuilderFocus['kind'], string> = {
+  character: '角色',
+  location: '地点',
+  scene: '场景',
+  world_event: '事件',
+  story: '故事',
+  relationship: '关系',
+  project: '项目',
+};
+
+export function formatFocusPrompt(focus?: WorldBuilderFocus | null): string {
+  if (!focus) return '';
+  const label = FOCUS_KIND_LABEL[focus.kind];
+  return `
+## 当前关注
+创作者从 Studio 选中了 [${focus.kind}:${focus.id}] ${focus.name}（${label}）。
+本轮优先讨论该实体：能改就用 update_entity（type 与 id 对应该实体），不要另建同名实体，除非创作者明确要求新建。
+`;
+}
+
 export function buildWorldBuilderSystemPrompt(
   world: WorldContext | null,
   stage: 'bootstrap' | 'growing' | 'mature',
+  focus?: WorldBuilderFocus | null,
 ): string {
   return `你是一位「世界构建者」（World Builder），正在帮助创作者把一个 IP 世界逐步构建成一个可持续演化的领域模型。
 
@@ -44,6 +71,7 @@ export function buildWorldBuilderSystemPrompt(
 
 ## 世界现状
 ${worldContextToPrompt(world)}
+${formatFocusPrompt(focus)}
 
 ## 当前缺口（系统规则，按优先级）
 ${formatGapPrompt(world)}

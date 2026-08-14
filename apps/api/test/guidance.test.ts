@@ -93,7 +93,35 @@ describe('world builder proactive guidance', () => {
     expect(response.world_state.open_questions.length).toBeGreaterThan(0);
   });
 
-  it('explains a complete world without inventing entities', () => {
-    expect(formatGuidanceReply([])).toContain('不会自动写入');
+  it('asks about the focused entity instead of the next world gap', () => {
+    const response = mockWorldBuilderResponse({
+      text: '继续',
+      history: [{ role: 'user', content: '继续' }],
+      world: world({
+        worldview: { genre: '东方玄幻', premise: '凡人修仙', rules: ['灵气有限'] },
+        characters: [{ id: 'c1', name: '韩立', description: '凡人弟子', tags: [] }],
+      }),
+      stage: 'growing',
+      focus: { kind: 'character', id: 'c1', name: '韩立' },
+    });
+    expect(response.reply).toContain('韩立');
+    expect(response.proposals).toEqual([]);
+  });
+
+  it('proposes update_entity for the focused character', () => {
+    const response = mockWorldBuilderResponse({
+      text: '把性格写得更冷一点',
+      history: [{ role: 'user', content: '把性格写得更冷一点' }],
+      world: world({
+        worldview: { genre: '东方玄幻', rules: ['灵气有限'] },
+        characters: [{ id: 'c1', name: '韩立', description: '凡人弟子', tags: [] }],
+      }),
+      stage: 'growing',
+      focus: { kind: 'character', id: 'c1', name: '韩立' },
+    });
+    expect(response.proposals[0]).toMatchObject({
+      kind: 'update_entity',
+      payload: { type: 'character', id: 'c1' },
+    });
   });
 });

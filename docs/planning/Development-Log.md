@@ -12,7 +12,16 @@
 
 ---
 
-## 2026-08-14 · pending · feat(web) · refine world-line tracks and presentation axis
+## 2026-08-14 · pending · feat(web,api) · continue chat from a studio entity
+
+Studio 选中实体后打开该项目对话，关注点只注入本轮 World Builder，不写入聊天记录。线程列表/详情改为 snake_case DTO。
+
+- **feat(web)** Inspector「在对话中继续」；Chat 关注条；按项目解析最近线程
+- **feat(api)** `sendMessageBody.focus` 进 prompt；mock 对关注实体出 `update_entity`
+- 验证：web `creator-chat-nav`；api `guidance`；web/api `tsc --noEmit`
+- 模块：`apps/web/{lib,components}`、`apps/api/src/{routes,contexts/world-builder}`、`docs/planning/Next-Tasks.md`
+
+## 2026-08-14 · `842adb1` · feat(web) · show locations and world-time drift on the world line
 
 世界线补地点轨；角色按参与事件、地点按所属场景锚定；刻度用事件标题；世界时间信封偏离呈现序时可见（不改写主轴）。创作线 / 制作实现未动。
 

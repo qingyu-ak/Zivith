@@ -475,10 +475,48 @@ const sendMessageBody = z
     content: z.string().min(1).max(100_000),
     proposal: proposalSchema.nullable().optional(),
     proposal_key: z.string().max(256).nullable().optional(),
+    focus: z
+      .object({
+        kind: z.enum([
+          'character',
+          'location',
+          'scene',
+          'world_event',
+          'story',
+          'relationship',
+          'project',
+        ]),
+        id: idSchema,
+        name: z.string().trim().min(1).max(200),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
 const applyProposalBody = z.object({ proposal_key: z.string().max(256).optional() }).strict();
+
+function chatThreadDto(
+  thread: {
+    id: string;
+    projectId: string | null;
+    title: string | null;
+    state: string;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  projectName?: string | null,
+) {
+  return {
+    id: thread.id,
+    project_id: thread.projectId,
+    project_name: projectName ?? null,
+    title: thread.title,
+    state: thread.state,
+    created_at: thread.createdAt.toISOString(),
+    updated_at: thread.updatedAt.toISOString(),
+  };
+}
 
 function chatMessageDto(message: {
   id: string;
@@ -507,6 +545,7 @@ async function createAssistantReply(
   builder: WorldBuilderAgent,
   thread: { id: string; projectId: string | null },
   userContent: string,
+  focus?: z.infer<typeof sendMessageBody>['focus'],
 ) {
   const rows = await db.creatorChatMessage.findMany({
     where: { threadId: thread.id },
@@ -526,6 +565,7 @@ async function createAssistantReply(
     history,
     world,
     stage: inferWorldStage(world),
+    focus: focus ?? null,
   });
   const proposalKey =
     response.proposals.length > 0
@@ -569,6 +609,7 @@ async function pipeCreatorChatSse(
     proposalState: string | null;
     createdAt: Date;
   },
+  focus?: z.infer<typeof sendMessageBody>['focus'],
 ): Promise<void> {
   const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
   reply.hijack();
@@ -605,6 +646,7 @@ async function pipeCreatorChatSse(
       builder,
       thread,
       userMessage.content,
+      focus,
     );
     await db.creatorChatThread.update({
       where: { id: thread.id },
@@ -658,16 +700,17 @@ function registerCreatorChatRoutes(
         state: 'active',
       },
     });
-    return reply.status(201).send(created);
+    return reply.status(201).send(chatThreadDto(created));
   });
 
   app.get('/projects/:projectId/creator-chats', async (request) => {
     const { projectId } = projectParams.parse(request.params);
     await requireProject(db, projectId);
-    return db.creatorChatThread.findMany({
+    const threads = await db.creatorChatThread.findMany({
       where: { projectId, state: 'active' },
       orderBy: { updatedAt: 'desc' },
     });
+    return threads.map((thread) => chatThreadDto(thread));
   });
 
   // Local single user (ADR-0013): list every active thread with its project name.
@@ -692,10 +735,9 @@ function registerCreatorChatRoutes(
           })
         : [];
     const nameById = new Map(projects.map((project) => [project.id, project.name]));
-    return threads.map((thread) => ({
-      ...thread,
-      project_name: thread.projectId ? (nameById.get(thread.projectId) ?? null) : null,
-    }));
+    return threads.map((thread) =>
+      chatThreadDto(thread, thread.projectId ? (nameById.get(thread.projectId) ?? null) : null),
+    );
   });
 
   app.get('/creator-chats/:threadId', async (request) => {
@@ -706,7 +748,10 @@ function registerCreatorChatRoutes(
       where: { threadId },
       orderBy: { createdAt: 'asc' },
     });
-    return { thread, messages };
+    return {
+      thread: chatThreadDto(thread),
+      messages: messages.map(chatMessageDto),
+    };
   });
 
   app.post('/creator-chats/:threadId/messages', async (request, reply) => {
@@ -736,14 +781,14 @@ function registerCreatorChatRoutes(
     });
 
     if (body.role === 'user' && wantsEventStream(request)) {
-      await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage);
+      await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage, body.focus);
       return;
     }
 
     // User turns trigger the World Builder: read world → reply → propose.
     let assistantMessage = null;
     if (body.role === 'user') {
-      const created = await createAssistantReply(db, builder, thread, userMessage.content);
+      const created = await createAssistantReply(db, builder, thread, userMessage.content, body.focus);
       assistantMessage = created.assistantMessage;
     }
 
@@ -751,9 +796,10 @@ function registerCreatorChatRoutes(
       where: { id: threadId },
       data: { updatedAt: new Date() },
     });
-    return reply
-      .status(201)
-      .send({ user_message: userMessage, assistant_message: assistantMessage });
+    return reply.status(201).send({
+      user_message: chatMessageDto(userMessage),
+      assistant_message: assistantMessage ? chatMessageDto(assistantMessage) : null,
+    });
   });
 
   app.post('/creator-chats/:threadId/messages/stream', async (request, reply) => {
@@ -775,7 +821,7 @@ function registerCreatorChatRoutes(
         content: body.content,
       },
     });
-    await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage);
+    await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage, body.focus);
   });
 
   app.post('/creator-chats/:threadId/proposals/:messageId/apply', async (request) => {

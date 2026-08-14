@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { Badge } from '@zivith/ui';
 import type { WorldResourcesDTO, WorldSelection, WorldStage } from '@/lib/types';
 import { WorldConflictList } from './conflict-list';
+import { ContinueInChatButton } from './continue-in-chat';
 
 const STAGE_META: Record<WorldStage, { label: string; tone: 'neutral' | 'warning' | 'success' }> = {
   bootstrap: { label: '萌芽期', tone: 'neutral' },
@@ -85,12 +85,11 @@ export function CoPilotPanel({
         ) : (
           <p className="text-xs leading-5 text-zinc-500">
             尚未设定世界观。去
-            <Link
-              href="/creator-chats"
-              className="mx-1 text-accent hover:underline"
-            >
-              创作聊天
-            </Link>
+            <ContinueInChatButton
+              projectId={resources.project.id}
+              label="创作聊天"
+              className="mx-1 text-accent hover:underline disabled:opacity-50"
+            />
             描述题材、核心设定与世界规则，自动提炼后这里会同步显示。
           </p>
         )}

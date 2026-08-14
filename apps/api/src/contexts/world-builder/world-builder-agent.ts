@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { proposalSchema, type Proposal } from '@zivith/domain';
 import type { LLMAdapter } from '../../ports/llm.js';
-import { buildWorldBuilderSystemPrompt } from './prompt.js';
+import { buildWorldBuilderSystemPrompt, type WorldBuilderFocus } from './prompt.js';
 import type { WorldContext } from './world-context.js';
 import {
   detectWorldConflicts,
@@ -33,6 +33,8 @@ export interface WorldBuilderInput {
   history: WorldBuilderChatMessage[];
   world: WorldContext | null;
   stage: WorldStage;
+  /** Studio 选中的实体；只进本轮 prompt，不写入聊天记录。 */
+  focus?: WorldBuilderFocus | null;
 }
 
 export const worldStateSchema = z
@@ -156,6 +158,29 @@ function extractWorldview(text: string): {
   };
 }
 
+function focusKindLabel(kind: WorldBuilderFocus['kind']): string {
+  switch (kind) {
+    case 'character':
+      return '角色';
+    case 'location':
+      return '地点';
+    case 'scene':
+      return '场景';
+    case 'world_event':
+      return '事件';
+    case 'story':
+      return '故事';
+    case 'relationship':
+      return '关系';
+    case 'project':
+      return '项目';
+  }
+}
+
+function focusUpdateType(kind: WorldBuilderFocus['kind']): string {
+  return kind;
+}
+
 function applyGuidance(
   response: WorldBuilderResponse,
   input: WorldBuilderInput,
@@ -167,6 +192,18 @@ function applyGuidance(
   ).slice(0, 3);
   const questions = mergeOpenQuestions(response.world_state.open_questions, gaps);
   if (wantsGuidanceTurn(input.text) && response.proposals.length === 0) {
+    if (input.focus) {
+      const label = `${focusKindLabel(input.focus.kind)}「${input.focus.name}」`;
+      return {
+        ...response,
+        reply: `我们正在看${label}。你想改哪一项：外貌 / 性格 / 关系，还是补充一段经历？直接说即可，我会整理成提案。`,
+        proposals: [],
+        world_state: {
+          ...response.world_state,
+          open_questions: mergeOpenQuestions(['关注实体的下一项设定'], gaps),
+        },
+      };
+    }
     return {
       ...response,
       reply: formatGuidanceReply(gaps),
@@ -250,6 +287,27 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
         open_questions: ['世界观题材', '核心主角', '核心主题'],
         conflicts,
       },
+    };
+  }
+
+  const focus = input.focus;
+  if (
+    focus &&
+    /改|补充|性格|描述|外貌|关系|经历|更|把/.test(text) &&
+    !/创建|新增|记录一个|再来一个/.test(text)
+  ) {
+    const label = `${focusKindLabel(focus.kind)}「${focus.name}」`;
+    proposals.push(
+      mockProposal('update_entity', projectId, {
+        type: focusUpdateType(focus.kind),
+        id: focus.id,
+        fields: { description: text.slice(0, 200) },
+      }),
+    );
+    return {
+      reply: `针对${label}，我整理了一条修改提案，确认后写入世界档案。`,
+      proposals,
+      world_state: { stage: 'growing', open_questions: ['还要改哪一项'], conflicts },
     };
   }
 
@@ -450,9 +508,10 @@ export class WorldBuilderAgent {
       {
         request_id: `world-builder:${Date.now()}`,
         model: this.model,
-        system_prompt: buildWorldBuilderSystemPrompt(input.world, input.stage),
+        system_prompt: buildWorldBuilderSystemPrompt(input.world, input.stage, input.focus),
         user_prompt: JSON.stringify({
           recent_conversation: historyText,
+          focus: input.focus ?? null,
           required_schema: {
             reply: '给创作者的自然语言回复（与创作者同语言）',
             proposals: '需要创作者确认的提案数组（最多 2 个，无则 []）',

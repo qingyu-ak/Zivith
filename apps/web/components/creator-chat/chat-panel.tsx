@@ -7,6 +7,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { Spinner } from '@zivith/ui';
 import { api, errorMessage, sendCreatorChatTurn, unwrapList } from '@/lib/api';
 import { PENDING_CHAT_TURN_KEY } from '@/lib/chat-history';
+import {
+  CHAT_FOCUS_LABEL,
+  clearPendingFocus,
+  mergeChatFocus,
+  normalizeThread,
+  parseFocusFromSearch,
+  readPendingFocus,
+  type ChatFocus,
+} from '@/lib/creator-chat-nav';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import type { CreatorChatMessageDTO, CreatorChatThreadDTO, ProposalKind } from '@/lib/types';
 import { IconExternal, IconSearch, IconSend, IconSidebar } from '@/components/nav-icons';
@@ -81,8 +90,11 @@ export function ChatPanel() {
   const [streamText, setStreamText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [focus, setFocus] = useState<ChatFocus | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const pendingConsumed = useRef(false);
+  const focusRef = useRef<ChatFocus | null>(null);
+  focusRef.current = focus;
 
   const load = useCallback(async () => {
     if (!threadId) {
@@ -96,7 +108,7 @@ export function ChatPanel() {
         thread: CreatorChatThreadDTO;
         messages: CreatorChatMessageDTO[];
       }>(`/world/creator-chats/${threadId}`);
-      setThread(value.thread ?? null);
+      setThread(normalizeThread(value.thread));
       setMessages(Array.isArray(value.messages) ? value.messages : []);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -113,8 +125,26 @@ export function ChatPanel() {
     api<CreatorChatThreadDTO[] | { data?: CreatorChatThreadDTO[]; items?: CreatorChatThreadDTO[] }>(
       '/world/creator-chats',
     )
-      .then((value) => setThreads(unwrapList(value)))
+      .then((value) =>
+        setThreads(
+          unwrapList(value)
+            .map(normalizeThread)
+            .filter((item): item is CreatorChatThreadDTO => Boolean(item)),
+        ),
+      )
       .catch(() => setThreads([]));
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!threadId || typeof window === 'undefined') {
+      setFocus(null);
+      return;
+    }
+    const fromUrl = parseFocusFromSearch(new URLSearchParams(window.location.search));
+    const pending = readPendingFocus();
+    const merged = mergeChatFocus(fromUrl, pending, threadId);
+    if (pending) clearPendingFocus();
+    setFocus(merged);
   }, [threadId]);
 
   useEffect(() => {
@@ -133,33 +163,38 @@ export function ChatPanel() {
       let acceptedUser = false;
       try {
         let sawError = '';
-        await sendCreatorChatTurn(threadId, content, (event, data) => {
-          const record = asRecord(data);
-          if (event === 'user') {
-            const userMessage = asChatMessage(record?.user_message);
-            if (userMessage) {
-              acceptedUser = true;
-              setMessages((current) => [...current, userMessage]);
+        await sendCreatorChatTurn(
+          threadId,
+          content,
+          (event, data) => {
+            const record = asRecord(data);
+            if (event === 'user') {
+              const userMessage = asChatMessage(record?.user_message);
+              if (userMessage) {
+                acceptedUser = true;
+                setMessages((current) => [...current, userMessage]);
+              }
+              return;
             }
-            return;
-          }
-          if (event === 'delta' && typeof record?.text === 'string') {
-            setStreamText((current) => current + record.text);
-            return;
-          }
-          if (event === 'done') {
-            const assistantMessage = asChatMessage(record?.assistant_message);
-            if (assistantMessage) {
-              setMessages((current) => [...current, assistantMessage]);
+            if (event === 'delta' && typeof record?.text === 'string') {
+              setStreamText((current) => current + record.text);
+              return;
             }
-            setStreamText('');
-            return;
-          }
-          if (event === 'error') {
-            sawError =
-              typeof record?.message === 'string' ? record.message : '世界构建者回复失败';
-          }
-        });
+            if (event === 'done') {
+              const assistantMessage = asChatMessage(record?.assistant_message);
+              if (assistantMessage) {
+                setMessages((current) => [...current, assistantMessage]);
+              }
+              setStreamText('');
+              return;
+            }
+            if (event === 'error') {
+              sawError =
+                typeof record?.message === 'string' ? record.message : '世界构建者回复失败';
+            }
+          },
+          focusRef.current,
+        );
         if (sawError) throw new Error(sawError);
         setThreads((current) => {
           const target = current.find((item) => item.id === threadId);
@@ -210,11 +245,13 @@ export function ChatPanel() {
       if (firstMessage) {
         sessionStorage.setItem(PENDING_CHAT_TURN_KEY, firstMessage);
       }
-      const created = await api<CreatorChatThreadDTO>('/world/creator-chats', {
+      const created = await api<unknown>('/world/creator-chats', {
         method: 'POST',
         body: { project_id: null, title: null },
       });
-      router.push(`/creator-chats/${created.id}`);
+      const createdThread = normalizeThread(created);
+      if (!createdThread?.id) throw new Error('无法创建对话');
+      router.push(`/creator-chats/${createdThread.id}`);
     } catch (reason) {
       setError(errorMessage(reason));
       if (firstMessage) sessionStorage.removeItem(PENDING_CHAT_TURN_KEY);
@@ -224,6 +261,12 @@ export function ChatPanel() {
 
   function handleApplied() {
     void load();
+  }
+
+  function dismissFocus() {
+    setFocus(null);
+    clearPendingFocus();
+    if (threadId) router.replace(`/creator-chats/${threadId}`);
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -405,9 +448,27 @@ export function ChatPanel() {
                     {error}
                   </p>
                 )}
+                {focus && (
+                  <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl bg-[#eef2ff] px-3 py-1.5 text-xs text-[#1e3a8a]">
+                    <span>
+                      正在讨论{CHAT_FOCUS_LABEL[focus.kind]}「{focus.name}」
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-[11px] text-zinc-500 hover:text-zinc-800"
+                      onClick={dismissFocus}
+                    >
+                      取消
+                    </button>
+                  </div>
+                )}
                 <textarea
                   className="min-h-[52px] w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 text-zinc-800 outline-none placeholder:text-zinc-400"
-                  placeholder="发给世界构建者…"
+                  placeholder={
+                    focus
+                      ? `继续完善「${focus.name}」…`
+                      : '发给世界构建者…'
+                  }
                   value={input}
                   disabled={sending || busy}
                   rows={1}
