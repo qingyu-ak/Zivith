@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-14 · pending · fix(web) · declare vitest for web tests in CI
+## 2026-08-14 · `84dd441` · fix(web) · declare vitest for web tests in CI
 
 GitHub CI 在 `chat-history.test.ts` 报 10 个错误：web 包未声明 vitest，隔离安装后测例全局的 `describe`/`it`/`expect` 无法解析。
 
