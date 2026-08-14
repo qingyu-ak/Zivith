@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Spinner } from '@zivith/ui';
 import { api, errorMessage, sendCreatorChatTurn, unwrapList } from '@/lib/api';
-import { PENDING_CHAT_TURN_KEY } from '@/lib/chat-history';
+import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
 import {
   CHAT_FOCUS_LABEL,
   clearPendingFocus,
@@ -117,11 +117,7 @@ export function ChatPanel() {
     }
   }, [threadId]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
+  const loadThreads = useCallback(() => {
     api<CreatorChatThreadDTO[] | { data?: CreatorChatThreadDTO[]; items?: CreatorChatThreadDTO[] }>(
       '/world/creator-chats',
     )
@@ -133,7 +129,15 @@ export function ChatPanel() {
         ),
       )
       .catch(() => setThreads([]));
-  }, [threadId]);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    loadThreads();
+  }, [loadThreads, threadId]);
 
   useEffect(() => {
     if (!threadId || typeof window === 'undefined') {
@@ -261,6 +265,7 @@ export function ChatPanel() {
 
   function handleApplied() {
     void load();
+    loadThreads();
   }
 
   function dismissFocus() {
@@ -321,7 +326,7 @@ export function ChatPanel() {
           )}
           {threadId ? (
             <h1 className="min-w-0 flex-1 truncate text-[15px] font-medium text-zinc-800">
-              {thread?.title ?? '新世界对话'}
+              {thread ? threadDisplayTitle(thread) : '新世界对话'}
             </h1>
           ) : (
             <span className="flex-1" />

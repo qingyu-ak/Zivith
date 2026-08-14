@@ -1,5 +1,5 @@
 /// <reference types="vitest/globals" />
-import { filterThreadsByQuery, groupThreadsByRecency } from './chat-history';
+import { filterThreadsByQuery, groupThreadsByRecency, threadDisplayTitle } from './chat-history';
 import type { CreatorChatThreadDTO } from './types';
 
 function thread(id: string, updatedAt: Date): CreatorChatThreadDTO {
@@ -45,5 +45,13 @@ describe('filterThreadsByQuery', () => {
     items[1]!.title = '都市日常';
     expect(filterThreadsByQuery(items, '修仙').map((item) => item.id)).toEqual(['t1']);
     expect(filterThreadsByQuery(items, '玄幻').map((item) => item.id)).toEqual(['t1']);
+  });
+});
+
+describe('threadDisplayTitle', () => {
+  it('prefers an explicit title, then the project name', () => {
+    expect(threadDisplayTitle({ title: '草稿会话', project_name: '凡人修仙' })).toBe('草稿会话');
+    expect(threadDisplayTitle({ title: null, project_name: '凡人修仙' })).toBe('凡人修仙');
+    expect(threadDisplayTitle({ title: '  ', project_name: null })).toBe('未命名对话');
   });
 });

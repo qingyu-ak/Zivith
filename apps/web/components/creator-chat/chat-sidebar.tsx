@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   filterThreadsByQuery,
   groupThreadsByRecency,
+  threadDisplayTitle,
 } from '@/lib/chat-history';
 import type { CreatorChatThreadDTO } from '@/lib/types';
 import { AccountMenu } from '@/components/account-menu';
@@ -104,7 +105,7 @@ export function ChatSidebar({
                             : 'text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900'
                         }`}
                       >
-                        <p className="truncate">{item.title ?? '未命名对话'}</p>
+                        <p className="truncate">{threadDisplayTitle(item)}</p>
                       </Link>
                     </li>
                   );

@@ -42,6 +42,14 @@ export function filterThreadsByQuery(
   });
 }
 
+export function threadDisplayTitle(thread: Pick<CreatorChatThreadDTO, 'title' | 'project_name'>): string {
+  const title = thread.title?.trim();
+  if (title) return title;
+  const project = thread.project_name?.trim();
+  if (project) return project;
+  return '未命名对话';
+}
+
 export function relativeTime(value: string): string {
   const time = new Date(value).getTime();
   if (Number.isNaN(time)) return '';

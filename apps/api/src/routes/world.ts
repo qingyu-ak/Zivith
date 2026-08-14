@@ -705,12 +705,12 @@ function registerCreatorChatRoutes(
 
   app.get('/projects/:projectId/creator-chats', async (request) => {
     const { projectId } = projectParams.parse(request.params);
-    await requireProject(db, projectId);
+    const project = await requireProject(db, projectId);
     const threads = await db.creatorChatThread.findMany({
       where: { projectId, state: 'active' },
       orderBy: { updatedAt: 'desc' },
     });
-    return threads.map((thread) => chatThreadDto(thread));
+    return threads.map((thread) => chatThreadDto(thread, project.name));
   });
 
   // Local single user (ADR-0013): list every active thread with its project name.
@@ -748,8 +748,16 @@ function registerCreatorChatRoutes(
       where: { threadId },
       orderBy: { createdAt: 'asc' },
     });
+    const projectName = thread.projectId
+      ? (
+          await db.project.findFirst({
+            where: { id: thread.projectId, deletedAt: null },
+            select: { name: true },
+          })
+        )?.name ?? null
+      : null;
     return {
-      thread: chatThreadDto(thread),
+      thread: chatThreadDto(thread, projectName),
       messages: messages.map(chatMessageDto),
     };
   });
@@ -897,7 +905,10 @@ function registerCreatorChatRoutes(
           currentProjectId = result.projectId;
           await tx.creatorChatThread.update({
             where: { id: threadId },
-            data: { projectId: result.projectId },
+            data: {
+              projectId: result.projectId,
+              ...(thread.title?.trim() ? {} : { title: result.title }),
+            },
           });
         }
       }

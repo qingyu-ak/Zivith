@@ -12,7 +12,16 @@
 
 ---
 
-## 2026-08-14 · pending · feat(web,api) · continue chat from a studio entity
+## 2026-08-14 · pending · feat(web,api) · name creator chats after their world
+
+确认创建世界后，对话标题跟随项目名；无自定义标题时侧栏和顶栏显示项目名。
+
+- **feat(api)** apply `create_project` 时写入 thread.title；GET 线程带 `project_name`
+- **feat(web)** `threadDisplayTitle`
+- 验证：web `chat-history`
+- 模块：`apps/api/src/routes/world.ts`、`apps/web/{lib/chat-history*,components/creator-chat}`
+
+## 2026-08-14 · `a55b258` · feat(web,api) · continue chat from a studio entity
 
 Studio 选中实体后打开该项目对话，关注点只注入本轮 World Builder，不写入聊天记录。线程列表/详情改为 snake_case DTO。
 
