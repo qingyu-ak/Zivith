@@ -44,6 +44,9 @@ export default tseslint.config(
   },
   {
     files: ['**/*.{test,spec}.{ts,tsx}'],
+    languageOptions: {
+      globals: globals.vitest,
+    },
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',

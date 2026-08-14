@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-08-14 · `84dd441` · fix(web) · declare vitest for web tests in CI
+
+GitHub CI 在 `chat-history.test.ts` 报 10 个错误：web 包未声明 vitest，隔离安装后测例全局的 `describe`/`it`/`expect` 无法解析。
+
+- **fix(web)** `vitest` 写入 `@zivith/web` devDependencies；`vitest-globals.d.ts`
+- **chore** eslint 测试文件加上 vitest globals
+- 验证：`pnpm format:check`；`pnpm lint`
+
 ## 2026-08-14 · `65cea1f` · chore · make format and lint pass on GitHub CI
 
 CI 在 `format:check` 失败：78 个文件未过 Prettier，随后 ESLint 还有脚本/测试/若干源码规则错误。已格式化并修掉会挡门禁的 lint。
