@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-08-14 · pending · feat(web,api) · guided chat and light collapsible studio
+
+World Builder 按缺口主动追问。Creator Chat 改为浅色独立对话面（可收起历史侧栏、Studio ↗）。Studio 白底、左右栏可收起。Web 开发服务固定 `127.0.0.1:3100`。
+
+- **feat(api)** `guidance.ts` 缺口检测；mock/LLM 回合合并 `open_questions`
+- **feat(web)** 浅色 Chat/Studio 壳、可收起侧栏、会话列表守卫
+- **chore** `next dev --hostname 127.0.0.1 --port 3100`；去掉 turbo `--parallel`
+- 验证：api `guidance` 7；web `chat-history` / `sidebar-state` / `world-conflicts`；web `tsc --noEmit`
+- 模块：`apps/api/src/contexts/world-builder/*`、`apps/web`、`packages/ui`、`docs/planning/*`
+
 ## 2026-08-13 · `8f2d8f0` · feat(web,api) · world conflict checks and concise creator chat
 
 H9 规则冲突检测（只报告不落库）+ Creator Chat 收成简洁对话面；世界摘要、冲突列表与 Inspector 放在 Studio。

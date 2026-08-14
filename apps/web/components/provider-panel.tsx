@@ -151,7 +151,7 @@ export function ProviderPanel() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -160,7 +160,7 @@ export function ProviderPanel() {
           className={`mt-4 rounded-lg p-3 text-sm ${
             Number(catalog.siliconflow_account.total_balance ?? 0) < 20
               ? 'bg-amber-500/10 text-amber-200'
-              : 'bg-zinc-800/80 text-zinc-300'
+              : 'bg-zinc-200 text-zinc-600'
           }`}
         >
           SiliconFlow 余额约 {catalog.siliconflow_account.total_balance ?? '—'}（充值{' '}
@@ -189,7 +189,7 @@ export function ProviderPanel() {
             {(Object.keys(modalityLabels) as Modality[]).map((modality) => (
               <div
                 key={modality}
-                className="grid gap-3 rounded-lg border border-line bg-ink/40 p-4"
+                className="grid gap-3 rounded-lg border border-line bg-zinc-50 p-4"
               >
                 <Field label={modalityLabels[modality]}>
                   <Select

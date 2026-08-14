@@ -79,7 +79,7 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -109,7 +109,7 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
             return (
               <div
                 key={task.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ink px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-3"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">镜头 {shotId}…</p>
@@ -117,7 +117,7 @@ export function GenerationQueuePanel({ projectId }: { projectId: string }) {
                     {task.provider ?? 'mock'} · 尝试 {task.attempts}
                   </p>
                   {task.status === 'failed' && failDetail && (
-                    <p className="mt-1 text-xs text-red-300/80 break-words">{failDetail}</p>
+                    <p className="mt-1 text-xs text-red-600 break-words">{failDetail}</p>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

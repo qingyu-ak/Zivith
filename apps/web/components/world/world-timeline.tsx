@@ -22,11 +22,11 @@ interface TrackColor {
 }
 
 const TRACK_COLORS: Record<string, TrackColor> = {
-  character: { fill: 'rgba(183,255,74,0.14)', stroke: '#b7ff4a', text: '#eaf9d2' },
-  scene: { fill: 'rgba(96,165,250,0.14)', stroke: '#60a5fa', text: '#dbeafe' },
-  world_event: { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24', text: '#fef3c7' },
-  story: { fill: 'rgba(244,114,182,0.14)', stroke: '#f472b6', text: '#fce7f3' },
-  shot: { fill: 'rgba(251,113,133,0.16)', stroke: '#fb7185', text: '#ffe4e6' },
+  character: { fill: 'rgba(77,107,254,0.12)', stroke: '#4d6bfe', text: '#1e3a8a' },
+  scene: { fill: 'rgba(37,99,235,0.10)', stroke: '#2563eb', text: '#1e3a8a' },
+  world_event: { fill: 'rgba(217,119,6,0.12)', stroke: '#d97706', text: '#92400e' },
+  story: { fill: 'rgba(219,39,119,0.10)', stroke: '#db2777', text: '#9d174d' },
+  shot: { fill: 'rgba(225,29,72,0.10)', stroke: '#e11d48', text: '#9f1239' },
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -189,7 +189,7 @@ export function WorldTimeline({
               dx="0"
               dy="0"
               stdDeviation="4"
-              floodColor={selection ? 'currentColor' : '#b7ff4a'}
+              floodColor={selection ? 'currentColor' : '#4d6bfe'}
               floodOpacity="0.45"
             />
           </filter>
@@ -211,7 +211,7 @@ export function WorldTimeline({
                 <path
                   d={link.d}
                   fill="none"
-                  stroke={active ? 'rgba(251,191,36,0.9)' : 'rgba(244,244,245,0.32)'}
+                  stroke={active ? 'rgba(217,119,6,0.9)' : 'rgba(24,24,27,0.18)'}
                   strokeWidth={active ? 2.25 : 1.25}
                   strokeDasharray="4 3"
                 />
@@ -238,7 +238,7 @@ export function WorldTimeline({
             y1={PADDING.top + AXIS_HEIGHT}
             x2={plotRight}
             y2={PADDING.top + AXIS_HEIGHT}
-            stroke="#3f3f46"
+            stroke="#d4d4d8"
             strokeWidth="1"
           />
           {ticks.map((tick) => (
@@ -248,7 +248,7 @@ export function WorldTimeline({
                 y1={PADDING.top + AXIS_HEIGHT}
                 x2={scale(tick)}
                 y2={PADDING.top + AXIS_HEIGHT + 5}
-                stroke="#3f3f46"
+                stroke="#d4d4d8"
                 strokeWidth="1"
               />
               <text
@@ -278,8 +278,8 @@ export function WorldTimeline({
                 width={plotRight - plotLeft}
                 height={track.height}
                 rx="10"
-                fill="rgba(255,255,255,0.02)"
-                stroke="#23262e"
+                fill="rgba(24,24,27,0.03)"
+                stroke="#e5e7eb"
                 strokeWidth="1"
               />
               <text
@@ -312,7 +312,7 @@ export function WorldTimeline({
                       fill={color.fill}
                       stroke={active ? color.stroke : 'transparent'}
                       strokeWidth={active ? 1.75 : 1}
-                      className={active ? '' : 'hover:stroke-white/50'}
+                      className={active ? '' : 'hover:stroke-zinc-400'}
                       filter={active ? 'url(#selected-glow)' : undefined}
                     />
                     <text

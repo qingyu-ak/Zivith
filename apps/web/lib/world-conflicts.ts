@@ -19,6 +19,6 @@ export function selectionFromConflictRef(ref: {
 }
 
 export function firstConflictSelection(conflict: WorldConflictDTO): WorldSelection {
-  const ref = conflict.entity_refs[0];
+  const ref = conflict.entity_refs?.[0];
   return ref ? selectionFromConflictRef(ref) : null;
 }

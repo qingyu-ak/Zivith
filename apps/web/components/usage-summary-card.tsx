@@ -77,7 +77,7 @@ export function UsageSummaryCard({ projectId }: { projectId: string }) {
         </div>
       )}
       {error && (
-        <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -96,7 +96,7 @@ export function UsageSummaryCard({ projectId }: { projectId: string }) {
               {summary.by_task_type.map((row) => (
                 <div
                   key={row.task_type}
-                  className="rounded-lg border border-line bg-ink px-3 py-2 text-sm"
+                  className="rounded-lg border border-line bg-white px-3 py-2 text-sm"
                 >
                   <p className="font-medium">{taskLabels[row.task_type] ?? row.task_type}</p>
                   <p className="mt-1 text-xs text-zinc-500">

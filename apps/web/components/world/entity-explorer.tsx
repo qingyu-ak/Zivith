@@ -17,7 +17,7 @@ interface GroupItem {
 }
 
 const GROUP_COLORS: Record<string, string> = {
-  character: 'border-l-[#b7ff4a]',
+  character: 'border-l-[#4d6bfe]',
   location: 'border-l-[#a78bfa]',
   scene: 'border-l-[#60a5fa]',
   world_event: 'border-l-[#fbbf24]',
@@ -60,7 +60,7 @@ function Group({
                   onClick={() => onSelect(item, kind)}
                   className={`w-full rounded-md border-l-2 px-2.5 py-1.5 text-left transition ${
                     GROUP_COLORS[kind] ?? 'border-l-transparent'
-                  } ${active ? 'bg-white/10 text-white' : 'text-zinc-300 hover:bg-white/5 hover:text-white'}`}
+                  } ${active ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}
                 >
                   <span className="block truncate text-sm">{item.title}</span>
                   {item.subtitle && (
@@ -143,7 +143,7 @@ export function EntityExplorer({
   return (
     <div className="flex h-full flex-col overflow-y-auto px-2 pb-6">
       <div className="border-b border-line px-2 pt-4 pb-3">
-        <h1 className="text-sm font-semibold text-white">实体 Explorer</h1>
+        <h1 className="text-sm font-semibold text-zinc-900">实体 Explorer</h1>
         <p className="mt-0.5 text-xs text-zinc-500">{resources.project.name}</p>
       </div>
       <Group

@@ -14,12 +14,12 @@ import type {
 import { api, errorMessage } from '@/lib/api';
 
 const KIND_COLOR: Record<string, string> = {
-  character: 'text-[#b7ff4a] border-[#b7ff4a]/40 bg-[#b7ff4a]/10',
+  character: 'text-[#4d6bfe] border-[#4d6bfe]/30 bg-[#4d6bfe]/10',
   location: 'text-[#a78bfa] border-[#a78bfa]/40 bg-[#a78bfa]/10',
   scene: 'text-[#60a5fa] border-[#60a5fa]/40 bg-[#60a5fa]/10',
   world_event: 'text-[#fbbf24] border-[#fbbf24]/40 bg-[#fbbf24]/10',
   story: 'text-[#f472b6] border-[#f472b6]/40 bg-[#f472b6]/10',
-  project: 'text-zinc-200 border-zinc-500/40 bg-zinc-500/10',
+  project: 'text-zinc-700 border-zinc-500/40 bg-zinc-500/10',
   relationship: 'text-[#f59e0b] border-[#f59e0b]/40 bg-[#f59e0b]/10',
   shot: 'text-[#fb7185] border-[#fb7185]/40 bg-[#fb7185]/10',
 };
@@ -36,14 +36,14 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 const fieldClass =
-  'w-full rounded-md border border-line bg-white/5 px-2.5 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-accent/60';
+  'w-full rounded-md border border-line bg-white px-2.5 py-1.5 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-accent/60';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === '') return null;
   return (
     <div className="flex items-start justify-between gap-4 py-1.5 text-sm">
       <span className="shrink-0 text-zinc-500">{label}</span>
-      <span className="min-w-0 break-words text-right text-zinc-200">{value}</span>
+      <span className="min-w-0 break-words text-right text-zinc-700">{value}</span>
     </div>
   );
 }
@@ -147,7 +147,7 @@ function SaveActions({
           type="button"
           disabled={saving}
           onClick={onCancel}
-          className="rounded-md border border-line px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-white/5 disabled:opacity-50"
+          className="rounded-md border border-line px-3 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50"
         >
           取消
         </button>
@@ -365,7 +365,7 @@ export function InspectorPanel({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-300 transition hover:bg-white/5 hover:text-white"
+              className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
             >
               编辑
             </button>

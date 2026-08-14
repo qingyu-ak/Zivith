@@ -408,7 +408,7 @@ export default function ShotEditorPage() {
         void save(event);
       }}
     >
-      <header className="sticky top-0 z-20 border-b border-line bg-ink/95 px-5 py-4 backdrop-blur sm:px-8">
+      <header className="sticky top-0 z-20 border-b border-line bg-[#f7f8fa] px-5 py-4 backdrop-blur sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
           <Link
             className="text-sm text-zinc-500 hover:text-accent"
@@ -461,7 +461,7 @@ export default function ShotEditorPage() {
       </header>
       <div className="mx-auto max-w-7xl space-y-5 p-5 sm:p-8">
         {error && (
-          <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+          <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
             {error}
           </p>
         )}
@@ -476,7 +476,7 @@ export default function ShotEditorPage() {
           </p>
         )}
         {frozen && (
-          <p className="rounded-lg border border-accent/20 bg-accent/5 p-4 text-sm text-zinc-300">
+          <p className="rounded-lg border border-accent/20 bg-accent/5 p-4 text-sm text-zinc-600">
             该镜头已批准，当前规格已冻结。解冻后才能继续编辑。
           </p>
         )}
@@ -936,7 +936,7 @@ export default function ShotEditorPage() {
 
             <div className="mt-5 grid gap-5 lg:grid-cols-2">
               <div>
-                <h3 className="text-sm font-semibold text-zinc-300">提示词版本</h3>
+                <h3 className="text-sm font-semibold text-zinc-600">提示词版本</h3>
                 <div className="mt-3 grid gap-3">
                   {promptVersions.length === 0 ? (
                     <p className="text-sm text-zinc-600">尚未生成提示词版本。</p>
@@ -945,7 +945,7 @@ export default function ShotEditorPage() {
                       const matchesShot =
                         (shot.prompt?.positive?.trim() ?? '') === version.positive.trim();
                       return (
-                        <div key={version.id} className="rounded-lg border border-line bg-ink p-4">
+                        <div key={version.id} className="rounded-lg border border-line bg-white p-4">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex flex-wrap gap-2">
                               <Badge tone={version.approved_at ? 'success' : 'neutral'}>
@@ -975,13 +975,13 @@ export default function ShotEditorPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-zinc-300">视频输出</h3>
+                <h3 className="text-sm font-semibold text-zinc-600">视频输出</h3>
                 <div className="mt-3 grid gap-3">
                   {outputs.length === 0 ? (
                     <p className="text-sm text-zinc-600">尚未生成视频输出。</p>
                   ) : (
                     outputs.map((output) => (
-                      <div key={output.id} className="rounded-lg border border-line bg-ink p-3">
+                      <div key={output.id} className="rounded-lg border border-line bg-white p-3">
                         {output.video_url && (
                           <video
                             className="aspect-video w-full rounded-md bg-black"

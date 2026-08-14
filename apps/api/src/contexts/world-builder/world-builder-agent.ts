@@ -11,6 +11,14 @@ import {
   normalizeEntityName,
   wantsConflictCheck,
 } from './conflict-detector.js';
+import {
+  detectWorldGaps,
+  formatGuidanceFollowUp,
+  formatGuidanceReply,
+  mergeOpenQuestions,
+  skipGapsCoveredByProposals,
+  wantsGuidanceTurn,
+} from './guidance.js';
 
 export type WorldStage = 'bootstrap' | 'growing' | 'mature';
 
@@ -148,6 +156,49 @@ function extractWorldview(text: string): {
   };
 }
 
+function applyGuidance(
+  response: WorldBuilderResponse,
+  input: WorldBuilderInput,
+): WorldBuilderResponse {
+  if (wantsConflictCheck(input.text)) return response;
+  const gaps = skipGapsCoveredByProposals(
+    detectWorldGaps(input.world),
+    response.proposals.map((proposal) => proposal.kind),
+  ).slice(0, 3);
+  const questions = mergeOpenQuestions(response.world_state.open_questions, gaps);
+  if (wantsGuidanceTurn(input.text) && response.proposals.length === 0) {
+    return {
+      ...response,
+      reply: formatGuidanceReply(gaps),
+      proposals: [],
+      world_state: { ...response.world_state, open_questions: questions },
+    };
+  }
+
+  let { reply } = response;
+  const next = gaps[0];
+  if (
+    response.proposals.length > 0 &&
+    next &&
+    !reply.includes(next.question) &&
+    !reply.includes('下一步我想问')
+  ) {
+    reply += formatGuidanceFollowUp(next);
+  } else if (
+    response.proposals.length === 0 &&
+    gaps.length > 0 &&
+    (/继续补充新的设定/.test(reply) || response.world_state.open_questions.length === 0)
+  ) {
+    reply = formatGuidanceReply(gaps);
+  }
+
+  return {
+    ...response,
+    reply,
+    world_state: { ...response.world_state, open_questions: questions },
+  };
+}
+
 function applyDetectedConflicts(
   response: WorldBuilderResponse,
   input: WorldBuilderInput,
@@ -171,7 +222,7 @@ function applyDetectedConflicts(
 }
 
 export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilderResponse {
-  return applyDetectedConflicts(mockWorldBuilderDraft(input), input);
+  return applyGuidance(applyDetectedConflicts(mockWorldBuilderDraft(input), input), input);
 }
 
 function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
@@ -432,7 +483,7 @@ export class WorldBuilderAgent {
       }
     }
 
-    return applyDetectedConflicts(parsed, input);
+    return applyGuidance(applyDetectedConflicts(parsed, input), input);
   }
 
   /**

@@ -1,3 +1,4 @@
+import { detectWorldGaps } from './guidance.js';
 import type { WorldContext } from './world-context.js';
 import { worldContextToPrompt } from './world-context.js';
 
@@ -19,7 +20,7 @@ export function buildWorldBuilderSystemPrompt(
 2. World First：所有创作都来源于世界本身，而不是 Prompt。你要把对话中隐含的世界信息显式化。
 3. 提案制：当你认为需要新增/修改实体时，输出 proposals（提案）。提案会展示给创作者确认，确认后才落库为 draft。一次最多 2 个提案。
 4. 渐进引导：每次回复只推进一个主题。推荐顺序：世界观 → 主角 → 配角/关系 → 地点/场景 → 关键事件 → 时间线。
-5. 主动提问：当信息不足时，用 reply 提出 1-3 个引导性问题（open_questions 里也记录），不要臆造缺失的关键设定。
+5. 主动提问：当信息不足时，用 reply 提出 1-3 个引导性问题（open_questions 里也记录），不要臆造缺失的关键设定。创作者只说「继续 / 然后呢 / 好的」时，不要创建新实体，只问下方缺口清单的第一项（优先剧情节奏、缺的主角/关系/地点）。
 6. 冲突检查：对比世界现状，若发现新信息与已有实体矛盾（如时间线矛盾、角色设定冲突），在 world_state.conflicts 中报告并提醒创作者。系统会用规则检测器合并同名重复、关系自指/对向循环、事件顺序撞车等结构化冲突；你只需补充规则覆盖不到的剧情矛盾。发现只报告，绝不静默修改实体。创作者明确要求「检查冲突」时不要再提创建类提案。
 7. 语言：始终使用与创作者相同的语言回复（默认中文）。reply 简洁自然，像一位熟悉世界的创作伙伴。
 8. 有信息必提案：创作者明确给出新的设定信息时（如“记录角色”“主角叫××”“发生过一场战争”“A和B是师徒”），你必须将这些信息组织成提案输出，即使你已经用文字总结过。严禁出现“已记录/已创建/好的，记下了”这类文字但 proposals 为空的空承诺——那会让创作者误以为世界已更新。若确实没有可提炼的新实体信息，才允许 proposals 为空。
@@ -44,6 +45,10 @@ export function buildWorldBuilderSystemPrompt(
 ## 世界现状
 ${worldContextToPrompt(world)}
 
+## 当前缺口（系统规则，按优先级）
+${formatGapPrompt(world)}
+创作者说「继续 / 然后呢 / 好的」时只问缺口，不要编造人名、关系或情节。
+
 ## 当前阶段
 - bootstrap：世界刚起步，优先确认世界观和主角。此时通常需要 create_project（若还没有项目）或先提问。
 - growing：世界观已立，围绕角色、场景、事件逐步扩展。
@@ -55,4 +60,10 @@ ${worldContextToPrompt(world)}
 若上方「世界现状」中已给出「项目名称：xxx」，说明项目已经存在，此时严禁再提出 create_project 提案（会被系统拒绝）。
 请基于现有项目继续引导：角色、场景、事件、关系、时间线等。
 `;
+}
+
+function formatGapPrompt(world: WorldContext | null): string {
+  const gaps = detectWorldGaps(world).slice(0, 5);
+  if (gaps.length === 0) return '（结构性缺口已补齐，可追问剧情节奏或检查冲突。）';
+  return gaps.map((item, index) => `${index + 1}. [${item.label}] ${item.question}`).join('\n');
 }

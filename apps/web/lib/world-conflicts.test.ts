@@ -23,5 +23,13 @@ describe('world conflict selection', () => {
         entity_refs: [],
       }),
     ).toBeNull();
+    expect(
+      firstConflictSelection({
+        id: 'y',
+        kind: 'duplicate_name',
+        summary: '同名',
+        entity_refs: undefined,
+      } as unknown as import('./types').WorldConflictDTO),
+    ).toBeNull();
   });
 });

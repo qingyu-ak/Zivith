@@ -10,7 +10,8 @@ export interface ThreadHistoryGroup {
 
 const DAY = 86_400_000;
 
-export function groupThreadsByRecency(threads: CreatorChatThreadDTO[]): ThreadHistoryGroup[] {
+export function groupThreadsByRecency(threads: CreatorChatThreadDTO[] | unknown): ThreadHistoryGroup[] {
+  if (!Array.isArray(threads)) return [];
   const now = Date.now();
   const buckets: ThreadHistoryGroup[] = [
     { id: 'today', label: '今天', threads: [] },
@@ -26,6 +27,19 @@ export function groupThreadsByRecency(threads: CreatorChatThreadDTO[]): ThreadHi
     else buckets[3]?.threads.push(thread);
   }
   return buckets.filter((group) => group.threads.length > 0);
+}
+
+export function filterThreadsByQuery(
+  threads: CreatorChatThreadDTO[],
+  query: string,
+): CreatorChatThreadDTO[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return threads;
+  return threads.filter((thread) => {
+    const title = (thread.title ?? '').toLowerCase();
+    const project = (thread.project_name ?? '').toLowerCase();
+    return title.includes(needle) || project.includes(needle);
+  });
 }
 
 export function relativeTime(value: string): string {

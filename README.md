@@ -68,8 +68,8 @@ pnpm dev
 
 Default local services:
 
-- Web: <http://localhost:3000>
-- API: <http://localhost:4000/api/v1>
+- Web: <http://127.0.0.1:3100>
+- API: <http://127.0.0.1:4000/api/v1>
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
 - MinIO API: <http://localhost:9000>

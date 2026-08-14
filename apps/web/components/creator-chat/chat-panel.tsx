@@ -3,15 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Button, EmptyState, Spinner, Textarea } from '@zivith/ui';
-import { api, errorMessage, sendCreatorChatTurn } from '@/lib/api';
-import {
-  PENDING_CHAT_TURN_KEY,
-  groupThreadsByRecency,
-  relativeTime,
-} from '@/lib/chat-history';
+import { useParams, useRouter } from 'next/navigation';
+import { Spinner } from '@zivith/ui';
+import { api, errorMessage, sendCreatorChatTurn, unwrapList } from '@/lib/api';
+import { PENDING_CHAT_TURN_KEY } from '@/lib/chat-history';
+import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import type { CreatorChatMessageDTO, CreatorChatThreadDTO, ProposalKind } from '@/lib/types';
+import { IconExternal, IconSearch, IconSend, IconSidebar } from '@/components/nav-icons';
+import { ChatSidebar, ChatSidebarRail } from './chat-sidebar';
 import { ProposalCard, type ChatProposal } from './proposal-card';
 
 const PROPOSAL_KINDS: ProposalKind[] = [
@@ -68,8 +67,11 @@ function asChatMessage(value: unknown): CreatorChatMessageDTO | null {
   return record as unknown as CreatorChatMessageDTO;
 }
 
-export function ChatPanel({ threadId }: { threadId?: string }) {
+export function ChatPanel() {
+  const params = useParams<{ threadId?: string }>();
+  const threadId = typeof params.threadId === 'string' ? params.threadId : undefined;
   const router = useRouter();
+  const [collapsed, toggleCollapsed] = useCollapsedSidebar('chat');
   const [thread, setThread] = useState<CreatorChatThreadDTO | null>(null);
   const [messages, setMessages] = useState<CreatorChatMessageDTO[]>([]);
   const [threads, setThreads] = useState<CreatorChatThreadDTO[]>([]);
@@ -94,8 +96,8 @@ export function ChatPanel({ threadId }: { threadId?: string }) {
         thread: CreatorChatThreadDTO;
         messages: CreatorChatMessageDTO[];
       }>(`/world/creator-chats/${threadId}`);
-      setThread(value.thread);
-      setMessages(value.messages);
+      setThread(value.thread ?? null);
+      setMessages(Array.isArray(value.messages) ? value.messages : []);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -108,8 +110,10 @@ export function ChatPanel({ threadId }: { threadId?: string }) {
   }, [load]);
 
   useEffect(() => {
-    api<CreatorChatThreadDTO[]>('/world/creator-chats')
-      .then(setThreads)
+    api<CreatorChatThreadDTO[] | { data?: CreatorChatThreadDTO[]; items?: CreatorChatThreadDTO[] }>(
+      '/world/creator-chats',
+    )
+      .then((value) => setThreads(unwrapList(value)))
       .catch(() => setThreads([]));
   }, [threadId]);
 
@@ -229,235 +233,204 @@ export function ChatPanel({ threadId }: { threadId?: string }) {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="grid min-h-[60vh] place-items-center">
-        <Spinner label="正在加载对话…" />
-      </div>
-    );
-  }
-
-  const studioHref = thread?.project_id ? `/projects/${thread.project_id}/world` : null;
-  const history = groupThreadsByRecency(threads);
-  const empty = (!threadId || messages.length === 0) && !sending && !streamText;
+  const studioHref = thread?.project_id ? `/projects/${thread.project_id}/world` : '/projects';
+  const empty = (!threadId || messages.length === 0) && !sending && !streamText && !loading;
+  const canSend = input.trim().length > 0 && !sending && !busy;
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col lg:h-dvh">
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-56 shrink-0 flex-col border-r border-line lg:flex">
-          <div className="p-3">
-            <Button
-              className="w-full min-h-9 text-sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void startThread()}
-            >
-              + 新对话
-            </Button>
-          </div>
-          <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="会话列表">
-            {threads.length === 0 ? (
-              <p className="px-3 py-4 text-xs text-zinc-600">还没有对话</p>
-            ) : (
-              history.map((group) => (
-                <div key={group.id} className="mb-3">
-                  <p className="px-3 pb-1 text-[11px] uppercase tracking-wider text-zinc-600">
-                    {group.label}
-                  </p>
-                  <ul className="grid gap-0.5">
-                    {group.threads.map((item) => {
-                      const active = item.id === threadId;
-                      return (
-                        <li key={item.id}>
-                          <Link
-                            href={`/creator-chats/${item.id}`}
-                            className={`block rounded-lg px-3 py-2 transition ${
-                              active
-                                ? 'bg-white/5 text-white'
-                                : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                            }`}
-                          >
-                            <p className="truncate text-sm">
-                              {item.title ?? '未命名对话'}
-                            </p>
-                            <p className="mt-0.5 truncate text-[11px] text-zinc-600">
-                              {item.project_name ?? '新世界'} · {relativeTime(item.updated_at)}
-                            </p>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))
-            )}
-          </nav>
-        </aside>
+    <div className="flex h-dvh overflow-hidden bg-white text-zinc-900 [color-scheme:light]">
+      {collapsed ? (
+        <ChatSidebarRail onToggle={toggleCollapsed} onNewChat={() => void startThread()} />
+      ) : (
+        <ChatSidebar
+          threads={threads}
+          threadId={threadId}
+          busy={busy}
+          onToggle={toggleCollapsed}
+          onNewChat={() => void startThread()}
+        />
+      )}
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-12 shrink-0 items-center gap-3 px-4 lg:px-6">
-            <Link
-              href="/creator-chats"
-              className="text-sm text-zinc-500 transition hover:text-white lg:hidden"
-            >
-              对话
-            </Link>
-            {threadId ? (
-              <h1 className="min-w-0 flex-1 truncate text-sm text-zinc-300">
-                {thread?.title ?? '新世界对话'}
-              </h1>
-            ) : (
-              <span className="flex-1" />
-            )}
-            {studioHref ? (
-              <Link
-                href={studioHref}
-                className="shrink-0 text-sm text-accent transition hover:underline"
-              >
-                Studio
-              </Link>
-            ) : (
-              <Link
-                href="/projects"
-                className="shrink-0 text-sm text-zinc-500 transition hover:text-zinc-300"
-              >
-                Studio
-              </Link>
-            )}
-          </header>
-
-          {threadId && !thread ? (
-            <div className="flex flex-1 items-center justify-center p-8">
-              <EmptyState
-                title="对话加载失败"
-                description={error || '暂时无法连接到服务器，请稍后重试。'}
-                action={
-                  <div className="flex items-center justify-center gap-3">
-                    <Button onClick={() => void load()}>重试</Button>
-                    <Link className="text-sm text-accent hover:underline" href="/creator-chats">
-                      新对话
-                    </Link>
-                  </div>
-                }
-              />
-            </div>
-          ) : (
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-3 px-4 lg:px-6">
+          {collapsed && (
             <>
-              <div
-                className={`min-h-0 flex-1 overflow-y-auto px-4 lg:px-6 ${empty ? 'flex items-center' : 'py-6'}`}
+              <Link href="/creator-chats" className="text-[17px] font-semibold tracking-tight text-zinc-900">
+                ZIVITH
+              </Link>
+              <button
+                type="button"
+                className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100"
+                aria-label="展开侧栏"
+                onClick={toggleCollapsed}
               >
-                <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-                  {empty && (
-                    <div className="flex flex-col items-center py-10 text-center">
-                      <p className="text-lg font-medium text-white">开始构建你的世界</p>
-                      <p className="mt-2 max-w-md text-sm leading-6 text-zinc-500">
-                        用一句话说设定。确认后的提案会写入草稿，细节在 Studio 里改。
-                      </p>
-                      <div className="mt-6 flex flex-wrap justify-center gap-2">
-                        {STARTERS.map((starter) => (
-                          <button
-                            key={starter}
-                            type="button"
-                            disabled={sending || busy}
-                            className="rounded-full border border-line px-3 py-1.5 text-xs text-zinc-400 transition hover:border-accent/40 hover:text-white disabled:opacity-40"
-                            onClick={() => {
-                              if (!threadId) {
-                                void startThread(starter);
-                                return;
-                              }
-                              void sendContent(starter);
-                            }}
-                          >
-                            {starter}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {messages.map((message) => {
-                    const { proposals, applied } = parseProposals(message);
-                    if (message.role === 'system') {
-                      return (
-                        <p
-                          key={message.id}
-                          className="mx-auto text-center text-xs text-zinc-500"
-                        >
-                          {message.content}
-                        </p>
-                      );
-                    }
-                    if (message.role === 'user') {
-                      return (
-                        <div key={message.id} className="flex justify-end">
-                          <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-2.5 text-sm leading-6 text-zinc-100">
-                            <p className="whitespace-pre-wrap">{message.content}</p>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={message.id} className="min-w-0">
-                        <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-100">
-                          {message.content}
-                        </p>
-                        {proposals.length > 0 && (
-                          <ProposalCard
-                            threadId={threadId ?? message.thread_id}
-                            messageId={message.id}
-                            proposals={proposals}
-                            applied={applied}
-                            onApplied={handleApplied}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                  {sending && streamText && (
-                    <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-100">
-                      {streamText}
-                    </p>
-                  )}
-                  {sending && !streamText && (
-                    <p className="text-sm text-zinc-500">正在思考…</p>
-                  )}
-                  <div ref={endRef} />
-                </div>
-              </div>
-
-              <div className="px-4 pb-5 pt-1 lg:px-6">
-                <form
-                  className="mx-auto max-w-2xl rounded-2xl border border-line bg-white/[0.04] px-3 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] focus-within:border-zinc-500"
-                  onSubmit={(event) => void send(event)}
-                >
-                  {error && (
-                    <p className="px-1 pb-2 text-xs text-red-300" role="alert">
-                      {error}
-                    </p>
-                  )}
-                  <Textarea
-                    className="min-h-[52px] resize-none border-0 bg-transparent px-1 py-2 focus:ring-0"
-                    placeholder="发给世界构建者…"
-                    value={input}
-                    disabled={sending || busy}
-                    onChange={(event) => setInput(event.target.value)}
-                    onKeyDown={handleComposerKeyDown}
-                  />
-                  <div className="flex items-center justify-between gap-3 px-1 pb-1">
-                    <span className="text-[11px] text-zinc-600">Enter 发送</span>
-                    <button
-                      type="submit"
-                      disabled={sending || busy || input.trim().length === 0}
-                      className="grid size-8 place-items-center rounded-full bg-accent text-sm font-semibold text-ink transition hover:bg-lime-300 disabled:cursor-not-allowed disabled:opacity-40"
-                      aria-label="发送"
-                    >
-                      ↑
-                    </button>
-                  </div>
-                </form>
-              </div>
+                <IconSidebar className="size-4" />
+              </button>
+              <button
+                type="button"
+                className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100"
+                aria-label="搜索对话"
+                onClick={toggleCollapsed}
+              >
+                <IconSearch className="size-4" />
+              </button>
             </>
           )}
-        </div>
+          {threadId ? (
+            <h1 className="min-w-0 flex-1 truncate text-[15px] font-medium text-zinc-800">
+              {thread?.title ?? '新世界对话'}
+            </h1>
+          ) : (
+            <span className="flex-1" />
+          )}
+          <Link
+            href={studioHref}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
+          >
+            Studio
+            <IconExternal className="size-3.5" />
+          </Link>
+        </header>
+
+        {threadId && !thread && !loading ? (
+          <div className="grid flex-1 place-items-center p-8">
+            <div className="max-w-sm text-center">
+              <p className="text-base font-medium text-zinc-800">对话加载失败</p>
+              <p className="mt-2 text-sm text-zinc-500">{error || '暂时无法连接到服务器，请稍后重试。'}</p>
+              <div className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  className="rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
+                  onClick={() => void load()}
+                >
+                  重试
+                </button>
+                <Link className="text-sm text-[#4d6bfe]" href="/creator-chats">
+                  新对话
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div
+              className={`min-h-0 flex-1 overflow-y-auto px-4 lg:px-6 ${empty ? 'flex items-center' : 'py-6'}`}
+            >
+              <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+                {loading && (
+                  <div className="grid min-h-[40vh] place-items-center">
+                    <Spinner label="正在加载对话…" />
+                  </div>
+                )}
+                {empty && (
+                  <div className="mx-auto w-full max-w-xl rounded-2xl bg-[#f3f4f6] px-8 py-10 text-center">
+                    <div className="mx-auto mb-4 grid size-10 place-items-center rounded-full bg-white text-sm font-bold text-[#4d6bfe] shadow-sm">
+                      Z
+                    </div>
+                    <p className="text-lg font-medium text-zinc-900">开始构建你的世界</p>
+                    <p className="mt-2 text-sm leading-6 text-zinc-500">
+                      用一句话说设定。确认后的提案会写入草稿，细节在 Studio 里改。
+                    </p>
+                    <div className="mt-6 flex flex-wrap justify-center gap-2">
+                      {STARTERS.map((starter) => (
+                        <button
+                          key={starter}
+                          type="button"
+                          disabled={sending || busy}
+                          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900 disabled:opacity-40"
+                          onClick={() => {
+                            if (!threadId) {
+                              void startThread(starter);
+                              return;
+                            }
+                            void sendContent(starter);
+                          }}
+                        >
+                          {starter}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {messages.map((message) => {
+                  const { proposals, applied } = parseProposals(message);
+                  if (message.role === 'system') {
+                    return (
+                      <p key={message.id} className="mx-auto text-center text-xs text-zinc-400">
+                        {message.content}
+                      </p>
+                    );
+                  }
+                  if (message.role === 'user') {
+                    return (
+                      <div key={message.id} className="flex justify-end">
+                        <div className="max-w-[80%] rounded-2xl bg-[#eef0f4] px-4 py-2.5 text-sm leading-6 text-zinc-800">
+                          <p className="whitespace-pre-wrap">{message.content}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={message.id} className="min-w-0">
+                      <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
+                        {message.content}
+                      </p>
+                      {proposals.length > 0 && (
+                        <ProposalCard
+                          threadId={threadId ?? message.thread_id}
+                          messageId={message.id}
+                          proposals={proposals}
+                          applied={applied}
+                          onApplied={handleApplied}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+                {sending && streamText && (
+                  <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">{streamText}</p>
+                )}
+                {sending && !streamText && <p className="text-sm text-zinc-400">正在思考…</p>}
+                <div ref={endRef} />
+              </div>
+            </div>
+
+            <div className="px-4 pb-3 pt-1 lg:px-6">
+              <form
+                className="mx-auto max-w-2xl rounded-[28px] border border-zinc-200 bg-white px-4 py-3 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+                onSubmit={(event) => void send(event)}
+              >
+                {error && (
+                  <p className="px-1 pb-2 text-xs text-red-500" role="alert">
+                    {error}
+                  </p>
+                )}
+                <textarea
+                  className="min-h-[52px] w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 text-zinc-800 outline-none placeholder:text-zinc-400"
+                  placeholder="发给世界构建者…"
+                  value={input}
+                  disabled={sending || busy}
+                  rows={1}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
+                />
+                <div className="flex items-center justify-end gap-2 px-1 pt-1">
+                  <button
+                    type="submit"
+                    disabled={!canSend}
+                    className="grid size-8 place-items-center rounded-full bg-[#4d6bfe] text-white transition hover:bg-[#3d5aee] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
+                    aria-label="发送"
+                  >
+                    <IconSend className="size-4" />
+                  </button>
+                </div>
+              </form>
+              <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-zinc-400">
+                内容由 AI 生成，请仔细甄别
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

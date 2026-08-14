@@ -18,7 +18,7 @@ export function ProjectSubNav({ projectId }: { projectId: string }) {
   return (
     <nav
       aria-label="项目分区"
-      className="mb-8 flex flex-wrap gap-1 rounded-xl border border-line bg-ink/50 p-1"
+      className="mb-8 flex flex-wrap gap-1 rounded-xl border border-line bg-zinc-50 p-1"
     >
       {sections.map((item) => {
         const href = `${base}${item.suffix}`;
@@ -38,8 +38,8 @@ export function ProjectSubNav({ projectId }: { projectId: string }) {
             href={href}
             className={`flex-1 rounded-lg px-3 py-2 text-center text-sm transition ${
               active
-                ? 'bg-white/5 text-white'
-                : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                ? 'bg-[#e8f0fe] text-zinc-900'
+                : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
             }`}
           >
             {item.label}

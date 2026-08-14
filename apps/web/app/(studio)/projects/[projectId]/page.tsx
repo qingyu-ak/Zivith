@@ -104,7 +104,7 @@ export default function ProjectPage() {
       </header>
       <ProjectSubNav projectId={projectId} />
       {error && (
-        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}

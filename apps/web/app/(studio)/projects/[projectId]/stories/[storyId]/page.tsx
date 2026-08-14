@@ -196,7 +196,7 @@ export default function StoryEditorPage() {
         </div>
       </header>
       {error && (
-        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -272,7 +272,7 @@ export default function StoryEditorPage() {
           {scenes.map((scene) => (
             <Card key={scene.id}>
               <div className="flex flex-wrap items-start gap-4">
-                <div className="grid size-10 place-items-center rounded-lg bg-white/5 font-mono text-zinc-400">
+                <div className="grid size-10 place-items-center rounded-lg bg-zinc-100 font-mono text-zinc-400">
                   {scene.order}
                 </div>
                 <div className="min-w-52 flex-1">
@@ -348,7 +348,7 @@ export default function StoryEditorPage() {
                     <Link
                       key={shot.id}
                       href={`/projects/${projectId}/stories/${storyId}/scenes/${scene.id}/shots/${shot.id}`}
-                      className="flex items-center gap-3 rounded-lg bg-ink px-4 py-3 hover:ring-1 hover:ring-accent/40"
+                      className="flex items-center gap-3 rounded-lg bg-white px-4 py-3 hover:ring-1 hover:ring-accent/40"
                     >
                       <span className="font-mono text-xs text-zinc-600">
                         {String(shot.order).padStart(2, '0')}

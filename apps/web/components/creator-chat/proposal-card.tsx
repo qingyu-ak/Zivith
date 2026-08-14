@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Badge, Button } from '@zivith/ui';
+import { Badge } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { ApplyProposalResultDTO, ProposalKind } from '@/lib/types';
 
@@ -88,18 +88,23 @@ export function ProposalCard({
   const studioId = results[0]?.project_id;
 
   return (
-    <div className="mt-3 rounded-xl border border-line bg-white/[0.03] px-3 py-2">
+    <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
       <div className="flex items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-sm text-zinc-300">{summary}</p>
+        <p className="min-w-0 flex-1 truncate text-sm text-zinc-700">{summary}</p>
         {!done && (
-          <Button className="min-h-8 px-3 text-xs" disabled={busy} onClick={() => void apply()}>
+          <button
+            type="button"
+            className="min-h-8 rounded-full bg-[#4d6bfe] px-3 text-xs font-medium text-white disabled:opacity-50"
+            disabled={busy}
+            onClick={() => void apply()}
+          >
             {busy ? '写入…' : '确认'}
-          </Button>
+          </button>
         )}
         {done && <Badge tone="success">已写入</Badge>}
         <button
           type="button"
-          className="shrink-0 text-xs text-zinc-500 hover:text-zinc-300"
+          className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700"
           onClick={() => setOpen((value) => !value)}
         >
           {open ? '收起' : '详情'}
@@ -107,7 +112,7 @@ export function ProposalCard({
       </div>
 
       {open && (
-        <ul className="mt-2 grid gap-1 border-t border-line pt-2 text-xs leading-5 text-zinc-500">
+        <ul className="mt-2 grid gap-1 border-t border-zinc-200 pt-2 text-xs leading-5 text-zinc-500">
           {proposals.map((proposal, index) => (
             <li key={`${proposal.kind}-${index}`}>
               {lineFor(proposal.kind, proposal.payload)}
@@ -120,7 +125,7 @@ export function ProposalCard({
       )}
 
       {error && (
-        <p className="mt-2 text-xs text-red-300" role="alert">
+        <p className="mt-2 text-xs text-red-500" role="alert">
           {error}
         </p>
       )}
@@ -134,7 +139,7 @@ export function ProposalCard({
       {done && studioId && (
         <Link
           href={`/projects/${studioId}/world`}
-          className="mt-2 inline-block text-xs text-accent hover:underline"
+          className="mt-2 inline-block text-xs text-[#4d6bfe] hover:underline"
         >
           在 Studio 查看 →
         </Link>

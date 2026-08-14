@@ -420,7 +420,7 @@ export default function AssetDetailPage() {
   if (!asset) {
     return (
       <div className="mx-auto max-w-5xl p-5 sm:p-8">
-        <p className="mb-4 text-red-300">{error || '资产不存在'}</p>
+        <p className="mb-4 text-red-600">{error || '资产不存在'}</p>
         <Link className="text-accent underline" href={`/projects/${projectId}/assets`}>
           返回角色与地点
         </Link>
@@ -452,7 +452,7 @@ export default function AssetDetailPage() {
       </header>
 
       {error && (
-        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -631,7 +631,7 @@ export default function AssetDetailPage() {
               />
             </Field>
             {sheetError && (
-              <p className="mt-2 rounded-md bg-red-500/10 p-2 text-xs text-red-300" role="alert">
+              <p className="mt-2 rounded-md bg-red-500/10 p-2 text-xs text-red-600" role="alert">
                 {sheetError}
               </p>
             )}
@@ -639,7 +639,7 @@ export default function AssetDetailPage() {
               <label className="flex items-center gap-1 text-xs text-zinc-400">
                 候选数
                 <select
-                  className="rounded border border-line bg-ink px-2 py-1 text-xs text-zinc-200"
+                  className="rounded border border-line bg-white px-2 py-1 text-xs text-zinc-700"
                   value={candidateCount}
                   disabled={Boolean(locationBusy)}
                   onChange={(event) => setCandidateCount(Number(event.target.value) || 1)}
@@ -757,7 +757,7 @@ export default function AssetDetailPage() {
                   />
                 </Field>
                 {sheetError && (
-                  <p className="mt-2 rounded-md bg-red-500/10 p-2 text-xs text-red-300" role="alert">
+                  <p className="mt-2 rounded-md bg-red-500/10 p-2 text-xs text-red-600" role="alert">
                     {sheetError}
                   </p>
                 )}
@@ -765,7 +765,7 @@ export default function AssetDetailPage() {
                   <label className="flex items-center gap-1 text-xs text-zinc-400">
                     候选数
                     <select
-                      className="rounded border border-line bg-ink px-2 py-1 text-xs text-zinc-200"
+                      className="rounded border border-line bg-white px-2 py-1 text-xs text-zinc-700"
                       value={candidateCount}
                       disabled={
                         variantBusyKey === '__sheet__' || variantBusyKey === '__sheet_draft__'
@@ -816,7 +816,7 @@ export default function AssetDetailPage() {
 
             {legacySheetVariants.length > 0 && (
               <details className="mt-4 rounded-lg border border-line/60 p-3 text-sm text-zinc-400">
-                <summary className="cursor-pointer text-zinc-300">
+                <summary className="cursor-pointer text-zinc-600">
                   旧版分视图槽位（已弃用，仅兼容）
                 </summary>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">

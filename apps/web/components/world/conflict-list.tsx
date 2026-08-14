@@ -30,7 +30,7 @@ export function WorldConflictList({
                 <button
                   type="button"
                   onClick={() => onSelect(selection)}
-                  className="w-full rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-left text-xs leading-5 text-amber-100/90 transition hover:border-amber-500/40"
+                  className="w-full rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-left text-xs leading-5 text-amber-800 transition hover:border-amber-500/40"
                 >
                   {conflict.summary}
                 </button>
@@ -40,7 +40,7 @@ export function WorldConflictList({
           return (
             <li
               key={conflict.id}
-              className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-xs leading-5 text-amber-100/90"
+              className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-xs leading-5 text-amber-800"
             >
               {conflict.summary}
             </li>

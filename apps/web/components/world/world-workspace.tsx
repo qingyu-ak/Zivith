@@ -7,6 +7,8 @@ import { Badge, Spinner } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { WorldResourcesDTO, WorldSelection } from '@/lib/types';
 import { buildWorldLineModel, buildProductionLineModel } from '@/lib/world-line';
+import { useCollapsedSidebar } from '@/lib/sidebar-state';
+import { IconPanelLeft, IconPanelRight } from '@/components/nav-icons';
 import { EntityExplorer } from './entity-explorer';
 import { WorldTimeline } from './world-timeline';
 import { InspectorPanel } from './inspector-panel';
@@ -19,6 +21,8 @@ export function WorldWorkspace() {
   const [view, setView] = useState<'world' | 'production'>('world');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [leftCollapsed, toggleLeft] = useCollapsedSidebar('worldLeft');
+  const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
 
   function switchView(next: 'world' | 'production') {
     setView(next);
@@ -75,12 +79,12 @@ export function WorldWorkspace() {
     return (
       <div className="grid h-screen place-items-center">
         <div className="max-w-md text-center">
-          <p className="rounded-lg bg-red-500/10 p-4 text-sm text-red-300" role="alert">
+          <p className="rounded-lg bg-red-500/10 p-4 text-sm text-red-600" role="alert">
             {error}
           </p>
           <button
             type="button"
-            className="mt-4 rounded-lg border border-line px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
+            className="mt-4 rounded-lg border border-line px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
             onClick={() => {
               void load();
             }}
@@ -107,7 +111,7 @@ export function WorldWorkspace() {
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-white">{resources.project.name}</h1>
+            <h1 className="text-lg font-semibold text-zinc-900">{resources.project.name}</h1>
             <Badge tone="neutral">v1</Badge>
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">
@@ -121,14 +125,36 @@ export function WorldWorkspace() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-line bg-white/5 p-0.5" role="tablist" aria-label="视图切换">
+          <button
+            type="button"
+            className={`grid size-8 place-items-center rounded-lg border border-line transition ${
+              leftCollapsed ? 'text-zinc-400 hover:text-zinc-700' : 'bg-white text-zinc-800'
+            }`}
+            aria-label={leftCollapsed ? '展开左侧栏' : '收起左侧栏'}
+            aria-pressed={!leftCollapsed}
+            onClick={toggleLeft}
+          >
+            <IconPanelLeft className="size-4" />
+          </button>
+          <button
+            type="button"
+            className={`grid size-8 place-items-center rounded-lg border border-line transition ${
+              rightCollapsed ? 'text-zinc-400 hover:text-zinc-700' : 'bg-white text-zinc-800'
+            }`}
+            aria-label={rightCollapsed ? '展开右侧栏' : '收起右侧栏'}
+            aria-pressed={!rightCollapsed}
+            onClick={toggleRight}
+          >
+            <IconPanelRight className="size-4" />
+          </button>
+          <div className="flex rounded-lg border border-line bg-zinc-100 p-0.5" role="tablist" aria-label="视图切换">
             <button
               type="button"
               role="tab"
               aria-selected={view === 'world'}
               onClick={() => switchView('world')}
               className={`rounded-md px-3 py-1 text-xs transition ${
-                view === 'world' ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-zinc-200'
+                view === 'world' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
               }`}
             >
               世界
@@ -139,7 +165,7 @@ export function WorldWorkspace() {
               aria-selected={view === 'production'}
               onClick={() => switchView('production')}
               className={`rounded-md px-3 py-1 text-xs transition ${
-                view === 'production' ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-zinc-200'
+                view === 'production' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
               }`}
             >
               制作
@@ -147,17 +173,22 @@ export function WorldWorkspace() {
           </div>
           <Link
             href="/creator-chats"
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-white/5 hover:text-white"
+            className="rounded-lg border border-line px-3 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
           >
             ← 回到创作聊天
           </Link>
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[248px_minmax(0,1fr)_320px]">
+      <div
+        className="grid min-h-0 flex-1"
+        style={{
+          gridTemplateColumns: `${leftCollapsed ? '0px' : '248px'} minmax(0,1fr) ${rightCollapsed ? '0px' : '320px'}`,
+        }}
+      >
         {/* 左栏：世界视图 = 实体 Explorer；制作视图 = 故事列表 */}
         {view === 'production' ? (
-          <aside className="min-h-0 overflow-y-auto border-r border-line">
+          <aside className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : 'overflow-y-auto'}`}>
             <div className="border-b border-line px-4 py-3">
               <p className="text-xs font-medium uppercase tracking-wider text-zinc-600">故事</p>
             </div>
@@ -174,8 +205,8 @@ export function WorldWorkspace() {
                         onClick={() => setSelection({ kind: 'story', id: story.id })}
                         className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition ${
                           active
-                            ? 'bg-white/5 text-white'
-                            : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                            ? 'bg-zinc-100 text-zinc-900'
+                            : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
                         }`}
                       >
                         <span className="truncate text-sm font-medium">{story.title}</span>
@@ -190,7 +221,7 @@ export function WorldWorkspace() {
             )}
           </aside>
         ) : (
-          <aside className="min-h-0 border-r border-line">
+          <aside className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : ''}`}>
             <EntityExplorer
               resources={resources}
               selection={selection}
@@ -235,7 +266,7 @@ export function WorldWorkspace() {
         </section>
 
         {/* 右栏：Inspector */}
-        <aside className="min-h-0 border-l border-line">
+        <aside className={`min-h-0 overflow-hidden border-l border-line ${rightCollapsed ? 'pointer-events-none' : ''}`}>
             <InspectorPanel
             resources={resources}
             selection={selection}

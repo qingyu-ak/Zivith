@@ -1069,7 +1069,7 @@ export function WorkflowPanel({
       </div>
 
       {error && (
-        <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -1145,7 +1145,7 @@ export function WorkflowPanel({
                       : step.status === 'running'
                         ? 'border-amber-400/30 bg-amber-400/5 text-amber-300'
                         : step.status === 'cancelled'
-                          ? 'border-red-400/30 bg-red-400/5 text-red-300'
+                          ? 'border-red-400/30 bg-red-400/5 text-red-600'
                           : 'border-line text-zinc-500'
                   } ${selectable ? 'cursor-pointer hover:brightness-110' : 'cursor-default opacity-60'}`}
                 >
@@ -1184,7 +1184,7 @@ export function WorkflowPanel({
 
           {viewKind === 'story' && !loadingArtifacts && story && (
             <div className="mt-5 grid gap-3">
-              <div className="rounded-lg border border-line bg-ink p-4">
+              <div className="rounded-lg border border-line bg-white p-4">
                 <p className="text-sm font-medium">{story.title}</p>
                 {story.logline && (
                   <p className="mt-2 text-xs leading-5 text-zinc-400">{story.logline}</p>
@@ -1199,7 +1199,7 @@ export function WorkflowPanel({
               </div>
               {(story.segments ?? []).length > 0 ? (
                 (story.segments ?? []).map((segment) => (
-                  <div key={segment.id} className="rounded-lg border border-line bg-ink p-4">
+                  <div key={segment.id} className="rounded-lg border border-line bg-white p-4">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium">
                         #{segment.order} {segment.title}
@@ -1266,7 +1266,7 @@ export function WorkflowPanel({
                 <p className="text-sm text-zinc-500">没有可展示的场景材料。</p>
               ) : (
                 scenes.map((scene) => (
-                  <div key={scene.id} className="rounded-lg border border-line bg-ink p-4">
+                  <div key={scene.id} className="rounded-lg border border-line bg-white p-4">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium">
                         #{scene.order} {scene.title}
@@ -1318,7 +1318,7 @@ export function WorkflowPanel({
                 <p className="text-sm text-zinc-500 md:col-span-2">没有可展示的镜头材料。</p>
               ) : (
                 shots.map((shot) => (
-                  <div key={shot.id} className="rounded-lg border border-line bg-ink p-4">
+                  <div key={shot.id} className="rounded-lg border border-line bg-white p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium">
                         #{shot.order} {shot.label || '未命名镜头'}
@@ -1370,7 +1370,7 @@ export function WorkflowPanel({
                   return (
                     <div
                       key={requirement.id}
-                      className={`rounded-lg border bg-ink p-3 ${
+                      className={`rounded-lg border bg-white p-3 ${
                         issue ? 'border-amber-400/40' : 'border-line'
                       }`}
                     >
@@ -1453,7 +1453,7 @@ export function WorkflowPanel({
                         </p>
                       )}
                       {referenceInjectionSkipped(selectedMedia) && (
-                        <p className="mb-2 rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-300">
+                        <p className="mb-2 rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600">
                           本次未注入参考图
                           {mediaMeta(selectedMedia).reference_injection === 'skipped_unsupported'
                             ? '（当前模型不支持）'
@@ -1490,7 +1490,7 @@ export function WorkflowPanel({
                             <label className="flex items-center gap-1 text-xs text-zinc-400">
                               候选数
                               <select
-                                className="rounded border border-line bg-ink px-2 py-1 text-xs text-zinc-200"
+                                className="rounded border border-line bg-white px-2 py-1 text-xs text-zinc-700"
                                 value={candidateCount}
                                 disabled={busy || regeneratingId === requirement.id}
                                 onChange={(event) =>
@@ -1560,7 +1560,7 @@ export function WorkflowPanel({
                 promptItems.map(({ shot, prompt, issue, warning }) => (
                   <div
                     key={prompt.id}
-                    className={`rounded-lg border bg-ink p-4 ${
+                    className={`rounded-lg border bg-white p-4 ${
                       issue ? 'border-amber-400/40' : 'border-line'
                     }`}
                   >
@@ -1574,7 +1574,7 @@ export function WorkflowPanel({
                       </p>
                     </Field>
                     {prompt.negative && (
-                      <p className="mt-2 text-xs leading-5 text-red-300/70">
+                      <p className="mt-2 text-xs leading-5 text-red-600">
                         Negative: {prompt.negative}
                       </p>
                     )}
@@ -1606,7 +1606,7 @@ export function WorkflowPanel({
                 videoItems.map(({ shot, output, issue }) => (
                   <div
                     key={shot.id}
-                    className={`rounded-lg border bg-ink p-3 ${
+                    className={`rounded-lg border bg-white p-3 ${
                       issue ? 'border-amber-400/40' : 'border-line'
                     }`}
                   >
@@ -1627,7 +1627,7 @@ export function WorkflowPanel({
                       </p>
                     </Field>
                     {shot.prompt?.negative && (
-                      <p className="mt-2 text-xs leading-5 text-red-300/70">
+                      <p className="mt-2 text-xs leading-5 text-red-600">
                         Negative: {shot.prompt.negative}
                       </p>
                     )}

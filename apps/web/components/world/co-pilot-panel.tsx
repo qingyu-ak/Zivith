@@ -40,15 +40,15 @@ export function CoPilotPanel({
     <div className="shrink-0 border-t border-line px-4 py-3">
       <div className="flex items-center gap-2">
         <span className="size-2 rounded-full bg-accent/80" aria-hidden />
-        <h3 className="text-sm font-medium text-zinc-200">副驾驶</h3>
+        <h3 className="text-sm font-medium text-zinc-700">副驾驶</h3>
         <Badge tone={stageMeta.tone}>{stageMeta.label}</Badge>
         <span className="text-xs text-zinc-600">建议性核对</span>
       </div>
 
       <div className="mt-2 grid grid-cols-5 gap-2">
         {counts.map((item) => (
-          <div key={item.label} className="rounded-lg bg-white/5 px-2 py-1.5 text-center">
-            <div className="text-sm font-semibold text-white">{item.value}</div>
+          <div key={item.label} className="rounded-lg bg-zinc-100 px-2 py-1.5 text-center">
+            <div className="text-sm font-semibold text-zinc-900">{item.value}</div>
             <div className="text-xs text-zinc-500">{item.label}</div>
           </div>
         ))}

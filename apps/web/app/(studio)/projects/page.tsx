@@ -76,7 +76,7 @@ export default function ProjectsPage() {
       </header>
 
       {error && (
-        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -119,7 +119,7 @@ export default function ProjectsPage() {
           {projects.map((project) => (
             <Card key={project.id} className="group relative overflow-hidden">
               <Link href={`/projects/${project.id}`} className="block">
-                <div className="mb-5 aspect-[16/8] rounded-lg bg-gradient-to-br from-zinc-700 via-zinc-800 to-accent/10" />
+                <div className="mb-5 aspect-[16/8] rounded-lg bg-gradient-to-br from-zinc-100 via-zinc-50 to-accent/10" />
                 <h2 className="text-lg font-semibold group-hover:text-accent">{project.name}</h2>
                 <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-zinc-400">
                   {project.description || '暂无项目简介'}

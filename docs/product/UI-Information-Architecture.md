@@ -189,13 +189,13 @@ flowchart TD
 
 ## 6. Creator Chat 的落点
 
-**路由：`/`，应用默认页。** 打开即用，无登录（本地单用户模式，[ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)）。简洁持续对话（历史边栏 + 居中消息流 + 底部输入）：聊天采集意图并确认提案后写入草稿；世界观摘要、实体表、冲突列表与 Inspector **在 Studio 世界工作区**，不堆在对话里。功能按能力爬坡逐步实现（v1：会话运行时 + 世界构建 agent；提案 → 确认 → 落库；世界知识上下文；冲突检测规则 v1）。
+**路由：`/`，应用默认页。** 打开即用，无登录（本地单用户模式，[ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)）。Creator Chat 为独立浅色对话面（可收起的左侧历史栏 + 居中消息流 + 底部输入），不再套 Studio 导航；世界观摘要、实体表、冲突列表与 Inspector **在 Studio 世界工作区**。Studio 左侧项目导航与世界工作区左右栏均可收起。功能按能力爬坡逐步实现（v1：会话运行时 + 世界构建 agent；提案 → 确认 → 落库；世界知识上下文；冲突检测规则 v1）。
 
 **对话与项目的关系。** 线程在用户确认「创建世界」提案之前没有 `projectId`；确认后经 apply-intent 创建 `Project` 并回绑线程。AI 永不自主写库：写库必须提案且经用户确认，经既有 service 落 `draft`，gate 不可绕过（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 围栏）。
 
 **对话记录是会话工作底稿。** 不进领域模型，不作为创作产物展示或导出（宪法 §9.2，2026-08-04 修订）。
 
-**切换到 Studio。** 内容足够丰富后，用户可像 Trae / Cursor 切换 IDE 一样进入世界工作区 `/projects/[id]/world`。侧栏「创作对话」（`/`）与项目世界工作区双向可达。
+**切换到 Studio。** 内容足够丰富后，用户可像 Trae / Cursor 切换 IDE 一样进入世界工作区 `/projects/[id]/world`（对话顶栏「Studio ↗」）。Studio 使用左侧可收起项目导航；世界工作区左实体栏 / 右 Inspector 也可收起。
 
 **它不是 Director Copilot。** 后者是项目内常驻的咨询侧栏，面向已经存在的世界，排期 Phase 3+，scope 由其自身 RFC 管辖，不因本文档而放宽。
 
