@@ -169,9 +169,7 @@ describe('detectWorldConflicts', () => {
   it('flags a character description that asserts both poles of a fact', () => {
     const findings = detectWorldConflicts(
       world({
-        characters: [
-          { id: 'c1', name: '艾拉', description: '她已死，但其实还活着', tags: [] },
-        ],
+        characters: [{ id: 'c1', name: '艾拉', description: '她已死，但其实还活着', tags: [] }],
       }),
     );
     expect(findings.map((item) => item.kind)).toEqual(['internal_fact_clash']);

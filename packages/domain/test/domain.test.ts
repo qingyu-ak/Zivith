@@ -183,9 +183,12 @@ describe('character resolution', () => {
 describe('appearance variants', () => {
   it('merges variant description over character appearance.custom', () => {
     expect(
-      resolveAppearanceWithVariant({ hair: 'black', custom: 'base look' }, {
-        description: 'bloodstained cloak',
-      }),
+      resolveAppearanceWithVariant(
+        { hair: 'black', custom: 'base look' },
+        {
+          description: 'bloodstained cloak',
+        },
+      ),
     ).toEqual({ hair: 'black', custom: 'bloodstained cloak' });
   });
 

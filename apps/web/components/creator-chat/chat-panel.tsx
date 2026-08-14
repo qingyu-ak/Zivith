@@ -33,11 +33,7 @@ const PROPOSAL_KINDS: ProposalKind[] = [
   'update_entity',
 ];
 
-const STARTERS = [
-  '我想创造一个东方玄幻世界',
-  '先介绍一下主角',
-  '帮我检查设定冲突',
-];
+const STARTERS = ['我想创造一个东方玄幻世界', '先介绍一下主角', '帮我检查设定冲突'];
 
 function parseProposals(message: CreatorChatMessageDTO): {
   proposals: ChatProposal[];
@@ -71,7 +67,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function asChatMessage(value: unknown): CreatorChatMessageDTO | null {
   const record = asRecord(value);
   if (!record) return null;
-  if (typeof record.id !== 'string' || typeof record.role !== 'string' || typeof record.content !== 'string') {
+  if (
+    typeof record.id !== 'string' ||
+    typeof record.role !== 'string' ||
+    typeof record.content !== 'string'
+  ) {
     return null;
   }
   return record as unknown as CreatorChatMessageDTO;
@@ -191,7 +191,8 @@ export function ChatPanel() {
               return;
             }
             if (event === 'delta' && typeof record?.text === 'string') {
-              setStreamText((current) => current + record.text);
+              const chunk = record.text;
+              setStreamText((current) => current + chunk);
               return;
             }
             if (event === 'done') {
@@ -323,7 +324,10 @@ export function ChatPanel() {
         <header className="flex h-14 shrink-0 items-center gap-3 px-4 lg:px-6">
           {collapsed && (
             <>
-              <Link href="/creator-chats" className="text-[17px] font-semibold tracking-tight text-zinc-900">
+              <Link
+                href="/creator-chats"
+                className="text-[17px] font-semibold tracking-tight text-zinc-900"
+              >
                 ZIVITH
               </Link>
               <button
@@ -364,7 +368,9 @@ export function ChatPanel() {
           <div className="grid flex-1 place-items-center p-8">
             <div className="max-w-sm text-center">
               <p className="text-base font-medium text-zinc-800">对话加载失败</p>
-              <p className="mt-2 text-sm text-zinc-500">{error || '暂时无法连接到服务器，请稍后重试。'}</p>
+              <p className="mt-2 text-sm text-zinc-500">
+                {error || '暂时无法连接到服务器，请稍后重试。'}
+              </p>
               <div className="mt-5 flex items-center justify-center gap-3">
                 <button
                   type="button"
@@ -456,7 +462,9 @@ export function ChatPanel() {
                   );
                 })}
                 {sending && streamText && (
-                  <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">{streamText}</p>
+                  <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
+                    {streamText}
+                  </p>
                 )}
                 {sending && !streamText && <p className="text-sm text-zinc-400">正在思考…</p>}
                 <div ref={endRef} />
@@ -489,11 +497,7 @@ export function ChatPanel() {
                 )}
                 <textarea
                   className="min-h-[52px] w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 text-zinc-800 outline-none placeholder:text-zinc-400"
-                  placeholder={
-                    focus
-                      ? `继续完善「${focus.name}」…`
-                      : '发给世界构建者…'
-                  }
+                  placeholder={focus ? `继续完善「${focus.name}」…` : '发给世界构建者…'}
                   value={input}
                   disabled={sending || busy}
                   rows={1}

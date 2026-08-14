@@ -20,10 +20,7 @@ export interface OrderScale {
 }
 
 /** 线性 domain→range 映射，clamp 到 range 两端。 */
-export function createOrderScale(
-  domain: [number, number],
-  range: [number, number],
-): OrderScale {
+export function createOrderScale(domain: [number, number], range: [number, number]): OrderScale {
   const [d0, d1] = domain;
   const [r0, r1] = range;
   const k = (r1 - r0) / (d1 - d0 || 1);

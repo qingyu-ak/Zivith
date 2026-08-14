@@ -197,9 +197,7 @@ describe('timeline schemas (H4+ world line)', () => {
   it('track create validates kind enum and defaults order', () => {
     const parsed = timelineTrackCreateSchema.parse({ kind: 'character', title: '主角' });
     expect(parsed.order).toBe(0);
-    expect(() =>
-      timelineTrackCreateSchema.parse({ kind: 'unknown', title: 'x' }),
-    ).toThrow();
+    expect(() => timelineTrackCreateSchema.parse({ kind: 'unknown', title: 'x' })).toThrow();
   });
 
   it('item create defaults metadata and requires non-negative presentation order', () => {

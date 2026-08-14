@@ -8,10 +8,7 @@ const SECTION_LABELS =
 
 function extractSection(text: string, label: string): string {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(
-    `${escaped}:\\s*([\\s\\S]*?)(?=\\s+(?:${SECTION_LABELS}):|$)`,
-    'i',
-  );
+  const re = new RegExp(`${escaped}:\\s*([\\s\\S]*?)(?=\\s+(?:${SECTION_LABELS}):|$)`, 'i');
   return text.match(re)?.[1]?.trim() ?? '';
 }
 

@@ -57,8 +57,8 @@ export function orderVisualMediaIdsForVideo(
   }[],
   shotCharacterIds: readonly string[],
 ): string[] {
-  const withMedia = requirements.filter(
-    (item): item is typeof item & { approvedMediaId: string } => Boolean(item.approvedMediaId),
+  const withMedia = requirements.filter((item): item is typeof item & { approvedMediaId: string } =>
+    Boolean(item.approvedMediaId),
   );
   const characters = withMedia.filter((item) => item.assetType === 'character');
   const locations = withMedia.filter((item) => item.assetType === 'location');

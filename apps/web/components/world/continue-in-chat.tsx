@@ -48,12 +48,7 @@ export function ContinueInChatButton({
 
   return (
     <span className="inline-flex flex-col items-end">
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void openChat()}
-        className={className}
-      >
+      <button type="button" disabled={busy} onClick={() => void openChat()} className={className}>
         {busy ? '正在打开对话…' : label}
       </button>
       {error ? (

@@ -473,8 +473,7 @@ export function WorkflowPanel({
             );
             const loaded = candidates.filter((item): item is WorkflowMediaDTO => Boolean(item));
             const preferredId =
-              requirement.approved_media_id &&
-              candidateIds.includes(requirement.approved_media_id)
+              requirement.approved_media_id && candidateIds.includes(requirement.approved_media_id)
                 ? requirement.approved_media_id
                 : candidateIds[0];
             const media = loaded.find((item) => item.id === preferredId) ?? loaded[0];
@@ -498,7 +497,12 @@ export function WorkflowPanel({
                   : '生图失败，当前仅为占位图。请检查图像模型后点击「按提示词生成」',
               } satisfies VisualReviewItem;
             }
-            return { requirement, media, candidates: loaded, sceneTitle } satisfies VisualReviewItem;
+            return {
+              requirement,
+              media,
+              candidates: loaded,
+              sceneTitle,
+            } satisfies VisualReviewItem;
           }),
         );
         const blocked = items.filter((item) => item.issue);
@@ -784,9 +788,7 @@ export function WorkflowPanel({
     if (!run?.state.awaiting_review) return;
     const review = run.state.awaiting_review;
     if (action === 'approve' && !approveReady) {
-      setError(
-        visualApproveBlockedReason || artifactWarning || '审核材料尚未就绪，无法通过',
-      );
+      setError(visualApproveBlockedReason || artifactWarning || '审核材料尚未就绪，无法通过');
       return;
     }
     setBusy(true);
@@ -1242,9 +1244,7 @@ export function WorkflowPanel({
                           type="button"
                           variant="secondary"
                           disabled={busy || !feedback.trim()}
-                          onClick={() =>
-                            void submitSegmentReview(segment, 'retry_with_feedback')
-                          }
+                          onClick={() => void submitSegmentReview(segment, 'retry_with_feedback')}
                         >
                           按反馈重写本段
                         </Button>
@@ -1342,212 +1342,224 @@ export function WorkflowPanel({
           {viewKind === 'visual' && !loadingArtifacts && (
             <div className="mt-5 grid gap-3">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {visualItems.length === 0 ? (
-                <p className="text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">
-                  没有可展示的视觉材料。
-                </p>
-              ) : (
-                <>
-                  <p className="text-xs text-zinc-500 sm:col-span-2 lg:col-span-3">
-                    视觉准备只起草提示词、不自动生图。请先在「角色与地点」生成设定表，再在本页对每张卡点「按提示词生成本张」。全部关键图就绪后，底部「审核通过并继续」会亮起。「重写本场景全部提示词」会重写同场景所有卡的提示词草稿，不会单独生图。
+                {visualItems.length === 0 ? (
+                  <p className="text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">
+                    没有可展示的视觉材料。
                   </p>
-                {visualItems.map(({ requirement, media, candidates, sceneTitle, issue }, index) => {
-                  const gallery = candidates && candidates.length > 0 ? candidates : media ? [media] : [];
-                  const selectedId =
-                    selectedCandidateIds[requirement.id] ??
-                    requirement.approved_media_id ??
-                    gallery[0]?.id;
-                  const selectedMedia =
-                    gallery.find((item) => item.id === selectedId) ?? gallery[0] ?? media;
-                  const imageSrc = selectedMedia?.access_url || selectedMedia?.url || '';
-                  const failedPlaceholder = isFailedPlaceholder(selectedMedia);
-                  const typeLabel =
-                    requirement.asset_type === 'character' ? '角色关键图' : '地点参考';
-                  const draft = promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '';
-                  const showSceneRecompute =
-                    visualItems.findIndex((item) => item.requirement.scene_id === requirement.scene_id) ===
-                    index;
-                  return (
-                    <div
-                      key={requirement.id}
-                      className={`rounded-lg border bg-white p-3 ${
-                        issue ? 'border-amber-400/40' : 'border-line'
-                      }`}
-                    >
-                      {imageSrc ? (
-                        <img
-                          className="mb-3 aspect-video w-full rounded-md object-cover bg-zinc-900"
-                          src={imageSrc}
-                          alt={requirement.reason}
-                          onError={(event) => {
-                            event.currentTarget.replaceWith(
-                              Object.assign(document.createElement('div'), {
-                                className:
-                                  'mb-3 flex aspect-video items-center justify-center rounded-md bg-zinc-900 text-xs text-zinc-600',
-                                textContent: '图片加载失败',
-                              }),
-                            );
-                          }}
-                        />
-                      ) : (
-                        <div className="mb-3 flex aspect-video items-center justify-center rounded-md bg-zinc-900 text-xs text-zinc-600">
-                          暂无预览
-                        </div>
-                      )}
-                      {gallery.length > 0 && (
-                        <div className="mb-3 grid grid-cols-3 gap-2">
-                          {gallery.map((candidate, index) => {
-                            const src = candidate.access_url || candidate.url || '';
-                            const selected = candidate.id === selectedId;
-                            return (
-                              <div key={candidate.id} className="relative">
-                                <button
-                                  type="button"
-                                  disabled={!canEditVisual || busy}
-                                  title={`候选 ${index + 1}（历史保留）`}
-                                  className={`w-full overflow-hidden rounded-md border ${
-                                    selected
-                                      ? 'border-accent ring-1 ring-accent/50'
-                                      : 'border-transparent hover:border-accent/40'
-                                  }`}
-                                  onClick={() =>
-                                    setSelectedCandidateIds((current) => ({
-                                      ...current,
-                                      [requirement.id]: candidate.id,
-                                    }))
-                                  }
-                                >
-                                  {src ? (
-                                    <img
-                                      className="aspect-square w-full object-cover"
-                                      src={src}
-                                      alt={`候选 ${index + 1}`}
-                                    />
-                                  ) : (
-                                    <div className="grid aspect-square place-items-center bg-zinc-900 text-[10px] text-zinc-600">
-                                      无图
-                                    </div>
-                                  )}
-                                </button>
-                                {canEditVisual && (
-                                  <button
-                                    type="button"
-                                    className="absolute right-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-black/90"
-                                    disabled={busy || regeneratingId === requirement.id}
-                                    title="从历史中删除"
-                                    onClick={() =>
-                                      void removeVisualCandidate(requirement, candidate.id)
-                                    }
-                                  >
-                                    删
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      {failedPlaceholder && (
-                        <p className="mb-2 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
-                          占位图（生图未成功）· 请检查图像模型后重新生成
-                        </p>
-                      )}
-                      {referenceInjectionSkipped(selectedMedia) && (
-                        <p className="mb-2 rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600">
-                          本次未注入参考图
-                          {mediaMeta(selectedMedia).reference_injection === 'skipped_unsupported'
-                            ? '（当前模型不支持）'
-                            : ''}
-                        </p>
-                      )}
-                      <p className="text-sm font-medium">
-                        {sceneTitle ? `场景「${sceneTitle}」` : '场景'} · {typeLabel}
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-400">
-                        {requirement.asset?.name ?? requirement.variant_key}
-                      </p>
-                      {requirement.asset?.appearance_summary && (
-                        <p className="mt-1 text-xs leading-5 text-zinc-500">
-                          特征：{requirement.asset.appearance_summary}
-                        </p>
-                      )}
-                      <p className="mt-1 text-xs leading-5 text-zinc-500">{requirement.reason}</p>
-                      <Field label="生图提示词">
-                        <Textarea
-                          value={draft}
-                          disabled={!canEditVisual || busy || regeneratingId === requirement.id}
-                          onChange={(event) =>
-                            setPromptDrafts((current) => ({
-                              ...current,
-                              [requirement.id]: event.target.value,
-                            }))
-                          }
-                        />
-                      </Field>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {canEditVisual && (
-                          <>
-                            <label className="flex items-center gap-1 text-xs text-zinc-400">
-                              候选数
-                              <select
-                                className="rounded border border-line bg-white px-2 py-1 text-xs text-zinc-700"
-                                value={candidateCount}
-                                disabled={busy || regeneratingId === requirement.id}
-                                onChange={(event) =>
-                                  setCandidateCount(Number(event.target.value) || 1)
-                                }
-                              >
-                                {[1, 2, 3, 4].map((value) => (
-                                  <option key={value} value={value}>
-                                    {value}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              disabled={busy || regeneratingId === requirement.id}
-                              onClick={() => void regenerateVisual(requirement)}
-                              title="只生成/追加本张关键图候选，不影响同场景其他卡"
-                            >
-                              {regeneratingId === requirement.id
-                                ? '生成中…'
-                                : failedPlaceholder || !imageSrc
-                                  ? '按提示词生成本张'
-                                  : '按提示词重生成本张'}
-                            </Button>
-                          </>
-                        )}
-                        {showSceneRecompute && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            disabled={busy || recomputingKey === `visual:${requirement.scene_id}`}
-                            onClick={() => {
-                              if (
-                                !window.confirm(
-                                  '将重跑该场景整步视觉准备：重新起草本场景全部角色/地点提示词（不自动生图）。单张生图请用「按提示词生成本张」。确定继续？',
-                                )
-                              ) {
-                                return;
-                              }
-                              void recomputeSceneVisual(requirement.scene_id);
-                            }}
-                            title="重写本场景全部提示词草稿，不是单张生图"
+                ) : (
+                  <>
+                    <p className="text-xs text-zinc-500 sm:col-span-2 lg:col-span-3">
+                      视觉准备只起草提示词、不自动生图。请先在「角色与地点」生成设定表，再在本页对每张卡点「按提示词生成本张」。全部关键图就绪后，底部「审核通过并继续」会亮起。「重写本场景全部提示词」会重写同场景所有卡的提示词草稿，不会单独生图。
+                    </p>
+                    {visualItems.map(
+                      ({ requirement, media, candidates, sceneTitle, issue }, index) => {
+                        const gallery =
+                          candidates && candidates.length > 0 ? candidates : media ? [media] : [];
+                        const selectedId =
+                          selectedCandidateIds[requirement.id] ??
+                          requirement.approved_media_id ??
+                          gallery[0]?.id;
+                        const selectedMedia =
+                          gallery.find((item) => item.id === selectedId) ?? gallery[0] ?? media;
+                        const imageSrc = selectedMedia?.access_url || selectedMedia?.url || '';
+                        const failedPlaceholder = isFailedPlaceholder(selectedMedia);
+                        const typeLabel =
+                          requirement.asset_type === 'character' ? '角色关键图' : '地点参考';
+                        const draft =
+                          promptDrafts[requirement.id] ?? requirement.generation_prompt ?? '';
+                        const showSceneRecompute =
+                          visualItems.findIndex(
+                            (item) => item.requirement.scene_id === requirement.scene_id,
+                          ) === index;
+                        return (
+                          <div
+                            key={requirement.id}
+                            className={`rounded-lg border bg-white p-3 ${
+                              issue ? 'border-amber-400/40' : 'border-line'
+                            }`}
                           >
-                            {recomputingKey === `visual:${requirement.scene_id}`
-                              ? '场景提示词重跑中…'
-                              : '重写本场景全部提示词'}
-                          </Button>
-                        )}
-                      </div>
-                      {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
-                    </div>
-                  );
-                })}
-                </>
-              )}
+                            {imageSrc ? (
+                              <img
+                                className="mb-3 aspect-video w-full rounded-md object-cover bg-zinc-900"
+                                src={imageSrc}
+                                alt={requirement.reason}
+                                onError={(event) => {
+                                  event.currentTarget.replaceWith(
+                                    Object.assign(document.createElement('div'), {
+                                      className:
+                                        'mb-3 flex aspect-video items-center justify-center rounded-md bg-zinc-900 text-xs text-zinc-600',
+                                      textContent: '图片加载失败',
+                                    }),
+                                  );
+                                }}
+                              />
+                            ) : (
+                              <div className="mb-3 flex aspect-video items-center justify-center rounded-md bg-zinc-900 text-xs text-zinc-600">
+                                暂无预览
+                              </div>
+                            )}
+                            {gallery.length > 0 && (
+                              <div className="mb-3 grid grid-cols-3 gap-2">
+                                {gallery.map((candidate, index) => {
+                                  const src = candidate.access_url || candidate.url || '';
+                                  const selected = candidate.id === selectedId;
+                                  return (
+                                    <div key={candidate.id} className="relative">
+                                      <button
+                                        type="button"
+                                        disabled={!canEditVisual || busy}
+                                        title={`候选 ${index + 1}（历史保留）`}
+                                        className={`w-full overflow-hidden rounded-md border ${
+                                          selected
+                                            ? 'border-accent ring-1 ring-accent/50'
+                                            : 'border-transparent hover:border-accent/40'
+                                        }`}
+                                        onClick={() =>
+                                          setSelectedCandidateIds((current) => ({
+                                            ...current,
+                                            [requirement.id]: candidate.id,
+                                          }))
+                                        }
+                                      >
+                                        {src ? (
+                                          <img
+                                            className="aspect-square w-full object-cover"
+                                            src={src}
+                                            alt={`候选 ${index + 1}`}
+                                          />
+                                        ) : (
+                                          <div className="grid aspect-square place-items-center bg-zinc-900 text-[10px] text-zinc-600">
+                                            无图
+                                          </div>
+                                        )}
+                                      </button>
+                                      {canEditVisual && (
+                                        <button
+                                          type="button"
+                                          className="absolute right-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-black/90"
+                                          disabled={busy || regeneratingId === requirement.id}
+                                          title="从历史中删除"
+                                          onClick={() =>
+                                            void removeVisualCandidate(requirement, candidate.id)
+                                          }
+                                        >
+                                          删
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {failedPlaceholder && (
+                              <p className="mb-2 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+                                占位图（生图未成功）· 请检查图像模型后重新生成
+                              </p>
+                            )}
+                            {referenceInjectionSkipped(selectedMedia) && (
+                              <p className="mb-2 rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600">
+                                本次未注入参考图
+                                {mediaMeta(selectedMedia).reference_injection ===
+                                'skipped_unsupported'
+                                  ? '（当前模型不支持）'
+                                  : ''}
+                              </p>
+                            )}
+                            <p className="text-sm font-medium">
+                              {sceneTitle ? `场景「${sceneTitle}」` : '场景'} · {typeLabel}
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-400">
+                              {requirement.asset?.name ?? requirement.variant_key}
+                            </p>
+                            {requirement.asset?.appearance_summary && (
+                              <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                特征：{requirement.asset.appearance_summary}
+                              </p>
+                            )}
+                            <p className="mt-1 text-xs leading-5 text-zinc-500">
+                              {requirement.reason}
+                            </p>
+                            <Field label="生图提示词">
+                              <Textarea
+                                value={draft}
+                                disabled={
+                                  !canEditVisual || busy || regeneratingId === requirement.id
+                                }
+                                onChange={(event) =>
+                                  setPromptDrafts((current) => ({
+                                    ...current,
+                                    [requirement.id]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </Field>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              {canEditVisual && (
+                                <>
+                                  <label className="flex items-center gap-1 text-xs text-zinc-400">
+                                    候选数
+                                    <select
+                                      className="rounded border border-line bg-white px-2 py-1 text-xs text-zinc-700"
+                                      value={candidateCount}
+                                      disabled={busy || regeneratingId === requirement.id}
+                                      onChange={(event) =>
+                                        setCandidateCount(Number(event.target.value) || 1)
+                                      }
+                                    >
+                                      {[1, 2, 3, 4].map((value) => (
+                                        <option key={value} value={value}>
+                                          {value}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={busy || regeneratingId === requirement.id}
+                                    onClick={() => void regenerateVisual(requirement)}
+                                    title="只生成/追加本张关键图候选，不影响同场景其他卡"
+                                  >
+                                    {regeneratingId === requirement.id
+                                      ? '生成中…'
+                                      : failedPlaceholder || !imageSrc
+                                        ? '按提示词生成本张'
+                                        : '按提示词重生成本张'}
+                                  </Button>
+                                </>
+                              )}
+                              {showSceneRecompute && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  disabled={
+                                    busy || recomputingKey === `visual:${requirement.scene_id}`
+                                  }
+                                  onClick={() => {
+                                    if (
+                                      !window.confirm(
+                                        '将重跑该场景整步视觉准备：重新起草本场景全部角色/地点提示词（不自动生图）。单张生图请用「按提示词生成本张」。确定继续？',
+                                      )
+                                    ) {
+                                      return;
+                                    }
+                                    void recomputeSceneVisual(requirement.scene_id);
+                                  }}
+                                  title="重写本场景全部提示词草稿，不是单张生图"
+                                >
+                                  {recomputingKey === `visual:${requirement.scene_id}`
+                                    ? '场景提示词重跑中…'
+                                    : '重写本场景全部提示词'}
+                                </Button>
+                              )}
+                            </div>
+                            {issue && <p className="mt-2 text-xs text-amber-300">{issue}</p>}
+                          </div>
+                        );
+                      },
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}

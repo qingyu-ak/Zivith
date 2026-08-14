@@ -10,7 +10,10 @@ describe('persistRemoteImage', () => {
       arrayBuffer: () => Promise.resolve(png.buffer),
     });
     const storage = {
-      put: vi.fn().mockResolvedValue({ key: 'visual-assets/a.png', url: 's3://zivith-media/visual-assets/a.png' }),
+      put: vi.fn().mockResolvedValue({
+        key: 'visual-assets/a.png',
+        url: 's3://zivith-media/visual-assets/a.png',
+      }),
       delete: vi.fn(),
       signedReadUrl: vi.fn(),
     };

@@ -40,18 +40,21 @@ export interface WorldBuilderInput {
 
 /** LLM often emits a single string where the schema wants a string array. */
 function coerceStringList(maxItems: number, maxLen: number) {
-  return z.preprocess((value: unknown) => {
-    if (value == null) return [];
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      return trimmed ? [trimmed.slice(0, maxLen)] : [];
-    }
-    if (!Array.isArray(value)) return [];
-    return value
-      .map((item) => (typeof item === 'string' ? item : item == null ? '' : String(item)))
-      .map((item) => item.trim().slice(0, maxLen))
-      .filter(Boolean);
-  }, z.array(z.string().max(maxLen)).max(maxItems));
+  return z.preprocess(
+    (value: unknown) => {
+      if (value == null) return [];
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed ? [trimmed.slice(0, maxLen)] : [];
+      }
+      if (!Array.isArray(value)) return [];
+      return value
+        .map((item) => (typeof item === 'string' ? item : item == null ? '' : String(item)))
+        .map((item) => item.trim().slice(0, maxLen))
+        .filter(Boolean);
+    },
+    z.array(z.string().max(maxLen)).max(maxItems),
+  );
 }
 
 export const worldStateSchema = z
@@ -91,7 +94,10 @@ export function worldBuilderPublicError(error: unknown): string {
 export function inferWorldStage(world: WorldContext | null): WorldStage {
   if (!world) return 'bootstrap';
   const count =
-    world.stories.length + world.characters.length + world.locations.length + world.worldEvents.length;
+    world.stories.length +
+    world.characters.length +
+    world.locations.length +
+    world.worldEvents.length;
   if (count === 0) return 'bootstrap';
   if (count < 5) return 'growing';
   return 'mature';
@@ -151,7 +157,9 @@ function extractWorldview(text: string): {
   let genre: string | undefined;
   let premise: string | undefined;
 
-  const genreMatch = text.match(/(?:题材|类型)(?:是|为|叫作|叫|：|:)?\s*([\u4e00-\u9fa5A-Za-z0-9·]{1,20})/);
+  const genreMatch = text.match(
+    /(?:题材|类型)(?:是|为|叫作|叫|：|:)?\s*([\u4e00-\u9fa5A-Za-z0-9·]{1,20})/,
+  );
   if (genreMatch && genreMatch[1]) genre = genreMatch[1].trim();
   if (!genre) {
     const fallback = text.match(WORLDVIEW_GENRE_PATTERN);
@@ -176,9 +184,7 @@ function extractWorldview(text: string): {
   if (premiseMatch && premiseMatch[1]) premise = premiseMatch[1].trim();
 
   if (!premise && !rules.length) {
-    const cleaned = text
-      .replace(/^(?:请|帮我|我想|让我们|我们来|我要|设定|记录|补充)/, '')
-      .trim();
+    const cleaned = text.replace(/^(?:请|帮我|我想|让我们|我们来|我要|设定|记录|补充)/, '').trim();
     if (cleaned.length >= 4) premise = cleaned.slice(0, 200);
   }
 
@@ -234,11 +240,7 @@ function applyGuidance(
       },
     };
   }
-  if (
-    response.proposals.length === 0 &&
-    input.focus &&
-    wantsGuidanceTurn(input.text)
-  ) {
+  if (response.proposals.length === 0 && input.focus && wantsGuidanceTurn(input.text)) {
     const label = `${focusKindLabel(input.focus.kind)}「${input.focus.name}」`;
     return {
       ...response,
@@ -376,9 +378,7 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
   // 明确声明信号（记录/创建/新增…）优先于疑问句检测，避免「主角还有什么秘密？」被误判为角色声明。
   const declaring = /记录|创建|新增|添加|设定|补充|登场|加入|增加|叫|名为/.test(text);
   const asking =
-    !declaring &&
-    (/\?|？/.test(text) ||
-      /什么|哪里|为什么|怎么|如何|是谁|在哪|吗$/.test(text));
+    !declaring && (/\?|？/.test(text) || /什么|哪里|为什么|怎么|如何|是谁|在哪|吗$/.test(text));
 
   // 世界观自动识别（优先于实体分支）：提炼题材/核心设定/世界规则 → update_entity(type='project')
   if (wantsWorldview && !asking) {
@@ -403,7 +403,11 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
         reply:
           '我提炼了你的世界观设定，已整理成提案。请确认后写入世界档案；如有遗漏可以直接补充，例如：「规则：魔法需要消耗生命值」。',
         proposals,
-        world_state: { stage: 'growing', open_questions: ['题材细节', '世界规则', '补充设定'], conflicts },
+        world_state: {
+          stage: 'growing',
+          open_questions: ['题材细节', '世界规则', '补充设定'],
+          conflicts,
+        },
       };
     }
   }
@@ -412,7 +416,9 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
     const extracted = extractEntityName(text);
     const existing =
       extracted &&
-      world.characters.find((character) => normalizeEntityName(character.name) === normalizeEntityName(extracted));
+      world.characters.find(
+        (character) => normalizeEntityName(character.name) === normalizeEntityName(extracted),
+      );
     if (existing) {
       return {
         reply: `角色「${existing.name}」已经在世界档案里。若要改设定，请说明要改哪一项；我不会自动覆盖。`,
@@ -434,7 +440,11 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
       reply:
         '我来帮你建立角色档案。为了更准确，告诉我角色的：\n1. 名字和身份\n2. 性格核心（比如：冷静、热血、偏执）\n3. 他/她的目标或欲望是什么？',
       proposals,
-      world_state: { stage: 'growing', open_questions: ['角色名字', '性格核心', '目标欲望'], conflicts },
+      world_state: {
+        stage: 'growing',
+        open_questions: ['角色名字', '性格核心', '目标欲望'],
+        conflicts,
+      },
     };
   }
 
@@ -442,7 +452,9 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
     const extracted = extractEntityName(text);
     const existing =
       extracted &&
-      world.locations.find((location) => normalizeEntityName(location.name) === normalizeEntityName(extracted));
+      world.locations.find(
+        (location) => normalizeEntityName(location.name) === normalizeEntityName(extracted),
+      );
     if (existing) {
       return {
         reply: `地点「${existing.name}」已经在世界档案里。若要改设定，请说明要改哪一项；我不会自动覆盖。`,
@@ -461,7 +473,8 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
       }),
     );
     return {
-      reply: '好的，我们建立一个核心地点。这个地点是：\n1. 一座城市、一片区域，还是一个建筑？\n2. 它在这个世界里的地位（家园 / 战场 / 圣地…）？',
+      reply:
+        '好的，我们建立一个核心地点。这个地点是：\n1. 一座城市、一片区域，还是一个建筑？\n2. 它在这个世界里的地位（家园 / 战场 / 圣地…）？',
       proposals,
       world_state: { stage: 'growing', open_questions: ['地点形态', '地点地位'], conflicts },
     };
@@ -476,9 +489,14 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
       }),
     );
     return {
-      reply: '这个世界发生过什么？请描述一个关键事件：\n1. 事件名称\n2. 它发生在什么时候（世界纪元 / 年份）\n3. 它对世界产生了什么影响？',
+      reply:
+        '这个世界发生过什么？请描述一个关键事件：\n1. 事件名称\n2. 它发生在什么时候（世界纪元 / 年份）\n3. 它对世界产生了什么影响？',
       proposals,
-      world_state: { stage: 'growing', open_questions: ['事件名称', '时间定位', '世界影响'], conflicts },
+      world_state: {
+        stage: 'growing',
+        open_questions: ['事件名称', '时间定位', '世界影响'],
+        conflicts,
+      },
     };
   }
 
@@ -560,7 +578,10 @@ export class WorldBuilderAgent {
     }
 
     const historyText = input.history
-      .map((m) => `${m.role === 'user' ? '创作者' : m.role === 'assistant' ? '世界构建者' : '系统'}：${m.content}`)
+      .map(
+        (m) =>
+          `${m.role === 'user' ? '创作者' : m.role === 'assistant' ? '世界构建者' : '系统'}：${m.content}`,
+      )
       .slice(-24)
       .join('\n');
 

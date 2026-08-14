@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import type { Prisma} from '@zivith/database';
+import type { Prisma } from '@zivith/database';
 import { type PrismaClient } from '@zivith/database';
 import {
   appearanceVariantCreateSchema,
@@ -402,10 +402,7 @@ export function registerAppearanceVariantRoutes(
     const asset = await characterAssetForMember(db, id, request.user.sub, true);
     const variant = await variantForAsset(db, asset.id, key);
     const body = generateBody.parse(request.body ?? {});
-    const appearance = resolveAppearanceWithVariant(
-      appearanceFromAsset(asset.appearance),
-      variant,
-    );
+    const appearance = resolveAppearanceWithVariant(appearanceFromAsset(asset.appearance), variant);
     const appearanceBits = Object.values(appearance)
       .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
       .join(', ');
@@ -524,23 +521,20 @@ export function registerAppearanceVariantRoutes(
     return approved;
   });
 
-  app.delete(
-    '/assets/:id/appearance-variants/:key/candidates/:mediaId',
-    async (request, reply) => {
-      const params = z
-        .object({
-          id: z.string().uuid(),
-          key: appearanceVariantKeySchema,
-          mediaId: z.string().uuid(),
-        })
-        .parse(request.params);
-      const asset = await characterAssetForMember(db, params.id, request.user.sub, true);
-      await removeAppearanceVariantCandidate(db, {
-        assetId: asset.id,
-        variantKey: params.key,
-        mediaId: params.mediaId,
-      });
-      return reply.status(204).send();
-    },
-  );
+  app.delete('/assets/:id/appearance-variants/:key/candidates/:mediaId', async (request, reply) => {
+    const params = z
+      .object({
+        id: z.string().uuid(),
+        key: appearanceVariantKeySchema,
+        mediaId: z.string().uuid(),
+      })
+      .parse(request.params);
+    const asset = await characterAssetForMember(db, params.id, request.user.sub, true);
+    await removeAppearanceVariantCandidate(db, {
+      assetId: asset.id,
+      variantKey: params.key,
+      mediaId: params.mediaId,
+    });
+    return reply.status(204).send();
+  });
 }

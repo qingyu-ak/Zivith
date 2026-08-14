@@ -43,9 +43,7 @@ describe('MockImageAdapter reference injection', () => {
 
 describe('SiliconFlowImageAdapter reference injection', () => {
   it('detects models that accept reference images', () => {
-    expect(siliconFlowModelSupportsReferenceImages('black-forest-labs/FLUX.1-schnell')).toBe(
-      false,
-    );
+    expect(siliconFlowModelSupportsReferenceImages('black-forest-labs/FLUX.1-schnell')).toBe(false);
     expect(siliconFlowModelSupportsReferenceImages('vendor/kolors-img2img')).toBe(true);
   });
 

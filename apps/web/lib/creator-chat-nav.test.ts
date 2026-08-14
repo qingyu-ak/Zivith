@@ -50,7 +50,9 @@ function resources(): WorldResourcesDTO {
 
 describe('normalizeThread', () => {
   it('accepts snake_case and camelCase payloads', () => {
-    expect(normalizeThread({ id: 't1', projectId: 'p1', updatedAt: '2026-01-01T00:00:00.000Z' })).toMatchObject({
+    expect(
+      normalizeThread({ id: 't1', projectId: 'p1', updatedAt: '2026-01-01T00:00:00.000Z' }),
+    ).toMatchObject({
       id: 't1',
       project_id: 'p1',
       updated_at: '2026-01-01T00:00:00.000Z',
@@ -85,15 +87,20 @@ describe('chat focus routing', () => {
   it('builds a thread URL and merges pending name onto query params', () => {
     const focus = { kind: 'character' as const, id: 'c1', name: '韩立' };
     expect(chatPathForThread('t9', focus)).toContain('focus_name=');
-    expect(parseFocusFromSearch(new URLSearchParams('focus_kind=character&focus_id=c1&focus_name=韩立'))).toEqual({
+    expect(
+      parseFocusFromSearch(new URLSearchParams('focus_kind=character&focus_id=c1&focus_name=韩立')),
+    ).toEqual({
       kind: 'character',
       id: 'c1',
       name: '韩立',
     });
     expect(mergeChatFocus({ kind: 'character', id: 'c1', name: '' }, null, 't9')).toBeNull();
     expect(
-      mergeChatFocus({ kind: 'character', id: 'c1', name: '韩立' }, { ...focus, thread_id: 't9', project_id: 'p1' }, 't9')
-        ?.name,
+      mergeChatFocus(
+        { kind: 'character', id: 'c1', name: '韩立' },
+        { ...focus, thread_id: 't9', project_id: 'p1' },
+        't9',
+      )?.name,
     ).toBe('韩立');
     expect(studioFocusHandoffMessage(focus)).toBe('从 Studio 继续：角色「韩立」');
   });

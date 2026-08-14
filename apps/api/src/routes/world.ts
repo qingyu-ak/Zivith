@@ -20,7 +20,10 @@ import {
   worldBuilderPublicError,
   type WorldBuilderChatMessage,
 } from '../contexts/world-builder/world-builder-agent.js';
-import { buildWorldContext, assembleWorldContext } from '../contexts/world-builder/world-context.js';
+import {
+  buildWorldContext,
+  assembleWorldContext,
+} from '../contexts/world-builder/world-context.js';
 import { detectWorldConflicts } from '../contexts/world-builder/conflict-detector.js';
 import { formatSseEvent } from '../lib/sse.js';
 import type { LLMAdapter } from '../ports/llm.js';
@@ -118,10 +121,8 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
         }),
       ]);
 
-    const entityCount =
-      stories.length + characters.length + locations.length + worldEvents.length;
-    const stage =
-      entityCount === 0 ? 'bootstrap' : entityCount < 5 ? 'growing' : 'mature';
+    const entityCount = stories.length + characters.length + locations.length + worldEvents.length;
+    const stage = entityCount === 0 ? 'bootstrap' : entityCount < 5 ? 'growing' : 'mature';
 
     const world = assembleWorldContext({
       projectId: project.id,
@@ -285,12 +286,8 @@ function registerRelationshipRoutes(app: FastifyInstance, db: PrismaClient) {
         direction: body.direction,
         label: body.label ?? null,
         description: body.description ?? null,
-        ...(body.valid_from
-          ? { validFrom: body.valid_from as Prisma.InputJsonValue }
-          : {}),
-        ...(body.valid_until
-          ? { validUntil: body.valid_until as Prisma.InputJsonValue }
-          : {}),
+        ...(body.valid_from ? { validFrom: body.valid_from as Prisma.InputJsonValue } : {}),
+        ...(body.valid_until ? { validUntil: body.valid_until as Prisma.InputJsonValue } : {}),
         state: 'draft',
       },
     });
@@ -301,7 +298,10 @@ function registerRelationshipRoutes(app: FastifyInstance, db: PrismaClient) {
     const { id } = entityParams.parse(request.params);
     const existing = await db.relationship.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new ApiError(404, 'RELATIONSHIP_NOT_FOUND', '关系不存在');
-    const body = relationshipCreateSchema.partial().strict().parse(request.body ?? {});
+    const body = relationshipCreateSchema
+      .partial()
+      .strict()
+      .parse(request.body ?? {});
     return db.relationship.update({
       where: { id },
       data: {
@@ -381,7 +381,10 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
       where: { id: trackId, deletedAt: null },
     });
     if (!existing) throw new ApiError(404, 'TRACK_NOT_FOUND', '轨道不存在');
-    const body = timelineTrackCreateSchema.partial().strict().parse(request.body ?? {});
+    const body = timelineTrackCreateSchema
+      .partial()
+      .strict()
+      .parse(request.body ?? {});
     return db.timelineTrack.update({
       where: { id: trackId },
       data: {
@@ -432,7 +435,10 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
       where: { id: itemId, deletedAt: null },
     });
     if (!existing) throw new ApiError(404, 'TIMELINE_ITEM_NOT_FOUND', '时间线项不存在');
-    const body = timelineItemCreateSchema.partial().strict().parse(request.body ?? {});
+    const body = timelineItemCreateSchema
+      .partial()
+      .strict()
+      .parse(request.body ?? {});
     return db.timelineItem.update({
       where: { id: itemId },
       data: {
@@ -443,7 +449,9 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
           : {}),
         ...(body.start_offset_ms !== undefined ? { startOffsetMs: body.start_offset_ms } : {}),
         ...(body.duration_ms !== undefined ? { durationMs: body.duration_ms } : {}),
-        ...(body.metadata !== undefined ? { metadata: body.metadata as Prisma.InputJsonValue } : {}),
+        ...(body.metadata !== undefined
+          ? { metadata: body.metadata as Prisma.InputJsonValue }
+          : {}),
       },
     });
   });
@@ -723,9 +731,7 @@ function registerCreatorChatRoutes(
     });
     const projectIds = [
       ...new Set(
-        threads
-          .map((thread) => thread.projectId)
-          .filter((id): id is string => Boolean(id)),
+        threads.map((thread) => thread.projectId).filter((id): id is string => Boolean(id)),
       ),
     ];
     const projects =
@@ -750,12 +756,12 @@ function registerCreatorChatRoutes(
       orderBy: { createdAt: 'asc' },
     });
     const projectName = thread.projectId
-      ? (
+      ? ((
           await db.project.findFirst({
             where: { id: thread.projectId, deletedAt: null },
             select: { name: true },
           })
-        )?.name ?? null
+        )?.name ?? null)
       : null;
     return {
       thread: chatThreadDto(thread, projectName),
@@ -797,7 +803,13 @@ function registerCreatorChatRoutes(
     // User turns trigger the World Builder: read world → reply → propose.
     let assistantMessage = null;
     if (body.role === 'user') {
-      const created = await createAssistantReply(db, builder, thread, userMessage.content, body.focus);
+      const created = await createAssistantReply(
+        db,
+        builder,
+        thread,
+        userMessage.content,
+        body.focus,
+      );
       assistantMessage = created.assistantMessage;
     }
 
@@ -880,8 +892,13 @@ function registerCreatorChatRoutes(
     }
 
     const { results, skipped } = await db.$transaction(async (tx) => {
-      const results: Array<{ kind: string; project_id: string; entity_type: string; entity_id: string; title: string }> =
-        [];
+      const results: Array<{
+        kind: string;
+        project_id: string;
+        entity_type: string;
+        entity_id: string;
+        title: string;
+      }> = [];
       const skipped: Array<{ kind: string; reason: string }> = [];
       // Track the project across a proposal batch: create_project may appear
       // alongside entity proposals in the same message.

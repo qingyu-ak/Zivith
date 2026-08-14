@@ -120,9 +120,7 @@ export function assertAllPromptTemplatesValid(root = resolvePromptsRoot()): void
       }
       for (const name of found) {
         if (!required.has(name)) {
-          throw new Error(
-            `Prompt ${agent}/system.${locale}.md has unknown placeholder {${name}}`,
-          );
+          throw new Error(`Prompt ${agent}/system.${locale}.md has unknown placeholder {${name}}`);
         }
       }
       // Ensure mock dispatch markers survive externalization.

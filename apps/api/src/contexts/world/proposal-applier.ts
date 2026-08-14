@@ -31,11 +31,7 @@ function requireProjectId(proposal: Proposal, fallback?: string | null): string 
   return id;
 }
 
-function requireString(
-  payload: Record<string, unknown>,
-  key: string,
-  label: string,
-): string {
+function requireString(payload: Record<string, unknown>, key: string, label: string): string {
   const value = payload[key];
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new ApiError(400, 'PROPOSAL_FIELD_REQUIRED', `提案缺少 ${label}`);
@@ -222,18 +218,12 @@ async function applyCreateScene(
           ? payload.description.trim()
           : null,
       order: typeof payload.order === 'number' ? payload.order : count + 1,
-      time:
-        typeof payload.time === 'string' && payload.time.trim()
-          ? payload.time.trim()
-          : null,
+      time: typeof payload.time === 'string' && payload.time.trim() ? payload.time.trim() : null,
       weather:
         typeof payload.weather === 'string' && payload.weather.trim()
           ? payload.weather.trim()
           : null,
-      mood:
-        typeof payload.mood === 'string' && payload.mood.trim()
-          ? payload.mood.trim()
-          : null,
+      mood: typeof payload.mood === 'string' && payload.mood.trim() ? payload.mood.trim() : null,
       state: 'draft',
     },
   });
@@ -269,12 +259,8 @@ async function applyCreateRelationship(
       direction: input.direction,
       label: input.label ?? null,
       description: input.description ?? null,
-      ...(input.valid_from
-        ? { validFrom: input.valid_from as Prisma.InputJsonValue }
-        : {}),
-      ...(input.valid_until
-        ? { validUntil: input.valid_until as Prisma.InputJsonValue }
-        : {}),
+      ...(input.valid_from ? { validFrom: input.valid_from as Prisma.InputJsonValue } : {}),
+      ...(input.valid_until ? { validUntil: input.valid_until as Prisma.InputJsonValue } : {}),
       state: 'draft',
     },
   });
@@ -299,15 +285,30 @@ async function assertEntityRefExists(
   }
   const exists =
     type === 'story'
-      ? await db.story.findFirst({ where: { id, projectId, deletedAt: null }, select: { id: true } })
+      ? await db.story.findFirst({
+          where: { id, projectId, deletedAt: null },
+          select: { id: true },
+        })
       : type === 'asset'
-        ? await db.asset.findFirst({ where: { id, projectId, deletedAt: null }, select: { id: true } })
+        ? await db.asset.findFirst({
+            where: { id, projectId, deletedAt: null },
+            select: { id: true },
+          })
         : type === 'scene'
-          ? await db.scene.findFirst({ where: { id, projectId, deletedAt: null }, select: { id: true } })
+          ? await db.scene.findFirst({
+              where: { id, projectId, deletedAt: null },
+              select: { id: true },
+            })
           : type === 'world_event'
-            ? await db.worldEvent.findFirst({ where: { id, projectId, deletedAt: null }, select: { id: true } })
+            ? await db.worldEvent.findFirst({
+                where: { id, projectId, deletedAt: null },
+                select: { id: true },
+              })
             : type === 'relationship'
-              ? await db.relationship.findFirst({ where: { id, projectId, deletedAt: null }, select: { id: true } })
+              ? await db.relationship.findFirst({
+                  where: { id, projectId, deletedAt: null },
+                  select: { id: true },
+                })
               : null;
   if (!exists) throw new ApiError(400, 'REF_NOT_FOUND', `引用实体不存在: ${type}:${id}`);
 }
@@ -354,7 +355,8 @@ async function applyUpdateEntity(
         data.sceneIds = fields.scene_ids.filter((x): x is string => typeof x === 'string');
       }
       if (fields.anchor_story_id !== undefined) {
-        data.anchorStoryId = typeof fields.anchor_story_id === 'string' ? fields.anchor_story_id : null;
+        data.anchorStoryId =
+          typeof fields.anchor_story_id === 'string' ? fields.anchor_story_id : null;
       }
       await db.worldEvent.update({ where: { id }, data });
       return { kind: proposal.kind, projectId, entityType: 'world_event', entityId: id, title };
@@ -428,7 +430,8 @@ async function applyUpdateEntity(
         data.label = fields.label.trim() || null;
         title = fields.label.trim() || id;
       }
-      if (typeof fields.description === 'string') data.description = fields.description.trim() || null;
+      if (typeof fields.description === 'string')
+        data.description = fields.description.trim() || null;
       if (typeof fields.direction === 'string') data.direction = fields.direction;
       if (fields.valid_from && typeof fields.valid_from === 'object') {
         data.validFrom = fields.valid_from;
@@ -454,10 +457,7 @@ async function applyUpdateEntity(
         typeof fields.worldview === 'object' && fields.worldview !== null
           ? (fields.worldview as Record<string, unknown>).premise
           : undefined;
-      title =
-        typeof premise === 'string' && premise.trim()
-          ? premise.trim()
-          : entity.name;
+      title = typeof premise === 'string' && premise.trim() ? premise.trim() : entity.name;
       return { kind: proposal.kind, projectId, entityType: 'project', entityId: id, title };
     }
     default:

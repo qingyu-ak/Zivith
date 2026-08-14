@@ -30,8 +30,8 @@ function entityName(payload: Record<string, unknown>): string {
   const fields = payload.fields;
   const fromFields =
     typeof fields === 'object' && fields !== null
-      ? pick(fields as Record<string, unknown>, 'name') ??
-        pick(fields as Record<string, unknown>, 'title')
+      ? (pick(fields as Record<string, unknown>, 'name') ??
+        pick(fields as Record<string, unknown>, 'title'))
       : null;
   return (
     pick(payload, 'name') ??
@@ -77,10 +77,10 @@ export function ProposalCard({
       const value = await api<{
         applied: ApplyProposalResultDTO[];
         skipped?: Array<{ kind: string; reason: string }>;
-      }>(
-        `/world/creator-chats/${threadId}/proposals/${messageId}/apply`,
-        { method: 'POST', body: {} },
-      );
+      }>(`/world/creator-chats/${threadId}/proposals/${messageId}/apply`, {
+        method: 'POST',
+        body: {},
+      });
       setResults(value.applied);
       setSkipped(value.skipped ?? []);
       onApplied?.(value.applied);

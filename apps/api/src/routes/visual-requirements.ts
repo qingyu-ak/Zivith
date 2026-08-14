@@ -350,23 +350,20 @@ export function registerVisualRequirementRoutes(
     return enrichRequirement(db, rejected);
   });
 
-  app.delete(
-    '/scenes/:id/visual-requirements/:rid/candidates/:mediaId',
-    async (request, reply) => {
-      const params = z
-        .object({
-          id: z.string().uuid(),
-          rid: z.string().uuid(),
-          mediaId: z.string().uuid(),
-        })
-        .parse(request.params);
-      await sceneForMember(db, params.id, request.user.sub, true);
-      await requirementForScene(db, params.id, params.rid);
-      await removeRequirementCandidate(db, {
-        requirementId: params.rid,
-        mediaId: params.mediaId,
-      });
-      return reply.status(204).send();
-    },
-  );
+  app.delete('/scenes/:id/visual-requirements/:rid/candidates/:mediaId', async (request, reply) => {
+    const params = z
+      .object({
+        id: z.string().uuid(),
+        rid: z.string().uuid(),
+        mediaId: z.string().uuid(),
+      })
+      .parse(request.params);
+    await sceneForMember(db, params.id, request.user.sub, true);
+    await requirementForScene(db, params.id, params.rid);
+    await removeRequirementCandidate(db, {
+      requirementId: params.rid,
+      mediaId: params.mediaId,
+    });
+    return reply.status(204).send();
+  });
 }

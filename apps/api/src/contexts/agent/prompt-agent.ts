@@ -117,9 +117,7 @@ export class PromptAgent implements Agent<PromptAgentInput, GeneratedPrompt> {
     const actionDescription =
       typeof input.action?.description === 'string' ? input.action.description.trim() : '';
     const compositionBackground =
-      typeof input.composition?.background === 'string'
-        ? input.composition.background.trim()
-        : '';
+      typeof input.composition?.background === 'string' ? input.composition.background.trim() : '';
     const sceneDescription = input.scene.description?.trim() ?? '';
     // Avoid repeating the same narrative in Characters.action, Action, and Environment.
     const environmentBits = [

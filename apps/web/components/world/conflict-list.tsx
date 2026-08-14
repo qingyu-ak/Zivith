@@ -35,7 +35,8 @@ export function WorldConflictList({
                   <span>{conflict.summary}</span>
                   {conflict.evidence && conflict.evidence.length > 0 ? (
                     <span className="mt-0.5 block text-[11px] text-amber-700/80">
-                      点此打开，改描述里的 {conflict.evidence.map((item) => `「${item}」`).join(' / ')}
+                      点此打开，改描述里的{' '}
+                      {conflict.evidence.map((item) => `「${item}」`).join(' / ')}
                     </span>
                   ) : null}
                 </button>
@@ -57,7 +58,9 @@ export function WorldConflictList({
           点一条冲突，右侧会打开对应实体。改描述里互相打架的句子后保存；系统不会自动改。
         </p>
       ) : (
-        <p className="mt-1 text-[11px] leading-4 text-zinc-600">只报告，不会自动修改。请确认要保留哪一则后再改档案。</p>
+        <p className="mt-1 text-[11px] leading-4 text-zinc-600">
+          只报告，不会自动修改。请确认要保留哪一则后再改档案。
+        </p>
       )}
     </div>
   );

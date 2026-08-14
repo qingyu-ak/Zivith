@@ -231,10 +231,7 @@ function recordingAudio(db: PrismaClient, inner: AudioSpeechAdapter): AudioSpeec
 }
 
 /** Wrap a provider bundle so every LLM/image/video/audio call writes a usage_records row. */
-export function instrumentProviderBundle(
-  db: PrismaClient,
-  bundle: ProviderBundle,
-): ProviderBundle {
+export function instrumentProviderBundle(db: PrismaClient, bundle: ProviderBundle): ProviderBundle {
   return {
     ...bundle,
     llm: recordingLlm(db, bundle.llm),

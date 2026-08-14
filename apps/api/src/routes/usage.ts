@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { Prisma} from '@zivith/database';
+import type { Prisma } from '@zivith/database';
 import { type PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ensureProjectMember } from '../contexts/world/local-user.js';

@@ -90,7 +90,9 @@ export function UsageSummaryCard({ projectId }: { projectId: string }) {
             )}
           </div>
           {summary.by_task_type.length === 0 ? (
-            <p className="text-sm text-zinc-500">尚无用量记录。运行工作流或生成媒体后会出现在这里。</p>
+            <p className="text-sm text-zinc-500">
+              尚无用量记录。运行工作流或生成媒体后会出现在这里。
+            </p>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">
               {summary.by_task_type.map((row) => (

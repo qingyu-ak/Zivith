@@ -64,7 +64,10 @@ const POLAR_FACTS: Array<{ a: RegExp; b: RegExp; label: string }> = [
 ];
 
 export function normalizeEntityName(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s·・.。]/g, '');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s·・.。]/g, '');
 }
 
 export function wantsConflictCheck(text: string): boolean {

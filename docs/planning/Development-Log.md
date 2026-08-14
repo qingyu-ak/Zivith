@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-08-14 · pending · chore · make format and lint pass on GitHub CI
+
+CI 在 `format:check` 失败：78 个文件未过 Prettier，随后 ESLint 还有脚本/测试/若干源码规则错误。已格式化并修掉会挡门禁的 lint。
+
+- **chore** Prettier 写回；eslint 忽略 scripts/vitest 配置，测试文件放宽 unsafe 规则
+- **fix** chat-history 类型收窄、Inspector 异步保存、视频 adapter 的 cause 文案
+- 验证：`pnpm format:check`；`pnpm lint`；api/web/domain `tsc --noEmit`
+
 ## 2026-08-14 · `3dac37e` · feat(web,api) · hand off studio focus and make conflicts editable
 
 「在对话中继续」立刻交接选中实体（带真名、不问主线、不写「未命名」）；模型把 `open_questions` 写成字符串时不再把校验 JSON 丢进对话；冲突卡片标出互相打架的原文，Inspector 可直接改描述。

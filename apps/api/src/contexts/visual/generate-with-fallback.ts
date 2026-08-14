@@ -1,4 +1,8 @@
-import type { ImageGenerationAdapter, ImageGenerationResult, ImageReferenceImage } from '../../ports/media.js';
+import type {
+  ImageGenerationAdapter,
+  ImageGenerationResult,
+  ImageReferenceImage,
+} from '../../ports/media.js';
 import { toImageReferencePayload } from './reference-images.js';
 
 export function shouldFallbackImageToText(error: unknown): boolean {

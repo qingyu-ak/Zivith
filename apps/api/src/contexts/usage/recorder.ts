@@ -17,10 +17,7 @@ function json(value: unknown): Prisma.InputJsonValue {
 }
 
 /** Fire-and-forget safe write — never throws to callers. */
-export async function recordUsage(
-  db: PrismaClient,
-  input: UsageRecordInput,
-): Promise<void> {
+export async function recordUsage(db: PrismaClient, input: UsageRecordInput): Promise<void> {
   const projectId = input.projectId ?? getUsageContext()?.projectId;
   if (!projectId) return;
   try {

@@ -731,7 +731,11 @@ export class MockWorkflowRunner {
       return this.getRun(runId);
     }
 
-    if (input.action === 'retry_with_feedback' || input.action === 'retry' || input.action === 'reject') {
+    if (
+      input.action === 'retry_with_feedback' ||
+      input.action === 'retry' ||
+      input.action === 'reject'
+    ) {
       const segments = await this.db.storySegment.findMany({
         where: { storyId, deletedAt: null },
         orderBy: { order: 'asc' },
@@ -1006,18 +1010,23 @@ export class MockWorkflowRunner {
           'workflow_step',
           `${run.id}:sheet-prompt:${character.id}`,
           () =>
-            enrichVisualAssetTraits(this.llm, this.llmModel, `${run.id}:sheet-prompt:${character.id}`, {
-              asset_type: 'character',
-              asset_name: character.name,
-              variant_key: CHARACTER_SHEET_TURNAROUND_KEY,
-              purpose: 'character_sheet',
-              scene_title: 'character reference sheet',
-              story_title: story?.title,
-              story_synopsis: story?.synopsis ?? undefined,
-              story_screenplay_excerpt: storyScreenplay,
-              existing_description: character.description,
-              appearance_bits: appearanceBits,
-            }),
+            enrichVisualAssetTraits(
+              this.llm,
+              this.llmModel,
+              `${run.id}:sheet-prompt:${character.id}`,
+              {
+                asset_type: 'character',
+                asset_name: character.name,
+                variant_key: CHARACTER_SHEET_TURNAROUND_KEY,
+                purpose: 'character_sheet',
+                scene_title: 'character reference sheet',
+                story_title: story?.title,
+                story_synopsis: story?.synopsis ?? undefined,
+                story_screenplay_excerpt: storyScreenplay,
+                existing_description: character.description,
+                appearance_bits: appearanceBits,
+              },
+            ),
         );
         await this.db.assetAppearanceVariant.update({
           where: { id: variant.id },
@@ -1087,8 +1096,7 @@ export class MockWorkflowRunner {
               asset_type: requirement.asset_type,
               asset_name: asset.name,
               variant_key: requirement.variant_key,
-              purpose:
-                requirement.asset_type === 'location' ? 'location_sheet' : 'keyframe',
+              purpose: requirement.asset_type === 'location' ? 'location_sheet' : 'keyframe',
               scene_title: sceneTitle,
               scene_context: [
                 typeof sceneMeta.summary === 'string' ? sceneMeta.summary : '',

@@ -158,7 +158,10 @@ export async function generateLocationSheetImage(input: {
       referenceImages: [
         primaryId,
         ...asset.referenceImages.filter((id) => id !== primaryId),
-        ...medias.slice(1).map((item) => item.id).filter((id) => !asset.referenceImages.includes(id)),
+        ...medias
+          .slice(1)
+          .map((item) => item.id)
+          .filter((id) => !asset.referenceImages.includes(id)),
       ],
       data: json(mergeVisualPromptIntoAssetData(asset.data, LOCATION_SHEET_KEY, prompt)),
     },

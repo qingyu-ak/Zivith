@@ -1,7 +1,4 @@
-import {
-  HISTORY_ENTITY_TYPES,
-  type HistoryEntityType,
-} from '@zivith/domain';
+import { HISTORY_ENTITY_TYPES, type HistoryEntityType } from '@zivith/domain';
 
 export type HistoryWriteMode = 'off' | 'shadow' | 'dual';
 

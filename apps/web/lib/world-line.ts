@@ -247,9 +247,7 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
       id: 'scene',
       kind: 'scene',
       title: '场景',
-      items: [...scenes]
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-        .map(sceneItem),
+      items: [...scenes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(sceneItem),
     },
     {
       id: 'world_event',
@@ -306,7 +304,9 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
   const { stories, scenes, shots = [] } = resources.entities;
 
   const sortedStories = [...stories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const storyOrder = new Map(sortedStories.map((story, index) => [story.id, story.order ?? index + 1]));
+  const storyOrder = new Map(
+    sortedStories.map((story, index) => [story.id, story.order ?? index + 1]),
+  );
 
   const sortedScenes = [...scenes]
     .map((scene) => ({

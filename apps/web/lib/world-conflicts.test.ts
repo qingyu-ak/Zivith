@@ -1,5 +1,10 @@
 /// <reference types="vitest/globals" />
-import { conflictsForSelection, firstConflictSelection, selectionFromConflictRef } from './world-conflicts';
+import type { WorldConflictDTO } from './types';
+import {
+  conflictsForSelection,
+  firstConflictSelection,
+  selectionFromConflictRef,
+} from './world-conflicts';
 
 describe('world conflict selection', () => {
   it('maps a known entity ref to a workspace selection', () => {
@@ -29,7 +34,7 @@ describe('world conflict selection', () => {
         kind: 'duplicate_name',
         summary: '同名',
         entity_refs: undefined,
-      } as unknown as import('./types').WorldConflictDTO),
+      } as unknown as WorldConflictDTO),
     ).toBeNull();
   });
 

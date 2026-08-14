@@ -104,9 +104,9 @@ function database(currentShot = shot()) {
   const shotUpdate = vi.fn().mockResolvedValue({});
   const db = {
     media: {
-      findMany: vi.fn().mockResolvedValue([
-        { id: 'media-1', url: 'https://example.test/ref-1.png' },
-      ]),
+      findMany: vi
+        .fn()
+        .mockResolvedValue([{ id: 'media-1', url: 'https://example.test/ref-1.png' }]),
     },
     shot: {
       findFirst: vi.fn().mockResolvedValue(currentShot),

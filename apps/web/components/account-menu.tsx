@@ -124,7 +124,9 @@ export function AccountMenu({
         >
           Z
         </span>
-        <span className={`min-w-0 flex-1 truncate text-sm ${light ? 'text-zinc-800' : 'text-zinc-700'}`}>
+        <span
+          className={`min-w-0 flex-1 truncate text-sm ${light ? 'text-zinc-800' : 'text-zinc-700'}`}
+        >
           {name}
         </span>
         <IconDots className={`size-4 ${light ? 'text-zinc-400' : 'text-zinc-500'}`} />
