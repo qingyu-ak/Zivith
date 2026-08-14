@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-14 · pending · feat(web,api) · name creator chats after their world
+## 2026-08-14 · `81aba7c` · feat(web,api) · name creator chats after their world
 
 确认创建世界后，对话标题跟随项目名；无自定义标题时侧栏和顶栏显示项目名。
 
