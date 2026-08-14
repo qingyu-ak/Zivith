@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Button, Card, EmptyState, Field, Input, Spinner, Textarea } from '@zivith/ui';
+import { Badge, Button, Card, EmptyState, Field, Input, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormText } from '@/lib/form-data';
 import type { ProjectDTO, StoryDTO } from '@/lib/types';
+import { ContinueInChatButton } from '@/components/world/continue-in-chat';
+import { ProjectSubNav } from '@/components/project-sub-nav';
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -84,22 +86,28 @@ export default function ProjectPage() {
           <Link className="text-sm text-zinc-500 hover:text-accent" href="/projects">
             ← 所有项目
           </Link>
-          <h1 className="mt-3 text-3xl font-semibold">{project?.name ?? '项目'}</h1>
+          <h1 className="mt-3 flex items-center gap-3 text-3xl font-semibold">
+            {project?.name ?? '项目'}
+            <Badge tone="neutral">本地创作</Badge>
+          </h1>
           <p className="mt-2 text-zinc-400">
             {project?.description || '从一个故事开始构建你的创意宇宙。'}
           </p>
         </div>
         <div className="flex gap-3">
-          <Link href={`/projects/${projectId}/assets`}>
-            <Button variant="secondary">资产库</Button>
-          </Link>
-          <Button onClick={() => setShowForm((value) => !value)}>
+          <ContinueInChatButton
+            projectId={projectId}
+            label="去创作对话"
+            className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          />
+          <Button variant="secondary" onClick={() => setShowForm((value) => !value)}>
             {showForm ? '取消' : '新建故事'}
           </Button>
         </div>
       </header>
+      <ProjectSubNav projectId={projectId} />
       {error && (
-        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+        <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}

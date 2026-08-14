@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { Shot } from '@zivith/domain';
+import { asId, type Shot } from '@zivith/domain';
 import { GenerationAdapterRegistry } from '../src/adapters/generation-registry.js';
 import { MockGenerationAdapter } from '../src/adapters/mock-generation.js';
 
 function makeShot(): Shot {
   return {
-    id: 'shot-1',
-    scene_id: 'scene-1',
-    project_id: 'project-1',
+    id: asId('shot-1'),
+    scene_id: asId('scene-1'),
+    project_id: asId('project-1'),
     order: 1,
     label: '开场镜头',
     state: 'generating',
@@ -18,7 +18,7 @@ function makeShot(): Shot {
     outputs: [],
     created_at: new Date('2026-07-20T00:00:00.000Z'),
     updated_at: new Date('2026-07-20T00:00:00.000Z'),
-  } as Shot;
+  };
 }
 
 describe('MockGenerationAdapter', () => {

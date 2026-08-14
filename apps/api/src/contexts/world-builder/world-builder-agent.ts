@@ -1,0 +1,646 @@
+import { ZodError, z } from 'zod';
+import { proposalSchema, type Proposal } from '@zivith/domain';
+import type { LLMAdapter } from '../../ports/llm.js';
+import { buildWorldBuilderSystemPrompt, type WorldBuilderFocus } from './prompt.js';
+import type { WorldContext } from './world-context.js';
+import {
+  detectWorldConflicts,
+  formatConflictAppendix,
+  formatConflictCheckReply,
+  mergeConflictSummaries,
+  normalizeEntityName,
+  wantsConflictCheck,
+} from './conflict-detector.js';
+import {
+  detectWorldGaps,
+  formatGuidanceFollowUp,
+  formatGuidanceReply,
+  mergeOpenQuestions,
+  skipGapsCoveredByProposals,
+  wantsGuidanceTurn,
+  wantsStudioHandoff,
+} from './guidance.js';
+
+export type WorldStage = 'bootstrap' | 'growing' | 'mature';
+
+export interface WorldBuilderChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+export interface WorldBuilderInput {
+  /** The latest user message (may also appear at the end of history). */
+  text: string;
+  history: WorldBuilderChatMessage[];
+  world: WorldContext | null;
+  stage: WorldStage;
+  /** Studio 选中的实体；只进本轮 prompt，不写入聊天记录。 */
+  focus?: WorldBuilderFocus | null;
+}
+
+/** LLM often emits a single string where the schema wants a string array. */
+function coerceStringList(maxItems: number, maxLen: number) {
+  return z.preprocess((value: unknown) => {
+    if (value == null) return [];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed ? [trimmed.slice(0, maxLen)] : [];
+    }
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item) => (typeof item === 'string' ? item : item == null ? '' : String(item)))
+      .map((item) => item.trim().slice(0, maxLen))
+      .filter(Boolean);
+  }, z.array(z.string().max(maxLen)).max(maxItems));
+}
+
+export const worldStateSchema = z
+  .object({
+    stage: z.enum(['bootstrap', 'growing', 'mature']),
+    open_questions: coerceStringList(12, 300),
+    conflicts: coerceStringList(12, 500),
+  })
+  .strict();
+
+export type WorldState = z.infer<typeof worldStateSchema>;
+
+export const worldBuilderResponseSchema = z
+  .object({
+    reply: z.string().min(1).max(8_000),
+    proposals: z.array(proposalSchema).max(3).default([]),
+    world_state: worldStateSchema,
+  })
+  .strict();
+
+export type WorldBuilderResponse = z.infer<typeof worldBuilderResponseSchema>;
+
+export function worldBuilderPublicError(error: unknown): string {
+  if (error instanceof ZodError) {
+    return '这一轮回复格式异常，请再发一次。';
+  }
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message.startsWith('[') || message.startsWith('{')) {
+      return '这一轮回复格式异常，请再发一次。';
+    }
+    return message || '世界构建者回复失败';
+  }
+  return '世界构建者回复失败';
+}
+
+export function inferWorldStage(world: WorldContext | null): WorldStage {
+  if (!world) return 'bootstrap';
+  const count =
+    world.stories.length + world.characters.length + world.locations.length + world.worldEvents.length;
+  if (count === 0) return 'bootstrap';
+  if (count < 5) return 'growing';
+  return 'mature';
+}
+
+/** Extract the latest user message from history. */
+function latestUserMessage(history: WorldBuilderChatMessage[]): WorldBuilderChatMessage | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i];
+    if (message && message.role === 'user') return message;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Rule-based mock responder — usable without any LLM credentials.
+// ---------------------------------------------------------------------------
+
+function mockProposal(
+  kind: Proposal['kind'],
+  projectId: string | null,
+  payload: Record<string, unknown>,
+): Proposal {
+  return { kind, project_id: projectId, payload };
+}
+
+/** Extract a likely entity name from user text ("记录艾拉为角色", "记录角色：杰克", "主角叫林澈"…). */
+function extractEntityName(text: string): string | null {
+  const candidates = [
+    // "记录角色：杰克" / "记录一个地点：雾都"
+    /[:：]\s*([\u4e00-\u9fa5A-Za-z0-9·]{1,12})/,
+    // "记录艾拉为角色" / "设定林澈为主角"
+    /(?:记录|创建|新增|添加|设定)([\u4e00-\u9fa5A-Za-z0-9·]{1,12})(?:为|作为|是)?(?:角色|人物|主角|地点|城市|场景|事件)/,
+    // "主角叫林澈" / "主角是艾拉"
+    /主角(?:是|叫|的名字叫|的名字是|叫作|名为)?([\u4e00-\u9fa5A-Za-z0-9·]{1,12})/,
+    // "她叫艾拉" / "名叫雾都"
+    /(?:名叫|名字叫|名为|叫做|叫)([\u4e00-\u9fa5A-Za-z0-9·]{1,12})/,
+  ];
+  for (const pattern of candidates) {
+    const match = text.match(pattern);
+    if (match && match[1] && match[1].trim().length >= 1) return match[1].trim();
+  }
+  return null;
+}
+
+const WORLDVIEW_GENRE_PATTERN =
+  /(赛博朋克|蒸汽朋克|废土|末世|玄幻|修真|仙侠|武侠|奇幻|西幻|科幻|都市|悬疑|推理|历史|神话|克苏鲁|校园|恋爱|战争|恐怖|惊悚|冒险|机甲)/;
+
+/** Extract a compact worldview from user text (题材/核心设定/世界规则/补充). */
+function extractWorldview(text: string): {
+  genre?: string;
+  premise?: string;
+  rules: string[];
+  notes?: string;
+} {
+  const rules: string[] = [];
+  let genre: string | undefined;
+  let premise: string | undefined;
+
+  const genreMatch = text.match(/(?:题材|类型)(?:是|为|叫作|叫|：|:)?\s*([\u4e00-\u9fa5A-Za-z0-9·]{1,20})/);
+  if (genreMatch && genreMatch[1]) genre = genreMatch[1].trim();
+  if (!genre) {
+    const fallback = text.match(WORLDVIEW_GENRE_PATTERN);
+    if (fallback && fallback[1]) genre = fallback[1];
+  }
+
+  const ruleMatch = text.match(
+    /(?:世界规则|力量体系|规则)(?:是|为|：|:|如下)?\s*([^。；;？?\n]{2,200})/,
+  );
+  if (ruleMatch && ruleMatch[1]) {
+    rules.push(
+      ...ruleMatch[1]
+        .split(/、|，|,|；|;/)
+        .map((part) => part.trim())
+        .filter((part) => part.length >= 2),
+    );
+  }
+
+  const premiseMatch = text.match(
+    /(?:核心设定|世界背景|世界观|这是一个关于|这是一个)(?:设定)?(?:是|为|：|:)?\s*([^。；;？?\n]{4,200})/,
+  );
+  if (premiseMatch && premiseMatch[1]) premise = premiseMatch[1].trim();
+
+  if (!premise && !rules.length) {
+    const cleaned = text
+      .replace(/^(?:请|帮我|我想|让我们|我们来|我要|设定|记录|补充)/, '')
+      .trim();
+    if (cleaned.length >= 4) premise = cleaned.slice(0, 200);
+  }
+
+  return {
+    ...(genre ? { genre } : {}),
+    ...(premise ? { premise } : {}),
+    rules: rules.slice(0, 64),
+  };
+}
+
+function focusKindLabel(kind: WorldBuilderFocus['kind']): string {
+  switch (kind) {
+    case 'character':
+      return '角色';
+    case 'location':
+      return '地点';
+    case 'scene':
+      return '场景';
+    case 'world_event':
+      return '事件';
+    case 'story':
+      return '故事';
+    case 'relationship':
+      return '关系';
+    case 'project':
+      return '项目';
+  }
+}
+
+function focusUpdateType(kind: WorldBuilderFocus['kind']): string {
+  return kind;
+}
+
+function applyGuidance(
+  response: WorldBuilderResponse,
+  input: WorldBuilderInput,
+): WorldBuilderResponse {
+  if (wantsConflictCheck(input.text)) return response;
+  const gaps = skipGapsCoveredByProposals(
+    detectWorldGaps(input.world),
+    response.proposals.map((proposal) => proposal.kind),
+  ).slice(0, 3);
+  const questions = mergeOpenQuestions(response.world_state.open_questions, gaps);
+  if (input.focus && wantsStudioHandoff(input.text)) {
+    const label = `${focusKindLabel(input.focus.kind)}「${input.focus.name}」`;
+    return {
+      ...response,
+      reply: `我们正在看${label}。若要改设定，可以说外貌、性格、关系或一段经历；已经满意的话，直接说主线或下一项即可。`,
+      proposals: [],
+      world_state: {
+        ...response.world_state,
+        open_questions: mergeOpenQuestions(['关注实体是否还要改'], gaps),
+      },
+    };
+  }
+  if (
+    response.proposals.length === 0 &&
+    input.focus &&
+    wantsGuidanceTurn(input.text)
+  ) {
+    const label = `${focusKindLabel(input.focus.kind)}「${input.focus.name}」`;
+    return {
+      ...response,
+      reply: `我们正在看${label}。若要改设定，可以说外貌、性格、关系或一段经历；已经满意的话，直接说主线或下一项即可。`,
+      proposals: [],
+      world_state: {
+        ...response.world_state,
+        open_questions: mergeOpenQuestions(['关注实体是否还要改'], gaps),
+      },
+    };
+  }
+  if (wantsGuidanceTurn(input.text) && response.proposals.length === 0) {
+    return {
+      ...response,
+      reply: formatGuidanceReply(gaps),
+      proposals: [],
+      world_state: { ...response.world_state, open_questions: questions },
+    };
+  }
+
+  let { reply } = response;
+  const next = gaps[0];
+  if (
+    response.proposals.length > 0 &&
+    next &&
+    !input.focus &&
+    !reply.includes(next.question) &&
+    !reply.includes('下一步我想问')
+  ) {
+    reply += formatGuidanceFollowUp(next);
+  } else if (
+    !input.focus &&
+    response.proposals.length === 0 &&
+    gaps.length > 0 &&
+    (/继续补充新的设定/.test(reply) || response.world_state.open_questions.length === 0)
+  ) {
+    reply = formatGuidanceReply(gaps);
+  }
+
+  return {
+    ...response,
+    reply,
+    world_state: { ...response.world_state, open_questions: questions },
+  };
+}
+
+function applyDetectedConflicts(
+  response: WorldBuilderResponse,
+  input: WorldBuilderInput,
+): WorldBuilderResponse {
+  const detected = detectWorldConflicts(input.world, { text: input.text });
+  const summaries = mergeConflictSummaries(response.world_state.conflicts, detected);
+  const checking = wantsConflictCheck(input.text);
+  let { reply, proposals } = response;
+  if (checking) {
+    proposals = [];
+    reply = formatConflictCheckReply(detected);
+  } else if (detected.length > 0 && !/设定冲突/.test(reply)) {
+    reply = `${reply}${formatConflictAppendix(detected)}`;
+  }
+  return {
+    ...response,
+    reply,
+    proposals,
+    world_state: { ...response.world_state, conflicts: summaries },
+  };
+}
+
+export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilderResponse {
+  return applyGuidance(applyDetectedConflicts(mockWorldBuilderDraft(input), input), input);
+}
+
+function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
+  const world = input.world;
+  const projectId = world?.projectId ?? null;
+  const latest = latestUserMessage(input.history);
+  const text = input.text.trim() || (latest?.content ?? '');
+  const conflicts: string[] = [];
+  const proposals: Proposal[] = [];
+
+  // No project yet — always propose creating one.
+  if (!world) {
+    proposals.push(
+      mockProposal('create_project', null, {
+        name: '新 IP 世界',
+        description: '由 Creator Chat 引导创建的世界',
+      }),
+    );
+    return {
+      reply:
+        '好的，我们开始构建你的 IP 世界！我先为你创建一个项目。\n\n在开始之前，我想先了解三件事：\n1. 这个世界是什么题材？（科幻 / 奇幻 / 现实 / 悬疑…）\n2. 故事的核心主角是什么样的人？\n3. 你想传达的核心主题是什么？',
+      proposals,
+      world_state: {
+        stage: 'bootstrap',
+        open_questions: ['世界观题材', '核心主角', '核心主题'],
+        conflicts,
+      },
+    };
+  }
+
+  const focus = input.focus;
+  if (
+    focus &&
+    !wantsStudioHandoff(text) &&
+    /改|补充|性格|描述|外貌|关系|经历|更|把/.test(text) &&
+    !/创建|新增|记录一个|再来一个/.test(text)
+  ) {
+    const label = `${focusKindLabel(focus.kind)}「${focus.name}」`;
+    proposals.push(
+      mockProposal('update_entity', projectId, {
+        type: focusUpdateType(focus.kind),
+        id: focus.id,
+        fields: { description: text.slice(0, 200) },
+      }),
+    );
+    return {
+      reply: `针对${label}，我整理了一条修改提案，确认后写入世界档案。`,
+      proposals,
+      world_state: { stage: 'growing', open_questions: ['还要改哪一项'], conflicts },
+    };
+  }
+
+  const hasCharacters = world.characters.length > 0;
+  const hasStories = world.stories.length > 0;
+  const hasLocations = world.locations.length > 0;
+  const hasEvents = world.worldEvents.length > 0;
+
+  // Signals for declaring a new entity vs. merely asking about an existing one.
+  const wantsCharacter = /角色|人物|主角|characters?/i.test(text);
+  const wantsLocation = /地点|城市|场景|环境|where|location/i.test(text);
+  const wantsEvent = /事件|发生了什么|历史|event/i.test(text);
+  const wantsWorldview =
+    /世界观|设定|规则|力量体系|题材|类型|文明|时代背景|世界背景|背景故事/i.test(text);
+  const incremental = /增加|添加|新增|再|又|还有|记录|补充|设定|创建|加入|登场/i.test(text);
+  // 明确声明信号（记录/创建/新增…）优先于疑问句检测，避免「主角还有什么秘密？」被误判为角色声明。
+  const declaring = /记录|创建|新增|添加|设定|补充|登场|加入|增加|叫|名为/.test(text);
+  const asking =
+    !declaring &&
+    (/\?|？/.test(text) ||
+      /什么|哪里|为什么|怎么|如何|是谁|在哪|吗$/.test(text));
+
+  // 世界观自动识别（优先于实体分支）：提炼题材/核心设定/世界规则 → update_entity(type='project')
+  if (wantsWorldview && !asking) {
+    const extracted = extractWorldview(text);
+    const hasContent =
+      Boolean(extracted.genre) ||
+      extracted.rules.length > 0 ||
+      Boolean(extracted.premise && extracted.premise.length >= 4);
+    if (hasContent) {
+      const worldview: Record<string, unknown> = {};
+      if (extracted.genre) worldview.genre = extracted.genre;
+      if (extracted.premise) worldview.premise = extracted.premise;
+      if (extracted.rules.length > 0) worldview.rules = extracted.rules;
+      proposals.push(
+        mockProposal('update_entity', projectId, {
+          type: 'project',
+          id: projectId,
+          fields: { worldview },
+        }),
+      );
+      return {
+        reply:
+          '我提炼了你的世界观设定，已整理成提案。请确认后写入世界档案；如有遗漏可以直接补充，例如：「规则：魔法需要消耗生命值」。',
+        proposals,
+        world_state: { stage: 'growing', open_questions: ['题材细节', '世界规则', '补充设定'], conflicts },
+      };
+    }
+  }
+
+  if (wantsCharacter && !asking && (!hasCharacters || incremental)) {
+    const extracted = extractEntityName(text);
+    const existing =
+      extracted &&
+      world.characters.find((character) => normalizeEntityName(character.name) === normalizeEntityName(extracted));
+    if (existing) {
+      return {
+        reply: `角色「${existing.name}」已经在世界档案里。若要改设定，请说明要改哪一项；我不会自动覆盖。`,
+        proposals: [],
+        world_state: {
+          stage: 'growing',
+          open_questions: ['确认是同一人还是需要改名', '要修改的字段'],
+          conflicts: [],
+        },
+      };
+    }
+    proposals.push(
+      mockProposal('create_character', projectId, {
+        name: extractEntityName(text) ?? (hasCharacters ? '新角色' : '未命名主角'),
+        description: text.length > 40 ? text.slice(0, 200) : '由对话引导创建的角色',
+      }),
+    );
+    return {
+      reply:
+        '我来帮你建立角色档案。为了更准确，告诉我角色的：\n1. 名字和身份\n2. 性格核心（比如：冷静、热血、偏执）\n3. 他/她的目标或欲望是什么？',
+      proposals,
+      world_state: { stage: 'growing', open_questions: ['角色名字', '性格核心', '目标欲望'], conflicts },
+    };
+  }
+
+  if (wantsLocation && !asking && (!hasLocations || incremental)) {
+    const extracted = extractEntityName(text);
+    const existing =
+      extracted &&
+      world.locations.find((location) => normalizeEntityName(location.name) === normalizeEntityName(extracted));
+    if (existing) {
+      return {
+        reply: `地点「${existing.name}」已经在世界档案里。若要改设定，请说明要改哪一项；我不会自动覆盖。`,
+        proposals: [],
+        world_state: {
+          stage: 'growing',
+          open_questions: ['确认是同一地点还是需要改名', '要修改的字段'],
+          conflicts: [],
+        },
+      };
+    }
+    proposals.push(
+      mockProposal('create_location', projectId, {
+        name: extractEntityName(text) ?? (hasLocations ? '新地点' : '未命名地点'),
+        description: '由对话引导创建的核心地点',
+      }),
+    );
+    return {
+      reply: '好的，我们建立一个核心地点。这个地点是：\n1. 一座城市、一片区域，还是一个建筑？\n2. 它在这个世界里的地位（家园 / 战场 / 圣地…）？',
+      proposals,
+      world_state: { stage: 'growing', open_questions: ['地点形态', '地点地位'], conflicts },
+    };
+  }
+
+  if (wantsEvent && !asking && (!hasEvents || incremental)) {
+    proposals.push(
+      mockProposal('create_world_event', projectId, {
+        title: extractEntityName(text) ?? (hasEvents ? '新事件' : '关键事件'),
+        description: '由对话引导创建的世界事件',
+        world_time_envelope: { order: 1 },
+      }),
+    );
+    return {
+      reply: '这个世界发生过什么？请描述一个关键事件：\n1. 事件名称\n2. 它发生在什么时候（世界纪元 / 年份）\n3. 它对世界产生了什么影响？',
+      proposals,
+      world_state: { stage: 'growing', open_questions: ['事件名称', '时间定位', '世界影响'], conflicts },
+    };
+  }
+
+  if (
+    !asking &&
+    /关系|和|与|relationship/i.test(text) &&
+    hasCharacters &&
+    (world.relationships.length === 0 || incremental)
+  ) {
+    const a = world.characters[0];
+    if (!a) {
+      return {
+        reply: '我注意到你想建立角色关系。不过世界档案里暂时没有可用的角色，先告诉我主角是谁？',
+        proposals,
+        world_state: { stage: 'growing', open_questions: ['主角信息'], conflicts },
+      };
+    }
+    proposals.push(
+      mockProposal('create_relationship', projectId, {
+        kind: 'bond',
+        source: { type: 'asset', id: a.id },
+        target: { type: 'asset', id: a.id },
+        direction: 'undirected',
+        label: '同伴',
+        description: '由对话引导创建的角色关系',
+      }),
+    );
+    return {
+      reply: `我看到你提到了关系。目前世界里有角色「${a.name}」。你想建立谁和谁的关系？关系类型是（伙伴 / 对手 / 家人 / 师徒…）？`,
+      proposals,
+      world_state: { stage: 'growing', open_questions: ['关系双方', '关系类型'], conflicts },
+    };
+  }
+
+  if (!hasStories) {
+    return {
+      reply:
+        '世界的骨架正在成形。接下来我建议先确立一条故事主线，方便后续把角色、场景和事件组织起来。\n\n可以告诉我：\n1. 故事一句话梗概？\n2. 主要冲突是什么？',
+      proposals,
+      world_state: {
+        stage: 'growing',
+        open_questions: ['故事梗概', '主要冲突'],
+        conflicts,
+      },
+    };
+  }
+
+  return {
+    reply:
+      '我已经把世界信息记录下来了。你可以继续补充新的设定，比如：\n- 「增加一个角色：×××」\n- 「这里发生过一场战争」\n- 「A 和 B 是师徒关系」\n\n或者让我帮你检查现有设定中的矛盾。',
+    proposals,
+    world_state: { stage: 'mature', open_questions: [], conflicts },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// World Builder agent
+// ---------------------------------------------------------------------------
+
+export class WorldBuilderAgent {
+  constructor(
+    private readonly llm: LLMAdapter,
+    private readonly model = 'mock-text-v1',
+  ) {}
+
+  async respond(input: WorldBuilderInput): Promise<WorldBuilderResponse> {
+    if (input.focus && wantsStudioHandoff(input.text)) {
+      return applyGuidance(
+        {
+          reply: '',
+          proposals: [],
+          world_state: { stage: input.stage, open_questions: [], conflicts: [] },
+        },
+        input,
+      );
+    }
+    if (this.llm.provider === 'mock') {
+      return mockWorldBuilderResponse(input);
+    }
+
+    const historyText = input.history
+      .map((m) => `${m.role === 'user' ? '创作者' : m.role === 'assistant' ? '世界构建者' : '系统'}：${m.content}`)
+      .slice(-24)
+      .join('\n');
+
+    const completion = await this.llm.completeStructured(
+      {
+        request_id: `world-builder:${Date.now()}`,
+        model: this.model,
+        system_prompt: buildWorldBuilderSystemPrompt(input.world, input.stage, input.focus),
+        user_prompt: JSON.stringify({
+          recent_conversation: historyText,
+          focus: input.focus ?? null,
+          required_schema: {
+            reply: '给创作者的自然语言回复（与创作者同语言）',
+            proposals: '需要创作者确认的提案数组（最多 2 个，无则 []）',
+            world_state: {
+              stage: 'bootstrap|growing|mature',
+              open_questions: ['下一步引导问题（字符串数组，无则 []）'],
+              conflicts: ['发现的设定冲突（字符串数组，无则 []）'],
+            },
+          },
+        }),
+        temperature: 0.7,
+        max_tokens: 2_000,
+      },
+      worldBuilderResponseSchema,
+    );
+    // Re-parse so defaults (proposals/open_questions/conflicts) are always materialized.
+    const parsed = worldBuilderResponseSchema.parse(completion.data);
+
+    // LLMs sometimes answer with prose only and forget to emit proposals.
+    // Fall back to rule-based extraction so user-provided settings still
+    // surface as confirmable proposals (ADR-0010 fence).
+    if (parsed.proposals.length === 0) {
+      const fallback = mockWorldBuilderResponse(input);
+      if (fallback.proposals.length > 0) {
+        parsed.proposals.push(...fallback.proposals);
+        parsed.reply = `${parsed.reply}\n\n（检测到你提供了新的设定信息，我已整理成提案，请确认后写入世界档案。）`;
+        parsed.world_state.open_questions = fallback.world_state.open_questions;
+      }
+    }
+
+    return applyGuidance(applyDetectedConflicts(parsed, input), input);
+  }
+
+  /**
+   * Run a full turn, then emit the reply in chunks so the chat UI can stream.
+   * Proposals stay off the wire until the complete response is ready (ADR-0010).
+   */
+  async respondStream(
+    input: WorldBuilderInput,
+    onDelta: (chunk: string) => void | Promise<void>,
+    options: { chunkSize?: number; delayMs?: number } = {},
+  ): Promise<WorldBuilderResponse> {
+    const response = await this.respond(input);
+    await streamReplyChunks(response.reply, onDelta, options);
+    return response;
+  }
+}
+
+/** Split a reply into display-sized chunks (CJK-friendly character slices). */
+export function chunkReply(text: string, chunkSize = 8): string[] {
+  if (!text) return [];
+  const size = Math.max(1, chunkSize);
+  const chunks: string[] = [];
+  for (let index = 0; index < text.length; index += size) {
+    chunks.push(text.slice(index, index + size));
+  }
+  return chunks;
+}
+
+export async function streamReplyChunks(
+  text: string,
+  onDelta: (chunk: string) => void | Promise<void>,
+  options: { chunkSize?: number; delayMs?: number } = {},
+): Promise<void> {
+  const delayMs = options.delayMs ?? 0;
+  for (const chunk of chunkReply(text, options.chunkSize ?? 8)) {
+    await onDelta(chunk);
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}

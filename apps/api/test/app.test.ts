@@ -30,10 +30,9 @@ describe('API foundation', () => {
     expect(response.json()).toEqual({ status: 'ok' });
   });
 
-  it('protects project resources', async () => {
+  it('does not require a login token for project resources', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/v1/projects' });
-    expect(response.statusCode).toBe(401);
-    expect(errorMessage(response)).toBe('请先登录');
+    expect(response.statusCode).not.toBe(401);
   });
 
   it('returns Chinese validation errors', async () => {
@@ -55,5 +54,23 @@ describe('API foundation', () => {
     });
     expect(response.statusCode).toBe(400);
     expect(errorMessage(response)).toBe('请求格式不正确');
+  });
+
+  it('allows browser preflight for destructive resource methods', async () => {
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/shots/11111111-1111-4111-8111-111111111111',
+      headers: {
+        origin: 'http://localhost:3000',
+        'access-control-request-method': 'DELETE',
+        'access-control-request-headers': 'authorization,content-type',
+      },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-methods']).toContain('DELETE');
+    expect(response.headers['access-control-allow-headers']?.toLowerCase()).toContain(
+      'authorization',
+    );
   });
 });

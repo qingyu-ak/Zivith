@@ -81,7 +81,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       </Field>
       {error && (
         <p
-          className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600"
           role="alert"
         >
           {error}

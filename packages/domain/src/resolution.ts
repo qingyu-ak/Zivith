@@ -1,4 +1,5 @@
 import type {
+  AppearanceVariant,
   Character,
   CharacterAppearance,
   InheritableContext,
@@ -12,6 +13,77 @@ import type {
 } from './types.js';
 import type { MediaId } from './ids.js';
 import { DomainError } from './shot-state.js';
+
+export const DEFAULT_APPEARANCE_VARIANT_KEY = 'default';
+export const DEFAULT_APPEARANCE_VARIANT_TITLE = '默认形象';
+
+/** Primary orthographic sheet: one T2I image with multiple viewpoints. */
+export const CHARACTER_SHEET_TURNAROUND_KEY = 'sheet_turnaround';
+
+/**
+ * Reserved sheet slots for the asset library (not workflow scene keyframes).
+ * Multi-view is a single turnaround image — not four separate generations.
+ */
+export const CHARACTER_SHEET_VARIANTS = [
+  {
+    key: CHARACTER_SHEET_TURNAROUND_KEY,
+    title: '角色设定表（多视角）',
+    order: 10,
+    prompt_clause:
+      'character model sheet on ONE image, 2x2 panel layout REQUIRED: (1) full-body front view (2) full-body side profile (3) full-body back view (4) large head-and-shoulders FACE CLOSE-UP portrait filling its own panel with clear eyes nose mouth and expression, NOT a tiny corner crop, identical identity outfit and colors across all four panels, clean white background, even studio lighting, consistent proportions, no text no labels no watermark no logos',
+  },
+] as const;
+
+/** Legacy per-view slots (deprecated; still recognized for old data). */
+export const LEGACY_CHARACTER_SHEET_VARIANT_KEYS = [
+  'sheet_front',
+  'sheet_side',
+  'sheet_back',
+  'sheet_face',
+] as const;
+
+export type CharacterSheetVariantKey = (typeof CHARACTER_SHEET_VARIANTS)[number]['key'];
+
+export function isCharacterSheetVariantKey(key: string): boolean {
+  return (
+    CHARACTER_SHEET_VARIANTS.some((item) => item.key === key) ||
+    (LEGACY_CHARACTER_SHEET_VARIANT_KEYS as readonly string[]).includes(key)
+  );
+}
+
+export function isPrimaryCharacterSheetKey(key: string): boolean {
+  return key === CHARACTER_SHEET_TURNAROUND_KEY;
+}
+
+/** Location design sheet stored on Asset.data.visual.generation_prompts[key]. */
+export const LOCATION_SHEET_KEY = 'location_sheet';
+
+export const LOCATION_SHEET_PROMPT_CLAUSE =
+  'environment design sheet on ONE image, multi-angle layout: main establishing wide shot plus complementary side/entrance angle and a detail inset of the same place, consistent architecture materials and lighting, cinematic, no text no labels no watermark no logos';
+
+/**
+ * Scenes belonging to a segment must form a contiguous block in story-global order
+ * (ADR-0006 single source of truth — no separate segment-local order).
+ */
+export function assertSegmentSceneOrderConsistent(
+  scenesInGlobalOrder: readonly { id: string; order: number; segment_id?: string | null }[],
+  segmentId: string,
+): void {
+  const sorted = [...scenesInGlobalOrder].sort((a, b) => a.order - b.order);
+  const flags = sorted.map((scene) => scene.segment_id === segmentId);
+  const first = flags.indexOf(true);
+  const last = flags.lastIndexOf(true);
+  if (first === -1) return;
+  for (let index = first; index <= last; index += 1) {
+    if (!flags[index]) {
+      throw new DomainError(
+        'SEGMENT_SCENE_ORDER_INCONSISTENT',
+        '段落内场景必须在故事全局 order 中连续，且与全局顺序一致',
+        { segment_id: segmentId },
+      );
+    }
+  }
+}
 
 type PlainObject = Record<string, unknown>;
 
@@ -105,9 +177,40 @@ export interface ResolvedCharacterReference {
   visual_media_id?: MediaId;
 }
 
+/**
+ * Merges a variant's free-text description over the character's base appearance
+ * (variant description wins on `custom`; other appearance fields stay from the base).
+ */
+export function resolveAppearanceWithVariant(
+  appearance: CharacterAppearance,
+  variant?: Pick<AppearanceVariant, 'description'> | null,
+): CharacterAppearance {
+  const description = variant?.description?.trim();
+  if (!description) return appearance;
+  return mergeInherited<CharacterAppearance>(appearance, { custom: description });
+}
+
+/** Prefer matching appearance-variant anchor when `variant_key` hits a known variant. */
+export function resolveAppearanceVariantAnchor(
+  variants: readonly Pick<AppearanceVariant, 'key' | 'anchor_media_id' | 'deleted_at' | 'state'>[],
+  variantKey: string,
+): MediaId | undefined {
+  const match = variants.find(
+    (item) => item.key === variantKey && !item.deleted_at && item.anchor_media_id,
+  );
+  return match?.anchor_media_id ?? undefined;
+}
+
 export function resolveVisualMedia(
   asset: Character | Location,
   requirements: readonly VisualAssetRequirement[],
+  options?: {
+    variant_key?: string;
+    appearance_variants?: readonly Pick<
+      AppearanceVariant,
+      'key' | 'anchor_media_id' | 'deleted_at' | 'state'
+    >[];
+  },
 ): MediaId | undefined {
   const binding = requirements.find(
     (item) =>
@@ -115,7 +218,15 @@ export function resolveVisualMedia(
       item.status === 'approved' &&
       item.approved_media_id,
   );
-  return binding?.approved_media_id ?? asset.reference_images[0];
+  if (binding?.approved_media_id) return binding.approved_media_id;
+
+  const variantKey = options?.variant_key;
+  if (variantKey && options?.appearance_variants?.length) {
+    const fromVariant = resolveAppearanceVariantAnchor(options.appearance_variants, variantKey);
+    if (fromVariant) return fromVariant;
+  }
+
+  return asset.reference_images[0];
 }
 
 export function resolveCharacterReference(

@@ -1,0 +1,193 @@
+import { api, unwrapList } from './api';
+import type { CreatorChatThreadDTO, WorldResourcesDTO, WorldSelection } from './types';
+
+export const PENDING_CHAT_FOCUS_KEY = 'zivith.pendingChatFocus';
+
+export const CHAT_FOCUS_KINDS = [
+  'character',
+  'location',
+  'scene',
+  'world_event',
+  'story',
+  'relationship',
+  'project',
+] as const;
+
+export type ChatFocusKind = (typeof CHAT_FOCUS_KINDS)[number];
+
+export interface ChatFocus {
+  kind: ChatFocusKind;
+  id: string;
+  name: string;
+}
+
+export interface PendingChatFocus extends ChatFocus {
+  thread_id: string;
+  project_id: string;
+  /** 进入对话后立刻发一轮，让世界构建者接着聊该实体 */
+  auto_send?: boolean;
+}
+
+export const CHAT_FOCUS_LABEL: Record<ChatFocusKind, string> = {
+  character: '角色',
+  location: '地点',
+  scene: '场景',
+  world_event: '事件',
+  story: '故事',
+  relationship: '关系',
+  project: '项目',
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+export function isChatFocusKind(value: unknown): value is ChatFocusKind {
+  return typeof value === 'string' && (CHAT_FOCUS_KINDS as readonly string[]).includes(value);
+}
+
+export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
+  const record = asRecord(value);
+  if (!record || typeof record.id !== 'string') return null;
+  return {
+    id: record.id,
+    project_id: asString(record.project_id) ?? asString(record.projectId),
+    project_name: asString(record.project_name) ?? asString(record.projectName),
+    title: asString(record.title),
+    state: asString(record.state) ?? 'active',
+    created_at: asString(record.created_at) ?? asString(record.createdAt) ?? '',
+    updated_at: asString(record.updated_at) ?? asString(record.updatedAt) ?? '',
+  };
+}
+
+export function parseFocusFromSearch(search: URLSearchParams): ChatFocus | null {
+  const kind = search.get('focus_kind');
+  const id = search.get('focus_id');
+  const name = search.get('focus_name')?.trim();
+  if (!isChatFocusKind(kind) || !id) return null;
+  return { kind, id, name: name || '' };
+}
+
+export function readPendingFocus(): PendingChatFocus | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(PENDING_CHAT_FOCUS_KEY);
+    if (!raw) return null;
+    const record = asRecord(JSON.parse(raw) as unknown);
+    if (!record || !isChatFocusKind(record.kind)) return null;
+    const id = asString(record.id);
+    const name = asString(record.name);
+    const threadId = asString(record.thread_id);
+    const projectId = asString(record.project_id);
+    if (!id || !name || !threadId || !projectId) return null;
+    return {
+      kind: record.kind,
+      id,
+      name,
+      thread_id: threadId,
+      project_id: projectId,
+      auto_send: record.auto_send === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writePendingFocus(focus: PendingChatFocus): void {
+  if (typeof sessionStorage === 'undefined') return;
+  sessionStorage.setItem(PENDING_CHAT_FOCUS_KEY, JSON.stringify(focus));
+}
+
+export function clearPendingFocus(): void {
+  if (typeof sessionStorage === 'undefined') return;
+  sessionStorage.removeItem(PENDING_CHAT_FOCUS_KEY);
+}
+
+export function mergeChatFocus(
+  fromUrl: ChatFocus | null,
+  pending: PendingChatFocus | null,
+  threadId?: string,
+): ChatFocus | null {
+  if (fromUrl) {
+    if (pending && pending.kind === fromUrl.kind && pending.id === fromUrl.id) {
+      if (!threadId || pending.thread_id === threadId) return pending;
+    }
+    if (fromUrl.name.trim()) return fromUrl;
+    return null;
+  }
+  if (pending && (!threadId || pending.thread_id === threadId)) return pending;
+  return null;
+}
+
+export function chatPathForThread(threadId: string, focus?: ChatFocus | null): string {
+  if (!focus) return `/creator-chats/${threadId}`;
+  const params = new URLSearchParams({
+    focus_kind: focus.kind,
+    focus_id: focus.id,
+    focus_name: focus.name,
+  });
+  return `/creator-chats/${threadId}?${params.toString()}`;
+}
+
+export function studioFocusHandoffMessage(focus: ChatFocus): string {
+  return `从 Studio 继续：${CHAT_FOCUS_LABEL[focus.kind]}「${focus.name}」`;
+}
+
+export function focusFromSelection(
+  resources: WorldResourcesDTO,
+  selection: Exclude<WorldSelection, null>,
+): ChatFocus | null {
+  if (!isChatFocusKind(selection.kind)) return null;
+  const name = entityTitle(resources, selection);
+  if (!name) return null;
+  return { kind: selection.kind, id: selection.id, name };
+}
+
+export function entityTitle(
+  resources: WorldResourcesDTO,
+  selection: Exclude<WorldSelection, null>,
+): string | null {
+  const entities = resources.entities;
+  switch (selection.kind) {
+    case 'project':
+      return resources.project.name || '当前项目';
+    case 'character':
+      return entities.characters.find((item) => item.id === selection.id)?.name ?? null;
+    case 'location':
+      return entities.locations.find((item) => item.id === selection.id)?.name ?? null;
+    case 'scene':
+      return entities.scenes.find((item) => item.id === selection.id)?.title ?? null;
+    case 'world_event':
+      return entities.world_events.find((item) => item.id === selection.id)?.title ?? null;
+    case 'story':
+      return entities.stories.find((item) => item.id === selection.id)?.title ?? null;
+    case 'relationship': {
+      const relationship = entities.relationships.find((item) => item.id === selection.id);
+      if (!relationship) return null;
+      return relationship.label?.trim() || relationship.kind || '关系';
+    }
+    default:
+      return null;
+  }
+}
+
+export async function resolveThreadForProject(projectId: string): Promise<string> {
+  const listed = await api<unknown[] | { data?: unknown[]; items?: unknown[] }>(
+    `/world/projects/${projectId}/creator-chats`,
+  );
+  const threads = unwrapList(listed)
+    .map(normalizeThread)
+    .filter((thread): thread is CreatorChatThreadDTO => Boolean(thread?.id));
+  if (threads[0]?.id) return threads[0].id;
+  const created = await api<unknown>('/world/creator-chats', {
+    method: 'POST',
+    body: { project_id: projectId, title: null },
+  });
+  const thread = normalizeThread(created);
+  if (!thread?.id) throw new Error('无法创建创作对话');
+  return thread.id;
+}

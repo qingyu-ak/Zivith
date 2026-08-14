@@ -193,6 +193,52 @@ export const characterAppearanceSchema = z
   })
   .strict();
 
+/** Stable semantic key, e.g. default / wounded / young */
+export const appearanceVariantKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z][a-z0-9_-]*$/, '形象键须为小写字母开头的 slug（如 default、wounded）');
+
+export const appearanceVariantSchema = z
+  .object({
+    key: appearanceVariantKeySchema,
+    title: z.string().trim().min(1).max(200),
+    change_reason: nullableString,
+    description: z.string().trim().max(20_000).nullable().optional(),
+    anchor_media_id: assetId.nullable().optional(),
+    candidate_media_ids: z.array(assetId).max(50).default([]),
+    state: z.enum(['draft', 'review', 'approved']).default('draft'),
+    order: z.number().int().min(0).max(10_000).optional(),
+  })
+  .strict();
+
+export const appearanceVariantCreateSchema = appearanceVariantSchema
+  .omit({ anchor_media_id: true, candidate_media_ids: true, state: true })
+  .strict();
+
+export const appearanceVariantPatchSchema = appearanceVariantCreateSchema.partial().strict();
+
+export const storySegmentSchema = z
+  .object({
+    title: z.string().trim().min(1).max(300),
+    synopsis: z.string().trim().max(50_000).nullable().optional(),
+    draft: z.string().trim().max(200_000).nullable().optional(),
+    order: z.number().int().positive().optional(),
+    state: z.enum(['draft', 'review', 'approved']).optional(),
+  })
+  .strict();
+
+export const storySegmentCreateSchema = storySegmentSchema
+  .omit({ state: true })
+  .extend({
+    title: z.string().trim().min(1).max(300),
+  })
+  .strict();
+
+export const storySegmentPatchSchema = storySegmentSchema.partial().strict();
+
 export const characterSchema = z
   .object({
     name: z.string().trim().min(1).max(200),

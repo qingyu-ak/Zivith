@@ -1,11 +1,18 @@
 # Zivith
 
-Build cinematic AI videos from a single idea using autonomous AI agents.
+Create, manage, and keep expanding an IP world that AI can understand.
 
-Zivith is an AI-native film production studio. This repository is a pnpm/Turborepo
-monorepo for the web application, API, domain model, database, and shared UI.
+Zivith is not an AI generation tool — it is an AI-understandable IP creation system.
+Models execute generation; Zivith manages creative intent, world rules, character
+relationships, temporal development, and production context. Filmmaking is how that
+world is expressed and delivered. This repository is a pnpm/Turborepo monorepo for the
+web application, API, domain model, database, and shared UI.
 
-The canonical product and architecture specifications live in [`docs/`](docs/README.md).
+The canonical product and architecture specifications live in [`docs/`](docs/README.md),
+grouped by how often they change: `product/` (why), `domain/` (what), `engineering/` (how),
+`planning/` (when), `architecture/` (decisions), `archive/` (frozen).
+Start with [`docs/product/Product-Positioning.md`](docs/product/Product-Positioning.md).
+Active engineering backlog: [`docs/planning/Next-Tasks.md`](docs/planning/Next-Tasks.md).
 
 ## Prerequisites
 
@@ -61,8 +68,8 @@ pnpm dev
 
 Default local services:
 
-- Web: <http://localhost:3000>
-- API: <http://localhost:4000/api/v1>
+- Web: <http://127.0.0.1:3100>
+- API: <http://127.0.0.1:4000/api/v1>
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
 - MinIO API: <http://localhost:9000>
@@ -111,5 +118,7 @@ MinIO services and removes their volumes after the run.
 
 ## Architecture decisions
 
-Infrastructure choices and their trade-offs are recorded in
-[`ARCHITECTURE-DECISIONS.md`](ARCHITECTURE-DECISIONS.md).
+Architecture decisions are recorded as ADRs in
+[`docs/architecture/adr/`](docs/architecture/adr/README.md), governed by the
+[Architecture Constitution](docs/architecture/architecture-principles.md) and the
+[ADR Guide](docs/architecture/adr-guide.md).

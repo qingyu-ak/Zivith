@@ -15,6 +15,7 @@ enum MemberRole {
 
 enum ApprovalState {
   draft
+  review
   approved
 }
 
@@ -79,6 +80,17 @@ enum RequirementStatus {
   rejected
 }
 
+/// Track H — EntityRevision.change_kind (ADR-0007 / entity-state-timeline-track)
+enum EntityChangeKind {
+  baseline
+  create
+  update
+  transition
+  delete
+  restore
+  merge
+}
+
 model User {
   id            String         @id @default(uuid())
   email         String         @unique
@@ -115,6 +127,8 @@ model Project {
   ownerId     String          @map("owner_id")
   name        String
   description String?
+  // 世界观轻量结构化字段（genre/premise/rules/notes），由 Creator Chat 自动提炼并随提案落库
+  worldview   Json            @default("{}")
   defaults    Json            @default("{}")
   settings    Json            @default("{}")
   createdAt   DateTime        @default(now()) @map("created_at")
@@ -127,6 +141,14 @@ model Project {
   media       Media[]
   tasks       Task[]
   workflows   WorkflowRun[]
+  usageRecords UsageRecord[]
+  entityRevisions EntityRevision[]
+  changeEvents    ChangeEvent[]
+  projectSequence ProjectSequence?
+  worldEvents     WorldEvent[]
+  relationships   Relationship[]
+  timeline        ProjectTimeline?
+  creatorThreads  CreatorChatThread[]
 
   @@index([ownerId, deletedAt])
   @@map("projects")
@@ -146,35 +168,56 @@ model ProjectMember {
 }
 
 model Story {
-  id                    String        @id @default(uuid())
-  projectId             String        @map("project_id")
+  id                    String         @id @default(uuid())
+  projectId             String         @map("project_id")
   title                 String
   logline               String?
   synopsis              String?
   genre                 String?
   theme                 String?
-  targetAudience        String?       @map("target_audience")
+  targetAudience        String?        @map("target_audience")
   tone                  String?
-  targetDurationSeconds Int?          @map("target_duration_seconds")
+  targetDurationSeconds Int?           @map("target_duration_seconds")
   language              String?
   screenplay            String?
-  state                 ApprovalState @default(draft)
+  state                 ApprovalState  @default(draft)
   overrides             Json?
   order                 Int
-  createdAt             DateTime      @default(now()) @map("created_at")
-  updatedAt             DateTime      @updatedAt @map("updated_at")
-  deletedAt             DateTime?     @map("deleted_at")
-  project               Project       @relation(fields: [projectId], references: [id])
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  deletedAt             DateTime?      @map("deleted_at")
+  project               Project        @relation(fields: [projectId], references: [id])
   scenes                Scene[]
+  segments              StorySegment[]
 
   @@index([projectId, order, deletedAt])
   @@map("stories")
+}
+
+/// Ordered Scene grouping inside a Story (ADR-0006 / V0.4 W3). Optional — zero segments = legacy behavior.
+model StorySegment {
+  id          String        @id @default(uuid())
+  storyId     String        @map("story_id")
+  order       Int
+  title       String
+  synopsis    String?
+  draft       String?
+  state       ApprovalState @default(draft)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
+  story       Story         @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  scenes      Scene[]
+
+  @@index([storyId, order, deletedAt])
+  @@map("story_segments")
 }
 
 model Scene {
   id               String                   @id @default(uuid())
   storyId          String                   @map("story_id")
   projectId        String                   @map("project_id")
+  segmentId        String?                  @map("segment_id")
   title            String
   description      String?
   order            Int
@@ -190,10 +233,12 @@ model Scene {
   updatedAt        DateTime                 @updatedAt @map("updated_at")
   deletedAt        DateTime?                @map("deleted_at")
   story            Story                    @relation(fields: [storyId], references: [id])
+  segment          StorySegment?            @relation(fields: [segmentId], references: [id], onDelete: SetNull)
   shots            Shot[]
   requirements     VisualAssetRequirement[]
 
   @@index([storyId, order, deletedAt])
+  @@index([segmentId, deletedAt])
   @@index([projectId, deletedAt])
   @@map("scenes")
 }
@@ -232,26 +277,49 @@ model Shot {
 }
 
 model Asset {
-  id              String      @id @default(uuid())
-  projectId       String      @map("project_id")
-  type            AssetType
-  state           AssetState  @default(draft)
-  name            String
-  description     String
-  aliases         String[]    @default([])
-  baseCharacterId String?     @map("base_character_id")
-  appearance      Json?
-  data            Json        @default("{}")
-  referenceImages String[]    @default([]) @map("reference_images")
-  tags            String[]    @default([])
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
-  deletedAt       DateTime?   @map("deleted_at")
-  project         Project     @relation(fields: [projectId], references: [id])
+  id                 String                   @id @default(uuid())
+  projectId          String                   @map("project_id")
+  type               AssetType
+  state              AssetState               @default(draft)
+  name               String
+  description        String
+  aliases            String[]                 @default([])
+  baseCharacterId    String?                  @map("base_character_id")
+  appearance         Json?
+  data               Json                     @default("{}")
+  referenceImages    String[]                 @default([]) @map("reference_images")
+  tags               String[]                 @default([])
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+  deletedAt          DateTime?                @map("deleted_at")
+  project            Project                  @relation(fields: [projectId], references: [id])
+  appearanceVariants AssetAppearanceVariant[]
 
   @@index([projectId, type, state, deletedAt])
   @@index([baseCharacterId])
   @@map("assets")
+}
+
+/// Character × narrative appearance state (V0.4 W2). Character assets only in v1.
+model AssetAppearanceVariant {
+  id                String        @id @default(uuid())
+  assetId           String        @map("asset_id")
+  key               String
+  title             String
+  changeReason      String?       @map("change_reason")
+  description       String?
+  anchorMediaId     String?       @map("anchor_media_id")
+  candidateMediaIds String[]      @default([]) @map("candidate_media_ids")
+  state             ApprovalState @default(draft)
+  order             Int           @default(0)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+  asset             Asset         @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, key])
+  @@index([assetId, order, deletedAt])
+  @@map("asset_appearance_variants")
 }
 
 model Media {
@@ -383,19 +451,40 @@ model WorkflowRun {
 }
 
 model WorkflowStep {
-  id            String      @id @default(uuid())
-  workflowRunId String      @map("workflow_run_id")
+  id            String                @id @default(uuid())
+  workflowRunId String                @map("workflow_run_id")
   name          String
-  status        JobStatus   @default(queued)
+  status        JobStatus             @default(queued)
   input         Json
   output        Json?
   order         Int
-  startedAt     DateTime?   @map("started_at")
-  completedAt   DateTime?   @map("completed_at")
-  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  startedAt     DateTime?             @map("started_at")
+  completedAt   DateTime?             @map("completed_at")
+  workflowRun   WorkflowRun           @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  attempts      WorkflowStepAttempt[]
 
   @@unique([workflowRunId, order])
   @@map("workflow_steps")
+}
+
+model WorkflowStepAttempt {
+  id             String       @id @default(uuid())
+  workflowStepId String       @map("workflow_step_id")
+  attempt        Int
+  status         JobStatus    @default(queued)
+  provider       String?
+  model          String?
+  inputHash      String       @map("input_hash")
+  usage          Json?
+  errorCode      String?      @map("error_code")
+  errorMessage   String?      @map("error_message")
+  startedAt      DateTime     @default(now()) @map("started_at")
+  finishedAt     DateTime?    @map("finished_at")
+  workflowStep   WorkflowStep @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowStepId, attempt])
+  @@index([workflowStepId, status])
+  @@map("workflow_step_attempts")
 }
 
 model AuditLog {
@@ -441,4 +530,226 @@ model ProviderUsage {
 
   @@index([projectId, provider, createdAt])
   @@map("provider_usage")
+}
+
+// Per-call usage ledger (V0.4 W7 first pass). Separate from ProviderUsage (BYOK/limits later).
+model UsageRecord {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  taskType      String   @map("task_type")
+  provider      String
+  model         String
+  quantity      Decimal  @db.Decimal(18, 6)
+  unit          String
+  estimatedCost Decimal? @map("estimated_cost") @db.Decimal(18, 6)
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([projectId, taskType])
+  @@map("usage_records")
+}
+
+/// Track H H2 — immutable Entity State history (append-only). Not a Presentation Timeline Item.
+model EntityRevision {
+  id                 String           @id @default(uuid())
+  projectId          String           @map("project_id")
+  entityType         String           @map("entity_type")
+  entityId           String           @map("entity_id")
+  revision           Int
+  parentRevisionId   String?          @map("parent_revision_id")
+  /// null = main line; CreativeBranch ids deferred (H10)
+  branchId           String?          @map("branch_id")
+  schemaVersion      Int              @default(1) @map("schema_version")
+  snapshot           Json?
+  snapshotRef        String?          @map("snapshot_ref")
+  snapshotHash       String           @map("snapshot_hash")
+  changeKind         EntityChangeKind @map("change_kind")
+  changedFields      String[]         @default([]) @map("changed_fields")
+  actorId            String?          @map("actor_id")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentRevision     EntityRevision?  @relation("EntityRevisionParent", fields: [parentRevisionId], references: [id], onDelete: SetNull)
+  childRevisions     EntityRevision[] @relation("EntityRevisionParent")
+  changeEvents       ChangeEvent[]
+
+  @@unique([entityType, entityId, revision])
+  @@index([projectId, entityType, entityId])
+  @@index([projectId, createdAt])
+  @@map("entity_revisions")
+}
+
+/// Track H H2 — system-committed facts (audit / SSE / causation). Not Presentation Timeline.
+model ChangeEvent {
+  id               String          @id @default(uuid())
+  projectId        String          @map("project_id")
+  sequence         BigInt
+  eventType        String          @map("event_type")
+  schemaVersion    Int             @default(1) @map("schema_version")
+  entityType       String?         @map("entity_type")
+  entityId         String?         @map("entity_id")
+  entityRevisionId String?         @map("entity_revision_id")
+  actorType        String?         @map("actor_type")
+  actorId          String?         @map("actor_id")
+  sourceType       String?         @map("source_type")
+  sourceId         String?         @map("source_id")
+  correlationId    String?         @map("correlation_id")
+  causationId      String?         @map("causation_id")
+  idempotencyKey   String?         @map("idempotency_key")
+  payload          Json            @default("{}")
+  occurredAt       DateTime        @map("occurred_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entityRevision   EntityRevision? @relation(fields: [entityRevisionId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, sequence])
+  @@index([projectId, createdAt])
+  @@index([projectId, entityType, entityId])
+  @@index([projectId, correlationId])
+  @@map("change_events")
+}
+
+/// Atomic Project-scoped sequence allocator for ChangeEvent.sequence
+model ProjectSequence {
+  projectId String @id @map("project_id")
+  lastValue BigInt @default(0) @map("last_value")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_sequences")
+}
+
+/// ADR-0011 — WorldEvent: a domain creative entity on the world line.
+/// World time is opaque (world_time_envelope); presentation axis via anchor_story_id + presentation_order.
+model WorldEvent {
+  id                String        @id @default(uuid())
+  projectId         String        @map("project_id")
+  anchorStoryId     String?       @map("anchor_story_id")
+  title             String
+  description       String?
+  worldTimeEnvelope Json          @default("{}") @map("world_time_envelope")
+  presentationOrder Int?          @map("presentation_order")
+  state             ApprovalState @default(draft)
+  characterIds      String[]      @default([]) @map("character_ids")
+  sceneIds          String[]      @default([]) @map("scene_ids")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, deletedAt])
+  @@index([projectId, anchorStoryId, presentationOrder])
+  @@map("world_events")
+}
+
+/// ADR-0012 — Relationship: independent queryable entity.
+/// Polymorphic EntityRef (source_type/source_id, target_type/target_id) — no physical FK.
+model Relationship {
+  id          String        @id @default(uuid())
+  projectId   String        @map("project_id")
+  kind        String
+  sourceType  String        @map("source_type")
+  sourceId    String        @map("source_id")
+  targetType  String        @map("target_type")
+  targetId    String        @map("target_id")
+  direction   String        @default("directed")
+  label       String?
+  description String?
+  validFrom   Json?         @map("valid_from")
+  validUntil  Json?         @map("valid_until")
+  state       ApprovalState @default(draft)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, deletedAt])
+  @@index([projectId, sourceType, sourceId])
+  @@index([projectId, targetType, targetId])
+  @@map("relationships")
+}
+
+/// H4+ — Presentation Timeline aggregate (world line).
+/// Abstract, non-uniform scale: pure presentation coordinates, no real time conversion (ADR-0007).
+model ProjectTimeline {
+  id          String          @id @default(uuid())
+  projectId   String          @unique @map("project_id")
+  name        String          @default("World Line")
+  description String?
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tracks      TimelineTrack[]
+
+  @@index([projectId, deletedAt])
+  @@map("project_timelines")
+}
+
+model TimelineTrack {
+  id         String           @id @default(uuid())
+  timelineId String           @map("timeline_id")
+  /// character | scene | world_event | organization
+  kind       String
+  title      String
+  order      Int              @default(0)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+  deletedAt  DateTime?        @map("deleted_at")
+  timeline   ProjectTimeline  @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  items      TimelineItem[]
+
+  @@unique([timelineId, order])
+  @@index([timelineId, deletedAt])
+  @@map("timeline_tracks")
+}
+
+model TimelineItem {
+  id                String        @id @default(uuid())
+  trackId           String        @map("track_id")
+  entityType        String        @map("entity_type")
+  entityId          String        @map("entity_id")
+  presentationOrder Int           @map("presentation_order")
+  startOffsetMs     Int?          @map("start_offset_ms")
+  durationMs        Int?          @map("duration_ms")
+  metadata          Json?         @default("{}")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+  track             TimelineTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([trackId, presentationOrder])
+  @@index([trackId, entityType, entityId])
+  @@map("timeline_items")
+}
+
+/// ADR-0013 — Creator Chat. Local single-user mode: no userId on these tables.
+/// thread.projectId is null until the "create world" proposal is confirmed.
+model CreatorChatThread {
+  id        String             @id @default(uuid())
+  projectId String?            @map("project_id")
+  title     String?
+  state     String             @default("active")
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+  project   Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  messages  CreatorChatMessage[]
+
+  @@index([projectId])
+  @@map("creator_chat_threads")
+}
+
+model CreatorChatMessage {
+  id            String            @id @default(uuid())
+  threadId      String            @map("thread_id")
+  role          String
+  content       String
+  proposal      Json?             @default("{}")
+  proposalKey   String?           @map("proposal_key")
+  proposalState String?           @map("proposal_state")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  thread        CreatorChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("creator_chat_messages")
 }

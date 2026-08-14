@@ -2,16 +2,40 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, type PrismaClient } from '@zivith/database';
 import {
+  CHARACTER_SHEET_TURNAROUND_KEY,
   characterSchema,
   locationSchema,
   mergeInherited,
+  parseWorldview,
   shotCreateSchema,
   shotPatchSchema,
 } from '@zivith/domain';
 import { z } from 'zod';
+import { ensureDefaultAppearanceVariant } from '../contexts/visual/appearance-variants.js';
+import {
+  draftLocationSheetPrompt,
+  generateLocationSheetImage,
+  readLocationSheetPrompt,
+} from '../contexts/visual/location-sheet.js';
+import { createProviderBundle } from '../providers/registry.js';
+import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
+import { withUsageContext } from '../contexts/usage/context.js';
 import { ApiError } from '../errors.js';
-import { authenticate } from './auth.js';
+import { ensureProjectMember } from '../contexts/world/local-user.js';
 import type { StoragePort } from '../ports/index.js';
+import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
+import { maybeRecordEntityChange } from '../contexts/history/index.js';
+
+/** Prefer remote/data URLs stored on Media; only sign object storage for local keys. */
+async function resolveMediaAccessUrl(
+  url: string,
+  storageKey: string,
+  storage?: StoragePort,
+): Promise<string> {
+  if (/^(https?:|data:)/i.test(url)) return url;
+  if (storage) return storage.signedReadUrl(storageKey);
+  return url;
+}
 
 const idParams = z.object({ id: z.string().uuid() });
 const projectParams = z.object({ pid: z.string().uuid() });
@@ -28,10 +52,11 @@ const newOrderReorderSchema = z
   })
   .strict();
 const reorderSchema = z.union([orderedIdsReorderSchema, newOrderReorderSchema]);
-const projectBody = z.object({
+export const projectBody = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(10_000).nullable().optional(),
   defaults: z.record(z.unknown()).optional(),
+  worldview: z.record(z.unknown()).optional(),
 });
 export const storyBodySchema = z.object({
   title: z.string().trim().min(1).max(300),
@@ -52,6 +77,7 @@ export const sceneBodySchema = z.object({
   description: z.string().max(50_000).nullable().optional(),
   time_of_day: z.string().max(200).nullable().optional(),
   location_id: z.string().uuid().nullable().optional(),
+  segment_id: z.string().uuid().nullable().optional(),
   time: z.string().max(200).nullable().optional(),
   weather: z.string().max(200).nullable().optional(),
   mood: z.string().max(200).nullable().optional(),
@@ -60,8 +86,10 @@ export const sceneBodySchema = z.object({
   overrides: z.record(z.unknown()).nullable().optional(),
 });
 
-const clean = <T extends Record<string, unknown>>(value: T): T =>
-  Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+const clean = <T extends Record<string, unknown>>(value: T) =>
+  Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as {
+    [K in keyof T as T[K] extends undefined ? never : K]: Exclude<T[K], undefined>;
+  };
 const replaceBigInt = (_key: string, item: unknown): unknown =>
   typeof item === 'bigint' ? item.toString() : item;
 const json = (value: unknown): Prisma.InputJsonValue => {
@@ -171,6 +199,68 @@ export function assetDto<T extends Record<string, unknown>>(asset: T): Record<st
   };
 }
 
+async function mediaRefDto(
+  db: PrismaClient,
+  mediaId: string,
+  storage?: StoragePort,
+): Promise<{ id: string; url: string; access_url: string; thumbnail_url: string } | null> {
+  const media = await db.media.findFirst({ where: { id: mediaId, deletedAt: null } });
+  if (!media) return null;
+  const accessUrl = await resolveMediaAccessUrl(media.url, media.storageKey, storage);
+  return {
+    id: media.id,
+    url: media.url,
+    access_url: accessUrl,
+    thumbnail_url: accessUrl,
+  };
+}
+
+/** Resolve media ids → URLs and prefer sheet/cover for list thumbnails. */
+async function enrichAssetForClient(
+  db: PrismaClient,
+  asset: {
+    id: string;
+    type: string;
+    referenceImages: string[];
+    data: unknown;
+    [key: string]: unknown;
+  },
+  storage?: StoragePort,
+): Promise<Record<string, unknown>> {
+  const dto = assetDto(asset);
+  let coverId: string | undefined = asset.referenceImages[0];
+  if (asset.type === 'character') {
+    const sheet = await db.assetAppearanceVariant.findFirst({
+      where: { assetId: asset.id, key: CHARACTER_SHEET_TURNAROUND_KEY, deletedAt: null },
+      select: { anchorMediaId: true, candidateMediaIds: true },
+    });
+    coverId = sheet?.anchorMediaId ?? sheet?.candidateMediaIds[0] ?? coverId;
+  }
+  const orderedIds = [
+    ...(coverId ? [coverId] : []),
+    ...asset.referenceImages.filter((id) => id !== coverId),
+  ];
+  const referenceImages: Array<{
+    id: string;
+    url: string;
+    access_url: string;
+    thumbnail_url: string;
+  }> = [];
+  for (const id of orderedIds) {
+    const media = await mediaRefDto(db, id, storage);
+    if (media) referenceImages.push(media);
+  }
+  const coverImage = coverId ? ((await mediaRefDto(db, coverId, storage)) ?? referenceImages[0] ?? null) : (referenceImages[0] ?? null);
+  const locationSheetPrompt =
+    asset.type === 'location' ? readLocationSheetPrompt(asset.data) : undefined;
+  return {
+    ...dto,
+    referenceImages,
+    coverImage,
+    ...(locationSheetPrompt ? { locationSheetPrompt } : {}),
+  };
+}
+
 function hasValidImageSignature(body: Buffer, mimeType: string): boolean {
   if (mimeType === 'image/jpeg') return body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff;
   if (mimeType === 'image/png')
@@ -185,12 +275,7 @@ function hasValidImageSignature(body: Buffer, mimeType: string): boolean {
 }
 
 async function requireMember(db: PrismaClient, userId: string, projectId: string, write = false) {
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId, userId } },
-  });
-  if (!member) throw new ApiError(403, 'FORBIDDEN', '你无权访问该项目');
-  if (write && member.role === 'viewer') throw new ApiError(403, 'FORBIDDEN', '你无权修改该项目');
-  return member;
+  return ensureProjectMember(db, userId, projectId, write);
 }
 
 async function projectOfStory(db: PrismaClient, id: string): Promise<string> {
@@ -315,7 +400,7 @@ async function audit(
   after?: unknown,
 ) {
   await db.auditLog.create({
-    data: {
+    data: clean({
       actorId: request.user.sub,
       projectId,
       entityType,
@@ -323,7 +408,7 @@ async function audit(
       action,
       before: before == null ? undefined : json(before),
       after: after == null ? undefined : json(after),
-    },
+    }),
   });
 }
 
@@ -336,24 +421,23 @@ export function registerResourceRoutes(
   db: PrismaClient,
   storage?: StoragePort,
 ): void {
-  app.addHook('preHandler', authenticate);
-
-  app.get('/projects', async (request) =>
+  app.get('/projects', async () =>
     db.project.findMany({
-      where: { members: { some: { userId: request.user.sub } }, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: { updatedAt: 'desc' },
     }),
   );
   app.post('/projects', async (request, reply) => {
     const body = projectBody.parse(request.body);
     const project = await db.project.create({
-      data: {
+      data: clean({
         ownerId: request.user.sub,
         name: body.name,
         description: body.description,
         defaults: json(body.defaults ?? {}),
-        members: { create: { userId: request.user.sub, role: 'owner' } },
-      },
+        worldview: body.worldview ? json(parseWorldview(body.worldview)) : undefined,
+        members: { create: { userId: request.user.sub, role: 'owner' as const } },
+      }),
     });
     return reply.status(201).send(project);
   });
@@ -374,6 +458,10 @@ export function registerResourceRoutes(
         name: body.name,
         description: body.description,
         defaults: body.defaults ? json(body.defaults) : undefined,
+        // 编辑器语义：worldview 为整组替换（parseWorldview 规范化），
+        // 允许清空单个字段；agent 侧走 mergeWorldview（proposal-applier）。
+        worldview:
+          body.worldview === undefined ? undefined : json(parseWorldview(body.worldview)),
       }),
     });
   });
@@ -415,7 +503,7 @@ export function registerResourceRoutes(
     const body = storyBodySchema.parse(request.body);
     const count = await db.story.count({ where: { projectId: pid, deletedAt: null } });
     const story = await db.story.create({
-      data: {
+      data: clean({
         projectId: pid,
         order: count + 1,
         title: body.title,
@@ -429,7 +517,7 @@ export function registerResourceRoutes(
         language: body.language,
         screenplay: body.screenplay,
         overrides: body.overrides ? json(body.overrides) : undefined,
-      },
+      }),
     });
     return reply.status(201).send(story);
   });
@@ -438,9 +526,14 @@ export function registerResourceRoutes(
     await requireMember(db, request.user.sub, await projectOfStory(db, id));
     const story = await db.story.findUnique({
       where: { id },
-      include: { scenes: { where: { deletedAt: null }, orderBy: { order: 'asc' } } },
+      include: {
+        scenes: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
+        segments: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
+      },
     });
-    return story ? { ...story, scenes: story.scenes.map(sceneDto) } : null;
+    return story
+      ? { ...story, scenes: story.scenes.map(sceneDto), segments: story.segments }
+      : null;
   });
   app.patch('/stories/:id', async (request) => {
     const { id } = idParams.parse(request.params);
@@ -449,7 +542,7 @@ export function registerResourceRoutes(
     const body = storyBodySchema.partial().parse(request.body);
     return db.story.update({
       where: { id },
-      data: {
+      data: clean({
         title: body.title,
         logline: body.logline,
         synopsis: body.synopsis,
@@ -466,7 +559,7 @@ export function registerResourceRoutes(
             : body.overrides === null
               ? Prisma.JsonNull
               : json(body.overrides),
-      },
+      }),
     });
   });
   app.delete('/stories/:id', async (request, reply) => {
@@ -490,21 +583,29 @@ export function registerResourceRoutes(
     const projectId = await projectOfStory(db, sid);
     await requireMember(db, request.user.sub, projectId, true);
     const body = sceneBodySchema.parse(request.body);
+    if (body.segment_id) {
+      const segment = await db.storySegment.findFirst({
+        where: { id: body.segment_id, storyId: sid, deletedAt: null },
+        select: { id: true },
+      });
+      if (!segment) throw new ApiError(400, 'INVALID_SEGMENT', '段落不存在或不属于该故事');
+    }
     const count = await db.scene.count({ where: { storyId: sid, deletedAt: null } });
     const scene = await db.scene.create({
-      data: {
+      data: clean({
         storyId: sid,
         projectId,
         order: body.order ?? count + 1,
         title: body.title,
         description: body.summary !== undefined ? body.summary : body.description,
         locationId: body.location_id,
+        segmentId: body.segment_id,
         time: body.time_of_day !== undefined ? body.time_of_day : body.time,
         weather: body.weather,
         mood: body.mood,
         characterIds: body.character_ids ?? [],
         overrides: body.overrides ? json(body.overrides) : undefined,
-      },
+      }),
     });
     return reply.status(201).send(sceneDto(scene));
   });
@@ -525,13 +626,26 @@ export function registerResourceRoutes(
     const projectId = await projectOfScene(db, id);
     await requireMember(db, request.user.sub, projectId, true);
     const body = sceneBodySchema.partial().parse(request.body);
+    if (body.segment_id) {
+      const scene = await db.scene.findFirst({
+        where: { id, deletedAt: null },
+        select: { storyId: true },
+      });
+      if (!scene) throw new ApiError(404, 'SCENE_NOT_FOUND', '场景不存在');
+      const segment = await db.storySegment.findFirst({
+        where: { id: body.segment_id, storyId: scene.storyId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!segment) throw new ApiError(400, 'INVALID_SEGMENT', '段落不存在或不属于该故事');
+    }
     return db.$transaction(async (tx) => {
       const updated = await tx.scene.update({
         where: { id },
-        data: {
+        data: clean({
           title: body.title,
           description: body.summary !== undefined ? body.summary : body.description,
           locationId: body.location_id,
+          segmentId: body.segment_id,
           time: body.time_of_day !== undefined ? body.time_of_day : body.time,
           weather: body.weather,
           mood: body.mood,
@@ -543,9 +657,9 @@ export function registerResourceRoutes(
               : body.overrides === null
                 ? Prisma.JsonNull
                 : json(body.overrides),
-          state: 'draft',
+          state: 'draft' as const,
           approvedSnapshot: Prisma.JsonNull,
-        },
+        }),
       });
       await tx.visualAssetRequirement.updateMany({
         where: { sceneId: id },
@@ -612,7 +726,7 @@ export function registerResourceRoutes(
     const order =
       body.order ?? (await db.shot.count({ where: { sceneId: sid, deletedAt: null } })) + 1;
     const shot = await db.shot.create({
-      data: {
+      data: clean({
         sceneId: sid,
         projectId,
         order,
@@ -630,7 +744,21 @@ export function registerResourceRoutes(
         action: body.action ? json(body.action) : undefined,
         audio: body.audio ? json(body.audio) : undefined,
         prompt: json(body.prompt),
-      },
+      }),
+    });
+    await maybeRecordEntityChange(db, {
+      projectId,
+      entityType: 'shot',
+      entityId: shot.id,
+      row: shot,
+      changeKind: 'create',
+      eventType: 'entity.created',
+      idempotencyKey: `shot:create:${shot.id}`,
+      expectedRevision: 0,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'POST /scenes/:sid/shots',
     });
     return reply.status(201).send(shot);
   });
@@ -678,7 +806,7 @@ export function registerResourceRoutes(
     const body = shotPatchSchema.parse(request.body);
     const updated = await db.shot.update({
       where: { id },
-      data: {
+      data: clean({
         label: body.label,
         order: body.order,
         narrativeMode: body.narrative_mode,
@@ -734,9 +862,22 @@ export function registerResourceRoutes(
               ? Prisma.JsonNull
               : json(body.audio),
         prompt: body.prompt ? json(body.prompt) : undefined,
-      },
+      }),
     });
     await audit(db, request, projectId, 'shot', id, 'update', existing, updated);
+    await maybeRecordEntityChange(db, {
+      projectId,
+      entityType: 'shot',
+      entityId: id,
+      row: updated,
+      changeKind: 'update',
+      eventType: 'entity.changed',
+      idempotencyKey: `shot:update:${id}:${updated.updatedAt.toISOString()}`,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'PATCH /shots/:id',
+    });
     return updated;
   });
   app.delete('/shots/:id', async (request, reply) => {
@@ -753,12 +894,12 @@ export function registerResourceRoutes(
     const order =
       (await db.shot.count({ where: { sceneId: source.sceneId, deletedAt: null } })) + 1;
     const copy = await db.shot.create({
-      data: {
+      data: clean({
         sceneId: source.sceneId,
         projectId,
         order,
         label: source.label ? `${source.label}（副本）` : null,
-        state: 'draft',
+        state: 'draft' as const,
         narrativeMode: source.narrativeMode,
         locationArea: source.locationArea,
         camera: source.camera ?? undefined,
@@ -772,7 +913,7 @@ export function registerResourceRoutes(
         action: source.action ?? undefined,
         audio: source.audio ?? undefined,
         prompt: json(source.prompt),
-      },
+      }),
     });
     return reply.status(201).send(copy);
   });
@@ -878,7 +1019,7 @@ export function registerResourceRoutes(
       })
       .parse(request.query);
     const assets = await db.asset.findMany({
-      where: {
+      where: clean({
         projectId: pid,
         deletedAt: null,
         type: query.asset_type ?? query.type,
@@ -886,14 +1027,14 @@ export function registerResourceRoutes(
         tags: query.tag ? { has: query.tag } : undefined,
         OR: query.q
           ? [
-              { name: { contains: query.q, mode: 'insensitive' } },
-              { description: { contains: query.q, mode: 'insensitive' } },
+              { name: { contains: query.q, mode: 'insensitive' as const } },
+              { description: { contains: query.q, mode: 'insensitive' as const } },
             ]
           : undefined,
-      },
+      }),
       orderBy: { updatedAt: 'desc' },
     });
-    return assets.map(assetDto);
+    return Promise.all(assets.map((asset) => enrichAssetForClient(db, asset, storage)));
   });
   app.post('/projects/:pid/assets', async (request, reply) => {
     const { pid } = projectParams.parse(request.params);
@@ -904,9 +1045,9 @@ export function registerResourceRoutes(
         ? await (async () => {
             const body = parsed.data;
             return db.asset.create({
-              data: {
+              data: clean({
                 projectId: pid,
-                type: 'character',
+                type: 'character' as const,
                 state: body.state,
                 name: body.name,
                 description: body.description,
@@ -916,7 +1057,7 @@ export function registerResourceRoutes(
                 baseCharacterId: body.base_character_id,
                 appearance: json(body.appearance),
                 data: json(body),
-              },
+              }),
             });
           })()
         : await (async () => {
@@ -934,6 +1075,9 @@ export function registerResourceRoutes(
               },
             });
           })();
+    if (asset.type === 'character') {
+      await ensureDefaultAppearanceVariant(db, asset);
+    }
     return reply.status(201).send(assetDto(asset));
   });
   app.get('/assets/:id', async (request) => {
@@ -941,10 +1085,93 @@ export function registerResourceRoutes(
     const asset = await db.asset.findFirst({ where: { id, deletedAt: null } });
     if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '资产不存在');
     await requireMember(db, request.user.sub, asset.projectId);
+    const enriched = await enrichAssetForClient(db, asset, storage);
     if (asset.type === 'character' && asset.baseCharacterId) {
-      return assetDto({ ...asset, resolved_appearance: await resolveAppearance(db, asset) });
+      return {
+        ...enriched,
+        resolved_appearance: await resolveAppearance(db, asset),
+      };
     }
-    return assetDto(asset);
+    return enriched;
+  });
+
+  const sheetBody = z
+    .object({
+      prompt: z.string().trim().min(1).max(5_000).optional(),
+      count: z.number().int().min(1).max(4).optional().default(1),
+    })
+    .strict();
+
+  app.post('/assets/:id/location-sheet/draft-prompt', async (request) => {
+    const { id } = idParams.parse(request.params);
+    const asset = await db.asset.findFirst({ where: { id, deletedAt: null, type: 'location' } });
+    if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '地点资产不存在');
+    await requireMember(db, request.user.sub, asset.projectId, true);
+    const providers = instrumentProviderBundle(
+      db,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+    const traits = await withUsageContext({ projectId: asset.projectId, taskType: 'llm' }, () =>
+      draftLocationSheetPrompt({
+        db,
+        assetId: asset.id,
+        llm: providers.llm,
+        llmModel: providers.llmModel,
+        requestId: randomUUID(),
+      }),
+    );
+    return {
+      asset_id: asset.id,
+      generation_prompt: traits.generation_prompt,
+      appearance_summary: traits.appearance_summary,
+      description: traits.description,
+      provider: providers.selection.llm,
+      model: providers.llmModel,
+      note: '仅起草地点设定表提示词，未调用生图。',
+    };
+  });
+
+  app.post('/assets/:id/location-sheet/generate', async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const asset = await db.asset.findFirst({ where: { id, deletedAt: null, type: 'location' } });
+    if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '地点资产不存在');
+    await requireMember(db, request.user.sub, asset.projectId, true);
+    const body = sheetBody.parse(request.body ?? {});
+    const providers = instrumentProviderBundle(
+      db,
+      createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+    );
+    const result = await withUsageContext(
+      { projectId: asset.projectId, taskType: 'image_generate' },
+      () =>
+        generateLocationSheetImage({
+          db,
+          assetId: asset.id,
+          image: providers.image,
+          imageModel: providers.imageModel,
+          requestId: randomUUID(),
+          count: body.count,
+          ...(body.prompt ? { prompt: body.prompt } : {}),
+          ...(storage ? { storage } : {}),
+        }),
+    );
+    return reply.status(201).send({
+      asset_id: asset.id,
+      media: {
+        id: result.media.id,
+        url: result.media.url,
+        access_url: result.media.url,
+      },
+      medias: result.medias.map((item) => ({
+        id: item.id,
+        url: item.url,
+        access_url: item.url,
+      })),
+      generation_prompt: result.generation_prompt,
+      provider: providers.selection.image,
+      model: providers.imageModel,
+      note: '地点多角度设定表（一次 T2I），已设为封面。',
+    });
   });
   app.patch('/assets/:id', async (request) => {
     const { id } = idParams.parse(request.params);
@@ -957,7 +1184,7 @@ export function registerResourceRoutes(
     const body = parseAssetPatchInput(asset.type, request.body);
     const updated = await db.asset.update({
       where: { id },
-      data: {
+      data: clean({
         name: body.name as string | undefined,
         description: body.description as string | undefined,
         state: body.state as 'draft' | 'active' | 'archived' | undefined,
@@ -967,7 +1194,7 @@ export function registerResourceRoutes(
         baseCharacterId: body.base_character_id as string | null | undefined,
         appearance: body.appearance ? json(body.appearance) : undefined,
         data: json({ ...(asset.data as object), ...body }),
-      },
+      }),
     });
     return assetDto(updated);
   });
@@ -1016,7 +1243,7 @@ export function registerResourceRoutes(
     await requireMember(db, request.user.sub, media.projectId);
     return {
       ...media,
-      access_url: storage ? await storage.signedReadUrl(media.storageKey) : media.url,
+      access_url: await resolveMediaAccessUrl(media.url, media.storageKey, storage),
     };
   });
 

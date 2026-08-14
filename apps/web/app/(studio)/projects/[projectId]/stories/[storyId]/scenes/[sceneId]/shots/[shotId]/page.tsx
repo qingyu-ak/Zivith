@@ -7,7 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Badge, Button, Card, Field, Input, Select, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormList, getOptionalFormText } from '@/lib/form-data';
-import type { AssetDTO, ShotCharacterDTO, ShotDTO } from '@/lib/types';
+import type { AssetDTO, OutputDTO, PromptVersionDTO, ShotCharacterDTO, ShotDTO } from '@/lib/types';
 
 const option = (value: string, label: string) => (
   <option key={value} value={value}>
@@ -57,22 +57,42 @@ export default function ShotEditorPage() {
   const [shot, setShot] = useState<ShotDTO | null>(null);
   const [characters, setCharacters] = useState<AssetDTO[]>([]);
   const [cast, setCast] = useState<ShotCharacterDTO[]>([]);
+  const [promptVersions, setPromptVersions] = useState<PromptVersionDTO[]>([]);
+  const [outputs, setOutputs] = useState<OutputDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [syncWarning, setSyncWarning] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const [shotValue, assetValue] = await Promise.all([
+      const [shotValue, assetValue, promptValue, outputValue] = await Promise.all([
         api<ShotDTO>(`/shots/${shotId}`),
         api<AssetDTO[] | { data?: AssetDTO[]; items?: AssetDTO[] }>(
           `/projects/${projectId}/assets?type=character`,
         ),
+        api<PromptVersionDTO[]>(`/shots/${shotId}/prompts`),
+        api<OutputDTO[]>(`/shots/${shotId}/outputs`),
       ]);
       setShot(shotValue);
       setCast(shotValue.characters ?? []);
       setCharacters(unwrapList(assetValue));
+      setPromptVersions(promptValue);
+      setOutputs(outputValue);
+
+      const approved = promptValue.find((item) => item.approved_at);
+      const shotPositive = shotValue.prompt?.positive?.trim() ?? '';
+      if (approved && shotPositive && approved.positive.trim() !== shotPositive) {
+        setSyncWarning(
+          '镜头表单中的提示词与已审核版本不一致。生成视频将以已审核版本为准；保存镜头前请先重新审核提示词。',
+        );
+      } else if (promptValue.length > 0 && !approved && shotValue.prompt?.positive) {
+        setSyncWarning('存在未审核的提示词版本。请先审核通过后再生成视频。');
+      } else {
+        setSyncWarning('');
+      }
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -80,9 +100,55 @@ export default function ShotEditorPage() {
     }
   }, [projectId, shotId]);
 
+  const refreshArtifacts = useCallback(async () => {
+    try {
+      const [shotValue, promptValue, outputValue] = await Promise.all([
+        api<ShotDTO>(`/shots/${shotId}`),
+        api<PromptVersionDTO[]>(`/shots/${shotId}/prompts`),
+        api<OutputDTO[]>(`/shots/${shotId}/outputs`),
+      ]);
+      setShot((current) =>
+        current
+          ? {
+              ...current,
+              state: shotValue.state,
+              prompt: shotValue.prompt,
+            }
+          : shotValue,
+      );
+      setPromptVersions(promptValue);
+      setOutputs(outputValue);
+      const approved = promptValue.find((item) => item.approved_at);
+      const shotPositive = shotValue.prompt?.positive?.trim() ?? '';
+      if (approved && shotPositive && approved.positive.trim() !== shotPositive) {
+        setSyncWarning(
+          '镜头表单中的提示词与已审核版本不一致。生成视频将以已审核版本为准；保存镜头前请先重新审核提示词。',
+        );
+      } else if (promptValue.length > 0 && !approved && shotValue.prompt?.positive) {
+        setSyncWarning('存在未审核的提示词版本。请先审核通过后再生成视频。');
+      } else {
+        setSyncWarning('');
+      }
+    } catch {
+      // Keep the editor usable if a background refresh fails.
+    }
+  }, [shotId]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshArtifacts();
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refreshArtifacts]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -189,6 +255,132 @@ export default function ShotEditorPage() {
     }
   }
 
+  async function generatePrompt() {
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/generate-prompt`, { method: 'POST', body: {} });
+      setNotice('AI 提示词已生成，请审核后再生成视频');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function approvePrompt(promptId: string) {
+    setGenerating(true);
+    setError('');
+    try {
+      await api(`/shots/${shotId}/prompts/${promptId}/approve`, {
+        method: 'POST',
+        body: {},
+      });
+      setNotice('提示词版本已审核通过');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function generateVideo() {
+    if (
+      !window.confirm(
+        '确认生成视频？\n\nSiliconFlow Wan 约 ¥2/条，失败后不会自动重试；仅本次点击会发起一次计费请求。',
+      )
+    ) {
+      return;
+    }
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/generate`, { method: 'POST', body: {} });
+      setNotice('已提交视频生成（约 ¥2；失败不会自动重试）');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function recomputePrompt() {
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/recompute-prompt`, { method: 'POST' });
+      setNotice('已局部重跑本镜头提示词（工作流 attempt 已记录）');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function recomputeVideo() {
+    if (
+      !window.confirm(
+        '确认重跑本镜头视频？\n\nSiliconFlow Wan 约 ¥2/条，失败后不会自动重试；仅本次点击会发起一次计费请求。',
+      )
+    ) {
+      return;
+    }
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/shots/${shotId}/recompute-video`, { method: 'POST' });
+      setNotice('已排队重跑本镜头视频（约 ¥2；失败不会自动重试）');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function generateAudio() {
+    setGenerating(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api<{ media: { url?: string }; provider?: string; model?: string }>(
+        `/shots/${shotId}/generate-audio`,
+        { method: 'POST', body: {} },
+      );
+      setNotice(`对白音频已生成（${result.provider ?? 'provider'} / ${result.model ?? 'model'}）`);
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function activateOutput(outputId: string) {
+    setGenerating(true);
+    setError('');
+    try {
+      await api(`/shots/${shotId}/outputs/${outputId}/activate`, {
+        method: 'POST',
+        body: {},
+      });
+      setNotice('已切换当前视频版本');
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   function updateCast(index: number, patch: Partial<ShotCharacterDTO>) {
     setCast((items) =>
       items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
@@ -202,6 +394,13 @@ export default function ShotEditorPage() {
       </div>
     );
   const frozen = shot.state === 'approved';
+  const approvedPrompt = promptVersions.find((item) => item.approved_at);
+  const promptFormKey = [
+    shot.id,
+    approvedPrompt?.id ?? promptVersions[0]?.id ?? 'none',
+    shot.prompt?.positive?.slice(0, 32) ?? '',
+    outputs[0]?.id ?? 'no-output',
+  ].join(':');
 
   return (
     <form
@@ -209,7 +408,7 @@ export default function ShotEditorPage() {
         void save(event);
       }}
     >
-      <header className="sticky top-0 z-20 border-b border-line bg-ink/95 px-5 py-4 backdrop-blur sm:px-8">
+      <header className="sticky top-0 z-20 border-b border-line bg-[#f7f8fa] px-5 py-4 backdrop-blur sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
           <Link
             className="text-sm text-zinc-500 hover:text-accent"
@@ -262,7 +461,7 @@ export default function ShotEditorPage() {
       </header>
       <div className="mx-auto max-w-7xl space-y-5 p-5 sm:p-8">
         {error && (
-          <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+          <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
             {error}
           </p>
         )}
@@ -271,8 +470,13 @@ export default function ShotEditorPage() {
             {notice}
           </p>
         )}
+        {syncWarning && (
+          <p className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-200" role="status">
+            {syncWarning}
+          </p>
+        )}
         {frozen && (
-          <p className="rounded-lg border border-accent/20 bg-accent/5 p-4 text-sm text-zinc-300">
+          <p className="rounded-lg border border-accent/20 bg-accent/5 p-4 text-sm text-zinc-600">
             该镜头已批准，当前规格已冻结。解冻后才能继续编辑。
           </p>
         )}
@@ -640,8 +844,25 @@ export default function ShotEditorPage() {
                 defaultValue={shot.audio?.volume_sfx ?? ''}
               />
             </Field>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={generating || frozen}
+                onClick={() => void generateAudio()}
+              >
+                {generating ? '处理中…' : '生成对白音频'}
+              </Button>
+              <p className="text-xs text-zinc-500">
+                使用镜头对白文本；提供商可在项目页「模型提供商」中切换。
+              </p>
+            </div>
           </Section>
-          <Section title="提示词" description="结构化镜头与视频生成模型之间的桥梁。">
+          <Section
+            key={`prompt-${promptFormKey}`}
+            title="提示词"
+            description="结构化镜头与视频生成模型之间的桥梁。工作流或 AI 生成后会刷新此处字段。"
+          >
             <Field label="来源">
               <Select name="prompt.source" defaultValue={shot.prompt?.source ?? 'auto'}>
                 {option('auto', 'AI 自动构建')}
@@ -665,6 +886,131 @@ export default function ShotEditorPage() {
               <Textarea name="prompt.custom" defaultValue={shot.prompt?.custom ?? ''} />
             </Field>
           </Section>
+          <Card key={`ai-${promptFormKey}`}>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">AI 生成与版本审核</h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  与项目页工作流共用同一套提示词版本与视频输出。从工作流返回后会自动同步。
+                </p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  <Link className="text-accent hover:underline" href={`/projects/${projectId}`}>
+                    ← 返回项目工作流
+                  </Link>
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={generating}
+                  onClick={() => void generatePrompt()}
+                >
+                  {generating ? '处理中…' : 'AI 生成提示词'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={generating}
+                  onClick={() => void recomputePrompt()}
+                >
+                  重跑本镜头提示词
+                </Button>
+                <Button
+                  type="button"
+                  disabled={generating || !promptVersions.some((item) => item.approved_at)}
+                  onClick={() => void generateVideo()}
+                >
+                  生成视频
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={generating || !promptVersions.some((item) => item.approved_at)}
+                  onClick={() => void recomputeVideo()}
+                >
+                  重跑本镜头视频
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-600">提示词版本</h3>
+                <div className="mt-3 grid gap-3">
+                  {promptVersions.length === 0 ? (
+                    <p className="text-sm text-zinc-600">尚未生成提示词版本。</p>
+                  ) : (
+                    promptVersions.map((version) => {
+                      const matchesShot =
+                        (shot.prompt?.positive?.trim() ?? '') === version.positive.trim();
+                      return (
+                        <div key={version.id} className="rounded-lg border border-line bg-white p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge tone={version.approved_at ? 'success' : 'neutral'}>
+                                {version.approved_at ? '已审核' : '待审核'}
+                              </Badge>
+                              {matchesShot && <Badge tone="success">与镜头同步</Badge>}
+                            </div>
+                            {!version.approved_at && (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={generating}
+                                onClick={() => void approvePrompt(version.id)}
+                              >
+                                审核通过
+                              </Button>
+                            )}
+                          </div>
+                          <p className="mt-3 line-clamp-4 text-xs leading-5 text-zinc-400">
+                            {version.positive}
+                          </p>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-600">视频输出</h3>
+                <div className="mt-3 grid gap-3">
+                  {outputs.length === 0 ? (
+                    <p className="text-sm text-zinc-600">尚未生成视频输出。</p>
+                  ) : (
+                    outputs.map((output) => (
+                      <div key={output.id} className="rounded-lg border border-line bg-white p-3">
+                        {output.video_url && (
+                          <video
+                            className="aspect-video w-full rounded-md bg-black"
+                            controls
+                            src={output.video_url}
+                          />
+                        )}
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <Badge tone={output.is_active ? 'success' : 'neutral'}>
+                            {output.is_active ? '当前版本' : output.status}
+                          </Badge>
+                          {!output.is_active && output.status === 'completed' && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={generating}
+                              onClick={() => void activateOutput(output.id)}
+                            >
+                              设为当前版本
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
         </fieldset>
         <div className="flex justify-end">
           <Button

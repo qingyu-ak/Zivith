@@ -9,13 +9,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: '#111318',
-        panel: '#181b22',
-        line: '#2b303b',
-        accent: '#b7ff4a',
+        ink: '#18181b',
+        panel: '#ffffff',
+        line: '#e5e7eb',
+        accent: '#4d6bfe',
       },
       boxShadow: {
-        glow: '0 0 30px rgba(183,255,74,.12)',
+        glow: '0 0 30px rgba(77,107,254,.12)',
       },
     },
   },

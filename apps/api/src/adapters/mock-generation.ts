@@ -29,9 +29,7 @@ export class MockGenerationAdapter implements VideoGenerationAdapter {
 
   constructor(options: MockGenerationAdapterOptions = {}) {
     this.placeholderVideoUrl =
-      options.placeholderVideoUrl ??
-      process.env.PLACEHOLDER_VIDEO_URL ??
-      DEFAULT_PLACEHOLDER_URL;
+      options.placeholderVideoUrl ?? process.env.PLACEHOLDER_VIDEO_URL ?? DEFAULT_PLACEHOLDER_URL;
     this.minDelayMs = options.minDelayMs ?? 2_000;
     this.maxDelayMs = options.maxDelayMs ?? 5_000;
     this.sleep =
@@ -79,10 +77,10 @@ export class MockGenerationAdapter implements VideoGenerationAdapter {
     return completed;
   }
 
-  async getStatus(jobId: string): Promise<GenerationJobStatus> {
+  getStatus(jobId: string): Promise<GenerationJobStatus> {
     const job = this.jobs.get(jobId);
     if (!job) throw new Error(`Mock generation job not found: ${jobId}`);
-    return job;
+    return Promise.resolve(job);
   }
 
   async cancel(jobId: string): Promise<void> {
