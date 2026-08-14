@@ -1,5 +1,5 @@
 /// <reference types="vitest/globals" />
-import { firstConflictSelection, selectionFromConflictRef } from './world-conflicts';
+import { conflictsForSelection, firstConflictSelection, selectionFromConflictRef } from './world-conflicts';
 
 describe('world conflict selection', () => {
   it('maps a known entity ref to a workspace selection', () => {
@@ -31,5 +31,28 @@ describe('world conflict selection', () => {
         entity_refs: undefined,
       } as unknown as import('./types').WorldConflictDTO),
     ).toBeNull();
+  });
+
+  it('lists conflicts that point at the selected entity', () => {
+    expect(
+      conflictsForSelection(
+        [
+          {
+            id: 'a',
+            kind: 'internal_fact_clash',
+            summary: '生死',
+            entity_refs: [{ type: 'character', id: 'c1' }],
+            evidence: ['身亡', '活着'],
+          },
+          {
+            id: 'b',
+            kind: 'internal_fact_clash',
+            summary: '别的角色',
+            entity_refs: [{ type: 'character', id: 'c2' }],
+          },
+        ],
+        { kind: 'character', id: 'c1' },
+      ).map((item) => item.id),
+    ).toEqual(['a']);
   });
 });

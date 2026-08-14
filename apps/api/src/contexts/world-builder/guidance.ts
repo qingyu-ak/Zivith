@@ -39,6 +39,11 @@ export function wantsGuidanceTurn(text: string): boolean {
   );
 }
 
+/** Studio「在对话中继续」落地时的交接句，只提问不建实体。 */
+export function wantsStudioHandoff(text: string): boolean {
+  return /^从 Studio 继续[：:]/.test(text.trim());
+}
+
 export function detectWorldGaps(world: WorldContext | null): WorldGap[] {
   if (!world) {
     return [

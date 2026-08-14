@@ -212,7 +212,7 @@
 | J1 | 会话运行时 + World Builder Agent | `creator_chat_*` 表（**无 userId**）；`world-builder-agent` + 中英双语文案；mock 分支可演示落库（[AI-Agent-Collaboration.md §2](../domain/AI-Agent-Collaboration.md)） | **已完成 2026-08-05**（会话运行时 + Agent + mock 落库 E2E） |
 | J2 | 提案 → 确认 → 落库 | `apply-intent` 按 kind 分发既有 service（project/character/location/world_event/relationship）；全部 `draft`；幂等键 `message_id + proposal_key`；确认「创建世界」自动建 Project 并回绑线程 | **已完成 2026-08-05**（提案→确认→落库 + 幂等 + 自动建世界；错误路径 400/409 覆盖） |
 | J3 | 世界知识上下文 + 世界状态面板 | `buildWorldContext` 聚合 project/stories/assets/world_events/relationships → prompt 插槽；**2026-08-06** 曾在聊天右侧展示世界摘要；**2026-08-13** Creator Chat 改为简洁对话面（类 DeepSeek），世界摘要/冲突改由 Studio 副驾驶承担；**2026-08-14** 浅色独立对话壳 + 可收起历史侧栏，Studio 左栏与世界工作区左右栏可收起 | **已完成**；展示面 2026-08-13 收束到 Studio |
-| J4 | 与结构化工作区联动 | 右侧面板/实体跳转 `/projects/[pid]/world`；对话与 Studio 双向可达。**2026-08-14**：Studio 选中实体后「在对话中继续」打开该项目最近线程，关注实体只进本轮 agent 上下文、不写聊天记录 | **已完成 2026-08-05**；**2026-08-14** 选中实体继续对话 |
+| J4 | 与结构化工作区联动 | 右侧面板/实体跳转 `/projects/[pid]/world`；对话与 Studio 双向可达。**2026-08-14**：Studio 选中实体「在对话中继续」打开该项目最近线程并立刻交接一轮（关注点只进 agent 上下文） | **已完成 2026-08-05**；**2026-08-14** 选中实体继续对话 |
 
 **退出标准：** 每个落库动作都有可观测的用户确认记录；产物一律为通过既有 review gate 的结构化 `draft` 实体；对话记录不作为创作产物存储、不进领域模型、不参与导出；不绕过任何强制门禁；每次生成携带 usage 埋点与 provenance（P7）。
 

@@ -17,6 +17,7 @@ import {
   WorldBuilderAgent,
   inferWorldStage,
   streamReplyChunks,
+  worldBuilderPublicError,
   type WorldBuilderChatMessage,
 } from '../contexts/world-builder/world-builder-agent.js';
 import { buildWorldContext, assembleWorldContext } from '../contexts/world-builder/world-context.js';
@@ -662,7 +663,7 @@ async function pipeCreatorChatSse(
     writeEvent('done', { assistant_message: chatMessageDto(assistantMessage) });
   } catch (error) {
     writeEvent('error', {
-      message: error instanceof Error ? error.message : '世界构建者回复失败',
+      message: worldBuilderPublicError(error),
     });
   } finally {
     cleanup();

@@ -32,7 +32,12 @@ export function ContinueInChatButton({
     try {
       const threadId = await resolveThreadForProject(projectId);
       if (focus) {
-        writePendingFocus({ ...focus, thread_id: threadId, project_id: projectId });
+        writePendingFocus({
+          ...focus,
+          thread_id: threadId,
+          project_id: projectId,
+          auto_send: true,
+        });
       }
       router.push(chatPathForThread(threadId, focus));
     } catch (reason) {

@@ -24,6 +24,8 @@ export interface ChatFocus {
 export interface PendingChatFocus extends ChatFocus {
   thread_id: string;
   project_id: string;
+  /** 进入对话后立刻发一轮，让世界构建者接着聊该实体 */
+  auto_send?: boolean;
 }
 
 export const CHAT_FOCUS_LABEL: Record<ChatFocusKind, string> = {
@@ -62,11 +64,12 @@ export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
   };
 }
 
-export function parseFocusFromSearch(search: URLSearchParams): Pick<ChatFocus, 'kind' | 'id'> | null {
+export function parseFocusFromSearch(search: URLSearchParams): ChatFocus | null {
   const kind = search.get('focus_kind');
   const id = search.get('focus_id');
+  const name = search.get('focus_name')?.trim();
   if (!isChatFocusKind(kind) || !id) return null;
-  return { kind, id };
+  return { kind, id, name: name || '' };
 }
 
 export function readPendingFocus(): PendingChatFocus | null {
@@ -81,7 +84,14 @@ export function readPendingFocus(): PendingChatFocus | null {
     const threadId = asString(record.thread_id);
     const projectId = asString(record.project_id);
     if (!id || !name || !threadId || !projectId) return null;
-    return { kind: record.kind, id, name, thread_id: threadId, project_id: projectId };
+    return {
+      kind: record.kind,
+      id,
+      name,
+      thread_id: threadId,
+      project_id: projectId,
+      auto_send: record.auto_send === true,
+    };
   } catch {
     return null;
   }
@@ -98,7 +108,7 @@ export function clearPendingFocus(): void {
 }
 
 export function mergeChatFocus(
-  fromUrl: Pick<ChatFocus, 'kind' | 'id'> | null,
+  fromUrl: ChatFocus | null,
   pending: PendingChatFocus | null,
   threadId?: string,
 ): ChatFocus | null {
@@ -106,7 +116,8 @@ export function mergeChatFocus(
     if (pending && pending.kind === fromUrl.kind && pending.id === fromUrl.id) {
       if (!threadId || pending.thread_id === threadId) return pending;
     }
-    return { kind: fromUrl.kind, id: fromUrl.id, name: '选中实体' };
+    if (fromUrl.name.trim()) return fromUrl;
+    return null;
   }
   if (pending && (!threadId || pending.thread_id === threadId)) return pending;
   return null;
@@ -117,8 +128,13 @@ export function chatPathForThread(threadId: string, focus?: ChatFocus | null): s
   const params = new URLSearchParams({
     focus_kind: focus.kind,
     focus_id: focus.id,
+    focus_name: focus.name,
   });
   return `/creator-chats/${threadId}?${params.toString()}`;
+}
+
+export function studioFocusHandoffMessage(focus: ChatFocus): string {
+  return `从 Studio 继续：${CHAT_FOCUS_LABEL[focus.kind]}「${focus.name}」`;
 }
 
 export function focusFromSelection(

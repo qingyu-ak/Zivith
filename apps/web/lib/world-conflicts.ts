@@ -22,3 +22,13 @@ export function firstConflictSelection(conflict: WorldConflictDTO): WorldSelecti
   const ref = conflict.entity_refs?.[0];
   return ref ? selectionFromConflictRef(ref) : null;
 }
+
+export function conflictsForSelection(
+  conflicts: WorldConflictDTO[] | undefined,
+  selection: WorldSelection,
+): WorldConflictDTO[] {
+  if (!selection) return [];
+  return (conflicts ?? []).filter((item) =>
+    (item.entity_refs ?? []).some((ref) => ref.type === selection.kind && ref.id === selection.id),
+  );
+}

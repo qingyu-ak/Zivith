@@ -484,6 +484,7 @@ export interface WorldConflictDTO {
   kind: string;
   summary: string;
   entity_refs: Array<{ type: string; id: string }>;
+  evidence?: string[];
 }
 
 export interface WorldResourcesDTO {

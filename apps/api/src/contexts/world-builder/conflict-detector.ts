@@ -33,6 +33,8 @@ export interface WorldConflict {
   kind: WorldConflictKind;
   summary: string;
   entity_refs: WorldConflictEntityRef[];
+  /** Matched phrases the creator can edit, e.g. ["身亡", "活着"]. */
+  evidence?: string[];
 }
 
 const CONFLICT_LIMIT = 12;
@@ -106,9 +108,17 @@ function namedInText(text: string, name: string): boolean {
   return trimmed.length >= 1 && text.includes(trimmed);
 }
 
-function polarClash(text: string): string | null {
+function firstMatch(pattern: RegExp, text: string): string | null {
+  const match = text.match(pattern);
+  const value = match?.[0]?.trim();
+  return value ? value : null;
+}
+
+function polarClash(text: string): { label: string; evidence: string[] } | null {
   for (const fact of POLAR_FACTS) {
-    if (fact.a.test(text) && fact.b.test(text)) return fact.label;
+    const a = firstMatch(fact.a, text);
+    const b = firstMatch(fact.b, text);
+    if (a && b) return { label: fact.label, evidence: [a, b] };
   }
   return null;
 }
@@ -311,14 +321,16 @@ function detectGenreMismatch(world: WorldContext, findings: WorldConflict[]): vo
 function detectInternalFacts(world: WorldContext, findings: WorldConflict[]): void {
   for (const character of world.characters) {
     const description = character.description ?? '';
-    const label = polarClash(description);
-    if (!label) continue;
+    const clash = polarClash(description);
+    if (!clash) continue;
     const refs: WorldConflictEntityRef[] = [{ type: 'character', id: character.id }];
+    const quoted = clash.evidence.map((item) => `「${item}」`).join('和');
     pushUnique(findings, {
       id: conflictId('internal_fact_clash', refs),
       kind: 'internal_fact_clash',
-      summary: `角色「${character.name}」的设定在「${label}」上自相矛盾`,
+      summary: `角色「${character.name}」的设定在「${clash.label}」上自相矛盾：描述同时写了${quoted}`,
       entity_refs: refs,
+      evidence: clash.evidence,
     });
   }
 }
@@ -418,7 +430,7 @@ export function formatConflictCheckReply(conflicts: WorldConflict[]): string {
     return '我按当前世界档案做了结构化核对：没有发现同名重复、关系自指/对向循环、事件顺序撞车或明显的生死/性别等极性矛盾。\n\n这只覆盖规则能判定的冲突；更细的剧情逻辑仍请你拍板。我不会自动改任何设定。';
   }
   const lines = conflicts.map((item, index) => `${index + 1}. ${item.summary}`);
-  return `我核对了当前世界档案，发现 ${conflicts.length} 处设定冲突。我不会自动修改，请你决定保留哪一则：\n\n${lines.join('\n')}\n\n可以说「改角色××的设定为…」或直接在 Studio Inspector 里编辑。`;
+  return `我核对了当前世界档案，发现 ${conflicts.length} 处设定冲突。我不会自动修改，请你决定保留哪一则：\n\n${lines.join('\n')}\n\n在 Studio 点开冲突卡片，右侧点「编辑」改描述后保存；或在对话里说「改角色××的设定为…」。`;
 }
 
 export function formatConflictAppendix(conflicts: WorldConflict[]): string {

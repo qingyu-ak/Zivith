@@ -4,6 +4,7 @@ import {
   entityTitle,
   focusFromSelection,
   isChatFocusKind,
+  studioFocusHandoffMessage,
   mergeChatFocus,
   normalizeThread,
   parseFocusFromSearch,
@@ -83,14 +84,17 @@ describe('focusFromSelection', () => {
 describe('chat focus routing', () => {
   it('builds a thread URL and merges pending name onto query params', () => {
     const focus = { kind: 'character' as const, id: 'c1', name: '韩立' };
-    expect(chatPathForThread('t9', focus)).toBe('/creator-chats/t9?focus_kind=character&focus_id=c1');
-    expect(parseFocusFromSearch(new URLSearchParams('focus_kind=character&focus_id=c1'))).toEqual({
+    expect(chatPathForThread('t9', focus)).toContain('focus_name=');
+    expect(parseFocusFromSearch(new URLSearchParams('focus_kind=character&focus_id=c1&focus_name=韩立'))).toEqual({
       kind: 'character',
       id: 'c1',
+      name: '韩立',
     });
+    expect(mergeChatFocus({ kind: 'character', id: 'c1', name: '' }, null, 't9')).toBeNull();
     expect(
-      mergeChatFocus({ kind: 'character', id: 'c1' }, { ...focus, thread_id: 't9', project_id: 'p1' }, 't9')
+      mergeChatFocus({ kind: 'character', id: 'c1', name: '韩立' }, { ...focus, thread_id: 't9', project_id: 'p1' }, 't9')
         ?.name,
     ).toBe('韩立');
+    expect(studioFocusHandoffMessage(focus)).toBe('从 Studio 继续：角色「韩立」');
   });
 });

@@ -6,6 +6,7 @@ import type {
   AssetDTO,
   SceneDTO,
   StoryDTO,
+  WorldConflictDTO,
   WorldEventDTO,
   WorldRelationshipDTO,
   WorldResourcesDTO,
@@ -15,6 +16,7 @@ import { api, errorMessage } from '@/lib/api';
 import { focusFromSelection } from '@/lib/creator-chat-nav';
 import { worldTimeCaption, worldTimeOrder } from '@/lib/world-line';
 import { ContinueInChatButton } from './continue-in-chat';
+import { conflictsForSelection } from '@/lib/world-conflicts';
 
 const KIND_COLOR: Record<string, string> = {
   character: 'text-[#4d6bfe] border-[#4d6bfe]/30 bg-[#4d6bfe]/10',
@@ -83,6 +85,38 @@ function EntityDetail({
       ) : (
         rows.map((field) => <Row key={field.label} label={field.label} value={field.value} />)
       )}
+    </div>
+  );
+}
+
+function ConflictEditHint({
+  conflicts,
+  editing,
+  onEdit,
+}: {
+  conflicts: WorldConflictDTO[];
+  editing: boolean;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="mx-4 mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-900">
+      {conflicts.map((conflict) => (
+        <p key={conflict.id}>{conflict.summary}</p>
+      ))}
+      <p className="mt-1 text-zinc-600">
+        {editing
+          ? '改下面描述里互相打架的句子，保存后这条冲突会消失。'
+          : '点「编辑描述」，只保留你要的那一则（或改成不互斥的写法）。'}
+      </p>
+      {!editing ? (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="mt-1.5 rounded-md border border-amber-700/30 bg-white px-2 py-0.5 text-[11px] text-amber-900 hover:bg-amber-50"
+        >
+          编辑描述
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -359,6 +393,8 @@ export function InspectorPanel({
     }
   }
 
+  const relatedConflicts = conflictsForSelection(resources.conflicts, selection);
+
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       <section className="border-b border-line">
@@ -383,7 +419,16 @@ export function InspectorPanel({
           ) : null}
         </header>
         {selection ? (
-          detail
+          <>
+            {relatedConflicts.length > 0 ? (
+              <ConflictEditHint
+                conflicts={relatedConflicts}
+                editing={editing}
+                onEdit={() => setEditing(true)}
+              />
+            ) : null}
+            {detail}
+          </>
         ) : (
           <div className="px-4 pb-6">
             <p className="rounded-lg border border-dashed border-line p-4 text-sm leading-6 text-zinc-500">

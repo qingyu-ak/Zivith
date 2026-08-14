@@ -175,6 +175,8 @@ describe('detectWorldConflicts', () => {
       }),
     );
     expect(findings.map((item) => item.kind)).toEqual(['internal_fact_clash']);
+    expect(findings[0]?.evidence).toEqual(['已死', '活着']);
+    expect(findings[0]?.summary).toContain('「已死」和「活着」');
   });
 
   it('flags incoming text that contradicts an existing character fact', () => {

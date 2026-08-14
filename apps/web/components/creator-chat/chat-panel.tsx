@@ -10,6 +10,7 @@ import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
 import {
   CHAT_FOCUS_LABEL,
   clearPendingFocus,
+  studioFocusHandoffMessage,
   mergeChatFocus,
   normalizeThread,
   parseFocusFromSearch,
@@ -93,6 +94,7 @@ export function ChatPanel() {
   const [focus, setFocus] = useState<ChatFocus | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const pendingConsumed = useRef(false);
+  const focusHandoff = useRef<ChatFocus | null>(null);
   const focusRef = useRef<ChatFocus | null>(null);
   focusRef.current = focus;
 
@@ -140,6 +142,11 @@ export function ChatPanel() {
   }, [loadThreads, threadId]);
 
   useEffect(() => {
+    pendingConsumed.current = false;
+    focusHandoff.current = null;
+  }, [threadId]);
+
+  useEffect(() => {
     if (!threadId || typeof window === 'undefined') {
       setFocus(null);
       return;
@@ -147,6 +154,9 @@ export function ChatPanel() {
     const fromUrl = parseFocusFromSearch(new URLSearchParams(window.location.search));
     const pending = readPendingFocus();
     const merged = mergeChatFocus(fromUrl, pending, threadId);
+    if (pending?.auto_send && pending.thread_id === threadId && merged) {
+      focusHandoff.current = merged;
+    }
     if (pending) clearPendingFocus();
     setFocus(merged);
   }, [threadId]);
@@ -229,6 +239,16 @@ export function ChatPanel() {
     sessionStorage.removeItem(PENDING_CHAT_TURN_KEY);
     void sendContent(pending);
   }, [loading, sendContent, threadId]);
+
+  useEffect(() => {
+    if (!threadId || loading || sending) return;
+    const handoff = focusHandoff.current;
+    if (!handoff) return;
+    focusHandoff.current = null;
+    focusRef.current = handoff;
+    setFocus(handoff);
+    void sendContent(studioFocusHandoffMessage(handoff));
+  }, [loading, sendContent, sending, threadId]);
 
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

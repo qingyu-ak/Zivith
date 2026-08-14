@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { ZodError } from 'zod';
 import {
   WorldBuilderAgent,
   chunkReply,
   mockWorldBuilderResponse,
   streamReplyChunks,
+  worldBuilderPublicError,
+  worldBuilderResponseSchema,
 } from '../src/contexts/world-builder/world-builder-agent.js';
 import { formatSseEvent, parseSseBuffer } from '../src/lib/sse.js';
 import type { LLMAdapter } from '../src/ports/llm.js';
@@ -115,5 +118,37 @@ describe('world builder conflict surfacing', () => {
     });
     expect(response.proposals).toEqual([]);
     expect(response.reply).toContain('已经在世界档案里');
+  });
+});
+
+describe('world builder response schema', () => {
+  it('coerces string open_questions and conflicts into arrays', () => {
+    const parsed = worldBuilderResponseSchema.parse({
+      reply: '达恩的生死设定有两处对不上。',
+      proposals: [],
+      world_state: {
+        stage: 'growing',
+        open_questions: '下一步引导问题',
+        conflicts: '生死设定自相矛盾',
+      },
+    });
+    expect(parsed.world_state.open_questions).toEqual(['下一步引导问题']);
+    expect(parsed.world_state.conflicts).toEqual(['生死设定自相矛盾']);
+  });
+
+  it('does not leak Zod issues into the chat', () => {
+    const error = new ZodError([
+      {
+        code: 'invalid_type',
+        expected: 'array',
+        received: 'string',
+        path: ['world_state', 'open_questions'],
+        message: 'Expected array, received string',
+      },
+    ]);
+    expect(worldBuilderPublicError(error)).toBe('这一轮回复格式异常，请再发一次。');
+    expect(worldBuilderPublicError(new Error(JSON.stringify(error.issues)))).toBe(
+      '这一轮回复格式异常，请再发一次。',
+    );
   });
 });

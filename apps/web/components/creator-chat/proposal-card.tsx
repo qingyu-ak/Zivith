@@ -27,10 +27,17 @@ function pick(payload: Record<string, unknown>, key: string): string | null {
 }
 
 function entityName(payload: Record<string, unknown>): string {
+  const fields = payload.fields;
+  const fromFields =
+    typeof fields === 'object' && fields !== null
+      ? pick(fields as Record<string, unknown>, 'name') ??
+        pick(fields as Record<string, unknown>, 'title')
+      : null;
   return (
     pick(payload, 'name') ??
     pick(payload, 'title') ??
     pick(payload, 'label') ??
+    fromFields ??
     '未命名'
   );
 }

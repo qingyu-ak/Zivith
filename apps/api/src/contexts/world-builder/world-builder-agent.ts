@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { ZodError, z } from 'zod';
 import { proposalSchema, type Proposal } from '@zivith/domain';
 import type { LLMAdapter } from '../../ports/llm.js';
 import { buildWorldBuilderSystemPrompt, type WorldBuilderFocus } from './prompt.js';
@@ -18,6 +18,7 @@ import {
   mergeOpenQuestions,
   skipGapsCoveredByProposals,
   wantsGuidanceTurn,
+  wantsStudioHandoff,
 } from './guidance.js';
 
 export type WorldStage = 'bootstrap' | 'growing' | 'mature';
@@ -37,11 +38,27 @@ export interface WorldBuilderInput {
   focus?: WorldBuilderFocus | null;
 }
 
+/** LLM often emits a single string where the schema wants a string array. */
+function coerceStringList(maxItems: number, maxLen: number) {
+  return z.preprocess((value: unknown) => {
+    if (value == null) return [];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed ? [trimmed.slice(0, maxLen)] : [];
+    }
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item) => (typeof item === 'string' ? item : item == null ? '' : String(item)))
+      .map((item) => item.trim().slice(0, maxLen))
+      .filter(Boolean);
+  }, z.array(z.string().max(maxLen)).max(maxItems));
+}
+
 export const worldStateSchema = z
   .object({
     stage: z.enum(['bootstrap', 'growing', 'mature']),
-    open_questions: z.array(z.string().max(300)).max(12).default([]),
-    conflicts: z.array(z.string().max(500)).max(12).default([]),
+    open_questions: coerceStringList(12, 300),
+    conflicts: coerceStringList(12, 500),
   })
   .strict();
 
@@ -56,6 +73,20 @@ export const worldBuilderResponseSchema = z
   .strict();
 
 export type WorldBuilderResponse = z.infer<typeof worldBuilderResponseSchema>;
+
+export function worldBuilderPublicError(error: unknown): string {
+  if (error instanceof ZodError) {
+    return '这一轮回复格式异常，请再发一次。';
+  }
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message.startsWith('[') || message.startsWith('{')) {
+      return '这一轮回复格式异常，请再发一次。';
+    }
+    return message || '世界构建者回复失败';
+  }
+  return '世界构建者回复失败';
+}
 
 export function inferWorldStage(world: WorldContext | null): WorldStage {
   if (!world) return 'bootstrap';
@@ -191,19 +222,35 @@ function applyGuidance(
     response.proposals.map((proposal) => proposal.kind),
   ).slice(0, 3);
   const questions = mergeOpenQuestions(response.world_state.open_questions, gaps);
+  if (input.focus && wantsStudioHandoff(input.text)) {
+    const label = `${focusKindLabel(input.focus.kind)}「${input.focus.name}」`;
+    return {
+      ...response,
+      reply: `我们正在看${label}。若要改设定，可以说外貌、性格、关系或一段经历；已经满意的话，直接说主线或下一项即可。`,
+      proposals: [],
+      world_state: {
+        ...response.world_state,
+        open_questions: mergeOpenQuestions(['关注实体是否还要改'], gaps),
+      },
+    };
+  }
+  if (
+    response.proposals.length === 0 &&
+    input.focus &&
+    wantsGuidanceTurn(input.text)
+  ) {
+    const label = `${focusKindLabel(input.focus.kind)}「${input.focus.name}」`;
+    return {
+      ...response,
+      reply: `我们正在看${label}。若要改设定，可以说外貌、性格、关系或一段经历；已经满意的话，直接说主线或下一项即可。`,
+      proposals: [],
+      world_state: {
+        ...response.world_state,
+        open_questions: mergeOpenQuestions(['关注实体是否还要改'], gaps),
+      },
+    };
+  }
   if (wantsGuidanceTurn(input.text) && response.proposals.length === 0) {
-    if (input.focus) {
-      const label = `${focusKindLabel(input.focus.kind)}「${input.focus.name}」`;
-      return {
-        ...response,
-        reply: `我们正在看${label}。你想改哪一项：外貌 / 性格 / 关系，还是补充一段经历？直接说即可，我会整理成提案。`,
-        proposals: [],
-        world_state: {
-          ...response.world_state,
-          open_questions: mergeOpenQuestions(['关注实体的下一项设定'], gaps),
-        },
-      };
-    }
     return {
       ...response,
       reply: formatGuidanceReply(gaps),
@@ -217,11 +264,13 @@ function applyGuidance(
   if (
     response.proposals.length > 0 &&
     next &&
+    !input.focus &&
     !reply.includes(next.question) &&
     !reply.includes('下一步我想问')
   ) {
     reply += formatGuidanceFollowUp(next);
   } else if (
+    !input.focus &&
     response.proposals.length === 0 &&
     gaps.length > 0 &&
     (/继续补充新的设定/.test(reply) || response.world_state.open_questions.length === 0)
@@ -293,6 +342,7 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
   const focus = input.focus;
   if (
     focus &&
+    !wantsStudioHandoff(text) &&
     /改|补充|性格|描述|外貌|关系|经历|更|把/.test(text) &&
     !/创建|新增|记录一个|再来一个/.test(text)
   ) {
@@ -495,6 +545,16 @@ export class WorldBuilderAgent {
   ) {}
 
   async respond(input: WorldBuilderInput): Promise<WorldBuilderResponse> {
+    if (input.focus && wantsStudioHandoff(input.text)) {
+      return applyGuidance(
+        {
+          reply: '',
+          proposals: [],
+          world_state: { stage: input.stage, open_questions: [], conflicts: [] },
+        },
+        input,
+      );
+    }
     if (this.llm.provider === 'mock') {
       return mockWorldBuilderResponse(input);
     }
@@ -517,8 +577,8 @@ export class WorldBuilderAgent {
             proposals: '需要创作者确认的提案数组（最多 2 个，无则 []）',
             world_state: {
               stage: 'bootstrap|growing|mature',
-              open_questions: '下一步引导问题',
-              conflicts: '发现的设定冲突',
+              open_questions: ['下一步引导问题（字符串数组，无则 []）'],
+              conflicts: ['发现的设定冲突（字符串数组，无则 []）'],
             },
           },
         }),
