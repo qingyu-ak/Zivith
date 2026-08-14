@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-14 · pending · chore · make format and lint pass on GitHub CI
+## 2026-08-14 · `65cea1f` · chore · make format and lint pass on GitHub CI
 
 CI 在 `format:check` 失败：78 个文件未过 Prettier，随后 ESLint 还有脚本/测试/若干源码规则错误。已格式化并修掉会挡门禁的 lint。
 
