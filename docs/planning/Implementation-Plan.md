@@ -35,7 +35,7 @@
 | 2.5 First Providers | ~85% | DeepSeek + SiliconFlow 适配器 + 提供商 UI；BYOK 稍后（C7） |
 | **V0.4（间奏）** | ~95% | W1–W7 首轮已落地（`usage_records` 记录；freeze/limits 稍后）。见 [V0.4-Modification-Plan.md](../archive/V0.4-Modification-Plan.md) |
 | 2.5 polish（Track G） | **已完成** | 真实密钥 Story→Video E2E；Wan 加固 + MinIO 持久化 + 余额告警 + 无自动重复计费 |
-| **IP Core foundation（Track H）** | H3 已完成；H4/H5 世界线 v1 已落地；H9 一致性 v1 | Entity + State + Timeline + Track。双写助手 + 按 Entity 开关（默认关）；H4/H5 世界线视图 v1 于 2026-08-05 落地；**H9 Lore Keeper v1（2026-08-13）规则冲突检测，只报告不修复** |
+| **IP Core foundation（Track H）** | H3 已完成；H4/H5 世界线 v1 已落地，2026-08-14 细化地点轨与呈现主轴；H9 一致性 v1 | Entity + State + Timeline + Track。双写助手 + 按 Entity 开关（默认关）；H4/H5 世界线视图 v1 于 2026-08-05 落地；**2026-08-14 地点轨 + 事件刻度 + 世界时间偏离可见**；**H9 Lore Keeper v1（2026-08-13）规则冲突检测，只报告不修复** |
 | **IP Core world entities（Track I）** | I1 / I2 已落地 | WorldEvent 已落库（[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md)）；Relationship 已提升为独立实体（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）；Organization 待偿 |
 | **Creator Chat 持续对话（Track J）** | 已落地 | 世界优先的持续对话创作面；后端（会话运行时 + World Builder Agent + 提案→确认→落库 + 知识上下文 + 冲突检测 v1 + 主动引导 v1）已落地。Web 为浅色独立对话壳（可收起历史侧栏），世界详情在 Studio。由 ADR-0010 划界 |
 | **World-first UI（Track K）** | K1/K3/K5 已完成；K2/K4 世界视图 v1 | 项目首页已拆分为 World Overview + `/production` + `/settings`（2026-08-05，侧栏新增 制作/设置）；Creator Chat 已为默认页 `/`（2026-08-05）；`/world` 三栏工作区 v1 只读（2026-08-05）；**世界观 Chat→Studio 核心闭环已落地（2026-08-05）：`Project.worldview Json` + 自动提炼落库 + Explorer「世界观」组 + 副驾驶只读摘要 + chat「进入 Studio」入口**。见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md) |

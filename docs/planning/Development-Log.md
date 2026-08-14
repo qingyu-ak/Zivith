@@ -12,7 +12,16 @@
 
 ---
 
-## 2026-08-14 · pending · feat(web,api) · guided chat and light collapsible studio
+## 2026-08-14 · pending · feat(web) · refine world-line tracks and presentation axis
+
+世界线补地点轨；角色按参与事件、地点按所属场景锚定；刻度用事件标题；世界时间信封偏离呈现序时可见（不改写主轴）。创作线 / 制作实现未动。
+
+- **feat(web)** `buildWorldLineModel` 四轨道 + `axisMarks`；时间线竖导轨 / hover / 琥珀色偏离
+- **feat(web)** Inspector 世界事件展示「跟随 / 偏离」
+- 验证：web `world-line`；web `tsc --noEmit`
+- 模块：`apps/web/lib/world-line*`、`apps/web/components/world/*`、`docs/planning/*`
+
+## 2026-08-14 · `cc12416` · feat(web,api) · guided chat and light collapsible studio
 
 World Builder 按缺口主动追问。Creator Chat 改为浅色独立对话面（可收起历史侧栏、Studio ↗）。Studio 白底、左右栏可收起。Web 开发服务固定 `127.0.0.1:3100`。
 

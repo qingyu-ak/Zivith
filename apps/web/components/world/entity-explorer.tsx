@@ -18,7 +18,7 @@ interface GroupItem {
 
 const GROUP_COLORS: Record<string, string> = {
   character: 'border-l-[#4d6bfe]',
-  location: 'border-l-[#a78bfa]',
+  location: 'border-l-[#059669]',
   scene: 'border-l-[#60a5fa]',
   world_event: 'border-l-[#fbbf24]',
   story: 'border-l-[#f472b6]',

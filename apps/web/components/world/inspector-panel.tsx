@@ -12,10 +12,11 @@ import type {
   WorldSelection,
 } from '@/lib/types';
 import { api, errorMessage } from '@/lib/api';
+import { worldTimeCaption, worldTimeOrder } from '@/lib/world-line';
 
 const KIND_COLOR: Record<string, string> = {
   character: 'text-[#4d6bfe] border-[#4d6bfe]/30 bg-[#4d6bfe]/10',
-  location: 'text-[#a78bfa] border-[#a78bfa]/40 bg-[#a78bfa]/10',
+  location: 'text-[#059669] border-[#059669]/30 bg-[#059669]/10',
   scene: 'text-[#60a5fa] border-[#60a5fa]/40 bg-[#60a5fa]/10',
   world_event: 'text-[#fbbf24] border-[#fbbf24]/40 bg-[#fbbf24]/10',
   story: 'text-[#f472b6] border-[#f472b6]/40 bg-[#f472b6]/10',
@@ -704,6 +705,9 @@ function renderReadonly(
     case 'world_event': {
       const event = entities.world_events.find((item) => item.id === selection.id);
       if (!event) return null;
+      const hintedOrder = worldTimeOrder(event.world_time_envelope);
+      const presentation = event.presentation_order ?? 0;
+      const diverges = hintedOrder != null && hintedOrder !== presentation;
       return (
         <EntityDetail
           kind="world_event"
@@ -711,11 +715,19 @@ function renderReadonly(
           fields={[
             { label: '标题', value: event.title },
             { label: '描述', value: event.description },
-            { label: '呈现顺序', value: event.presentation_order ?? 0 },
+            { label: '呈现顺序', value: presentation },
             { label: '状态', value: event.state },
             { label: '参与角色', value: (event.character_ids ?? []).length },
             { label: '关联场景', value: (event.scene_ids ?? []).length },
-            { label: '世界时间', value: <JsonValue value={event.world_time_envelope} /> },
+            {
+              label: '世界时间',
+              value: worldTimeCaption(event.world_time_envelope) ?? '跟随呈现顺序',
+            },
+            {
+              label: '与主轴关系',
+              value: diverges ? `偏离呈现序（信封 order=${hintedOrder}）` : '跟随呈现顺序',
+            },
+            { label: '世界时间信封', value: <JsonValue value={event.world_time_envelope} /> },
           ]}
         />
       );

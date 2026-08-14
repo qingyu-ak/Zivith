@@ -116,7 +116,7 @@ export function WorldWorkspace() {
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">
             {view === 'world'
-              ? `${entityCount} 个实体 · ${model.relationships.length} 条关系${
+              ? `呈现顺序主轴 · ${entityCount} 个实体 · ${model.relationships.length} 条关系${
                   (resources.conflicts ?? []).length > 0
                     ? ` · ${resources.conflicts?.length} 处冲突`
                     : ''

@@ -522,18 +522,28 @@ export interface WorldLineItem {
   title: string;
   description?: string | null;
   tags?: string[];
-  /** 刻度位置：事件=presentation_order，场景=order，角色/地点=锚点插值 */
+  /** 刻度位置：事件=presentation_order，场景=order，角色/地点=事件/场景锚点或插值 */
   anchorOrder: number;
   createdAt: string;
-  /** 实体特有属性（Inspector 展示用） */
+  /** 实体特有属性（Inspector / 时间线提示用） */
   extra?: Record<string, unknown>;
 }
 
 export interface WorldLineTrack {
   id: string;
-  kind: 'character' | 'scene' | 'world_event' | 'story' | 'shot';
+  kind: 'character' | 'location' | 'scene' | 'world_event' | 'story' | 'shot';
   title: string;
   items: WorldLineItem[];
+}
+
+/** 呈现主轴上的命名刻度（事件标题优先；无事件时退到场景） */
+export interface WorldLineAxisMark {
+  order: number;
+  label: string;
+  /** 项目提供的世界时间标签（opaque，原样展示） */
+  worldTimeLabel?: string | null;
+  /** envelope.order 与 presentation_order 不一致时为 true */
+  worldTimeDiverges?: boolean;
 }
 
 export interface WorldLineRelationship {
@@ -551,8 +561,10 @@ export interface WorldLineModel {
   projectName: string;
   tracks: WorldLineTrack[];
   relationships: WorldLineRelationship[];
-  /** 刻度轴锚点（世界时间刻度 domain） */
+  /** 刻度轴锚点（呈现顺序 domain，非真实时间） */
   scaleDomain: { min: number; max: number };
+  /** 轴上的命名刻度；空则回退为整数 #n */
+  axisMarks: WorldLineAxisMark[];
 }
 
 /** 世界线工作区选中项（Explorer / Timeline 联动，Inspector 展示） */

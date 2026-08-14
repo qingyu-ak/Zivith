@@ -172,7 +172,7 @@
 | H2 | EntityRevision/ChangeEvent 表与基线回填 | Prisma 表 + `backfillEntityBaselines`；无读路径切换 | 已完成 2026-07-30 |
 | H3 | 先影子写再事务性 State 双写 | 功能开关默认 **关**；经 env 按 Entity 使用 `shadow` / `dual` | 已完成 2026-07-30 |
 | H4 | 只读 Presentation Timeline | 导入既有 Scene/Shot 顺序；World Time 默认跟随；**2026-08-04 起以世界线视图优先落地**（非均匀刻度 + 轨道化）；**2026-08-05 世界线 v1 已落地（`/projects/:id/world`）** | **已完成 v1（2026-08-05）** — Production 视图后续 |
-| H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；首发无高级 track 或编辑；**2026-08-05 三轨道 + 关系连线 v1 已落地** | **已完成 v1（2026-08-05）** — 高级 track/编辑后续 |
+| H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；**2026-08-14** 补地点轨、事件标题刻度、角色按 `character_ids` 锚定事件、地点按场景 `location_id` 锚定、世界时间偏离可见（信封 label 原样展示，不改写呈现主轴）；首发无拖拽编辑 | **已完成 v1（2026-08-05）+ 2026-08-14 细化** — 高级 track/编辑后续 |
 | H6 | 可变 WorldTime 绑定 | 自定义维度、模糊/区间/相对/平行时间 | 计划中 |
 | H7 | 高级派生 Track 投影 | 先 Camera/Prompt/Model；Style 稍后 | 计划中 |
 | H8 | Object/Event/Organization Entity 扩展 | **已被 Track I 取代** — 世界实体扩展现有独立的分片门禁轨道 | 已取代 2026-07-31 |
@@ -232,7 +232,7 @@
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
 | K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | **已完成 2026-08-05**（World Overview：项目名 + 「本地创作」徽标 + 「去创作对话」入口 + 分区导航；`/production` `/settings` 承接原面板只搬不移；侧栏新增 制作/设置；浏览器回归 5 页全过） |
-| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector；**2026-08-14** 左右栏可收起（与 Studio 左导航同一套折叠）；**2026-08-05 v1 只读已落地（`/projects/:id/world`）**；**2026-08-13 Inspector 内联编辑**；**2026-08-13 副驾驶展示 `resources.conflicts`（H9 v1）** | 已完成 v1 + Inspector 可编辑 + 冲突列表 + 左右栏可收起 |
+| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector；**2026-08-14** 左右栏可收起；**2026-08-14 世界线细化**：地点轨 + 事件刻度标题 + 角色/地点锚定 + 世界时间偏离标记；**2026-08-05 v1 只读已落地**；**2026-08-13 Inspector 内联编辑**；**2026-08-13 副驾驶展示 `resources.conflicts`（H9 v1）** | 已完成 v1 + Inspector 可编辑 + 冲突列表 + 左右栏可收起 + 世界线细化 |
 | K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；Chat 为独立浅色壳，Studio 左栏「创作聊天」可达 | **已完成 2026-08-05**；**2026-08-13 ADR-0013 API 闭环**；**2026-08-14** 可收起历史侧栏 |
 | K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），**2026-08-06 Production 视图 v1**（世界/制作 tab；故事 + 场景轨道），**2026-08-13 Shot 轨道**：镜头嵌在所属场景刻度区间，Inspector 只读 + 跳转镜头编辑器 | **已完成 v1 + Shot 轨道（2026-08-13）** |
 | K5 | 世界观 Chat→Studio 核心闭环 | 世界观自动识别 → 落库 → Studio 展示：`Project.worldview Json`（genre/premise/rules/notes，additive 迁移）+ mock/LLM 自动提炼（`update_entity` type='project'）+ resources 返回 worldview/stage + chat header 常驻「进入 Studio」入口 | **已完成 2026-08-05**（愿景核对报告：Chat 引导/Studio 三栏/实体列表/timeline/Inspector 均已对齐；补齐世界观单点表示与识别、副驾驶摘要） |

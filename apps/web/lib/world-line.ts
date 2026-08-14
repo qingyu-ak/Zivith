@@ -1,14 +1,16 @@
 // world-line.ts — 从 WorldResourcesDTO 派生世界线视图模型（纯函数，可单测）
 //
 // 借鉴 vis-timeline 的 "轨道(group) + 条目(item)" 数据模型抽象：
-// 每条轨道一类实体（character / scene / world_event，对应 TimelineTrack.kind），
-// 条目按 anchorOrder 在非均匀刻度上定位。
+// 每条轨道一类实体（character / location / scene / world_event），
+// 条目按 anchorOrder 在非均匀呈现刻度上定位。
+// 世界时间信封保持 opaque：只展示 label，不用 envelope.order 改写主轴。
 // v1 为只读派生视图（TimelineTrack/TimelineItem 表留作未来持久化轨道结构）。
 
 import type {
   AssetDTO,
   SceneDTO,
   WorldEventDTO,
+  WorldLineAxisMark,
   WorldLineItem,
   WorldLineModel,
   WorldLineRelationship,
@@ -18,18 +20,49 @@ import type {
 } from './types';
 import { interpolateOrders } from './world-scale';
 
+export function worldTimeCaption(
+  envelope: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!envelope) return null;
+  if (typeof envelope.label === 'string' && envelope.label.trim()) return envelope.label.trim();
+  if (typeof envelope.value === 'string' && envelope.value.trim()) return envelope.value.trim();
+  return null;
+}
+
+export function worldTimeOrder(
+  envelope: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!envelope || typeof envelope.order !== 'number' || !Number.isInteger(envelope.order)) {
+    return null;
+  }
+  return envelope.order;
+}
+
+function eventPresentationOrder(event: WorldEventDTO): number {
+  return event.presentation_order ?? 0;
+}
+
+function eventDiverges(event: WorldEventDTO): boolean {
+  const hinted = worldTimeOrder(event.world_time_envelope);
+  return hinted != null && hinted !== eventPresentationOrder(event);
+}
+
 function eventItem(event: WorldEventDTO): WorldLineItem {
+  const caption = worldTimeCaption(event.world_time_envelope);
+  const diverges = eventDiverges(event);
   return {
     id: event.id,
     entityType: 'world_event',
     title: event.title,
     description: event.description,
-    anchorOrder: event.presentation_order ?? 0,
+    anchorOrder: eventPresentationOrder(event),
     createdAt: event.created_at,
     extra: {
       state: event.state,
       anchor_story_id: event.anchor_story_id ?? null,
       world_time_envelope: event.world_time_envelope ?? null,
+      world_time_label: caption,
+      world_time_diverges: diverges,
       character_ids: event.character_ids ?? [],
       scene_ids: event.scene_ids ?? [],
     },
@@ -67,6 +100,7 @@ function assetItem(
   asset: AssetDTO,
   entityType: 'character' | 'location',
   anchorOrder: number,
+  extra: Record<string, unknown> = {},
 ): WorldLineItem {
   return {
     id: asset.id,
@@ -82,38 +116,132 @@ function assetItem(
       appearance: asset.appearance ?? null,
       personality: asset.personality ?? null,
       default_outfit: asset.default_outfit ?? null,
+      ...extra,
     },
   };
+}
+
+function byCreated(a: AssetDTO, b: AssetDTO): number {
+  return (a.created_at ?? '').localeCompare(b.created_at ?? '');
+}
+
+/** 有显式锚点的用锚点；其余按 createdAt 在 domain 内均匀插值。 */
+function assignAssetOrders(
+  assets: AssetDTO[],
+  resolveAnchor: (id: string) => { order: number; extra: Record<string, unknown> } | null,
+  baseMin: number,
+  baseMax: number,
+): Map<string, { order: number; extra: Record<string, unknown> }> {
+  const result = new Map<string, { order: number; extra: Record<string, unknown> }>();
+  const unanchored: AssetDTO[] = [];
+  for (const asset of assets) {
+    const anchored = resolveAnchor(asset.id);
+    if (anchored) result.set(asset.id, anchored);
+    else unanchored.push(asset);
+  }
+  const interpolated = interpolateOrders(unanchored.length, baseMin, baseMax);
+  unanchored.forEach((asset, index) => {
+    result.set(asset.id, {
+      order: interpolated[index] ?? baseMax,
+      extra: { anchored: false },
+    });
+  });
+  return result;
+}
+
+function firstEventForCharacter(
+  characterId: string,
+  events: WorldEventDTO[],
+): WorldEventDTO | null {
+  const hits = events.filter((event) => (event.character_ids ?? []).includes(characterId));
+  if (hits.length === 0) return null;
+  return [...hits].sort((a, b) => eventPresentationOrder(a) - eventPresentationOrder(b))[0] ?? null;
+}
+
+function firstSceneForLocation(locationId: string, scenes: SceneDTO[]): SceneDTO | null {
+  const hits = scenes.filter((scene) => scene.location_id === locationId);
+  if (hits.length === 0) return null;
+  return [...hits].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0] ?? null;
+}
+
+function worldAxisMarks(events: WorldEventDTO[], scenes: SceneDTO[]): WorldLineAxisMark[] {
+  if (events.length > 0) {
+    return [...events]
+      .sort((a, b) => eventPresentationOrder(a) - eventPresentationOrder(b))
+      .map((event) => ({
+        order: eventPresentationOrder(event),
+        label: event.title,
+        worldTimeLabel: worldTimeCaption(event.world_time_envelope),
+        worldTimeDiverges: eventDiverges(event),
+      }));
+  }
+  return [...scenes]
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((scene) => ({
+      order: scene.order ?? 0,
+      label: scene.title,
+    }));
 }
 
 export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineModel {
   const { stories, characters, locations, scenes, world_events, relationships } =
     resources.entities;
 
-  // —— 刻度 domain：所有实体刻度范围（事件 presentation_order + 场景 order）——
   const anchorOrders: number[] = [
-    ...world_events.map((event) => event.presentation_order ?? 0),
+    ...world_events.map(eventPresentationOrder),
     ...scenes.map((scene) => scene.order ?? 0),
   ];
   const baseMin = anchorOrders.length ? Math.min(...anchorOrders) : 1;
   const baseMax = anchorOrders.length ? Math.max(...anchorOrders) : Math.max(baseMin, 1);
 
-  // 角色/地点无显式 order：按 createdAt 序在 [baseMin, baseMax] 内均匀插值
-  const byCreated = (a: AssetDTO, b: AssetDTO) =>
-    (a.created_at ?? '').localeCompare(b.created_at ?? '');
   const sortedCharacters = [...characters].sort(byCreated);
   const sortedLocations = [...locations].sort(byCreated);
-  const characterOrders = interpolateOrders(sortedCharacters.length, baseMin, baseMax);
-  const locationOrders = interpolateOrders(sortedLocations.length, baseMin, baseMax);
+
+  const characterAnchors = assignAssetOrders(
+    sortedCharacters,
+    (id) => {
+      const event = firstEventForCharacter(id, world_events);
+      if (!event) return null;
+      return {
+        order: eventPresentationOrder(event),
+        extra: { anchored: true, anchor_event_id: event.id },
+      };
+    },
+    baseMin,
+    baseMax,
+  );
+  const locationAnchors = assignAssetOrders(
+    sortedLocations,
+    (id) => {
+      const scene = firstSceneForLocation(id, scenes);
+      if (!scene) return null;
+      return {
+        order: scene.order ?? 0,
+        extra: { anchored: true, anchor_scene_id: scene.id },
+      };
+    },
+    baseMin,
+    baseMax,
+  );
 
   const tracks: WorldLineTrack[] = [
     {
       id: 'character',
       kind: 'character',
       title: '角色',
-      items: sortedCharacters.map((character, index) =>
-        assetItem(character, 'character', characterOrders[index] ?? baseMax),
-      ),
+      items: sortedCharacters.map((character) => {
+        const anchor = characterAnchors.get(character.id);
+        return assetItem(character, 'character', anchor?.order ?? baseMax, anchor?.extra);
+      }),
+    },
+    {
+      id: 'location',
+      kind: 'location',
+      title: '地点',
+      items: sortedLocations.map((location) => {
+        const anchor = locationAnchors.get(location.id);
+        return assetItem(location, 'location', anchor?.order ?? baseMax, anchor?.extra);
+      }),
     },
     {
       id: 'scene',
@@ -128,12 +256,11 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
       kind: 'world_event',
       title: '事件',
       items: [...world_events]
-        .sort((a, b) => (a.presentation_order ?? 0) - (b.presentation_order ?? 0))
+        .sort((a, b) => eventPresentationOrder(a) - eventPresentationOrder(b))
         .map(eventItem),
     },
   ];
 
-  // —— 关系连线：端点映射到轨道条目 id（location 不在轨道上时 source/target 为 null，v1 跳过渲染）——
   const itemById = new Map<string, string>();
   for (const track of tracks) {
     for (const item of track.items) itemById.set(item.id, item.id);
@@ -151,7 +278,11 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
     }),
   );
 
-  const allOrders = [...anchorOrders, ...characterOrders, ...locationOrders];
+  const allOrders = [
+    ...anchorOrders,
+    ...[...characterAnchors.values()].map((entry) => entry.order),
+    ...[...locationAnchors.values()].map((entry) => entry.order),
+  ];
   const min = allOrders.length ? Math.min(...allOrders) : 1;
   const max = allOrders.length ? Math.max(...allOrders) : 1;
 
@@ -162,6 +293,7 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
     tracks,
     relationships: lines,
     scaleDomain: { min, max },
+    axisMarks: worldAxisMarks(world_events, scenes),
   };
 }
 
@@ -274,5 +406,9 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
     tracks,
     relationships: [],
     scaleDomain: { min, max },
+    axisMarks: sortedScenes.map(({ scene, order }) => ({
+      order,
+      label: scene.title,
+    })),
   };
 }
