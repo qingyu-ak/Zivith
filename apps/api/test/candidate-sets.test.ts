@@ -80,10 +80,7 @@ describe('generateRequirementImage candidate sets (W5)', () => {
     expect(generate).toHaveBeenCalledTimes(3);
     expect(mediaCreate).toHaveBeenCalledTimes(3);
     expect(result!.medias).toHaveLength(3);
-    expect(result!.requirement.candidateMediaIds).toEqual([
-      ...createdMediaIds,
-      'old-media',
-    ]);
+    expect(result!.requirement.candidateMediaIds).toEqual([...createdMediaIds, 'old-media']);
     expect(result!.requirement.approvedMediaId).toBeNull();
 
     const firstCall = mediaCreate.mock.calls[0];

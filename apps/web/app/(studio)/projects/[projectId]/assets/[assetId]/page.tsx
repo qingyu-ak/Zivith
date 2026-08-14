@@ -4,16 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-  Spinner,
-  Textarea,
-} from '@zivith/ui';
+import { Badge, Button, Card, Field, Input, Select, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import { getFormList, getFormText, getOptionalFormText } from '@/lib/form-data';
 import type {
@@ -251,7 +242,9 @@ export default function AssetDetailPage() {
         method: 'POST',
         body: {
           count: candidateCount,
-          ...(promptDrafts[variant.key]?.trim() ? { prompt: promptDrafts[variant.key].trim() } : {}),
+          ...(promptDrafts[variant.key]?.trim()
+            ? { prompt: promptDrafts[variant.key].trim() }
+            : {}),
         },
       });
       await loadVariants();
@@ -609,7 +602,10 @@ export default function AssetDetailPage() {
               );
             })}
           </div>
-          <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={(event) => void upload(event)}>
+          <form
+            className="grid gap-3 sm:grid-cols-[1fr_auto]"
+            onSubmit={(event) => void upload(event)}
+          >
             <Input name="file" type="file" accept="image/png,image/jpeg,image/webp" required />
             <Button type="submit" variant="secondary">
               上传参考图
@@ -688,9 +684,7 @@ export default function AssetDetailPage() {
                   <img
                     className="mb-2 aspect-[4/3] w-full rounded-md object-cover"
                     src={imageUrl(
-                      primarySheet.anchor_media ??
-                        primarySheet.candidate_media?.[0] ??
-                        '',
+                      primarySheet.anchor_media ?? primarySheet.candidate_media?.[0] ?? '',
                     )}
                     alt="角色设定表"
                   />
@@ -757,7 +751,10 @@ export default function AssetDetailPage() {
                   />
                 </Field>
                 {sheetError && (
-                  <p className="mt-2 rounded-md bg-red-500/10 p-2 text-xs text-red-600" role="alert">
+                  <p
+                    className="mt-2 rounded-md bg-red-500/10 p-2 text-xs text-red-600"
+                    role="alert"
+                  >
                     {sheetError}
                   </p>
                 )}
@@ -792,7 +789,7 @@ export default function AssetDetailPage() {
                     disabled={
                       Boolean(variantBusyKey) ||
                       variantsLoading ||
-                      !(promptDrafts[PRIMARY_SHEET_KEY]?.trim())
+                      !promptDrafts[PRIMARY_SHEET_KEY]?.trim()
                     }
                     onClick={() => void generateSheetSet()}
                   >
@@ -821,9 +818,7 @@ export default function AssetDetailPage() {
                 </summary>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {legacySheetVariants.map((variant) => {
-                    const anchorSrc = variant.anchor_media
-                      ? imageUrl(variant.anchor_media)
-                      : '';
+                    const anchorSrc = variant.anchor_media ? imageUrl(variant.anchor_media) : '';
                     return (
                       <div
                         key={variant.id}

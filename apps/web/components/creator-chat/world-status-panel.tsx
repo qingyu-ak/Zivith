@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Badge, Button, Spinner } from '@zivith/ui';
+import { Badge, Spinner } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { WorldResourcesDTO, WorldStage } from '@/lib/types';
 import { WorldConflictList } from '@/components/world/conflict-list';

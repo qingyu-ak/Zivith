@@ -12,6 +12,9 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       '**/generated/**',
+      'apps/api/scripts/**',
+      'apps/api/vitest.config.ts',
+      'apps/web/vitest.config.ts',
     ],
   },
   eslint.configs.recommended,
@@ -38,5 +41,16 @@ export default tseslint.config(
   {
     files: ['**/*.{js,mjs,cjs}'],
     ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    files: ['**/*.{test,spec}.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+    },
   },
 );

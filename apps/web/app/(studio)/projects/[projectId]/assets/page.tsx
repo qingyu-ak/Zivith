@@ -159,9 +159,7 @@ export default function AssetsPage() {
       {creating && (
         <Card className="mb-6">
           <div className="mb-5 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">
-              新建{type === 'character' ? '角色' : '地点'}
-            </h2>
+            <h2 className="text-lg font-semibold">新建{type === 'character' ? '角色' : '地点'}</h2>
             <Button type="button" variant="ghost" onClick={() => setCreating(false)}>
               取消
             </Button>

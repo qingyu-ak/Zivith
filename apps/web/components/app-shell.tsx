@@ -91,7 +91,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   href={href}
                   title={item.label}
                   className={`grid size-9 place-items-center rounded-lg text-sm transition ${
-                    active ? 'bg-[#e8f0fe] text-zinc-900' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'
+                    active
+                      ? 'bg-[#e8f0fe] text-zinc-900'
+                      : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'
                   }`}
                 >
                   <span aria-hidden>{item.icon}</span>

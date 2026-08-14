@@ -38,14 +38,15 @@ function isHttpUrl(url: string): boolean {
   return /^https?:\/\//i.test(url.trim());
 }
 
+function causeMessage(error: unknown): string {
+  if (!(error instanceof Error) || error.cause == null) return '';
+  if (error.cause instanceof Error) return error.cause.message;
+  return typeof error.cause === 'string' ? error.cause : '';
+}
+
 function isTransientFetchError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  const cause =
-    error instanceof Error && error.cause instanceof Error
-      ? error.cause.message
-      : error instanceof Error && error.cause
-        ? String(error.cause)
-        : '';
+  const cause = causeMessage(error);
   const text = `${message} ${cause}`.toLowerCase();
   return (
     text.includes('fetch failed') ||
@@ -61,12 +62,7 @@ function isTransientFetchError(error: unknown): boolean {
 
 function formatFetchError(prefix: string, error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
-  const cause =
-    error instanceof Error && error.cause instanceof Error
-      ? error.cause.message
-      : error instanceof Error && error.cause
-        ? String(error.cause)
-        : '';
+  const cause = causeMessage(error);
   return new Error(cause ? `${prefix}: ${message} (${cause})` : `${prefix}: ${message}`);
 }
 
@@ -214,11 +210,12 @@ export class SiliconFlowVideoAdapter implements VideoGenerationAdapter {
     const preparedImage = await this.prepareReferenceImage(rawRef);
     const prompt = toWanVideoPrompt(request.positive_prompt);
     const negative = request.negative_prompt?.trim().slice(0, 500) || undefined;
-    const skippedReason = !preparedImage && rawRef
-      ? /siliconflow\.cn\/temporary\//i.test(rawRef)
-        ? 'temporary_cdn_unsupported_for_i2v'
-        : 'unreachable_or_expired'
-      : undefined;
+    const skippedReason =
+      !preparedImage && rawRef
+        ? /siliconflow\.cn\/temporary\//i.test(rawRef)
+          ? 'temporary_cdn_unsupported_for_i2v'
+          : 'unreachable_or_expired'
+        : undefined;
 
     // Cost control: never auto-submit a second Wan job (I2V→T2V etc.). Each submit ≈ ¥2.
     // Failed runs stay failed until the operator clicks generate again.
@@ -234,9 +231,7 @@ export class SiliconFlowVideoAdapter implements VideoGenerationAdapter {
       metadata: {
         ...result.metadata,
         ...(skippedReason ? { reference_skipped: skippedReason } : {}),
-        ...(result.status === 'failed' && preparedImage
-          ? { i2v_failed_no_auto_t2v: true }
-          : {}),
+        ...(result.status === 'failed' && preparedImage ? { i2v_failed_no_auto_t2v: true } : {}),
       },
     };
   }
@@ -325,7 +320,10 @@ export class SiliconFlowVideoAdapter implements VideoGenerationAdapter {
   }
 
   /** Continue polling an already-submitted SiliconFlow requestId. */
-  async pollExisting(jobId: string, options?: { timeoutMs?: number }): Promise<VideoGenerationResult> {
+  async pollExisting(
+    jobId: string,
+    options?: { timeoutMs?: number },
+  ): Promise<VideoGenerationResult> {
     const timeoutMs = options?.timeoutMs ?? this.timeoutMs;
     const started = Date.now();
     let consecutivePollErrors = 0;

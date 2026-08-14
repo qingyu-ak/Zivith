@@ -29,7 +29,12 @@ export async function persistRemoteImage(input: {
 }): Promise<PersistedRemoteImage> {
   const sourceUrl = input.url.trim();
   if (!sourceUrl) {
-    return { url: sourceUrl, storageKey: input.storageKey, mimeType: 'image/png', persisted: false };
+    return {
+      url: sourceUrl,
+      storageKey: input.storageKey,
+      mimeType: 'image/png',
+      persisted: false,
+    };
   }
   if (!input.storage) {
     return {

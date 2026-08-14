@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto';
 
 /** Fields ignored when hashing business snapshots (non-semantic / volatile). */
-export const HASH_IGNORED_FIELDS = new Set([
-  'updated_at',
-  'updatedAt',
-]);
+export const HASH_IGNORED_FIELDS = new Set(['updated_at', 'updatedAt']);
 
 export function toCanonicalValue(value: unknown, forHash = false): unknown {
   if (value === undefined) return undefined;

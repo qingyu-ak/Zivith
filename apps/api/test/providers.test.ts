@@ -257,12 +257,8 @@ describe('SiliconFlow adapters', () => {
 
   it('canonicalizes lowercase env model ids and falls back to T2V without a frame', async () => {
     const adapter = new SiliconFlowVideoAdapter({ apiKey: 'sf' });
-    expect(adapter.resolveModel('wan-ai/wan2.2-i2v-a14b', false)).toBe(
-      'Wan-AI/Wan2.2-T2V-A14B',
-    );
-    expect(adapter.resolveModel('wan-ai/wan2.2-i2v-a14b', true)).toBe(
-      'Wan-AI/Wan2.2-I2V-A14B',
-    );
+    expect(adapter.resolveModel('wan-ai/wan2.2-i2v-a14b', false)).toBe('Wan-AI/Wan2.2-T2V-A14B');
+    expect(adapter.resolveModel('wan-ai/wan2.2-i2v-a14b', true)).toBe('Wan-AI/Wan2.2-I2V-A14B');
   });
 
   it('returns audio bytes from speech endpoint', async () => {

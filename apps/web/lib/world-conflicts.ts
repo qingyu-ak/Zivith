@@ -10,10 +10,7 @@ const SELECTABLE = new Set([
   'relationship',
 ]);
 
-export function selectionFromConflictRef(ref: {
-  type: string;
-  id: string;
-}): WorldSelection {
+export function selectionFromConflictRef(ref: { type: string; id: string }): WorldSelection {
   if (!SELECTABLE.has(ref.type)) return null;
   return { kind: ref.type as NonNullable<WorldSelection>['kind'], id: ref.id };
 }

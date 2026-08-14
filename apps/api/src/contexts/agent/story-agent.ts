@@ -54,9 +54,8 @@ function segmentsToScreenplay(
   segments: Array<{ title: string; synopsis?: string; draft: string }>,
 ): string {
   return segments
-    .map(
-      (segment, index) =>
-        `## 第${index + 1}段：${segment.title}\n${segment.synopsis ? `${segment.synopsis}\n\n` : ''}${segment.draft}`.trim(),
+    .map((segment, index) =>
+      `## 第${index + 1}段：${segment.title}\n${segment.synopsis ? `${segment.synopsis}\n\n` : ''}${segment.draft}`.trim(),
     )
     .join('\n\n');
 }

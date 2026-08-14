@@ -1,6 +1,11 @@
 /// <reference types="vitest/globals" />
 import type { WorldResourcesDTO } from './types';
-import { buildProductionLineModel, buildWorldLineModel, worldTimeCaption, worldTimeOrder } from './world-line';
+import {
+  buildProductionLineModel,
+  buildWorldLineModel,
+  worldTimeCaption,
+  worldTimeOrder,
+} from './world-line';
 
 function resources(overrides?: Partial<WorldResourcesDTO['entities']>): WorldResourcesDTO {
   return {
@@ -82,8 +87,20 @@ describe('buildWorldLineModel character track', () => {
     const model = buildWorldLineModel(
       resources({
         characters: [
-          { id: 'c1', project_id: 'p1', name: '安娜苏', description: '主角', created_at: '2026-01-01' },
-          { id: 'c2', project_id: 'p1', name: '安利', description: '配角', created_at: '2026-01-02' },
+          {
+            id: 'c1',
+            project_id: 'p1',
+            name: '安娜苏',
+            description: '主角',
+            created_at: '2026-01-01',
+          },
+          {
+            id: 'c2',
+            project_id: 'p1',
+            name: '安利',
+            description: '配角',
+            created_at: '2026-01-02',
+          },
           {
             id: 'c3',
             project_id: 'p1',
@@ -116,7 +133,9 @@ describe('buildWorldLineModel character track', () => {
   });
 
   it('keeps a single empty character track when the world has no characters', () => {
-    const model = buildWorldLineModel(resources({ characters: [], scenes: [], shots: [], stories: [] }));
+    const model = buildWorldLineModel(
+      resources({ characters: [], scenes: [], shots: [], stories: [] }),
+    );
     const characterTracks = model.tracks.filter((track) => track.kind === 'character');
     expect(characterTracks).toHaveLength(1);
     expect(characterTracks[0]?.title).toBe('角色');
@@ -139,7 +158,13 @@ describe('buildWorldLineModel location track and anchoring', () => {
     const model = buildWorldLineModel(
       resources({
         characters: [
-          { id: 'c1', project_id: 'p1', name: '韩立', description: '主角', created_at: '2026-01-01' },
+          {
+            id: 'c1',
+            project_id: 'p1',
+            name: '韩立',
+            description: '主角',
+            created_at: '2026-01-01',
+          },
         ],
         locations: [
           {
@@ -190,8 +215,20 @@ describe('buildWorldLineModel location track and anchoring', () => {
     const model = buildWorldLineModel(
       resources({
         characters: [
-          { id: 'c1', project_id: 'p1', name: '韩立', description: '主角', created_at: '2026-01-01' },
-          { id: 'c2', project_id: 'p1', name: '南宫婉', description: '配角', created_at: '2026-01-02' },
+          {
+            id: 'c1',
+            project_id: 'p1',
+            name: '韩立',
+            description: '主角',
+            created_at: '2026-01-01',
+          },
+          {
+            id: 'c2',
+            project_id: 'p1',
+            name: '南宫婉',
+            description: '配角',
+            created_at: '2026-01-02',
+          },
         ],
         scenes: [{ id: 'sc1', story_id: 'st1', order: 1, title: '开场' }],
         world_events: [

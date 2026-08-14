@@ -945,7 +945,10 @@ export default function ShotEditorPage() {
                       const matchesShot =
                         (shot.prompt?.positive?.trim() ?? '') === version.positive.trim();
                       return (
-                        <div key={version.id} className="rounded-lg border border-line bg-white p-4">
+                        <div
+                          key={version.id}
+                          className="rounded-lg border border-line bg-white p-4"
+                        >
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex flex-wrap gap-2">
                               <Badge tone={version.approved_at ? 'success' : 'neutral'}>

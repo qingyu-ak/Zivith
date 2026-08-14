@@ -22,8 +22,7 @@ export class BullMqQueueAdapter implements QueuePort {
         : { value: job.payload, idempotency_key: job.idempotency_key };
     // video_generate: never auto-retry — a stalled/failed worker retry can re-call
     // provider submit (~¥2/Wan). Soft-timeout polling uses explicit new poll jobs instead.
-    const attempts =
-      job.type === 'review_analysis' || job.type === 'video_generate' ? 1 : 3;
+    const attempts = job.type === 'review_analysis' || job.type === 'video_generate' ? 1 : 3;
     const queued = await this.queue.add(job.type, payload, {
       jobId,
       attempts,

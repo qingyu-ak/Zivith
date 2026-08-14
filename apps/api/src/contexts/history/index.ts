@@ -4,11 +4,7 @@ export {
   type BaselineBackfillOptions,
   type BaselineBackfillResult,
 } from './baseline-backfill.js';
-export {
-  historyWriteModeFor,
-  historyWriteModesSnapshot,
-  type HistoryWriteMode,
-} from './flags.js';
+export { historyWriteModeFor, historyWriteModesSnapshot, type HistoryWriteMode } from './flags.js';
 export {
   maybeRecordEntityChange,
   recordEntityChange,

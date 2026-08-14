@@ -164,8 +164,8 @@ export function ProviderPanel() {
           }`}
         >
           SiliconFlow 余额约 {catalog.siliconflow_account.total_balance ?? '—'}（充值{' '}
-          {catalog.siliconflow_account.charge_balance ?? '—'}）。Wan 视频约 $0.29/条；余额过低时任务会长期
-          InQueue，请到 cloud.siliconflow.cn 充值后再生成视频。
+          {catalog.siliconflow_account.charge_balance ?? '—'}）。Wan 视频约
+          $0.29/条；余额过低时任务会长期 InQueue，请到 cloud.siliconflow.cn 充值后再生成视频。
         </p>
       )}
       {notice && !open && <p className="mt-3 text-sm text-emerald-300">{notice}</p>}

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   detectWorldGaps,
-  formatGuidanceReply,
   nextGuidanceGaps,
   wantsGuidanceTurn,
 } from '../src/contexts/world-builder/guidance.js';

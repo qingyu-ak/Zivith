@@ -188,11 +188,11 @@ function main(): Promise<number> {
         `DB: ${expected.label} 基础字段（name/type/state/project）`,
         Boolean(
           row &&
-            row.name === expected.name &&
-            row.type === expected.type &&
-            row.state === 'draft' &&
-            row.deletedAt === null &&
-            row.projectId === projectId,
+          row.name === expected.name &&
+          row.type === expected.type &&
+          row.state === 'draft' &&
+          row.deletedAt === null &&
+          row.projectId === projectId,
         ),
         row ? `${row.name}/${row.type}/${row.state}` : '—',
       );
@@ -210,12 +210,12 @@ function main(): Promise<number> {
         'DB: 事件 title/description/state 持久化',
         Boolean(
           row &&
-            typeof row.title === 'string' &&
-            row.title.includes(titleSubstr) &&
-            row.description === '由对话引导创建的世界事件' &&
-            row.state === 'draft' &&
-            row.deletedAt === null &&
-            row.projectId === projectId,
+          typeof row.title === 'string' &&
+          row.title.includes(titleSubstr) &&
+          row.description === '由对话引导创建的世界事件' &&
+          row.state === 'draft' &&
+          row.deletedAt === null &&
+          row.projectId === projectId,
         ),
         row ? `${row.title} / ${row.state}` : '—',
       );
@@ -233,15 +233,17 @@ function main(): Promise<number> {
     };
 
     const expectRelationshipRow = async (entityId: string | undefined) => {
-      const row = entityId ? await prisma.relationship.findUnique({ where: { id: entityId } }) : null;
+      const row = entityId
+        ? await prisma.relationship.findUnique({ where: { id: entityId } })
+        : null;
       check(
         'DB: 关系 kind/sourceType/targetType 持久化',
         Boolean(
           row &&
-            row.kind === 'bond' &&
-            row.sourceType === 'asset' &&
-            row.targetType === 'asset' &&
-            row.projectId === projectId,
+          row.kind === 'bond' &&
+          row.sourceType === 'asset' &&
+          row.targetType === 'asset' &&
+          row.projectId === projectId,
         ),
         row ? `${row.kind}/${row.sourceType}/${row.targetType}` : '—',
       );
@@ -249,19 +251,27 @@ function main(): Promise<number> {
         'DB: 关系 direction/label/description/state 持久化',
         Boolean(
           row &&
-            row.direction === 'undirected' &&
-            row.label === '同伴' &&
-            row.description === '由对话引导创建的角色关系' &&
-            row.state === 'draft',
+          row.direction === 'undirected' &&
+          row.label === '同伴' &&
+          row.description === '由对话引导创建的角色关系' &&
+          row.state === 'draft',
         ),
         row ? `${row.direction}/${row.label ?? '—'}/${row.state}` : '—',
       );
       if (row?.sourceId && row?.targetId) {
         const [src, tgt] = await Promise.all([
-          prisma.asset.findFirst({ where: { id: row.sourceId, projectId: projectId ?? undefined } }),
-          prisma.asset.findFirst({ where: { id: row.targetId, projectId: projectId ?? undefined } }),
+          prisma.asset.findFirst({
+            where: { id: row.sourceId, projectId: projectId ?? undefined },
+          }),
+          prisma.asset.findFirst({
+            where: { id: row.targetId, projectId: projectId ?? undefined },
+          }),
         ]);
-        check('DB: 关系两端引用项目内真实角色', Boolean(src) && Boolean(tgt), `${row.sourceId} / ${row.targetId}`);
+        check(
+          'DB: 关系两端引用项目内真实角色',
+          Boolean(src) && Boolean(tgt),
+          `${row.sourceId} / ${row.targetId}`,
+        );
       }
       return row;
     };
@@ -318,9 +328,19 @@ function main(): Promise<number> {
       const dbTimeline = projectId
         ? await prisma.projectTimeline.findFirst({ where: { projectId, deletedAt: null } })
         : null;
-      check('DB: 建项目自动创建 World Line timeline', dbTimeline?.name === 'World Line', dbTimeline?.name ?? '—');
-      const dbThread = threadId ? await prisma.creatorChatThread.findUnique({ where: { id: threadId } }) : null;
-      check('DB: thread.project_id 已持久化', dbThread?.projectId === projectId, dbThread?.projectId ?? '—');
+      check(
+        'DB: 建项目自动创建 World Line timeline',
+        dbTimeline?.name === 'World Line',
+        dbTimeline?.name ?? '—',
+      );
+      const dbThread = threadId
+        ? await prisma.creatorChatThread.findUnique({ where: { id: threadId } })
+        : null;
+      check(
+        'DB: thread.project_id 已持久化',
+        dbThread?.projectId === projectId,
+        dbThread?.projectId ?? '—',
+      );
 
       const after = await request(base, 'GET', `/world/creator-chats/${threadId}`);
       check(
@@ -343,8 +363,7 @@ function main(): Promise<number> {
       const charTitle = ((apply2?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check('角色「韩立」已入库', charTitle === '韩立', asString(charTitle));
       const hanId = ((apply2?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
-        | string
-        | undefined;
+        string | undefined;
       await expectAssetRow(hanId, {
         label: '韩立',
         name: '韩立',
@@ -365,8 +384,7 @@ function main(): Promise<number> {
       const locTitle = ((apply3?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check('地点「天南大陆」已入库', locTitle === '天南大陆', asString(locTitle));
       const locId = ((apply3?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
-        | string
-        | undefined;
+        string | undefined;
       await expectAssetRow(locId, {
         label: '天南大陆',
         name: '天南大陆',
@@ -391,8 +409,7 @@ function main(): Promise<number> {
         asString(eventTitle),
       );
       const eventId = ((apply4?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
-        | string
-        | undefined;
+        string | undefined;
       await expectWorldEventRow(eventId, '灵气枯竭');
 
       console.log('\n== 6. 增量角色消息（已有角色再添角色）==');
@@ -408,8 +425,7 @@ function main(): Promise<number> {
       const wanTitle = ((apply5?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check('角色「南宫婉」已入库', wanTitle === '南宫婉', asString(wanTitle));
       const wanId = ((apply5?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
-        | string
-        | undefined;
+        string | undefined;
       await expectAssetRow(wanId, {
         label: '南宫婉',
         name: '南宫婉',
@@ -430,8 +446,7 @@ function main(): Promise<number> {
       const relTitle = ((apply6?.json?.applied as Json[] | undefined) ?? [])[0]?.title;
       check('关系已入库', Boolean(relTitle), asString(relTitle));
       const relId = ((apply6?.json?.applied as Json[] | undefined) ?? [])[0]?.entity_id as
-        | string
-        | undefined;
+        string | undefined;
       await expectRelationshipRow(relId);
 
       console.log('\n== 8. 提问消息（不应误触发提案）==');
@@ -500,7 +515,11 @@ function main(): Promise<number> {
         characters.includes('韩立') && characters.includes('南宫婉'),
         characters.map(asString).join(', '),
       );
-      check('resources: 1 地点', locations.includes('天南大陆'), locations.map(asString).join(', '));
+      check(
+        'resources: 1 地点',
+        locations.includes('天南大陆'),
+        locations.map(asString).join(', '),
+      );
       check('resources: 1 事件', worldEvents.length >= 1, String(worldEvents.length));
       check('resources: 1 关系', relationships.length >= 1, String(relationships.length));
 
@@ -510,7 +529,11 @@ function main(): Promise<number> {
         prisma.worldEvent.count({ where: { projectId: projectId, deletedAt: null } }),
         prisma.relationship.count({ where: { projectId: projectId, deletedAt: null } }),
       ]);
-      check('DB: 项目内 3 个 asset（韩立/南宫婉/天南大陆）', dbCounts[0] === 3, String(dbCounts[0]));
+      check(
+        'DB: 项目内 3 个 asset（韩立/南宫婉/天南大陆）',
+        dbCounts[0] === 3,
+        String(dbCounts[0]),
+      );
       check('DB: 项目内 1 个 world_event', dbCounts[1] === 1, String(dbCounts[1]));
       check('DB: 项目内 1 个 relationship', dbCounts[2] === 1, String(dbCounts[2]));
 
@@ -553,16 +576,22 @@ function main(): Promise<number> {
         `status=${mixedRes.status}`,
       );
       const mixedJson = mixedRes.json as Json | undefined;
-      const mixedApplied = ((mixedJson?.applied as Json[] | undefined) ?? []).map((item) => item as Json);
-      const mixedSkipped = ((mixedJson?.skipped as Json[] | undefined) ?? []).map((item) => item as Json);
+      const mixedApplied = ((mixedJson?.applied as Json[] | undefined) ?? []).map(
+        (item) => item as Json,
+      );
+      const mixedSkipped = ((mixedJson?.skipped as Json[] | undefined) ?? []).map(
+        (item) => item as Json,
+      );
       check(
         '混合批次：create_project 被跳过（skipped 1 项）',
-        mixedSkipped.length === 1 && (mixedSkipped[0] as Record<string, unknown>).kind === 'create_project',
+        mixedSkipped.length === 1 &&
+          (mixedSkipped[0] as Record<string, unknown>).kind === 'create_project',
         JSON.stringify(mixedSkipped),
       );
       check(
         '混合批次：create_character 已应用（applied 1 项）',
-        mixedApplied.length === 1 && (mixedApplied[0] as Record<string, unknown>).entity_type === 'asset',
+        mixedApplied.length === 1 &&
+          (mixedApplied[0] as Record<string, unknown>).entity_type === 'asset',
         JSON.stringify(mixedApplied),
       );
       const mixedAsset = await prisma.asset.findFirst({
@@ -570,7 +599,11 @@ function main(): Promise<number> {
       });
       check('混合批次：角色已落库（draft）', Boolean(mixedAsset && mixedAsset.state === 'draft'));
       const mixedMsg = await prisma.creatorChatMessage.findUnique({ where: { id: mixed.id } });
-      check('混合批次：消息已标记 applied', mixedMsg?.proposalState === 'applied', String(mixedMsg?.proposalState));
+      check(
+        '混合批次：消息已标记 applied',
+        mixedMsg?.proposalState === 'applied',
+        String(mixedMsg?.proposalState),
+      );
     } catch (error) {
       console.error('验证流程异常:', error);
     } finally {

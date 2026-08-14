@@ -44,48 +44,47 @@ export async function buildWorldContext(
   });
   if (!project) return null;
 
-  const [stories, characters, locations, scenes, worldEvents, relationships] =
-    await Promise.all([
-      db.story.findMany({
-        where: { projectId, deletedAt: null },
-        select: { id: true, title: true, genre: true, logline: true },
-        orderBy: { order: 'asc' },
-      }),
-      db.asset.findMany({
-        where: { projectId, type: 'character', deletedAt: null },
-        select: { id: true, name: true, description: true, tags: true },
-        orderBy: { createdAt: 'asc' },
-      }),
-      db.asset.findMany({
-        where: { projectId, type: 'location', deletedAt: null },
-        select: { id: true, name: true, description: true, tags: true },
-        orderBy: { createdAt: 'asc' },
-      }),
-      db.scene.findMany({
-        where: { projectId, deletedAt: null },
-        select: { id: true, title: true, description: true, time: true },
-        orderBy: { order: 'asc' },
-      }),
-      db.worldEvent.findMany({
-        where: { projectId, deletedAt: null },
-        select: { id: true, title: true, description: true, presentationOrder: true },
-        orderBy: [{ presentationOrder: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
-      }),
-      db.relationship.findMany({
-        where: { projectId, deletedAt: null },
-        select: {
-          id: true,
-          kind: true,
-          label: true,
-          direction: true,
-          sourceType: true,
-          sourceId: true,
-          targetType: true,
-          targetId: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      }),
-    ]);
+  const [stories, characters, locations, scenes, worldEvents, relationships] = await Promise.all([
+    db.story.findMany({
+      where: { projectId, deletedAt: null },
+      select: { id: true, title: true, genre: true, logline: true },
+      orderBy: { order: 'asc' },
+    }),
+    db.asset.findMany({
+      where: { projectId, type: 'character', deletedAt: null },
+      select: { id: true, name: true, description: true, tags: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    db.asset.findMany({
+      where: { projectId, type: 'location', deletedAt: null },
+      select: { id: true, name: true, description: true, tags: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    db.scene.findMany({
+      where: { projectId, deletedAt: null },
+      select: { id: true, title: true, description: true, time: true },
+      orderBy: { order: 'asc' },
+    }),
+    db.worldEvent.findMany({
+      where: { projectId, deletedAt: null },
+      select: { id: true, title: true, description: true, presentationOrder: true },
+      orderBy: [{ presentationOrder: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
+    }),
+    db.relationship.findMany({
+      where: { projectId, deletedAt: null },
+      select: {
+        id: true,
+        kind: true,
+        label: true,
+        direction: true,
+        sourceType: true,
+        sourceId: true,
+        targetType: true,
+        targetId: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ]);
 
   return assembleWorldContext({
     projectId: project.id,
@@ -106,9 +105,7 @@ export async function buildWorldContext(
 }
 
 function stringTags(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((tag): tag is string => typeof tag === 'string')
-    : [];
+  return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : [];
 }
 
 /** Build a WorldContext from already-loaded rows (resources route + tests). */
@@ -184,39 +181,53 @@ export function worldContextToPrompt(context: WorldContext | null): string {
     if (worldview.notes) lines.push(`- 补充：${worldview.notes}`);
     lines.push('');
   }
-  if (context.stories.length === 0 && context.characters.length === 0 && context.locations.length === 0) {
+  if (
+    context.stories.length === 0 &&
+    context.characters.length === 0 &&
+    context.locations.length === 0
+  ) {
     lines.push('世界状态：全新世界，还没有任何实体。');
   }
   if (context.stories.length > 0) {
     lines.push('## 故事');
     for (const s of context.stories) {
-      lines.push(`- [story:${s.id}] ${s.title}${s.genre ? `（${s.genre}）` : ''}${s.logline ? `：${s.logline}` : ''}`);
+      lines.push(
+        `- [story:${s.id}] ${s.title}${s.genre ? `（${s.genre}）` : ''}${s.logline ? `：${s.logline}` : ''}`,
+      );
     }
   }
   if (context.characters.length > 0) {
     lines.push('## 角色');
     for (const c of context.characters) {
       const tags = c.tags.length > 0 ? ` [标签:${c.tags.join(',')}]` : '';
-      lines.push(`- [character:${c.id}] ${c.name}${c.description ? `：${c.description}` : ''}${tags}`);
+      lines.push(
+        `- [character:${c.id}] ${c.name}${c.description ? `：${c.description}` : ''}${tags}`,
+      );
     }
   }
   if (context.locations.length > 0) {
     lines.push('## 地点');
     for (const l of context.locations) {
       const tags = l.tags.length > 0 ? ` [标签:${l.tags.join(',')}]` : '';
-      lines.push(`- [location:${l.id}] ${l.name}${l.description ? `：${l.description}` : ''}${tags}`);
+      lines.push(
+        `- [location:${l.id}] ${l.name}${l.description ? `：${l.description}` : ''}${tags}`,
+      );
     }
   }
   if (context.scenes.length > 0) {
     lines.push('## 场景');
     for (const s of context.scenes) {
-      lines.push(`- [scene:${s.id}] ${s.title}${s.time ? `（${s.time}）` : ''}${s.description ? `：${s.description}` : ''}`);
+      lines.push(
+        `- [scene:${s.id}] ${s.title}${s.time ? `（${s.time}）` : ''}${s.description ? `：${s.description}` : ''}`,
+      );
     }
   }
   if (context.worldEvents.length > 0) {
     lines.push('## 世界事件（按时间顺序）');
     for (const e of context.worldEvents) {
-      lines.push(`- [world_event:${e.id}] ${e.order ?? '?'}. ${e.title}${e.description ? `：${e.description}` : ''}`);
+      lines.push(
+        `- [world_event:${e.id}] ${e.order ?? '?'}. ${e.title}${e.description ? `：${e.description}` : ''}`,
+      );
     }
   }
   if (context.relationships.length > 0) {

@@ -104,19 +104,13 @@ export async function recordEntityChange(
           : payloadFingerprint(prior)
         : '';
     if (priorFp && priorFp !== fingerprint) {
-      throw new ApiError(
-        409,
-        'IDEMPOTENCY_KEY_REUSED',
-        '相同幂等键已用于不同的历史写入载荷',
-      );
+      throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', '相同幂等键已用于不同的历史写入载荷');
     }
     return {
       mode,
       skipped: true,
       reason: 'idempotent_replay',
-      ...(existingEvent.entityRevisionId
-        ? { revisionId: existingEvent.entityRevisionId }
-        : {}),
+      ...(existingEvent.entityRevisionId ? { revisionId: existingEvent.entityRevisionId } : {}),
       changeEventId: existingEvent.id,
       sequence: existingEvent.sequence,
       snapshotHash: envelope.snapshot_hash,

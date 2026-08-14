@@ -57,7 +57,12 @@ export function detectWorldGaps(world: WorldContext | null): WorldGap[] {
   const worldview = world.worldview;
   if (!worldview.genre?.trim() && !worldview.premise?.trim()) {
     findings.push(
-      gap('worldview', '世界观题材', '这个世界的题材和核心设定是什么？（例如东方玄幻、凡人修仙）', 10),
+      gap(
+        'worldview',
+        '世界观题材',
+        '这个世界的题材和核心设定是什么？（例如东方玄幻、凡人修仙）',
+        10,
+      ),
     );
   } else if (worldview.rules.length === 0) {
     findings.push(
@@ -110,7 +115,12 @@ export function detectWorldGaps(world: WorldContext | null): WorldGap[] {
 
   if (world.locations.length === 0 && world.characters.length > 0) {
     findings.push(
-      gap('location', '核心地点', '故事主要发生在哪里？给这个核心地点起个名字，并说清它在世界里的地位。', 40),
+      gap(
+        'location',
+        '核心地点',
+        '故事主要发生在哪里？给这个核心地点起个名字，并说清它在世界里的地位。',
+        40,
+      ),
     );
   }
 
@@ -121,7 +131,10 @@ export function detectWorldGaps(world: WorldContext | null): WorldGap[] {
   }
 
   if (story?.logline?.trim()) {
-    const names = world.characters.slice(0, 2).map((character) => `「${character.name}」`).join('和');
+    const names = world.characters
+      .slice(0, 2)
+      .map((character) => `「${character.name}」`)
+      .join('和');
     findings.push(
       gap(
         'pacing',

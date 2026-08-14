@@ -12,10 +12,7 @@ export function getUsageContext(): UsageContext | undefined {
   return store.getStore();
 }
 
-export function withUsageContext<T>(
-  context: UsageContext,
-  run: () => Promise<T>,
-): Promise<T> {
+export function withUsageContext<T>(context: UsageContext, run: () => Promise<T>): Promise<T> {
   return store.run(context, run);
 }
 

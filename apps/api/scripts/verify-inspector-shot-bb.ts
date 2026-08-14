@@ -41,7 +41,9 @@ function asRecord(value: unknown): Json {
 }
 
 function asList(value: unknown): Json[] {
-  return Array.isArray(value) ? value.filter((item): item is Json => Boolean(item) && typeof item === 'object') : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is Json => Boolean(item) && typeof item === 'object')
+    : [];
 }
 
 async function request(
@@ -101,7 +103,11 @@ async function main(): Promise<number> {
       token,
     );
     projectId = String(asRecord(created.json).id ?? '');
-    check('create project', created.status === 201 && Boolean(projectId), `status=${created.status}`);
+    check(
+      'create project',
+      created.status === 201 && Boolean(projectId),
+      `status=${created.status}`,
+    );
     if (!projectId) return 1;
 
     const character = await request(
@@ -119,7 +125,11 @@ async function main(): Promise<number> {
       token,
     );
     const characterId = String(asRecord(character.json).id ?? '');
-    check('create character', character.status === 201 && Boolean(characterId), `status=${character.status}`);
+    check(
+      'create character',
+      character.status === 201 && Boolean(characterId),
+      `status=${character.status}`,
+    );
 
     const location = await request(
       base,
@@ -201,16 +211,36 @@ async function main(): Promise<number> {
     const foundCharacter = characters1.find((item) => item.id === characterId) ?? {};
     const foundScene = scenes1.find((item) => item.id === sceneId) ?? {};
     check('resources 200', resources1.status === 200, `status=${resources1.status}`);
-    check('resources flattens personality', foundCharacter.personality === '谨慎', String(foundCharacter.personality));
-    check('resources flattens default_outfit', foundCharacter.default_outfit === '青衫', String(foundCharacter.default_outfit));
+    check(
+      'resources flattens personality',
+      foundCharacter.personality === '谨慎',
+      String(foundCharacter.personality),
+    );
+    check(
+      'resources flattens default_outfit',
+      foundCharacter.default_outfit === '青衫',
+      String(foundCharacter.default_outfit),
+    );
     check(
       'resources keeps appearance.hair',
       asRecord(foundCharacter.appearance).hair === '黑发',
       String(asRecord(foundCharacter.appearance).hair),
     );
-    check('resources aliases scene.summary', foundScene.summary === '出海求生', String(foundScene.summary));
-    check('resources aliases scene.time_of_day', foundScene.time_of_day === '黄昏', String(foundScene.time_of_day));
-    check('resources includes shots', shots1.some((item) => item.id === shotId), `count=${shots1.length}`);
+    check(
+      'resources aliases scene.summary',
+      foundScene.summary === '出海求生',
+      String(foundScene.summary),
+    );
+    check(
+      'resources aliases scene.time_of_day',
+      foundScene.time_of_day === '黄昏',
+      String(foundScene.time_of_day),
+    );
+    check(
+      'resources includes shots',
+      shots1.some((item) => item.id === shotId),
+      `count=${shots1.length}`,
+    );
 
     const patchCharacter = await request(
       base,
@@ -270,7 +300,13 @@ async function main(): Promise<number> {
       base,
       'PATCH',
       `/stories/${storyId}`,
-      { title: '第一卷·改', logline: '新梗概', genre: '东方玄幻', theme: '长生', synopsis: '完整梗概' },
+      {
+        title: '第一卷·改',
+        logline: '新梗概',
+        genre: '东方玄幻',
+        theme: '长生',
+        synopsis: '完整梗概',
+      },
       token,
     );
     check('PATCH story 200', patchStory.status === 200, `status=${patchStory.status}`);
@@ -287,10 +323,26 @@ async function main(): Promise<number> {
     const appearance2 = asRecord(character2.appearance);
 
     check('persist character name', character2.name === '韩立·改', String(character2.name));
-    check('persist personality', character2.personality === '愈发谨慎', String(character2.personality));
-    check('persist appearance.hair after merge', appearance2.hair === '黑发', String(appearance2.hair));
-    check('persist appearance.age_range', appearance2.age_range === '青年', String(appearance2.age_range));
-    check('persist location mood', location2.mood_default === '辽阔', String(location2.mood_default));
+    check(
+      'persist personality',
+      character2.personality === '愈发谨慎',
+      String(character2.personality),
+    );
+    check(
+      'persist appearance.hair after merge',
+      appearance2.hair === '黑发',
+      String(appearance2.hair),
+    );
+    check(
+      'persist appearance.age_range',
+      appearance2.age_range === '青年',
+      String(appearance2.age_range),
+    );
+    check(
+      'persist location mood',
+      location2.mood_default === '辽阔',
+      String(location2.mood_default),
+    );
     check('persist event title', event2.title === '灵气潮汐', String(event2.title));
     check('persist relationship label', rel2.label === '羁绊', String(rel2.label));
     check('persist scene summary', scene2.summary === '夜航', String(scene2.summary));
@@ -300,7 +352,9 @@ async function main(): Promise<number> {
   } finally {
     if (projectId) {
       const [{ prisma }] = await Promise.all([import('@zivith/database')]);
-      await prisma.project.update({ where: { id: projectId }, data: { deletedAt: new Date() } }).catch(() => undefined);
+      await prisma.project
+        .update({ where: { id: projectId }, data: { deletedAt: new Date() } })
+        .catch(() => undefined);
       await prisma.$disconnect().catch(() => undefined);
     }
     await app.close();

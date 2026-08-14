@@ -86,9 +86,7 @@ export async function resolveVisualPrepReferenceImages(
     const anchorId = resolveAppearanceVariantAnchor(
       variants.map((item) => ({
         key: item.key,
-        anchor_media_id: item.anchorMediaId
-          ? asId<MediaId>(item.anchorMediaId)
-          : null,
+        anchor_media_id: item.anchorMediaId ? asId<MediaId>(item.anchorMediaId) : null,
         state: item.state,
         deleted_at: item.deletedAt,
       })),
@@ -139,7 +137,9 @@ export async function resolveAppearanceVariantReferenceImages(
 
   const preferred =
     variants.find((item) => item.key === 'sheet_turnaround' && item.key !== variantKey) ??
-    variants.find((item) => item.key === DEFAULT_APPEARANCE_VARIANT_KEY && item.key !== variantKey) ??
+    variants.find(
+      (item) => item.key === DEFAULT_APPEARANCE_VARIANT_KEY && item.key !== variantKey,
+    ) ??
     variants.find((item) => item.key !== variantKey) ??
     variants[0];
 

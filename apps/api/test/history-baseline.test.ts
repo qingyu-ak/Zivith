@@ -49,10 +49,7 @@ describe('backfillEntityBaselines', () => {
     };
 
     const entityRevision = {
-      findFirst: vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 'rev-existing' }),
+      findFirst: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'rev-existing' }),
     };
 
     const db = {

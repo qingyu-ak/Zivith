@@ -82,7 +82,9 @@ export class SiliconFlowImageAdapter implements ImageGenerationAdapter {
 
   getCapabilities() {
     return {
-      supports_reference_images: siliconFlowModelSupportsReferenceImages(this.supportedModels[0]?.id ?? '')
+      supports_reference_images: siliconFlowModelSupportsReferenceImages(
+        this.supportedModels[0]?.id ?? '',
+      )
         ? (true as const)
         : (false as const),
     };
@@ -117,9 +119,7 @@ export class SiliconFlowImageAdapter implements ImageGenerationAdapter {
       // SiliconFlow image-to-image / edit models accept a primary `image` input.
       body.image = usableRefs[0]?.url;
     } else if (/image-edit|img2img|i2i/i.test(model)) {
-      throw new Error(
-        `模型 ${model} 需要参考图（image），但当前没有可用的 http(s) 参考图 URL`,
-      );
+      throw new Error(`模型 ${model} 需要参考图（image），但当前没有可用的 http(s) 参考图 URL`);
     }
 
     const response = await this.fetchImpl(`${this.baseUrl}/images/generations`, {

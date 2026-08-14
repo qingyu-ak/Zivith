@@ -50,7 +50,12 @@ async function requireShotMember(db: PrismaClient, shotId: string, userId: strin
   return shot;
 }
 
-async function requireProjectMember(db: PrismaClient, projectId: string, userId: string, write = false) {
+async function requireProjectMember(
+  db: PrismaClient,
+  projectId: string,
+  userId: string,
+  write = false,
+) {
   await ensureProjectMember(db, userId, projectId, write);
 }
 

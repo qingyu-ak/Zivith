@@ -338,11 +338,7 @@ export class WorkflowOrchestrator {
       const raw = recordJson(fresh.state);
       const locks = recordJson(raw.scoped_locks);
       if (typeof locks[lockKey] === 'string') {
-        throw new ApiError(
-          409,
-          'RECOMPUTE_IN_PROGRESS',
-          '该实体已有进行中的局部重跑，请稍后再试',
-        );
+        throw new ApiError(409, 'RECOMPUTE_IN_PROGRESS', '该实体已有进行中的局部重跑，请稍后再试');
       }
       const last = await tx.workflowStepAttempt.findFirst({
         where: { workflowStepId: step.id },
@@ -458,7 +454,10 @@ export class WorkflowOrchestrator {
       const next = patch[key];
       const prev = current[key];
       if (Array.isArray(next) && Array.isArray(prev)) {
-        merged[key] = [...new Set([...prev, ...next])];
+        const combined: unknown[] = [];
+        for (const item of prev) combined.push(item);
+        for (const item of next) combined.push(item);
+        merged[key] = [...new Set(combined)];
       }
     }
     await this.db.workflowStep.update({

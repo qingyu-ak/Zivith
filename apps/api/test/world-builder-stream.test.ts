@@ -65,9 +65,13 @@ describe('world builder reply streaming', () => {
 
   it('streamReplyChunks respects delayMs=0 and custom size', async () => {
     const seen: string[] = [];
-    await streamReplyChunks('abcdef', (chunk) => {
-      seen.push(chunk);
-    }, { chunkSize: 2, delayMs: 0 });
+    await streamReplyChunks(
+      'abcdef',
+      (chunk) => {
+        seen.push(chunk);
+      },
+      { chunkSize: 2, delayMs: 0 },
+    );
     expect(seen).toEqual(['ab', 'cd', 'ef']);
   });
 });

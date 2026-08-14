@@ -356,13 +356,9 @@ export function WorldTimeline({
                       fontSize="9"
                       textAnchor="middle"
                     >
-                      {mark.worldTimeLabel
-                        ? clipLabel(mark.worldTimeLabel, 10)
-                        : `#${mark.order}`}
+                      {mark.worldTimeLabel ? clipLabel(mark.worldTimeLabel, 10) : `#${mark.order}`}
                     </text>
-                    {diverges && (
-                      <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#d97706" />
-                    )}
+                    {diverges && <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#d97706" />}
                   </g>
                 );
               })
@@ -455,12 +451,7 @@ export function WorldTimeline({
                       {clipLabel(item.title, 14)}
                     </text>
                     {diverges && (
-                      <circle
-                        cx={pos.x + pos.itemWidth - 8}
-                        cy={pos.y + 8}
-                        r="3"
-                        fill="#d97706"
-                      />
+                      <circle cx={pos.x + pos.itemWidth - 8} cy={pos.y + 8} r="3" fill="#d97706" />
                     )}
                   </g>
                 );

@@ -250,13 +250,7 @@ export interface ApplyProposalResultDTO {
   kind: ProposalKind;
   project_id: string;
   entity_type:
-    | 'project'
-    | 'world_event'
-    | 'asset'
-    | 'scene'
-    | 'relationship'
-    | 'story'
-    | (string & {});
+    'project' | 'world_event' | 'asset' | 'scene' | 'relationship' | 'story' | (string & {});
   entity_id: string;
   title: string;
 }
@@ -335,11 +329,7 @@ export interface WorkflowMediaDTO {
     generation_error?: string;
     generation_prompt?: string;
     reference_injection?:
-      | 'none'
-      | 'applied'
-      | 'skipped_unsupported'
-      | 'skipped_error'
-      | (string & {});
+      'none' | 'applied' | 'skipped_unsupported' | 'skipped_error' | (string & {});
     reference_media_ids?: string[];
     reference_labels?: string[];
   } | null;
@@ -510,12 +500,7 @@ export interface WorldResourcesDTO {
 
 /** 世界线条目（前端从 resources 派生；anchorOrder 用于非均匀刻度定位） */
 export type WorldLineEntityType =
-  | 'character'
-  | 'location'
-  | 'scene'
-  | 'world_event'
-  | 'story'
-  | 'shot';
+  'character' | 'location' | 'scene' | 'world_event' | 'story' | 'shot';
 
 export interface WorldLineItem {
   id: string;
@@ -569,17 +554,15 @@ export interface WorldLineModel {
 }
 
 /** 世界线工作区选中项（Explorer / Timeline 联动，Inspector 展示） */
-export type WorldSelection =
-  | {
-      kind:
-        | 'character'
-        | 'location'
-        | 'scene'
-        | 'world_event'
-        | 'story'
-        | 'project'
-        | 'relationship'
-        | 'shot';
-      id: string;
-    }
-  | null;
+export type WorldSelection = {
+  kind:
+    | 'character'
+    | 'location'
+    | 'scene'
+    | 'world_event'
+    | 'story'
+    | 'project'
+    | 'relationship'
+    | 'shot';
+  id: string;
+} | null;

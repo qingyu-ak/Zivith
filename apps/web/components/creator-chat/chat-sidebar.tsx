@@ -37,7 +37,10 @@ export function ChatSidebar({
   return (
     <aside className="flex h-full w-[268px] shrink-0 flex-col bg-[#f7f8fa]">
       <div className="flex items-center gap-1 px-3 pt-3">
-        <Link href="/creator-chats" className="px-1 text-[17px] font-semibold tracking-tight text-zinc-900">
+        <Link
+          href="/creator-chats"
+          className="px-1 text-[17px] font-semibold tracking-tight text-zinc-900"
+        >
           ZIVITH
         </Link>
         <span className="flex-1" />

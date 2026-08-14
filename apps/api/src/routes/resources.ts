@@ -250,7 +250,9 @@ async function enrichAssetForClient(
     const media = await mediaRefDto(db, id, storage);
     if (media) referenceImages.push(media);
   }
-  const coverImage = coverId ? ((await mediaRefDto(db, coverId, storage)) ?? referenceImages[0] ?? null) : (referenceImages[0] ?? null);
+  const coverImage = coverId
+    ? ((await mediaRefDto(db, coverId, storage)) ?? referenceImages[0] ?? null)
+    : (referenceImages[0] ?? null);
   const locationSheetPrompt =
     asset.type === 'location' ? readLocationSheetPrompt(asset.data) : undefined;
   return {
@@ -460,8 +462,7 @@ export function registerResourceRoutes(
         defaults: body.defaults ? json(body.defaults) : undefined,
         // 编辑器语义：worldview 为整组替换（parseWorldview 规范化），
         // 允许清空单个字段；agent 侧走 mergeWorldview（proposal-applier）。
-        worldview:
-          body.worldview === undefined ? undefined : json(parseWorldview(body.worldview)),
+        worldview: body.worldview === undefined ? undefined : json(parseWorldview(body.worldview)),
       }),
     });
   });

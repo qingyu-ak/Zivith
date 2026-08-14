@@ -100,9 +100,15 @@ describe('history snapshot serializers', () => {
   });
 
   it('serializes remaining first-batch entities', () => {
-    expect(serializePromptVersionSnapshot({ id: 'pv', shotId: 's', positive: 'x', source: 'auto', createdAt: created }).entity_type).toBe(
-      'prompt_version',
-    );
+    expect(
+      serializePromptVersionSnapshot({
+        id: 'pv',
+        shotId: 's',
+        positive: 'x',
+        source: 'auto',
+        createdAt: created,
+      }).entity_type,
+    ).toBe('prompt_version');
     expect(
       serializeOutputSnapshot({
         id: 'o',
@@ -154,7 +160,11 @@ describe('history snapshot serializers', () => {
 
   it('dispatch covers every HISTORY_ENTITY_TYPES entry', () => {
     for (const type of HISTORY_ENTITY_TYPES) {
-      const envelope = serializeHistorySnapshot(type, { id: 'x', createdAt: created, updatedAt: updated });
+      const envelope = serializeHistorySnapshot(type, {
+        id: 'x',
+        createdAt: created,
+        updatedAt: updated,
+      });
       expect(envelope.entity_type).toBe(type);
       expect(envelope.schema_version).toBe(1);
       expect(envelope.snapshot_hash).toMatch(/^[a-f0-9]{64}$/);

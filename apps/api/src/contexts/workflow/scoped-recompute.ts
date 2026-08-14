@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Prisma} from '@zivith/database';
+import type { Prisma } from '@zivith/database';
 import { type PrismaClient } from '@zivith/database';
 
 export type RecomputeKind = 'visual_prep' | 'prompt' | 'video';
@@ -137,10 +137,7 @@ export function shotPromptInputSnapshot(shot: {
   };
 }
 
-export function shotVideoInputSnapshot(shot: {
-  id: string;
-  prompt: unknown;
-}): unknown {
+export function shotVideoInputSnapshot(shot: { id: string; prompt: unknown }): unknown {
   const prompt = record(shot.prompt);
   return {
     shot_id: shot.id,

@@ -65,11 +65,7 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
   });
   if (!scene) return null;
 
-  const refs = await resolveVisualPrepReferenceImages(
-    input.db,
-    asset,
-    requirement.variantKey,
-  );
+  const refs = await resolveVisualPrepReferenceImages(input.db, asset, requirement.variantKey);
   const prompt = withReferencePromptClauses(input.prompt.trim(), refs.length > 0);
   const allowFallback = input.allowFallback !== false;
   const count = clampCandidateCount(input.count);
@@ -126,7 +122,8 @@ export async function generateRequirementImage(input: GenerateRequirementImageIn
       data: {
         id: mediaId,
         projectId: scene.projectId,
-        name: count > 1 ? `${asset.name} Key Image ${index + 1}/${count}` : `${asset.name} Key Image`,
+        name:
+          count > 1 ? `${asset.name} Key Image ${index + 1}/${count}` : `${asset.name} Key Image`,
         mediaType: 'image',
         mimeType: persisted.mimeType,
         storageKey: persisted.storageKey,

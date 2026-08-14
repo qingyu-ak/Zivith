@@ -147,14 +147,20 @@ export function WorldWorkspace() {
           >
             <IconPanelRight className="size-4" />
           </button>
-          <div className="flex rounded-lg border border-line bg-zinc-100 p-0.5" role="tablist" aria-label="视图切换">
+          <div
+            className="flex rounded-lg border border-line bg-zinc-100 p-0.5"
+            role="tablist"
+            aria-label="视图切换"
+          >
             <button
               type="button"
               role="tab"
               aria-selected={view === 'world'}
               onClick={() => switchView('world')}
               className={`rounded-md px-3 py-1 text-xs transition ${
-                view === 'world' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
+                view === 'world'
+                  ? 'bg-white text-zinc-900 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-700'
               }`}
             >
               世界
@@ -165,7 +171,9 @@ export function WorldWorkspace() {
               aria-selected={view === 'production'}
               onClick={() => switchView('production')}
               className={`rounded-md px-3 py-1 text-xs transition ${
-                view === 'production' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
+                view === 'production'
+                  ? 'bg-white text-zinc-900 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-700'
               }`}
             >
               制作
@@ -187,7 +195,9 @@ export function WorldWorkspace() {
       >
         {/* 左栏：世界视图 = 实体 Explorer；制作视图 = 故事列表 */}
         {view === 'production' ? (
-          <aside className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : 'overflow-y-auto'}`}>
+          <aside
+            className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : 'overflow-y-auto'}`}
+          >
             <div className="border-b border-line px-4 py-3">
               <p className="text-xs font-medium uppercase tracking-wider text-zinc-600">故事</p>
             </div>
@@ -220,12 +230,10 @@ export function WorldWorkspace() {
             )}
           </aside>
         ) : (
-          <aside className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : ''}`}>
-            <EntityExplorer
-              resources={resources}
-              selection={selection}
-              onSelect={setSelection}
-            />
+          <aside
+            className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : ''}`}
+          >
+            <EntityExplorer resources={resources} selection={selection} onSelect={setSelection} />
           </aside>
         )}
 
@@ -252,22 +260,18 @@ export function WorldWorkspace() {
                 </div>
               </div>
             ) : (
-              <WorldTimeline
-                model={model}
-                selection={selection}
-                onSelect={setSelection}
-              />
+              <WorldTimeline model={model} selection={selection} onSelect={setSelection} />
             )}
           </div>
           {/* 副驾驶 Agent 面板（v1 只读世界状态摘要，仅世界视图） */}
-          {view === 'world' && (
-            <CoPilotPanel resources={resources} onSelect={setSelection} />
-          )}
+          {view === 'world' && <CoPilotPanel resources={resources} onSelect={setSelection} />}
         </section>
 
         {/* 右栏：Inspector */}
-        <aside className={`min-h-0 overflow-hidden border-l border-line ${rightCollapsed ? 'pointer-events-none' : ''}`}>
-            <InspectorPanel
+        <aside
+          className={`min-h-0 overflow-hidden border-l border-line ${rightCollapsed ? 'pointer-events-none' : ''}`}
+        >
+          <InspectorPanel
             resources={resources}
             selection={selection}
             onUpdated={() => void load()}

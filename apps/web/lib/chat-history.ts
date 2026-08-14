@@ -10,7 +10,15 @@ export interface ThreadHistoryGroup {
 
 const DAY = 86_400_000;
 
-export function groupThreadsByRecency(threads: CreatorChatThreadDTO[] | unknown): ThreadHistoryGroup[] {
+function isThread(value: unknown): value is CreatorChatThreadDTO {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as CreatorChatThreadDTO).id === 'string'
+  );
+}
+
+export function groupThreadsByRecency(threads: unknown): ThreadHistoryGroup[] {
   if (!Array.isArray(threads)) return [];
   const now = Date.now();
   const buckets: ThreadHistoryGroup[] = [
@@ -19,12 +27,13 @@ export function groupThreadsByRecency(threads: CreatorChatThreadDTO[] | unknown)
     { id: 'month', label: '30 天内', threads: [] },
     { id: 'older', label: '更早', threads: [] },
   ];
-  for (const thread of threads) {
-    const age = now - new Date(thread.updated_at).getTime();
-    if (Number.isNaN(age) || age < DAY) buckets[0]?.threads.push(thread);
-    else if (age < 7 * DAY) buckets[1]?.threads.push(thread);
-    else if (age < 30 * DAY) buckets[2]?.threads.push(thread);
-    else buckets[3]?.threads.push(thread);
+  for (const item of threads) {
+    if (!isThread(item)) continue;
+    const age = now - new Date(item.updated_at).getTime();
+    if (Number.isNaN(age) || age < DAY) buckets[0]?.threads.push(item);
+    else if (age < 7 * DAY) buckets[1]?.threads.push(item);
+    else if (age < 30 * DAY) buckets[2]?.threads.push(item);
+    else buckets[3]?.threads.push(item);
   }
   return buckets.filter((group) => group.threads.length > 0);
 }
@@ -42,7 +51,9 @@ export function filterThreadsByQuery(
   });
 }
 
-export function threadDisplayTitle(thread: Pick<CreatorChatThreadDTO, 'title' | 'project_name'>): string {
+export function threadDisplayTitle(
+  thread: Pick<CreatorChatThreadDTO, 'title' | 'project_name'>,
+): string {
   const title = thread.title?.trim();
   if (title) return title;
   const project = thread.project_name?.trim();

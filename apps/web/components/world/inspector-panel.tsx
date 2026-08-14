@@ -76,7 +76,9 @@ function EntityDetail({
   return (
     <div className="px-4 py-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs ${KIND_COLOR[kind]}`}>
+        <span
+          className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs ${KIND_COLOR[kind]}`}
+        >
           {label}
         </span>
       </div>
@@ -380,8 +382,17 @@ export function InspectorPanel({
 
   if (selection) {
     detail = editing
-      ? renderEditor(selection, resources, draft, updateDraft, saving, editError, save, () =>
-          setEditing(false),
+      ? renderEditor(
+          selection,
+          resources,
+          draft,
+          updateDraft,
+          saving,
+          editError,
+          () => {
+            void save();
+          },
+          () => setEditing(false),
         )
       : renderReadonly(selection, resources);
     if (!detail) {
@@ -471,7 +482,9 @@ function EditorShell({
   return (
     <div className="px-4 py-3">
       <div className="mb-3 flex items-center gap-2">
-        <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs ${KIND_COLOR[kind]}`}>
+        <span
+          className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs ${KIND_COLOR[kind]}`}
+        >
           {KIND_LABEL[kind] ?? kind}
         </span>
         <span className="text-xs text-zinc-500">编辑属性</span>
@@ -510,14 +523,22 @@ function renderEditor(
     case 'project':
       return shell(
         <>
-          <Field label="名称" value={draft.name ?? ''} onChange={(value) => updateDraft('name', value)} />
+          <Field
+            label="名称"
+            value={draft.name ?? ''}
+            onChange={(value) => updateDraft('name', value)}
+          />
           <Field
             label="描述"
             value={draft.description ?? ''}
             onChange={(value) => updateDraft('description', value)}
             rows={3}
           />
-          <Field label="题材" value={draft.genre ?? ''} onChange={(value) => updateDraft('genre', value)} />
+          <Field
+            label="题材"
+            value={draft.genre ?? ''}
+            onChange={(value) => updateDraft('genre', value)}
+          />
           <Field
             label="核心设定"
             value={draft.premise ?? ''}
@@ -542,7 +563,11 @@ function renderEditor(
     case 'character':
       return shell(
         <>
-          <Field label="名称" value={draft.name ?? ''} onChange={(value) => updateDraft('name', value)} />
+          <Field
+            label="名称"
+            value={draft.name ?? ''}
+            onChange={(value) => updateDraft('name', value)}
+          />
           <Field
             label="描述"
             value={draft.description ?? ''}
@@ -561,13 +586,21 @@ function renderEditor(
             onChange={(value) => updateDraft('tags', value)}
             placeholder="逗号或换行分隔"
           />
-          <Field label="性别" value={draft.gender ?? ''} onChange={(value) => updateDraft('gender', value)} />
+          <Field
+            label="性别"
+            value={draft.gender ?? ''}
+            onChange={(value) => updateDraft('gender', value)}
+          />
           <Field
             label="年龄"
             value={draft.age_range ?? ''}
             onChange={(value) => updateDraft('age_range', value)}
           />
-          <Field label="身形" value={draft.build ?? ''} onChange={(value) => updateDraft('build', value)} />
+          <Field
+            label="身形"
+            value={draft.build ?? ''}
+            onChange={(value) => updateDraft('build', value)}
+          />
           <Field
             label="个性"
             value={draft.personality ?? ''}
@@ -584,14 +617,22 @@ function renderEditor(
     case 'location':
       return shell(
         <>
-          <Field label="名称" value={draft.name ?? ''} onChange={(value) => updateDraft('name', value)} />
+          <Field
+            label="名称"
+            value={draft.name ?? ''}
+            onChange={(value) => updateDraft('name', value)}
+          />
           <Field
             label="描述"
             value={draft.description ?? ''}
             onChange={(value) => updateDraft('description', value)}
             rows={3}
           />
-          <Field label="标签" value={draft.tags ?? ''} onChange={(value) => updateDraft('tags', value)} />
+          <Field
+            label="标签"
+            value={draft.tags ?? ''}
+            onChange={(value) => updateDraft('tags', value)}
+          />
           <Field
             label="时代"
             value={draft.time_period ?? ''}
@@ -617,7 +658,11 @@ function renderEditor(
     case 'world_event':
       return shell(
         <>
-          <Field label="标题" value={draft.title ?? ''} onChange={(value) => updateDraft('title', value)} />
+          <Field
+            label="标题"
+            value={draft.title ?? ''}
+            onChange={(value) => updateDraft('title', value)}
+          />
           <Field
             label="描述"
             value={draft.description ?? ''}
@@ -647,7 +692,11 @@ function renderEditor(
     case 'scene':
       return shell(
         <>
-          <Field label="标题" value={draft.title ?? ''} onChange={(value) => updateDraft('title', value)} />
+          <Field
+            label="标题"
+            value={draft.title ?? ''}
+            onChange={(value) => updateDraft('title', value)}
+          />
           <Field
             label="摘要"
             value={draft.summary ?? ''}
@@ -659,16 +708,36 @@ function renderEditor(
             value={draft.time_of_day ?? ''}
             onChange={(value) => updateDraft('time_of_day', value)}
           />
-          <Field label="天气" value={draft.weather ?? ''} onChange={(value) => updateDraft('weather', value)} />
-          <Field label="氛围" value={draft.mood ?? ''} onChange={(value) => updateDraft('mood', value)} />
+          <Field
+            label="天气"
+            value={draft.weather ?? ''}
+            onChange={(value) => updateDraft('weather', value)}
+          />
+          <Field
+            label="氛围"
+            value={draft.mood ?? ''}
+            onChange={(value) => updateDraft('mood', value)}
+          />
         </>,
       );
     case 'story':
       return shell(
         <>
-          <Field label="标题" value={draft.title ?? ''} onChange={(value) => updateDraft('title', value)} />
-          <Field label="类型" value={draft.genre ?? ''} onChange={(value) => updateDraft('genre', value)} />
-          <Field label="主题" value={draft.theme ?? ''} onChange={(value) => updateDraft('theme', value)} />
+          <Field
+            label="标题"
+            value={draft.title ?? ''}
+            onChange={(value) => updateDraft('title', value)}
+          />
+          <Field
+            label="类型"
+            value={draft.genre ?? ''}
+            onChange={(value) => updateDraft('genre', value)}
+          />
+          <Field
+            label="主题"
+            value={draft.theme ?? ''}
+            onChange={(value) => updateDraft('theme', value)}
+          />
           <Field
             label="一句话梗概"
             value={draft.logline ?? ''}
@@ -845,10 +914,9 @@ function renderReadonly(
       const shot = (resources.entities.shots ?? []).find((item) => item.id === selection.id);
       if (!shot) return null;
       const scene = entities.scenes.find((item) => item.id === shot.scene_id);
-      const href =
-        scene?.story_id
-          ? `/projects/${resources.project.id}/stories/${scene.story_id}/scenes/${scene.id}/shots/${shot.id}`
-          : null;
+      const href = scene?.story_id
+        ? `/projects/${resources.project.id}/stories/${scene.story_id}/scenes/${scene.id}/shots/${shot.id}`
+        : null;
       return (
         <div>
           <EntityDetail
@@ -864,10 +932,7 @@ function renderReadonly(
           />
           {href ? (
             <div className="px-4 pb-4">
-              <Link
-                href={href}
-                className="text-xs text-accent hover:underline"
-              >
+              <Link href={href} className="text-xs text-accent hover:underline">
                 打开镜头规格编辑器 →
               </Link>
             </div>
