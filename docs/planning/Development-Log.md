@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-14 · pending · feat(web,api) · hand off studio focus and make conflicts editable
+## 2026-08-14 · `3dac37e` · feat(web,api) · hand off studio focus and make conflicts editable
 
 「在对话中继续」立刻交接选中实体（带真名、不问主线、不写「未命名」）；模型把 `open_questions` 写成字符串时不再把校验 JSON 丢进对话；冲突卡片标出互相打架的原文，Inspector 可直接改描述。
 
