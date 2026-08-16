@@ -215,8 +215,11 @@ describe('MockWorkflowRunner recompute guards', () => {
           scene: { story: { id: 'story-1', projectId: 'project-1' } },
         }),
       },
+      project: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'project-1' }),
+      },
       projectMember: {
-        findUnique: vi.fn().mockResolvedValue({ role: 'editor' }),
+        upsert: vi.fn().mockResolvedValue({ role: 'editor' }),
       },
     } as unknown as PrismaClient;
     const orchestrator = {
