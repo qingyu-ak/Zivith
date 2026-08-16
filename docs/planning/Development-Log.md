@@ -12,6 +12,20 @@
 
 ---
 
+## 2026-08-16 · test(api) · align scoped-recompute mock with ensureProjectMember
+
+CI 测试挂在 `scoped-recompute.test.ts`：`ensureProjectMember` 已改为 `project.findFirst` + `projectMember.upsert`，测例仍 mock 旧的 `findUnique`，于是先抛 `undefined` 而不是 `SHOT_APPROVED`。
+
+- **test(api)** 补齐 project / upsert mock
+- 验证：`vitest run test/scoped-recompute.test.ts` 5/5
+
+## 2026-08-16 · `7c92921` · chore · turn off no-unsafe-call on tests for CI
+
+GitHub CI lint 在测试文件上报 247 条 `@typescript-eslint/no-unsafe-call`：隔离安装下 `expect`/`describe` 没有类型，typed lint 视为无法解析的调用。本地因 hoisted vitest 而过。
+
+- **chore** 测试文件关闭 `no-unsafe-call` / `no-unsafe-return`
+- 验证：`pnpm lint`
+
 ## 2026-08-14 · `84dd441` · fix(web) · declare vitest for web tests in CI
 
 GitHub CI 在 `chat-history.test.ts` 报 10 个错误：web 包未声明 vitest，隔离安装后测例全局的 `describe`/`it`/`expect` 无法解析。
