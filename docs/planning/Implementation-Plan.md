@@ -4,7 +4,7 @@
 >
 > Version: 2.4
 >
-> Status: Active — 进度已于 2026-07-30 同步；2026-07-31 围绕 IP Core 重新排序（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）；2026-08-04 创造层优先转向（分支 `feat/creator-layer-first`，ADR-0010 修订 + 0011 / 0012 / 0013），实施细节以 [Next-Tasks.md](Next-Tasks.md) 为准
+> Status: Active — 进度已于 2026-07-30 同步；2026-07-31 围绕 IP Core 重新排序（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）；2026-08-04 创造层优先转向（分支 `feat/creator-layer-first`，ADR-0010 修订 + 0011 / 0012 / 0013）；2026-08-16 创造层 v1 闭环并合并进 `main`。实施细节以 [Next-Tasks.md](Next-Tasks.md) 为准
 >
 > Strategy: B-Line — AI Agent 流水线优先，视频生成用 Mock；IP Core 先于生成生产化
 >
@@ -48,7 +48,7 @@
 ADR-0007 已 Accepted；Track H 已明确排期。运行时历史表尚未成为基线。增量推进：
 
 1. **V1 Entity + State：** `[x]` 规范快照（H1）→ `[x]` EntityRevision/ChangeEvent 表 + 基线回填（H2）→ `[x]` 事务双写助手/开关（H3）；
-2. **V2 Timeline：** 从既有 Scene/Shot 顺序得到只读 Presentation Time；World Time 默认跟随；
+2. **V2 Timeline：** `[x]` 从既有 Scene/Shot 顺序得到只读 Presentation Time；World Time 默认跟随（世界线 v1 2026-08-05；2026-08-14 细化地点轨/事件刻度/锚定/偏离标记）；
 3. **V3 Track System：** 在 Scene/Character/Shot 验证之后增加可变 World Time 维度与高级派生 Track；
 4. **V4 AI consistency：** `[~]` 规则冲突检测 v1（H9，2026-08-13）— 同名 / 关系循环 / 事件顺序 / 题材偏离 / 极性事实；修复经人工确认。跨修订 State 与知识策展后续；
 5. **稍后 CreativeBranch：** 备选 State 对比/合并，明确与 Timeline Track 分离。
@@ -73,17 +73,17 @@ Phase 2.5: First Provider Integration (2-3 weeks)
     ↓
 ─────────────  IP Core (product foundation, ADR-0008)  ─────────────
     ↓
-Track H: Entity + State + Timeline + Track       [H3 done]
-    │   H4 read-only Presentation Timeline is the next action
+Track H: Entity + State + Timeline + Track       [H0–H5 v1 done; H9 v1 done; H6/H7 next]
+    │   World line v1 landed 2026-08-05, refined 2026-08-14
     ↓
-Track I: IP Core world entities  (3-5 weeks, slice-gated)
-    │   I1 WorldEvent (ADR-0011 done) → I2 Relationship (ADR-0012 done) → I3 Organization
+Track I: IP Core world entities  (slice-gated)
+    │   I1 WorldEvent (ADR-0011 done) → I2 Relationship (ADR-0012 done) → I3 Organization (needs evidence)
     ↓
-Track J: Creator Chat continuous conversation (2-3 weeks)
+Track J: Creator Chat continuous conversation   [J1–J4 done]
     │   May run in parallel with Track I
     │
     │   Track K: world-first UI information architecture
-    │   K1 · K2 / K3 in progress (feat/creator-layer-first) · K4 after Production Skill
+    │   K1–K5 done (2026-08-05 → 08-14) · 创作线转换（Production Skill）后续
     ↓
 ─────────────  Generation productionization  ─────────────
     ↓

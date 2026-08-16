@@ -4,9 +4,9 @@
 >
 > Status: Active
 >
-> Synced: 2026-08-05
+> Synced: 2026-08-16
 >
-> Priority policy: **创造层优先进行中**，分支 `feat/creator-layer-first`：IP 核心数据库（Track I，[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md) / [ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）+ Creator Chat 持续对话（Track J 重写，[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 修订）+ 世界线视图（Track K，H4/H5 以世界线视图优先落地）。Track H 的 H3 已完成；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
+> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）：IP 核心数据库（Track I I1/I2，[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md) / [ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）+ Creator Chat 持续对话（Track J，[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 修订）+ 世界线视图（Track H H4/H5 + Track K）均已落地。下一步：H6 可变世界时间绑定、H7 高级派生 Track、I3 `Organization`（需真实项目晋级证据，不随计划启动）；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
 >
 > Related: [Product-Positioning.md](../product/Product-Positioning.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [IP World Model Repositioning RFC](../architecture/rfc/IP-World-Model-Repositioning-RFC.md)
 
@@ -14,13 +14,14 @@
 
 ## 当前基线
 
-近期已落地（提交至 `05d078e`）：
+创造层 v1 已闭环（2026-08-16 合并进 `main`）：
 
-- Backend：Mock agents、orchestrator、`MockWorkflowRunner`、generation + shot-prompts + visual-requirements + workflow 路由
-- Frontend：项目页上的 [`apps/web/components/workflow-panel.tsx`](../../apps/web/components/workflow-panel.tsx)；镜头编辑器提示词批准 + mock 产出
-- Domain：[`packages/domain/src/workflow.ts`](../../packages/domain/src/workflow.ts)
+- Backend：世界线 / WorldEvent / Relationship / Creator Chat 路由（[`apps/api/src/routes/world.ts`](../../apps/api/src/routes/world.ts)）；World Builder Agent + 冲突检测（H9 v1，只报告不修复）+ 提案应用（`apply-intent`，全部 `draft` + 幂等键）；`entity_revisions` / `change_events` / `project_sequences` 表 + 双写助手（per-Entity 开关默认关）
+- Frontend：`/` Creator Chat 默认页（无登录，浅色独立对话壳 + 可收起历史侧栏）；`/projects/:id/world` 三栏世界工作区（Explorer / 世界线 / Inspector 可编辑 + 冲突列表 + 「在对话中继续」）；`/production` 与 `/settings` 承接原工作流与提供商面板
+- Domain：[`packages/domain/src/history/*`](../../packages/domain/src/history/) 快照与 ChangeEvent schema；WorldEvent / Relationship / Timeline Track/Item schema
+- Database：`20260804000000_creator_layer_world` 迁移（world_events / relationships / project_timelines / timeline_tracks / timeline_items / creator_chat_threads / creator_chat_messages）；`Project.worldview` Json（K5 世界观单点表示）
 
-仍为 stub（501）：BYOK 凭证、提供商用量/限额/回调 — 见 [`apps/api/src/routes/stubs.ts`](../../apps/api/src/routes/stubs.ts)。（Workflow SSE 与 visual-requirement generate 已实现。）
+仍为 stub（501）：BYOK 凭证、提供商用量/限额/回调 — 见 [`apps/api/src/routes/stubs.ts`](../../apps/api/src/routes/stubs.ts)。
 
 ---
 ## Track A — 稳定 WIP（优先做）
@@ -263,20 +264,20 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓
          Track G (provider stability polish) ✓ 2026-07-29
               ↓
-         Track H (IP Core foundation): H0–H3 ✓ → H4/H5 (world-line first) on feat/creator-layer-first
+         Track H (IP Core foundation): H0–H3 ✓ → H4/H5 ✓ v1 (world-line first) → H9 ✓ v1 → H6/H7 planned
               ↓
-         Track I (world entities): I0 ✓ (ADR-0011) → I1 → I2 (ADR-0012 晋级) → [evidence] → I3
+         Track I (world entities): I0 ✓ (ADR-0011) → I1 ✓ → I2 ✓ (ADR-0012 晋级) → [evidence] → I3
               ↓          ╲
-              │           ╲ Track J (Creator Chat continuous conversation): J1 → J2 → J3 → J4
-              │           ╱   on feat/creator-layer-first
+              │           ╲ Track J (Creator Chat continuous conversation): J1 ✓ → J2 ✓ → J3 ✓ → J4 ✓
+              │           ╱
               ↓          ╱
          Phase 3 (generation productionize) — continues to defer, per ADR-0008
 
    Track K (world-first UI) runs alongside, each step gated on its supply:
-         K1 ✓ 2026-08-05 → K2 ✓ (world workspace v1, after H4 world-line first) → K3 ✓ 2026-08-05 (default page `/`, after Track J) → K4 (World View first, after Track I) → K5 ✓ 2026-08-05 (世界观 Chat→Studio 核心闭环)
+         K1 ✓ 2026-08-05 → K2 ✓ (world workspace v1, after H4 world-line first) → K3 ✓ 2026-08-05 (default page `/`, after Track J) → K4 ✓ (World View first, after Track I) → K5 ✓ 2026-08-05 (世界观 Chat→Studio 核心闭环)
 ```
 
-创造层优先计划（2026-08-04）已把 H4/H5、Track I、Track J（重写为持续对话）、Track K 串入同一分支 `feat/creator-layer-first`：先 IP 核心数据库 + Creator Chat，再世界线视图。生产制作功能（Story→Shot、Provider、usage）只搬不移、保持可用。
+创造层优先计划（2026-08-04）已把 H4/H5、Track I、Track J（重写为持续对话）、Track K 串入同一分支 `feat/creator-layer-first`：先 IP 核心数据库 + Creator Chat，再世界线视图。2026-08-16 创造层 v1 闭环并合并进 `main`。生产制作功能（Story→Shot、Provider、usage）只搬不移、保持可用。
 
 ---
 

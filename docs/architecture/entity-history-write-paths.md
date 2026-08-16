@@ -1,10 +1,10 @@
 # 实体历史写入路径清单（Track H H1）
 
-> Status: H3 dual-write helpers landed; flags default **off**
+> Status: H3 dual-write helpers landed; flags default **off**；H4/H5 世界线 v1 已落地（2026-08-05）；WorldEvent / Relationship 已落库（ADR-0011 / ADR-0012）
 >
-> Synced: 2026-07-30
+> Synced: 2026-08-16
 >
-> Branch: `feat/track-h-entity-history`
+> Branch: merged to `main`
 >
 > Related: [entity-state-timeline-track.md](entity-state-timeline-track.md), [ADR-0007](adr/0007-preserve-current-state-with-immutable-creative-history.md)
 
@@ -91,8 +91,9 @@ Env: `HISTORY_WRITE_DEFAULT`, `HISTORY_ENTITY_SHOT`, `HISTORY_ENTITY_PROMPT_VERS
 
 已接线调用点（标志启用前为 no-op）：Shot create/patch、PromptVersion create/approve、Output complete/fail、AppearanceVariant approve、VisualRequirement approve。
 
-## H3 范围外（仍属后续）
+## H3 之后已落地 / 仍属后续
 
-- 无 Presentation Timeline / World Time API（H4+）
+- Presentation Timeline v1 已落地（2026-08-05，世界线视图 `/projects/:id/world`，2026-08-14 细化；显式 Track/Item CRUD 在 [`apps/api/src/routes/world.ts`](../../apps/api/src/routes/world.ts)）— 可变 World Time binding 仍属 H6
+- `WorldEvent` / `Relationship` 已落库（2026-08-04 迁移；ADR-0011 / ADR-0012）
 - 无 CreativeBranch（H10）
 - 并非每条写入路径都已接线（workflow mock-runner 批量路径留待后续）

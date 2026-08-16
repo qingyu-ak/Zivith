@@ -2,9 +2,9 @@
 
 > Zivith 技术架构
 >
-> Version: 1.1
+> Version: 1.2
 >
-> Status: Active — 已于 2026-07-28 同步（SiliconFlow 模态槽位 + I2I 回退）
+> Status: Active — 已于 2026-08-16 同步（创造层 v1：世界线、WorldEvent/Relationship、Creator Chat、世界优先 UI）
 >
 > Related: [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md), [Shot-Specification.md](../domain/Shot-Specification.md), [Asset-Model.md](../domain/Asset-Model.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md)
 
@@ -146,13 +146,13 @@
 - 用户偏好
 - 项目成员关系
 
-### Entity State & Timeline Context（实体状态与时间线上下文，横切；拟议）
+### Entity State & Timeline Context（实体状态与时间线上下文，横切）
 - 不可变 Entity 修订与 ChangeEvent 查询
 - 以 Presentation Time（呈现时间）为主轴的 Project Timeline，可选绑定项目自定义的 World Time（世界时间）
 - 语义 Track 配置与派生 Track 投影
 - 乐观修订检查、命令幂等性，以及依赖过期传播
 
-该上下文规范见 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md)，尚未实现。它不拥有 Story、Shot、Asset、Workflow 或 Generation 的当前状态；各既有限界上下文仍负责其专用表与领域转换。
+该上下文规范见 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md)。实现状态（2026-08-16）：H1–H3 已落地（`entity_revisions` / `change_events` / `project_sequences` 表 + 基线回填 + `recordEntityChange` 双写助手，per-Entity `off|shadow|dual` 默认关）；H4/H5 世界线 v1 已落地（`/projects/:id/world` 世界视图 + 世界/制作双视图 + Shot 轨道；显式 Track/Item CRUD API 见 §4.2）；H9 v1 冲突检测只报告不修复。它不拥有 Story、Shot、Asset、Workflow 或 Generation 的当前状态；各既有限界上下文仍负责其专用表与领域转换。
 
 ## 3.3 上下文通信模式
 
@@ -257,18 +257,27 @@
 | `POST` | `/workflows/{runId}/cancel` | 取消工作流 |
 | `GET` | `/workflows/{runId}/events` | 实时进度的 SSE 流 |
 
-### Entity State, Timeline, and Tracks（拟议）
+### Entity State, Timeline, and Tracks（已实现 v1，2026-08-16 同步）
+
+以下路由已在 [`apps/api/src/routes/world.ts`](../../apps/api/src/routes/world.ts) 落地（创造层 v1）。写操作携带 `expected_revision` 与幂等键；修订冲突返回 HTTP 409。
 
 | 方法 | 路径 | 说明 |
 |--------|------|-------------|
-| `GET` | `/projects/{pid}/entities/{type}/{id}/revisions` | 列出不可变 Entity 修订 |
-| `GET` | `/projects/{pid}/changes` | 游标分页的已提交 ChangeEvent |
-| `GET` | `/projects/{pid}/timeline` | 以选定视图查询唯一的 Project Timeline：`presentation`、`world_overlay`，或二者 |
-| `GET` | `/projects/{pid}/timeline/tracks` | 列出语义 Scene/Character/Event/Shot 等 Track |
-| `POST` | `/projects/{pid}/timeline/items` | 将 Entity State 放置到 Presentation Time，可选绑定 World Time |
-| `PATCH` | `/projects/{pid}/timeline/items/{itemId}` | 移动或重标注显式 TimelineItem |
+| `GET` | `/projects/{pid}/resources` | 世界工作区聚合资源：世界观（`Project.worldview` Json，genre/premise/rules/notes）、stage（bootstrap/growing/mature）、`conflicts`（H9 v1 规则冲突）、stories/characters/locations/scenes/world_events/relationships/shots |
+| `GET` | `/projects/{pid}/world-events` | 列出 WorldEvent（ADR-0011） |
+| `POST` | `/projects/{pid}/world-events` | 创建 WorldEvent draft（世界时间信封、受影响实体、前置条件、后果） |
+| `PATCH` / `DELETE` | `/world-events/{id}` | 更新 / 软删除 WorldEvent |
+| `POST` | `/world-events/{id}/approve` | 批准 WorldEvent（draft → approved） |
+| `GET` | `/projects/{pid}/relationships` | 列出 Relationship（ADR-0012：独立表、多态 EntityRef、directed/undirected） |
+| `POST` | `/projects/{pid}/relationships` | 创建 Relationship |
+| `PATCH` / `DELETE` | `/relationships/{id}` | 更新 / 软删除 Relationship |
+| `GET` | `/projects/{pid}/timeline` | 查询唯一 ProjectTimeline + 全部 Track 与 Item（世界线数据源） |
+| `POST` | `/projects/{pid}/timeline/tracks` | 创建语义 Track |
+| `PATCH` / `DELETE` | `/timeline/tracks/{trackId}` | 更新 / 软删除 Track |
+| `POST` | `/timeline/tracks/{trackId}/items` | 将 Entity State 放置到 Presentation Time（`presentation_order`、可选 `start_offset_ms`/`duration_ms`） |
+| `PATCH` / `DELETE` | `/timeline/items/{itemId}` | 移动或重标注显式 TimelineItem |
 
-这些端点是设计契约，尚非当前可用路由。写操作携带 `expected_revision` 与幂等键；修订冲突返回 HTTP 409。
+仍为设计契约、尚未实现：`GET /projects/{pid}/entities/{type}/{id}/revisions`（EntityRevision 只读查询面）与 `GET /projects/{pid}/changes`（ChangeEvent 游标分页）。可变 WorldTime 绑定（H6）与高级派生 Track（H7）未落地。
 
 **One Timeline, several views.（一条时间线，多种视图。）** 一个 Project 恰好有一个 `ProjectTimeline`，以 Presentation Time 作为稳定主轴存储，可选的 World Time 绑定作为跟随层（ADR-0007）。`view` 参数选择该唯一存储的投影 — 面向产品的 *World View（世界视图）* 与 *Production View（制作视图）*（[UI-Information-Architecture.md](../product/UI-Information-Architecture.md) §5.2）是两种此类投影，而不是两条持久化时间线。工作流运行与生成任务是执行对象，永不出现在这条 Timeline 上；它们仅通过产出溯源与之关联。
 
@@ -339,7 +348,7 @@ PATCH /shots/shot_123
 | **Job Queue（任务队列）** | 异步任务管理 | 生成任务、工作流步骤、通知 |
 | **Cache（缓存）** | 频繁访问、很少变更的数据 | 已解析 Asset 数据、提示词模板、模型能力 |
 
-拟议的 State/Timeline 层在 PostgreSQL 中存储 `EntityRevision`、`ChangeEvent`、`ProjectTimeline`、`TimelineTrack` 与 `TimelineItem`。专用业务表仍是当前状态权威；修订是状态历史权威。Timeline 行需要 Presentation 放置，并可选择携带不透明的项目自定义 World Time 绑定。大型快照使用对象存储引用加规范哈希，而不是把二进制或提供商载荷复制进 PostgreSQL。
+State/Timeline 层（已落库，2026-08-04 迁移 `20260804000000_creator_layer_world`）在 PostgreSQL 中存储 `EntityRevision`、`ChangeEvent`、`ProjectSequence`、`ProjectTimeline`、`TimelineTrack`、`TimelineItem`、`WorldEvent`、`Relationship`，以及 Creator Chat 的 `CreatorChatThread` / `CreatorChatMessage`。专用业务表仍是当前状态权威；修订是状态历史权威。Timeline 行需要 Presentation 放置，并可选择携带不透明的项目自定义 World Time 绑定。大型快照使用对象存储引用加规范哈希，而不是把二进制或提供商载荷复制进 PostgreSQL。
 
 ## 5.2 主数据库 — 实体关系总览
 ```
@@ -354,12 +363,16 @@ Scene N──M Character (via scene_characters join)
 Shot N──1 Location (reference)
 Shot N──1 Style (reference)
 WorkflowRun 1──N WorkflowStep
-Entity 1──N EntityRevision (logical reference; proposed)
-Project 1──N ChangeEvent (proposed)
-Project 1──1 ProjectTimeline (proposed)
-ProjectTimeline 1──N TimelineTrack (proposed)
-TimelineTrack 1──N TimelineItem (proposed)
-TimelineItem N──1 EntityRevision (logical reference; proposed)
+Entity 1──N EntityRevision (logical reference)
+Project 1──N ChangeEvent
+Project 1──N WorldEvent
+Project 1──N Relationship
+Project 1──1 ProjectTimeline
+ProjectTimeline 1──N TimelineTrack
+TimelineTrack 1──N TimelineItem
+TimelineItem N──1 EntityRevision (logical reference; optional)
+Project 1──N CreatorChatThread
+CreatorChatThread 1──N CreatorChatMessage
 ```
 
 ## 5.3 关键模式决策
@@ -382,7 +395,7 @@ TimelineItem N──1 EntityRevision (logical reference; proposed)
 
 当前实现会在 `audit_logs` 中记录选定的 Shot 与 Workflow 动作；覆盖并不完整，且该表不是事件存储。
 
-拟议的 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md) 迁移会在与当前状态写入同一事务中引入仅追加的 `EntityRevision` 与 `ChangeEvent` 记录。迁移期间保留 `AuditLog`，可暂时双写，仅在查询、保留、权限与回填等价性验证通过后才退役。工作流尝试与队列进度仍留在专用表中。ChangeEvent 历史不是创作 Timeline：Timeline 首先导出 Presentation 顺序；除非可选的可变维度绑定另有说明，World Time 跟随其后。
+[Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md) 的仅追加 `EntityRevision` 与 `ChangeEvent` 表已落库（H2），双写助手按 per-Entity `off|shadow|dual` 开关默认关闭（H3）。迁移期间保留 `AuditLog`，仅在查询、保留、权限与回填等价性验证通过后才退役。工作流尝试与队列进度仍留在专用表中。ChangeEvent 历史不是创作 Timeline：Timeline 首先导出 Presentation 顺序；除非可选的可变维度绑定另有说明，World Time 跟随其后。
 
 ---
 
@@ -550,11 +563,11 @@ Agent 配置指定使用的 LLM 模型。LLM 适配器处理提供商特定格�
 - 幕/场景组织，支持拖放重排
 - 故事级 AI 动作（生成、扩展、改写）
 
-### AI Creative IDE（拟议）
-- 左侧 Project Explorer：层级与世界 Entity
-- 中央以 Presentation 为主的 Timeline，可选 World Time 叠加与语义 Track
-- 下方 Director Console / Agent Chat
-- 右侧 Entity Inspector：当前 State 与修订历史
+### AI Creative IDE（v1 已落地；Director Console 仍拟议）
+- 左侧 Project Explorer：层级与世界 Entity（世界观 / 角色 / 场景 / 事件，2026-08-05 起 `/projects/:id/world`）
+- 中央以 Presentation 为主的 Timeline，可选 World Time 叠加与语义 Track（世界线 v1 只读，2026-08-14 细化地点轨 / 事件刻度 / 角色·地点锚定 / 世界时间偏离标记；显式 Track/Item API 已落地）
+- 下方 Director Console / Agent Chat（槽位预留，Phase 3+，不填充）
+- 右侧 Entity Inspector：当前 State 与修订历史（2026-08-13 起可内联编辑 + 冲突列表 + 「在对话中继续」交接）
 - Fast / Balanced / Deep 使用执行策略，不改变权限或门禁
 - 完整范围与节奏：[AI Creative IDE RFC](../architecture/rfc/AI-Creative-IDE-RFC.md) 与 [Agent Effort Control RFC](../architecture/rfc/Agent-Effort-Control-RFC.md)
 
@@ -669,7 +682,7 @@ Agent 配置指定使用的 LLM 模型。LLM 适配器处理提供商特定格�
 
 | 关注点 | 做法 |
 |---------|----------|
-| 认证 | 基于 JWT，由认证服务签发 |
+| 认证 | 本地单用户模式（ADR-0013）：自动本地会话，打开即用，无登录门禁；用户表 / 登录页 / JWT 结构保留为未来云服务扩展点，数据按 `project` 隔离而非按 `user` 隔离 |
 | 授权 | 资源级：用户必须是项目成员 |
 | API 限流 | 按用户、按端点限流；生成端点更严格 |
 | 文件上传安全 | MIME 类型校验、病毒扫描、大小限制 |

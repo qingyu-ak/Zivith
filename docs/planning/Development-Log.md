@@ -12,6 +12,21 @@
 
 ---
 
+## 2026-08-16 · docs · sync docs with creator-layer v1 closure
+
+创造层 v1 已闭环（2026-08-16 合并进 `main`），但多份文档仍停留在 2026-07 状态：Technical-Architecture 的「拟议」标记、Core-Domain-Model 的「planned」标记、docs/README 状态表、Next-Tasks 当前基线与工作顺序图。本轮按 Development-Log 约定做一次全量文档同步，不改变代码。
+
+- **docs** Technical-Architecture v1.2：Entity State & Timeline 上下文转已实现（H1–H3 + 世界线 v1 + H9 v1）；API 契约替换为 `world.ts` 实际路由（resources / world-events / relationships / timeline / creator-chats）；ER 图去除 proposed 并补世界层表；安全表更新为 ADR-0013 本地单用户模式；AI Creative IDE 标注 v1 已落地
+- **docs** Core-Domain-Model v1.2：WorldEvent / Relationship 入契约（ADR-0011 / 0012）；世界层图示与术语表更新；Timeline 补世界线 v1；§10 实现状态更新
+- **docs** entity-state-timeline-track：头注状态、扩展实体表（Event 已落库 / Relationship 已晋级）、迁移目标表、V1–V3 分阶段状态
+- **docs** entity-history-write-paths：同步日期；H3 范围外改为「H3 之后已落地 / 仍属后续」
+- **docs** UI-Information-Architecture：Status 收口 Accepted v1；Track K 分期表 K1–K3 已完成
+- **docs** docs/README：状态表（Track H/I/J/K 收口）+ Next Tasks / write-paths 条目
+- **docs** Next-Tasks：Synced 2026-08-16；Priority policy 与当前基线重写；工作顺序图 ✓ 收口
+- **docs** Implementation-Plan：Status 补 2026-08-16；阶段图 Track H/I/J/K 状态；V2 复选框
+- 验证：`pnpm format:check`
+- 模块：`docs/**`
+
 ## 2026-08-16 · test(api) · align scoped-recompute mock with ensureProjectMember
 
 CI 测试挂在 `scoped-recompute.test.ts`：`ensureProjectMember` 已改为 `project.findFirst` + `projectMember.upsert`，测例仍 mock 旧的 `findUnique`，于是先抛 `undefined` 而不是 `SHOT_APPROVED`。

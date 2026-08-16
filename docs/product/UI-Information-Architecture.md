@@ -4,9 +4,9 @@
 >
 > Version: 1.1
 >
-> Status: Draft — 落地任务见 [Next Tasks](../planning/Next-Tasks.md) Track K（Track K 已随 `feat/creator-layer-first` 分支开工，2026-08-04）
+> Status: Accepted v1 — Track K 已完成（2026-08-05 起陆续落地，2026-08-13/14 细化；§8 分期表已收口）。落地任务见 [Next Tasks](../planning/Next-Tasks.md)
 >
-> Last Updated: 2026-08-04
+> Last Updated: 2026-08-16
 >
 > Related: [Product-Positioning.md](Product-Positioning.md), [Design-Philosophy.md](Design-Philosophy.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI Creative IDE RFC](../architecture/rfc/AI-Creative-IDE-RFC.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)
 
@@ -216,12 +216,12 @@ flowchart TD
 
 | 阶段 | 内容 | 依赖 / 状态 |
 |------|------|------|
-| **K1** | 项目主页重构为世界总览；`ProviderPanel` / `UsageSummaryCard` 迁至 `/settings`，`WorkflowPanel` / `GenerationQueuePanel` 迁至 `/production`；侧栏导航更名与扩充 | 进行中（`feat/creator-layer-first`） |
-| **K2** | `/world` 工作区（2026-08-04 三栏）：左 Entity Explorer / 中 Timeline + 副驾驶 agent / 右 Inspector（右上世界线属性、右下创作线属性置灰）；世界线抽象刻度、轨道化实体、关系连线 | 进行中（`feat/creator-layer-first`）；世界实体契约由 ADR-0011 / 0012 提供 |
-| **K3** | Creator Chat 为应用默认页 `/`，无登录；对话自动建项目（提案 → 确认 → 落库），产出 `draft` 实体；与 `/world` 双向切换 | 进行中（`feat/creator-layer-first`）；ADR-0013 |
+| **K1** | 项目主页重构为世界总览；`ProviderPanel` / `UsageSummaryCard` 迁至 `/settings`，`WorkflowPanel` / `GenerationQueuePanel` 迁至 `/production`；侧栏导航更名与扩充 | **已完成 2026-08-05**（「只搬不移」；浏览器回归 5 页全过） |
+| **K2** | `/world` 工作区（2026-08-04 三栏）：左 Entity Explorer / 中 Timeline + 副驾驶 agent / 右 Inspector（右上世界线属性、右下创作线属性置灰）；世界线抽象刻度、轨道化实体、关系连线 | **已完成 v1 2026-08-05**；2026-08-13 Inspector 内联编辑 + 冲突列表 + 副驾驶摘要；2026-08-14 左右栏可收起 + 地点轨 / 事件刻度 / 锚定 / 偏离标记 |
+| **K3** | Creator Chat 为应用默认页 `/`，无登录；对话自动建项目（提案 → 确认 → 落库），产出 `draft` 实体；与 `/world` 双向切换 | **已完成 2026-08-05**；2026-08-13 ADR-0013 API 闭环 + 流式 SSE；2026-08-14 可收起历史侧栏 + 浅色独立对话壳 |
 | **K4** | 创作线视图（v1 置灰标「后续」）：从世界线经 Production Skill 转换，15 秒镜头提示词 / 风格固定词 / 镜头参数 | 后续迭代 |
 
-K1 不依赖任何在途工作，且它单独就能解决「打开项目先看到模型选择器」这个最刺眼的问题。K2 / K3 是创造层优先的当前焦点，K4（创作线）属扩展层，等 Production Skill 成熟后再实装。
+K1 不依赖任何在途工作，且它单独就能解决「打开项目先看到模型选择器」这个最刺眼的问题。K1–K3 已完成，K4（创作线）属扩展层，等 Production Skill 成熟后再实装。
 
 ---
 

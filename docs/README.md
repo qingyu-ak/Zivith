@@ -4,9 +4,9 @@
 >
 > Version: 0.1.0-pre
 >
-> Status: 实现中 — Track H H3 双写开关（默认关闭）；下一步 H4 Presentation Timeline
+> Status: 实现中 — 创造层 v1 已闭环（世界线视图、WorldEvent/Relationship、Creator Chat、世界优先 UI）；下一步 H6 可变世界时间绑定 / H7 派生 Track / I3 Organization（需晋级证据）
 >
-> Last Progress Sync: 2026-07-30 · 重新定位 2026-07-31（[ADR-0008](architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）
+> Last Progress Sync: 2026-08-16 · 重新定位 2026-07-31（[ADR-0008](architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）
 
 ---
 
@@ -108,7 +108,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 | 文档 | 说明 |
 |----------|-------------|
-| [Next Tasks](planning/Next-Tasks.md) | 当前工程 backlog（Track H 进行中：H3 Done → H4 Timeline；Phase 3 稍后） |
+| [Next Tasks](planning/Next-Tasks.md) | 当前工程 backlog（创造层 v1 已闭环；H6 可变世界时间绑定 / H7 派生 Track / I3 Organization；Phase 3 稍后） |
 | [Implementation Plan](planning/Implementation-Plan.md) | 分阶段路线图与实时进度勾选 |
 | [Development Log](planning/Development-Log.md) | 逐次修改的开发记录（每次提交同步追加） |
 
@@ -122,7 +122,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 | [ADR Guide](architecture/adr-guide.md) | 何时、如何记录架构决策（[ADR index](architecture/adr/README.md)） |
 | [RFC Guide](architecture/rfc-guide.md) | 重大变更的提案、评审、风险、迁移与验收流程 |
 | [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) | Entity State 历史、Presentation-led Timeline、可变 World Time 维度、语义 Tracks，以及分阶段落地 |
-| [Entity history write paths](architecture/entity-history-write-paths.md) | H1：首批 Entity 写入面清单（尚未双写） |
+| [Entity history write paths](architecture/entity-history-write-paths.md) | 首批 Entity 写入面清单；H3 双写助手已落地（per-Entity 开关默认关）；世界线 v1 已落地 |
 | [IP World Model Repositioning RFC](architecture/rfc/IP-World-Model-Repositioning-RFC.md) | 为何从 AI 视频工作流转向 AI 可理解的 IP 系统；IP Core 能力爬坡 |
 | [AI Creative IDE RFC](architecture/rfc/AI-Creative-IDE-RFC.md) | Explorer + Presentation/World-overlay Timeline + Director Console + Entity Inspector |
 | [Looser Creative Flow RFC (thin)](architecture/rfc/Looser-Creative-Flow-RFC.md) | 部分重算 / 资产优先视觉 / 故事切分爬坡 |
@@ -170,7 +170,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 ---
 
-## 项目状态（2026-08-04）
+## 项目状态（2026-08-16）
 
 | 阶段 | 状态 | 说明 |
 |-------|--------|-------|
@@ -179,15 +179,15 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 | Phase 2 AI Agent + Mock Gen | ~95% done | A1 E2E 关卡通过；queue + SSE + recover 已落地 |
 | Phase 2.5 First Providers | ~85% done | DeepSeek + SiliconFlow；四模态模型槽位；BYOK 稍后（C7） |
 | Track G polish | **Done** | 真密钥 Story→Video E2E；Wan harden / MinIO / balance / 无自动重计费 |
-| Track H — IP Core foundation | H3 Done | Entity/State/Timeline。双写 helpers；flags 默认关闭；H4 以世界线视图形式进行中（`feat/creator-layer-first`） |
-| Track I — IP Core world entities | I1 / I2 落地 | WorldEvent（ADR-0011）与 Relationship（ADR-0012）已入 domain contract；Organization 待偿 |
-| Track J — Creator Chat | 进行中 | 世界优先的持续对话创作面，应用默认页 `/`，无登录（ADR-0010 修订 / ADR-0013） |
-| Track K — World-first UI | 进行中 | 项目主页 World Overview；`/world` 三栏工作区（2026-08-04 设计）；见 UI Information Architecture |
+| Track H — IP Core foundation | H0–H5 v1 + H9 v1 | Entity/State/Timeline。双写 helpers（flags 默认关闭）；世界线 v1 已落地（世界/制作双视图、四轨道、Shot 轨道，2026-08-05 → 08-14 细化）；H9 规则冲突检测只报告不修复；H6/H7 计划中 |
+| Track I — IP Core world entities | I1 / I2 落地 | WorldEvent（ADR-0011）与 Relationship（ADR-0012）已入 domain contract；Organization 待真实项目证据 |
+| Track J — Creator Chat | **已完成** | 世界优先的持续对话创作面，应用默认页 `/`，无登录（ADR-0010 修订 / ADR-0013）；流式 SSE + 冲突检测 + 主动引导 v1 |
+| Track K — World-first UI | **已完成 v1** | 项目主页 World Overview；`/world` 三栏工作区 + Inspector 可编辑；世界观 Chat→Studio 闭环；见 UI Information Architecture |
 | Phase 3–5 | Not started | 生成生产化，在 IP Core 之后重新排序（ADR-0008） |
 
 **仓库：** 活跃 monorepo（`apps/web`、`apps/api`、`packages/*`）。  
-**策略：** B-Line — 先 Agent 管线；真 SiliconFlow 路径已在 Track G 验证。自 2026-07-31 起 IP Core 优先；2026-08-04 创造层优先（分支 `feat/creator-layer-first`）。  
-**近期焦点：** [Next Tasks](planning/Next-Tasks.md) — 创造层优先：IP 核心数据库（WorldEvent / Relationship，ADR-0011 / 0012）+ Creator Chat 持续对话（ADR-0010 修订）+ `/world` 世界线三栏视图（Track K）。资产表 + 提供商矩阵见 [Asset Model](domain/Asset-Model.md)。后续仍待：用量冻结/限额、BYOK（C7）。
+**策略：** B-Line — 先 Agent 管线；真 SiliconFlow 路径已在 Track G 验证。自 2026-07-31 起 IP Core 优先；2026-08-04 创造层优先（分支 `feat/creator-layer-first`，2026-08-16 合并进 `main`）。  
+**近期焦点：** [Next Tasks](planning/Next-Tasks.md) — 创造层 v1 已闭环；下一步 H6 可变世界时间绑定、H7 高级派生 Track，I3 Organization 待晋级证据。资产表 + 提供商矩阵见 [Asset Model](domain/Asset-Model.md)。后续仍待：用量冻结/限额、BYOK（C7）、Phase 3 生成生产化。
 
 ---
 

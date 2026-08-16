@@ -2,7 +2,7 @@
 
 > Zivith 世界创作状态与可变时间维度体系
 >
-> Status: Accepted design — revised 2026-07-29; H1–H3 on `feat/track-h-entity-history` (2026-07-30); Presentation Timeline UI not yet
+> Status: Accepted design — revised 2026-07-29; H1–H3 landed (2026-07-30); 世界线 v1 已落地（2026-08-05 `/projects/:id/world`，2026-08-14 细化地点轨/事件刻度/锚定/偏离标记）；WorldEvent / Relationship 已落库（ADR-0011 / ADR-0012）；H6 可变 WorldTime 绑定与 H7 派生 Track 计划中
 >
 > Scope: Domain architecture, presentation-led variable time model, API contract, UI boundary, and migration plan
 >
@@ -55,10 +55,10 @@ Entity 具有稳定 ID、Project 作用域、类型和生命周期。它的 Stat
 
 | Entity | 语义 | 首版策略 |
 |---|---|---|
-| Object | 道具、交通工具、关键物体 | 映射 `Asset(type=prop)`，先补齐 API/UI |
-| Event | 世界内发生且可影响多个 Entity 的事件 | 新增独立 WorldEvent，不用 WorkflowEvent 代替 |
-| Organization | 阵营、公司、门派、家庭等持续组织 | 新增 Project 级 Entity |
-| Relationship | Entity 之间随时间变化的关系 | 先作为 Entity State 的结构化字段；需要独立查询时再提升为 Entity |
+| Object | 道具、交通工具、关键物体 | 映射 `Asset(type=prop)`，先补齐 API/UI（计划中） |
+| Event | 世界内发生且可影响多个 Entity 的事件 | **已落库**：独立 `WorldEvent`（ADR-0011）；v1 只读 + 创建 draft，不参与 Shot 依赖与继承解析 |
+| Organization | 阵营、公司、门派、家庭等持续组织 | 新增 Project 级 Entity（Track I3，需真实项目晋级证据） |
+| Relationship | Entity 之间随时间变化的关系 | **已提升为独立实体**（ADR-0012）：独立表、多态 EntityRef、directed/undirected、可选世界时间有效期；v1 无 `at=` 回溯 |
 
 `WorkflowRun`、`WorkflowStep`、`Task` 是执行对象，不是世界 Entity。Provider 和 Model 是生成基础设施与 provenance，不成为世界 Entity。
 
@@ -500,15 +500,19 @@ Task attempt、心跳和进度百分比留在执行表，不进入 ChangeEvent�
 
 ## 9. 数据库迁移目标
 
-首批新增表：
+已落地表（2026-07-30 H2 + 2026-08-04 创造层迁移 `20260804000000_creator_layer_world`）：
 
 ```text
 entity_revisions
 change_events
+project_sequences
 project_timelines
 timeline_tracks
 timeline_items
-project_sequences
+world_events
+relationships
+creator_chat_threads
+creator_chat_messages
 ```
 
 后续可选：
@@ -516,7 +520,6 @@ project_sequences
 ```text
 creative_branches
 branch_heads
-world_events
 organizations
 ```
 
@@ -539,31 +542,31 @@ Project sequence 使用原子 allocator，不用时间戳模拟顺序。
 
 ## 10. 分阶段路线
 
-### V1：Entity + State
+### V1：Entity + State（**已落地 2026-07-30**，Track H H1–H3）
 
 1. 冻结首批 Entity canonical snapshot schema；
 2. 建立 EntityRevision、ChangeEvent、Project sequence；
 3. 为现有 Entity 回填 baseline revision；
-4. shadow write 后按 Entity 开启事务双写；
-5. 提供只读 revision/change history。
+4. shadow write 后按 Entity 开启事务双写（per-Entity `off|shadow|dual`，默认关）；
+5. 提供只读 revision/change history（查询面仍待接线）。
 
 首批只接入 Character Asset、Scene、Shot 及其生成 provenance。PromptVersion、Output、AppearanceVariant、VisualRequirement 作为引用/快照接入，不在首版扩展 Object、Event、Organization。
 
-### V2：Timeline
+### V2：Timeline（**v1 已落地 2026-08-05**，世界线视图 `/projects/:id/world`；2026-08-14 细化）
 
-1. 建立只读 ProjectTimeline；
-2. 只以现有 Scene/Shot order 作为 Presentation Time 主轴；
-3. 首批只显示 Scene、Character、Shot 三种 Track；
-4. World Time 全部默认 follow，不要求用户填写；
-5. 验证只读 UI 后再开放显式 TimelineItem 移动。
+1. 建立只读 ProjectTimeline（每 Project 恰一条，缺省惰性创建）；
+2. 只以现有 Scene/Shot order 作为 Presentation Time 主轴（世界线导入场景顺序，角色按事件 `character_ids`、地点按场景 `location_id` 锚定）；
+3. 首批只显示 Scene、Character、Shot 三种 Track（v1 已扩展为 event/character/scene/location 四轨道 + 关系连线；制作视图 Shot 轨道 2026-08-13）；
+4. World Time 全部默认 follow，不要求用户填写（世界时间信封偏离可见，不改写主轴）；
+5. 显式 Track/Item CRUD API 已落地（`world.ts`），UI 首发无拖拽编辑。
 
-### V3：Track System
+### V3：Track System（**计划中**，Track H H6/H7）
 
 1. 增加 WorldTime binding 与 Project-defined TemporalDimension；
 2. 支持模糊值、范围、相对关系和平行维度；
 3. Camera、Prompt、Model 先作为只读派生 Track，Style 后续；
 4. 验证折叠、过滤、关联高亮和大型 Project 虚拟化；
-5. Object、Event、Organization 仅在真实项目需求出现后逐类增加。
+5. Object、Event、Organization 仅在真实项目需求出现后逐类增加（Event 已落地，见 §2.1）。
 
 ### V4：AI 一致性维护
 

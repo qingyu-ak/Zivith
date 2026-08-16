@@ -2,11 +2,11 @@
 
 > Zivith 核心领域模型
 >
-> Version: 1.1 (Draft)
+> Version: 1.2
 >
-> Status: Working Draft — 世界层由 [ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md) 引入
+> Status: Active — synced 2026-08-16（WorldEvent / Relationship 已入契约，ADR-0011 / ADR-0012；世界观 Json 与世界线 v1 已落地）
 >
-> Last Updated: 2026-07-31
+> Last Updated: 2026-08-16
 >
 > Related Documents:
 >
@@ -93,9 +93,9 @@ World Layer        Project (the IP)
                        ├── Character      (Asset)
                        ├── Location       (Asset)
                        ├── Object         (Asset, planned)
-                       ├── WorldEvent     (planned)
+                       ├── WorldEvent     (ADR-0011)
                        ├── Organization   (planned)
-                       └── Relationship   (Entity State field)
+                       └── Relationship   (ADR-0012)
                                 │
                             Timeline
 
@@ -119,8 +119,8 @@ Expression Layer   Story → Scene → Shot → Video
 | Character | **`Asset(type=character)`** + `EntityRevision` history | 阶段演化是 State 历史，绝不是重复角色 |
 | A place in the world | **`Location`** (`Asset(type=location)`) | ⚠️ 不是 `Scene`。见下文 |
 | A narrative unit | **`Scene`** | 地点、时间与情绪连续的叙事单元，拥有 `Shot` |
-| Event in the story world | **`WorldEvent`** (planned) | 不同于 `ChangeEvent`。见下文 |
-| Relationship between entities | Structured field on `Entity` State | 仅在有证据时才提升为独立 Entity |
+| Event in the story world | **`WorldEvent`**（已入契约，ADR-0011） | 不同于 `ChangeEvent`。见下文 |
+| Relationship between entities | **`Relationship`** 独立可查询实体（ADR-0012） | 独立表、多态 EntityRef、directed/undirected；v1 无 `at=` 回溯 |
 | World line / chronology | **`Timeline`** (Presentation-led, ADR-0007) | 无新概念；Presentation Time 是稳定轴 |
 | Skill / conversion layer | *Not a domain object* | 见第 11 节 |
 
@@ -155,23 +155,25 @@ Character: 林夜
 
 以 `Asset(type=location)` 持有。管理地点、环境、历史、相关事件与关联角色。
 
-### WorldEvent（planned）
+### WorldEvent
 
-Project 级实体，记录故事世界内的一次发生：何时发生、影响哪些实体、前置条件，以及随之而来的后果。尚未进入契约——见 [IP World Model Repositioning RFC](../architecture/rfc/IP-World-Model-Repositioning-RFC.md) 的能力爬坡；进入契约需要单独的 ADR。
+Project 级实体（已入契约，[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md)），记录故事世界内的一次发生：世界时间信封、受影响实体、前置条件，以及随之而来的后果。v1 为只读 + 创建 `draft`（批准提升），不参与 Shot 依赖与继承解析；与 `ChangeEvent`（系统审计事实）严格区分。
 
 ### Relationship
 
-记录实体之间如何相待——师徒、对立阵营、家族——以及这如何随时间变化。首发版本中，这是 `Entity` State 上的结构化字段，不是独立实体。仅当真实项目产生 State 字段无法回答的跨实体查询时才提升。
+记录实体之间如何相待——师徒、对立阵营、家族——以及这如何随时间变化。**已提升为独立可查询实体**（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）：独立表、多态 EntityRef、directed/undirected、可选世界时间有效期；查询面 `GET /projects/:pid/relationships`；v1 不做 `at=` 回溯。
 
 ### Organization（planned）
 
-阵营、公司、宗门、家族——Project 级的持久组织。状态与 `WorldEvent` 相同：planned，进入契约前需要 ADR。
+阵营、公司、宗门、家族——Project 级的持久组织。进入契约前需要 ADR，且需要真实项目的跨实体查询证据（Track I3；随创造层计划不启动）。
 
 ### Timeline
 
 把世界实体及其 State 排成顺序，使系统能回答每个 AI 协作者首先需要的问题：**这个世界此刻处于哪个阶段？**
 
 Presentation Time 是稳定的主轴。World Time 默认跟随它，仅当创作者表达闪回、近似时期、区间、时间跳跃或平行世界时才偏离。见 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md)。
+
+世界线 v1 已落地（2026-08-05，`/projects/:id/world`：非均匀刻度 + 轨道化 + 关系连线；2026-08-14 细化地点轨、事件刻度标题、角色/地点锚定与世界时间偏离标记）。可变 WorldTime binding 属 H6，尚未落地。
 
 ---
 
@@ -598,7 +600,7 @@ Approved 对象变为冻结。
 
 # 10. Entity State、Timeline 与 Tracks
 
-创作层级定义所有权，而提议的 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md) 架构定义演化与时间呈现，且不改变 `Project → Story → Scene → Shot`：
+创作层级定义所有权，而 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md) 架构定义演化与时间呈现，且不改变 `Project → Story → Scene → Shot`：
 
 - 一个 **Entity** 保持稳定身份与专用存储；
 - 一个不可变的 **State revision** 记录该 Entity 在已提交时点是什么；
@@ -611,7 +613,7 @@ Timeline 不是审计日志。已提交的系统事实是 `ChangeEvent`。World 
 
 已批准快照仍是领域级冻结记录。修订历史或 Timeline 移动，不允许后续的 Asset、Scene、Track、Branch 或 Workflow 更改改写已批准 Shot 或既有 Output 的创建时上下文。
 
-**实现状态（2026-07-29）：** 修订后的架构、ADR 与 UI/Agent RFC 已文档化；数据库表、API、投影与 UI 尚未实现。
+**实现状态（2026-08-16）：** H1–H3 已落地（`entity_revisions` / `change_events` / `project_sequences` 表 + 基线回填 + 双写助手默认关）；世界线 v1 已落地（世界/制作双视图、event/character/scene/location 四轨道、Shot 轨道、显式 Track/Item CRUD）；H9 v1 规则冲突检测只报告不修复；WorldEvent / Relationship 已落库；Creator Chat 持续对话（ADR-0010 修订 / ADR-0013）与世界观 Json（`Project.worldview`）已落地。可变 WorldTime 绑定（H6）、高级派生 Track（H7）、`Organization`（I3）与 CreativeBranch（H10）仍属后续。
 
 ---
 
