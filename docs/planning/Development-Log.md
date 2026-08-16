@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-16 · pending · chore · turn off no-unsafe-call on tests for CI
+## 2026-08-16 · `7c92921` · chore · turn off no-unsafe-call on tests for CI
 
 GitHub CI lint 在测试文件上报 247 条 `@typescript-eslint/no-unsafe-call`：隔离安装下 `expect`/`describe` 没有类型，typed lint 视为无法解析的调用。本地因 hoisted vitest 而过。
 
