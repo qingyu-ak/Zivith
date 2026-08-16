@@ -12,6 +12,13 @@
 
 ---
 
+## 2026-08-16 · pending · chore · turn off no-unsafe-call on tests for CI
+
+GitHub CI lint 在测试文件上报 247 条 `@typescript-eslint/no-unsafe-call`：隔离安装下 `expect`/`describe` 没有类型，typed lint 视为无法解析的调用。本地因 hoisted vitest 而过。
+
+- **chore** 测试文件关闭 `no-unsafe-call` / `no-unsafe-return`
+- 验证：`pnpm lint`
+
 ## 2026-08-14 · `84dd441` · fix(web) · declare vitest for web tests in CI
 
 GitHub CI 在 `chat-history.test.ts` 报 10 个错误：web 包未声明 vitest，隔离安装后测例全局的 `describe`/`it`/`expect` 无法解析。
