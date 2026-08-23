@@ -20,6 +20,7 @@
     "@zivith/database": "workspace:*",
     "@zivith/domain": "workspace:*",
     "argon2": "^0.40.3",
+    "better-sqlite3": "^13.0.3",
     "bullmq": "^5.12.10",
     "dotenv": "^17.4.2",
     "fastify": "^5.4.0",
@@ -27,6 +28,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.5.0",
     "tsx": "^4.17.0",
     "typescript": "^5.5.4",
