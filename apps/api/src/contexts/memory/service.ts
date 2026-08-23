@@ -13,6 +13,13 @@ import { extractCandidateAtoms, resolveEntityByName, linkEntities } from './extr
 import { decideAtomAction } from './cleaning.js';
 import { dedupeRetrieved, keywordRank, rrfFuse } from './retrieval.js';
 import {
+  buildBudgetedHistory,
+  compressHistory,
+  contextTokenBudget,
+  estimateTokens,
+  type ContextMessage,
+} from './context-window.js';
+import {
   coreKindForEntityType,
   MEMORY_REFINE_SYSTEM_PROMPT,
   memoryRefineSchema,
@@ -386,5 +393,54 @@ export class MemoryService {
 
   async invalidateAtom(atomId: string): Promise<boolean> {
     return this.deps.store.invalidateAtom(atomId);
+  }
+
+  /** 预算窗口：滚动摘要(system) + 最近原文；返回 evicted 供落摘要。 */
+  async getContextWindow(
+    threadId: string,
+    history: Array<{ id: string; role: string; content: string }>,
+  ): Promise<{ window: ContextMessage[]; evicted: ContextMessage[] }> {
+    const state = await this.deps.store.findContextState(threadId);
+    const summary = state?.rollingSummary ?? '';
+    const messages: ContextMessage[] = history.map((message) => ({
+      id: message.id,
+      role: message.role === 'user' || message.role === 'assistant' ? message.role : 'system',
+      content: message.content,
+    }));
+    const built = buildBudgetedHistory({
+      history: messages,
+      previousSummary: summary,
+      tokenBudget: contextTokenBudget(),
+      keepRecentMessages: 8,
+    });
+    const window = summary
+      ? [{ id: 'summary', role: 'system' as const, content: `## 此前对话摘要\n${summary}` }, ...built.window]
+      : built.window;
+    return { window, evicted: built.evicted };
+  }
+
+  /** 回合结束后压缩淘汰消息并持久化滚动摘要。 */
+  async updateThreadSummary(
+    threadId: string,
+    evicted: Array<{ id: string; role: string; content: string }>,
+  ): Promise<void> {
+    if (evicted.length === 0) return;
+    const state = await this.deps.store.findContextState(threadId);
+    const summary = await compressHistory({
+      llm: this.deps.llm,
+      llmModel: this.deps.llmModel,
+      evicted: evicted.map((message) => ({
+        id: message.id,
+        role: message.role === 'user' || message.role === 'assistant' ? message.role : 'system',
+        content: message.content,
+      })),
+      previousSummary: state?.rollingSummary ?? '',
+    });
+    await this.deps.store.upsertContextState(threadId, {
+      rollingSummary: summary,
+      summarizedUntilMessageId: evicted[evicted.length - 1]?.id ?? null,
+      summaryVersion: (state?.summaryVersion ?? 0) + 1,
+      tokenEstimate: estimateTokens(summary),
+    });
   }
 }
