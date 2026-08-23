@@ -9,8 +9,9 @@ import type { LLMAdapter } from '../../ports/llm.js';
 import type { LocalVectorStore } from '../../adapters/memory/local-vector-store.js';
 import type { WorldContext } from '../world-builder/world-context.js';
 import { computeDedupHash } from './fingerprint.js';
-import { extractCandidateAtoms, resolveEntityByName } from './extract.js';
+import { extractCandidateAtoms, resolveEntityByName, linkEntities } from './extract.js';
 import { decideAtomAction } from './cleaning.js';
+import { dedupeRetrieved, keywordRank, rrfFuse } from './retrieval.js';
 import {
   coreKindForEntityType,
   MEMORY_REFINE_SYSTEM_PROMPT,
@@ -149,13 +150,87 @@ export class MemoryService {
 
   // ---- 以下方法在后续 Task 中实现（先占位避免类型断链）----
 
-  async retrieve(_params: {
+  async retrieve(params: {
     projectId: string;
     text: string;
     world: WorldContext | null;
     topK?: number;
   }): Promise<RetrievedMemory[]> {
-    return [];
+    const topK = params.topK ?? 8;
+    const active = await this.deps.store.findActiveAtoms(params.projectId);
+    if (active.length === 0) return [];
+
+    // ① 实体链接（决定 core 加权范围）
+    const linked = linkEntities(params.text, params.world);
+    const linkedEntityIds = new Set<string>();
+    if (linked) linkedEntityIds.add(`${linked.entityType}:${linked.entityId}`);
+
+    // ② 向量召回
+    let vectorIds: string[] = [];
+    if (this.deps.vectorStore && this.deps.embedding) {
+      const { vectors } = await this.deps.embedding.embed({
+        request_id: `memory-retrieve:${Date.now()}`,
+        model: 'memory-retrieval',
+        inputs: [params.text],
+      });
+      vectorIds = this.deps.vectorStore
+        .search(params.projectId, vectors[0]!, 10)
+        .map((hit) => hit.id);
+    }
+
+    // ③ 关键词召回（bigram Jaccard）
+    const keywordIds = keywordRank(
+      tokenizeForSimilarity(params.text),
+      active.map((atom) => ({ id: atom.id, content: atom.content })),
+      10,
+    );
+
+    // RRF 融合（向量路权重略高）
+    const fused = rrfFuse(
+      [
+        { list: keywordIds, weight: 1 },
+        { list: vectorIds, weight: 1.2 },
+      ],
+      topK,
+    );
+    const byId = new Map(active.map((atom) => [atom.id, atom]));
+    const results: RetrievedMemory[] = [];
+    for (const id of fused) {
+      const atom = byId.get(id);
+      if (!atom) continue;
+      if (atom.entityType && atom.entityId) linkedEntityIds.add(`${atom.entityType}:${atom.entityId}`);
+      results.push({
+        source: 'atom',
+        id: atom.id,
+        content: atom.content,
+        entity_type: atom.entityType,
+        entity_id: atom.entityId,
+        fact_type: atom.factType,
+      });
+    }
+
+    // L2 核心加权：命中实体的 core 内容追加（溯源 sourceAtomIds）
+    const cores = await this.deps.store.listCores(params.projectId);
+    const linkedAtomIds = new Set(
+      active
+        .filter((atom) => atom.entityType && atom.entityId && linkedEntityIds.has(`${atom.entityType}:${atom.entityId}`))
+        .map((atom) => atom.id),
+    );
+    for (const core of cores) {
+      const linkedCore =
+        core.sourceAtomIds.some((id) => linkedAtomIds.has(id)) ||
+        (linked && core.topic === linked.name);
+      if (!linkedCore) continue;
+      results.push({
+        source: 'core',
+        id: core.id,
+        content: core.content,
+        entity_type: null,
+        entity_id: null,
+        fact_type: null,
+      });
+    }
+    return dedupeRetrieved(results).slice(0, topK + 4);
   }
 
   async processRefine(messageId: string): Promise<void> {
