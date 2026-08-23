@@ -757,3 +757,71 @@ model CreatorChatMessage {
   @@index([threadId, createdAt])
   @@map("creator_chat_messages")
 }
+
+// Track M1 — 分层记忆（docs/planning/Memory-Novel-Roleplay-Design.md §3.2）
+// L1 原子记忆：从对话提炼的最小事实单元，PG 为唯一事实源。
+model MemoryAtom {
+  id              String    @id @default(uuid())
+  projectId       String    @map("project_id")
+  threadId        String?   @map("thread_id")
+  sourceMessageId String?   @map("source_message_id")
+  entityType      String?   @map("entity_type")
+  entityId        String?   @map("entity_id")
+  factType        String    @map("fact_type")
+  content         String
+  confidence      Float     @default(0.7)
+  dedupHash       String    @map("dedup_hash")
+  memoryOp        String    @default("ADD") @map("memory_op")
+  status          String    @default("active")
+  supersededById  String?   @map("superseded_by_id")
+  validFrom       DateTime  @default(now()) @map("valid_from")
+  validTo         DateTime? @map("valid_to")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([projectId, entityType, entityId])
+  @@index([projectId, status, validTo])
+  @@index([dedupHash])
+  @@map("memory_atoms")
+}
+
+// L2 核心记忆：分主题凝练知识块（persona/scenario/world_rule/event_chain）。
+model MemoryCore {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  kind          String
+  topic         String
+  content       String
+  version       Int      @default(1)
+  sourceAtomIds String[] @default([]) @map("source_atom_ids")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId, kind, topic])
+  @@map("memory_cores")
+}
+
+// L0 管线状态：每条消息的记忆处理进度（断点续传单位）。
+model MemoryPipelineState {
+  messageId      String    @id @map("message_id")
+  level1At       DateTime? @map("level_1_at")
+  extractionMode String    @default("rule") @map("extraction_mode")
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("memory_pipeline_states")
+}
+
+// 线程级上下文状态：滚动摘要 + 压缩进度（Creator Chat 与未来扮演线程共用）。
+model ThreadContextState {
+  threadId                 String   @id @map("thread_id")
+  rollingSummary           String   @default("") @map("rolling_summary")
+  summarizedUntilMessageId String?  @map("summarized_until_message_id")
+  summaryVersion           Int      @default(1) @map("summary_version")
+  tokenEstimate            Int      @default(0) @map("token_estimate")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@map("thread_context_states")
+}
