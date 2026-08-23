@@ -34,7 +34,10 @@ import { registerWorkflowEventRoutes } from './routes/workflow-events.js';
 import { registerWorkflowRoutes } from './routes/workflows.js';
 import { registerWorldRoutes } from './routes/world.js';
 import { registerMemoryRoutes } from './routes/memory.js';
+import { registerNovelImportRoutes } from './routes/novel-imports.js';
+import { registerRoleplayRoutes } from './routes/roleplay.js';
 import type { MemoryService } from './contexts/memory/service.js';
+import type { NovelImportService } from './contexts/novel-import/service.js';
 
 export interface BuildAppOptions {
   db?: PrismaClient;
@@ -44,6 +47,7 @@ export interface BuildAppOptions {
   generationService?: GenerationService;
   queueWork?: QueueWorkBridge;
   memory?: MemoryService;
+  novelImport?: NovelImportService;
 }
 
 function toSnakeCase(value: unknown): unknown {
@@ -175,6 +179,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
             memoryDone();
           },
           { prefix: '/memory' },
+        );
+      }
+      api.register(
+        (roleplayApi, _roleplayOptions, roleplayDone) => {
+          registerRoleplayRoutes(roleplayApi, db, worldProviders.llm, worldProviders.llmModel, options.memory);
+          roleplayDone();
+        },
+        { prefix: '/roleplay' },
+      );
+      if (options.novelImport) {
+        api.register(
+          (novelApi, _novelOptions, novelDone) => {
+            registerNovelImportRoutes(novelApi, options.novelImport!);
+            novelDone();
+          },
+          { prefix: '/novel-imports' },
         );
       }
       done();

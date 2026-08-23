@@ -13,6 +13,7 @@ import { MockEmbeddingAdapter } from './adapters/memory/mock-embedding.js';
 import { MemoryService } from './contexts/memory/service.js';
 import { PrismaMemoryStore } from './contexts/memory/prisma-store.js';
 import { createMemoryQueueRuntime } from './contexts/memory/queue-runtime.js';
+import { NovelImportService } from './contexts/novel-import/service.js';
 
 config({ path: resolve(process.cwd(), '../../.env') });
 
@@ -43,6 +44,7 @@ const app = await buildApp({
   generationService,
   queueWork: queueRuntime.workBridge,
   memory: memoryService,
+  novelImport: new NovelImportService(prisma),
 });
 
 const recovered = await new WorkflowOrchestrator(prisma).recoverInterruptedRuns();
