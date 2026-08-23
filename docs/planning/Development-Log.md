@@ -12,6 +12,17 @@
 
 ---
 
+## 2026-08-23 · pending · feat(api,web,domain,db) · M1 记忆地基 + 上下文管理器落地
+
+分层记忆（L0 原文 / L1 原子 / L2 核心）+ 双路径管线（同步规则归档 + 队列异步深加工）+ 三路混合检索（实体链接 / 向量 / bigram 关键词 RRF 融合）+ ThreadContextState 滚动摘要压缩（[Memory-Novel-Roleplay-Design.md](Memory-Novel-Roleplay-Design.md)，ADR-0014）。mock-first：无任何密钥时规则提炼 + bigram 检索全链路可用。
+
+- **feat(domain)** MemoryIngestOps / RetrievedMemory 契约；归一化指纹；规则事实分类与实体链接
+- **feat(db)** MemoryAtom / MemoryCore / MemoryPipelineState / ThreadContextState 四张表 + 迁移
+- **feat(api)** MemoryService（ingest / processRefine / retrieve / getContextWindow）；本地 better-sqlite3 向量库（每项目一个文件，可重建）；Creator Chat SSE 新增 `memory` 事件；`/api/v1/memory/*` 免登录 API；记忆队列运行时（BullMQ / InMemory 双实现）
+- **feat(web)** 对话流记忆反馈行（「记忆：归档 N · 重复 N…」）；世界工作区右栏记忆面板（L1 原子列表 / 删除 / 重建向量）
+- 验证：api `vitest` 34 文件 164 用例全绿；api/web `tsc --noEmit`
+- 模块：`packages/domain`、`packages/database`、`apps/api/src/{contexts/memory,adapters/memory,routes}`、`apps/web/{lib/api.ts,components/{creator-chat,world}}`、`docs/**`
+
 ## 2026-08-16 · pending · feat(api,web) · H7 Style derived track
 
 Style 轨从 Shot lighting/color/style/mood 投影，插入机位与提示词之间，仍不落库。

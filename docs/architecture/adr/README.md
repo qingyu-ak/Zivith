@@ -19,6 +19,7 @@
 | [0011](0011-world-event-is-a-domain-creative-entity.md) | WorldEvent 是创作层领域实体 | 已接受 | 2026-08-04 |
 | [0012](0012-relationship-is-an-independent-queryable-entity.md) | Relationship 是独立可查询实体 | 已接受 | 2026-08-04 |
 | [0013](0013-local-single-user-mode-no-login.md) | 本地单用户模式：无登录 | 已接受 | 2026-08-04 |
+| [0014](0014-layered-memory-system.md) | 分层记忆系统 | 已接受 | 2026-08-23 |
 
 ADR-0001 至 0005 自根目录 `ARCHITECTURE-DECISIONS.md` 迁入，早于
 [架构宪章](../architecture-principles.md)；新 ADR 必须遵循指南中的完整模板。
