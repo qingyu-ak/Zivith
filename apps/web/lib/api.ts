@@ -159,8 +159,10 @@ export async function sendCreatorChatTurn(
   const payload = (await response.json()) as {
     user_message?: unknown;
     assistant_message?: unknown;
+    memory_ops?: unknown;
   };
   if (payload.user_message) onEvent('user', { user_message: payload.user_message });
+  if (payload.memory_ops) onEvent('memory', { ops: payload.memory_ops });
   const assistant = payload.assistant_message;
   if (assistant && typeof assistant === 'object') {
     const reply =

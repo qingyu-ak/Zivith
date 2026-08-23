@@ -89,6 +89,7 @@ export function ChatPanel() {
   const [loading, setLoading] = useState(Boolean(threadId));
   const [sending, setSending] = useState(false);
   const [streamText, setStreamText] = useState('');
+  const [memoryNote, setMemoryNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [focus, setFocus] = useState<ChatFocus | null>(null);
@@ -174,6 +175,7 @@ export function ChatPanel() {
       setError('');
       setSending(true);
       setStreamText('');
+      setMemoryNote('');
       let acceptedUser = false;
       try {
         let sawError = '';
@@ -188,6 +190,11 @@ export function ChatPanel() {
                 acceptedUser = true;
                 setMessages((current) => [...current, userMessage]);
               }
+              return;
+            }
+            if (event === 'memory') {
+              const ops = asRecord(record?.ops);
+              if (ops) setMemoryNote(formatMemoryOps(ops));
               return;
             }
             if (event === 'delta' && typeof record?.text === 'string') {
@@ -467,6 +474,9 @@ export function ChatPanel() {
                   </p>
                 )}
                 {sending && !streamText && <p className="text-sm text-zinc-400">正在思考…</p>}
+                {memoryNote && !sending && (
+                  <p className="px-1 pb-1 text-xs text-zinc-400">{memoryNote}</p>
+                )}
                 <div ref={endRef} />
               </div>
             </div>
@@ -524,4 +534,16 @@ export function ChatPanel() {
       </div>
     </div>
   );
+}
+
+function formatMemoryOps(ops: Record<string, unknown>): string {
+  const added = Number(ops.added ?? 0);
+  const updated = Number(ops.updated ?? 0);
+  const noop = Number(ops.noop ?? 0);
+  const conflicts = Array.isArray(ops.conflicts) ? ops.conflicts.length : 0;
+  const parts = [`归档 ${added}`];
+  if (updated > 0) parts.push(`合并 ${updated}`);
+  if (noop > 0) parts.push(`重复 ${noop}`);
+  if (conflicts > 0) parts.push(`冲突 ${conflicts}（待确认）`);
+  return `记忆：${parts.join(' · ')}`;
 }
