@@ -7,6 +7,12 @@ import { GenerationService } from './contexts/generation/service.js';
 import { WorkflowOrchestrator } from './contexts/workflow/orchestrator.js';
 import { createProviderBundle } from './providers/registry.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './routes/providers.js';
+import { instrumentProviderBundle } from './contexts/usage/instrument.js';
+import { LocalVectorStore } from './adapters/memory/local-vector-store.js';
+import { MockEmbeddingAdapter } from './adapters/memory/mock-embedding.js';
+import { MemoryService } from './contexts/memory/service.js';
+import { PrismaMemoryStore } from './contexts/memory/prisma-store.js';
+import { createMemoryQueueRuntime } from './contexts/memory/queue-runtime.js';
 
 config({ path: resolve(process.cwd(), '../../.env') });
 
@@ -17,10 +23,26 @@ const generationService = new GenerationService(
   () => createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()).video,
 );
 const queueRuntime = createGenerationQueueRuntime(generationService);
+const memoryVectorStore = new LocalVectorStore(
+  process.env.MEMORY_VECTOR_DIR ?? 'data/memory-vectors',
+);
+const memoryProviders = instrumentProviderBundle(
+  prisma,
+  createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
+);
+const memoryService = new MemoryService({
+  store: new PrismaMemoryStore(prisma),
+  vectorStore: memoryVectorStore,
+  embedding: new MockEmbeddingAdapter(),
+  llm: memoryProviders.llm,
+  llmModel: memoryProviders.llmModel,
+});
+const memoryRuntime = createMemoryQueueRuntime(memoryService);
 const app = await buildApp({
   logger: true,
   generationService,
   queueWork: queueRuntime.workBridge,
+  memory: memoryService,
 });
 
 const recovered = await new WorkflowOrchestrator(prisma).recoverInterruptedRuns();
@@ -31,6 +53,7 @@ const providers = createProviderBundle(getRuntimeProviderOverride(), getRuntimeM
 app.log.info(
   {
     queueMode: queueRuntime.mode,
+    memoryQueueMode: memoryRuntime.mode,
     providers: providers.selection,
     models: {
       llm: providers.llmModel,
@@ -49,12 +72,16 @@ try {
 } catch (error) {
   app.log.error(error);
   await queueRuntime.close();
+  await memoryRuntime.close();
+  memoryVectorStore.close();
   process.exit(1);
 }
 
 const shutdown = async () => {
   await app.close();
   await queueRuntime.close();
+  await memoryRuntime.close();
+  memoryVectorStore.close();
   process.exit(0);
 };
 process.on('SIGINT', () => void shutdown());

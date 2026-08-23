@@ -395,6 +395,11 @@ export class MemoryService {
     return this.deps.store.invalidateAtom(atomId);
   }
 
+  /** 记忆路由 /search 用：构造项目世界上下文（实体链接召回需要）。 */
+  async projectWorld(projectId: string): Promise<WorldContext | null> {
+    return this.deps.store.buildWorldContext(projectId);
+  }
+
   /** 预算窗口：滚动摘要(system) + 最近原文；返回 evicted 供落摘要。 */
   async getContextWindow(
     threadId: string,

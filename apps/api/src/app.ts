@@ -33,6 +33,8 @@ import { registerRecomputeRoutes } from './routes/recompute.js';
 import { registerWorkflowEventRoutes } from './routes/workflow-events.js';
 import { registerWorkflowRoutes } from './routes/workflows.js';
 import { registerWorldRoutes } from './routes/world.js';
+import { registerMemoryRoutes } from './routes/memory.js';
+import type { MemoryService } from './contexts/memory/service.js';
 
 export interface BuildAppOptions {
   db?: PrismaClient;
@@ -41,6 +43,7 @@ export interface BuildAppOptions {
   logger?: boolean;
   generationService?: GenerationService;
   queueWork?: QueueWorkBridge;
+  memory?: MemoryService;
 }
 
 function toSnakeCase(value: unknown): unknown {
@@ -154,11 +157,26 @@ export async function buildApp(options: BuildAppOptions = {}) {
       );
       api.register(
         (worldApi, _worldOptions, worldDone) => {
-          registerWorldRoutes(worldApi, db, worldProviders.llm, worldProviders.llmModel);
+          registerWorldRoutes(
+            worldApi,
+            db,
+            worldProviders.llm,
+            worldProviders.llmModel,
+            options.memory,
+          );
           worldDone();
         },
         { prefix: '/world' },
       );
+      if (options.memory) {
+        api.register(
+          (memoryApi, _memoryOptions, memoryDone) => {
+            registerMemoryRoutes(memoryApi, options.memory!);
+            memoryDone();
+          },
+          { prefix: '/memory' },
+        );
+      }
       done();
     },
     { prefix: '/api/v1' },
