@@ -13,6 +13,7 @@ import { WorldTimeline } from './world-timeline';
 import { WorldTimeBar } from './world-time-bar';
 import { InspectorPanel } from './inspector-panel';
 import { CoPilotPanel } from './co-pilot-panel';
+import { MemoryPanel } from './memory-panel';
 import { ContinueInChatButton } from './continue-in-chat';
 
 export function WorldWorkspace() {
@@ -310,6 +311,8 @@ export function WorldWorkspace() {
           </div>
           {/* 副驾驶 Agent 面板（v1 只读世界状态摘要，仅世界视图） */}
           {view === 'world' && <CoPilotPanel resources={resources} onSelect={setSelection} />}
+          {/* M1 记忆面板：L1 原子列表 + 重建向量 */}
+          <MemoryPanel projectId={projectId} />
         </section>
 
         {/* 右栏：Inspector */}
