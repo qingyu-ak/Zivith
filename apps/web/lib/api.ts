@@ -143,10 +143,31 @@ export async function sendCreatorChatTurn(
   onEvent: (event: string, data: unknown) => void,
   focus?: { kind: string; id: string; name: string } | null,
 ): Promise<void> {
-  const response = await request(`/world/creator-chats/${threadId}/messages`, {
+  await postChatTurn(`/world/creator-chats/${threadId}/messages`, {
+    role: 'user',
+    content,
+    ...(focus ? { focus } : {}),
+  }, onEvent);
+}
+
+/** POST a roleplay turn (same SSE protocol as Creator Chat). */
+export async function sendRoleplayTurn(
+  roleplayThreadId: string,
+  content: string,
+  onEvent: (event: string, data: unknown) => void,
+): Promise<void> {
+  await postChatTurn(`/roleplay/threads/${roleplayThreadId}/messages`, { content }, onEvent);
+}
+
+async function postChatTurn(
+  path: string,
+  body: Record<string, unknown>,
+  onEvent: (event: string, data: unknown) => void,
+): Promise<void> {
+  const response = await request(path, {
     method: 'POST',
     headers: { Accept: 'text/event-stream' },
-    body: { role: 'user', content, ...(focus ? { focus } : {}) },
+    body,
   });
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('text/event-stream')) {
@@ -174,6 +195,38 @@ export async function sendCreatorChatTurn(
     }
     onEvent('done', { assistant_message: assistant });
   }
+}
+
+export interface RoleplayThreadDTO {
+  id: string;
+  thread_id: string;
+  character_asset_id: string;
+  character_name: string;
+  anchored_world_event_id: string | null;
+  anchor_title: string | null;
+  updated_at: string;
+}
+
+export async function createRoleplayThread(
+  projectId: string,
+  characterAssetId: string,
+  anchoredWorldEventId?: string | null,
+): Promise<{ id: string; thread_id: string; reused: boolean }> {
+  return api<{ id: string; thread_id: string; reused: boolean }>('/roleplay/threads', {
+    method: 'POST',
+    body: {
+      project_id: projectId,
+      character_asset_id: characterAssetId,
+      ...(anchoredWorldEventId ? { anchored_world_event_id: anchoredWorldEventId } : {}),
+    },
+  });
+}
+
+export async function listRoleplayThreads(projectId: string): Promise<RoleplayThreadDTO[]> {
+  const value = await api<{ items?: RoleplayThreadDTO[] } | RoleplayThreadDTO[]>(
+    `/roleplay/threads?project_id=${encodeURIComponent(projectId)}`,
+  );
+  return Array.isArray(value) ? value : (value.items ?? []);
 }
 
 async function request(

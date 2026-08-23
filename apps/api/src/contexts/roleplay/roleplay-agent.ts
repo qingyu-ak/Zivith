@@ -42,12 +42,20 @@ export async function buildCharacterState(
   });
 
   // 时间锚定：只取锚点之前且角色亲历的事件（认知边界，防剧透）。
+  // 无锚点（或锚点缺序号）= 全书读完：不加 presentationOrder 过滤，避免大哨兵值溢出 INT4。
   const anchor = anchoredWorldEventId
     ? await db.worldEvent.findFirst({ where: { id: anchoredWorldEventId, projectId, deletedAt: null } })
     : null;
-  const anchorOrder = anchor?.presentationOrder ?? Number.MAX_SAFE_INTEGER;
+  const anchorOrder =
+    anchor?.presentationOrder !== null && anchor?.presentationOrder !== undefined
+      ? anchor.presentationOrder
+      : null;
   const events = await db.worldEvent.findMany({
-    where: { projectId, deletedAt: null, presentationOrder: { lte: anchorOrder } },
+    where: {
+      projectId,
+      deletedAt: null,
+      ...(anchorOrder !== null ? { presentationOrder: { lte: anchorOrder } } : {}),
+    },
     orderBy: { presentationOrder: 'asc' },
     take: 200,
   });

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type {
   AssetDTO,
@@ -13,7 +14,7 @@ import type {
   WorldResourcesDTO,
   WorldSelection,
 } from '@/lib/types';
-import { api, errorMessage } from '@/lib/api';
+import { api, createRoleplayThread, errorMessage } from '@/lib/api';
 import { focusFromSelection } from '@/lib/creator-chat-nav';
 import {
   canonicalizeWorldTimeMode,
@@ -575,6 +576,16 @@ export function InspectorPanel({
           selection.kind !== 'prompt' &&
           selection.kind !== 'model' ? (
             <div className="flex items-center gap-2">
+              {selection.kind === 'character' && (
+                <RoleplayLaunchButton
+                  projectId={resources.project.id}
+                  characterAssetId={selection.id}
+                  characterName={
+                    resources.entities.characters.find((character) => character.id === selection.id)?.name ?? '该角色'
+                  }
+                  worldEvents={resources.entities.world_events}
+                />
+              )}
               <ContinueInChatButton
                 projectId={resources.project.id}
                 focus={focusFromSelection(resources, selection)}
@@ -651,6 +662,65 @@ export function InspectorPanel({
           </p>
         </div>
       </section>
+    </div>
+  );
+}
+
+/** M3 角色扮演启动：选时间锚点（WorldEvent 或全书读完）→ 创建扮演线程并跳转聊天页。 */
+function RoleplayLaunchButton({
+  projectId,
+  characterAssetId,
+  characterName,
+  worldEvents,
+}: {
+  projectId: string;
+  characterAssetId: string;
+  characterName: string;
+  worldEvents: WorldEventDTO[];
+}) {
+  const router = useRouter();
+  const [anchorId, setAnchorId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function launch() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const created = await createRoleplayThread(projectId, characterAssetId, anchorId || null);
+      router.push(`/creator-chats/${created.thread_id}`);
+    } catch (reason) {
+      setError(errorMessage(reason));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        className="max-w-36 rounded-md border border-line bg-white px-1.5 py-0.5 text-xs text-zinc-600"
+        value={anchorId}
+        disabled={busy}
+        onChange={(event) => setAnchorId(event.target.value)}
+        title="时间锚点：角色只知道该时刻之前亲历的事"
+      >
+        <option value="">全书读完</option>
+        {worldEvents.map((event) => (
+          <option key={event.id} value={event.id}>
+            {event.title}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => void launch()}
+        disabled={busy}
+        className="whitespace-nowrap rounded-md border border-[#4d6bfe]/40 bg-[#eef2ff] px-2 py-0.5 text-xs text-[#1e3a8a] transition hover:border-[#4d6bfe] disabled:opacity-50"
+      >
+        {busy ? '创建中…' : `与${characterName}对话`}
+      </button>
+      {error && <span className="text-[10px] text-red-500">{error}</span>}
     </div>
   );
 }

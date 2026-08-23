@@ -14,6 +14,7 @@ import { WorldTimeBar } from './world-time-bar';
 import { InspectorPanel } from './inspector-panel';
 import { CoPilotPanel } from './co-pilot-panel';
 import { MemoryPanel } from './memory-panel';
+import { NovelImportPanel } from './novel-import-panel';
 import { ContinueInChatButton } from './continue-in-chat';
 
 export function WorldWorkspace() {
@@ -313,6 +314,8 @@ export function WorldWorkspace() {
           {view === 'world' && <CoPilotPanel resources={resources} onSelect={setSelection} />}
           {/* M1 记忆面板：L1 原子列表 + 重建向量 */}
           <MemoryPanel projectId={projectId} />
+          {/* M2 小说导入：上传 → 提炼世界层 + 角色卡 */}
+          <NovelImportPanel projectId={projectId} onImported={() => void load()} />
         </section>
 
         {/* 右栏：Inspector */}

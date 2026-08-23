@@ -186,7 +186,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
           registerRoleplayRoutes(roleplayApi, db, worldProviders.llm, worldProviders.llmModel, options.memory);
           roleplayDone();
         },
-        { prefix: '/roleplay' },
       );
       if (options.novelImport) {
         api.register(
@@ -194,7 +193,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
             registerNovelImportRoutes(novelApi, options.novelImport!);
             novelDone();
           },
-          { prefix: '/novel-imports' },
         );
       }
       done();

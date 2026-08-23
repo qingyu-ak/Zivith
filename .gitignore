@@ -21,6 +21,7 @@ dist/
 
 # Local data and logs
 .data/
+apps/api/data/
 *.log
 npm-debug.log*
 pnpm-debug.log*

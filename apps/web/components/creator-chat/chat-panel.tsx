@@ -5,7 +5,16 @@ import type { FormEvent, KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Spinner } from '@zivith/ui';
-import { api, errorMessage, sendCreatorChatTurn, unwrapList } from '@/lib/api';
+import {
+  api,
+  createRoleplayThread,
+  errorMessage,
+  listRoleplayThreads,
+  sendCreatorChatTurn,
+  sendRoleplayTurn,
+  unwrapList,
+  type RoleplayThreadDTO,
+} from '@/lib/api';
 import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
 import {
   CHAT_FOCUS_LABEL,
@@ -93,6 +102,9 @@ export function ChatPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [focus, setFocus] = useState<ChatFocus | null>(null);
+  const [roleplayThreads, setRoleplayThreads] = useState<RoleplayThreadDTO[]>([]);
+  const [characters, setCharacters] = useState<Array<{ id: string; name: string }>>([]);
+  const [switching, setSwitching] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const pendingConsumed = useRef(false);
   const focusHandoff = useRef<ChatFocus | null>(null);
@@ -142,6 +154,45 @@ export function ChatPanel() {
     loadThreads();
   }, [loadThreads, threadId]);
 
+  // Agent 切换数据：项目角色列表 + 已有扮演线程（线程加载后按 project_id 拉取）。
+  useEffect(() => {
+    const projectId = thread?.project_id;
+    if (!projectId) {
+      setRoleplayThreads([]);
+      setCharacters([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [roleplay, resources] = await Promise.all([
+          listRoleplayThreads(projectId),
+          api<{ entities?: { characters?: Array<{ id?: unknown; name?: unknown }> } }>(
+            `/world/projects/${projectId}/resources`,
+          ),
+        ]);
+        if (cancelled) return;
+        setRoleplayThreads(roleplay);
+        setCharacters(
+          (resources.entities?.characters ?? [])
+            .filter(
+              (character): character is { id: string; name: string } =>
+                typeof character.id === 'string' && typeof character.name === 'string',
+            )
+            .map((character) => ({ id: character.id, name: character.name })),
+        );
+      } catch {
+        if (!cancelled) {
+          setRoleplayThreads([]);
+          setCharacters([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [thread?.project_id]);
+
   useEffect(() => {
     pendingConsumed.current = false;
     focusHandoff.current = null;
@@ -167,6 +218,9 @@ export function ChatPanel() {
   }, [messages.length, streamText, sending]);
 
   const sendingRef = useRef(false);
+  const activeRoleplay = roleplayThreads.find((item) => item.thread_id === threadId) ?? null;
+  const activeRoleplayRef = useRef<RoleplayThreadDTO | null>(null);
+  activeRoleplayRef.current = activeRoleplay;
 
   const sendContent = useCallback(
     async (content: string) => {
@@ -179,44 +233,49 @@ export function ChatPanel() {
       let acceptedUser = false;
       try {
         let sawError = '';
-        await sendCreatorChatTurn(
-          threadId,
-          content,
-          (event, data) => {
-            const record = asRecord(data);
-            if (event === 'user') {
-              const userMessage = asChatMessage(record?.user_message);
-              if (userMessage) {
-                acceptedUser = true;
-                setMessages((current) => [...current, userMessage]);
-              }
-              return;
+        const onEvent = (event: string, data: unknown) => {
+          const record = asRecord(data);
+          if (event === 'user') {
+            const userMessage = asChatMessage(record?.user_message);
+            if (userMessage) {
+              acceptedUser = true;
+              setMessages((current) => [...current, userMessage]);
             }
-            if (event === 'memory') {
-              const ops = asRecord(record?.ops);
-              if (ops) setMemoryNote(formatMemoryOps(ops));
-              return;
+            return;
+          }
+          if (event === 'memory') {
+            const ops = asRecord(record?.ops);
+            if (ops) setMemoryNote(formatMemoryOps(ops));
+            return;
+          }
+          if (event === 'delta' && typeof record?.text === 'string') {
+            const chunk = record.text;
+            setStreamText((current) => current + chunk);
+            return;
+          }
+          if (event === 'done') {
+            const assistantMessage = asChatMessage(record?.assistant_message);
+            if (assistantMessage) {
+              setMessages((current) => [...current, assistantMessage]);
             }
-            if (event === 'delta' && typeof record?.text === 'string') {
-              const chunk = record.text;
-              setStreamText((current) => current + chunk);
-              return;
-            }
-            if (event === 'done') {
-              const assistantMessage = asChatMessage(record?.assistant_message);
-              if (assistantMessage) {
-                setMessages((current) => [...current, assistantMessage]);
-              }
-              setStreamText('');
-              return;
-            }
-            if (event === 'error') {
-              sawError =
-                typeof record?.message === 'string' ? record.message : '世界构建者回复失败';
-            }
-          },
-          focusRef.current,
-        );
+            setStreamText('');
+            return;
+          }
+          if (event === 'error') {
+            sawError =
+              typeof record?.message === 'string'
+                ? record.message
+                : activeRoleplayRef.current
+                  ? '角色回复失败'
+                  : '世界构建者回复失败';
+          }
+        };
+        const roleplay = activeRoleplayRef.current;
+        if (roleplay) {
+          await sendRoleplayTurn(roleplay.id, content, onEvent);
+        } else {
+          await sendCreatorChatTurn(threadId, content, onEvent, focusRef.current);
+        }
         if (sawError) throw new Error(sawError);
         setThreads((current) => {
           const target = current.find((item) => item.id === threadId);
@@ -237,6 +296,51 @@ export function ChatPanel() {
     },
     [threadId],
   );
+
+  /** 切换对话对象：世界构建者 ↔ 任意角色（自动复用或创建扮演线程）。 */
+  async function switchAgent(value: string) {
+    const projectId = thread?.project_id;
+    if (!projectId || switching) return;
+    if (value === 'world') {
+      const roleplayThreadIds = new Set(roleplayThreads.map((item) => item.thread_id));
+      const existing = threads.find(
+        (item) => item.project_id === projectId && !roleplayThreadIds.has(item.id),
+      );
+      if (existing) {
+        router.push(`/creator-chats/${existing.id}`);
+        return;
+      }
+      setSwitching(true);
+      try {
+        const created = await api<unknown>('/world/creator-chats', {
+          method: 'POST',
+          body: { project_id: projectId, title: null },
+        });
+        const createdThread = normalizeThread(created);
+        if (!createdThread?.id) throw new Error('无法创建对话');
+        router.push(`/creator-chats/${createdThread.id}`);
+      } catch (reason) {
+        setError(errorMessage(reason));
+      } finally {
+        setSwitching(false);
+      }
+      return;
+    }
+    setSwitching(true);
+    try {
+      const existing = roleplayThreads.find((item) => item.character_asset_id === value);
+      if (existing) {
+        router.push(`/creator-chats/${existing.thread_id}`);
+        return;
+      }
+      const created = await createRoleplayThread(projectId, value);
+      router.push(`/creator-chats/${created.thread_id}`);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   useEffect(() => {
     if (!threadId || loading || pendingConsumed.current) return;
@@ -356,9 +460,36 @@ export function ChatPanel() {
             </>
           )}
           {threadId ? (
-            <h1 className="min-w-0 flex-1 truncate text-[15px] font-medium text-zinc-800">
-              {thread ? threadDisplayTitle(thread) : '新世界对话'}
-            </h1>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <h1 className="min-w-0 truncate text-[15px] font-medium text-zinc-800">
+                {activeRoleplay
+                  ? `与「${activeRoleplay.character_name}」对话`
+                  : thread
+                    ? threadDisplayTitle(thread)
+                    : '新世界对话'}
+              </h1>
+              {thread?.project_id && characters.length > 0 && (
+                <label className="relative shrink-0">
+                  <span className="sr-only">切换对话对象</span>
+                  <select
+                    className="appearance-none rounded-full border border-zinc-200 bg-white py-1 pl-3 pr-7 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900"
+                    value={activeRoleplay ? activeRoleplay.character_asset_id : 'world'}
+                    disabled={switching || sending}
+                    onChange={(event) => void switchAgent(event.target.value)}
+                  >
+                    <option value="world">世界构建者</option>
+                    {characters.map((character) => (
+                      <option key={character.id} value={character.id}>
+                        扮演：{character.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-[9px] text-zinc-400">
+                    ▼
+                  </span>
+                </label>
+              )}
+            </div>
           ) : (
             <span className="flex-1" />
           )}
@@ -398,12 +529,29 @@ export function ChatPanel() {
               className={`min-h-0 flex-1 overflow-y-auto px-4 lg:px-6 ${empty ? 'flex items-center' : 'py-6'}`}
             >
               <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+                {activeRoleplay && (
+                  <p className="mx-auto rounded-full bg-[#eef2ff] px-3 py-1 text-xs text-[#1e3a8a]">
+                    正在扮演「{activeRoleplay.character_name}」· 时间锚点：
+                    {activeRoleplay.anchor_title ?? '全书读完'}
+                  </p>
+                )}
                 {loading && (
                   <div className="grid min-h-[40vh] place-items-center">
                     <Spinner label="正在加载对话…" />
                   </div>
                 )}
-                {empty && (
+                {empty && activeRoleplay && (
+                  <div className="mx-auto w-full max-w-xl rounded-2xl bg-[#f3f4f6] px-8 py-10 text-center">
+                    <p className="text-lg font-medium text-zinc-900">
+                      与「{activeRoleplay.character_name}」开启对话
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-zinc-500">
+                      以故事中的人物身份与 TA 交流。TA 只记得时间锚点
+                      {activeRoleplay.anchor_title ?? '全书读完'}之前亲历的事。
+                    </p>
+                  </div>
+                )}
+                {empty && !activeRoleplay && (
                   <div className="mx-auto w-full max-w-xl rounded-2xl bg-[#f3f4f6] px-8 py-10 text-center">
                     <div className="mx-auto mb-4 grid size-10 place-items-center rounded-full bg-white text-sm font-bold text-[#4d6bfe] shadow-sm">
                       Z
@@ -453,6 +601,11 @@ export function ChatPanel() {
                   }
                   return (
                     <div key={message.id} className="min-w-0">
+                      {activeRoleplay && (
+                        <p className="mb-1 text-xs font-medium text-[#4d6bfe]">
+                          {activeRoleplay.character_name}
+                        </p>
+                      )}
                       <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
                         {message.content}
                       </p>
