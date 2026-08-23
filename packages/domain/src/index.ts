@@ -7,3 +7,4 @@ export * from './world.js';
 export * from './shot-state.js';
 export * from './resolution.js';
 export * from './history/index.js';
+export * from './memory.js';
