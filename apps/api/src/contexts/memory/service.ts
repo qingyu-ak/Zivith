@@ -9,8 +9,13 @@ import type { LLMAdapter } from '../../ports/llm.js';
 import type { LocalVectorStore } from '../../adapters/memory/local-vector-store.js';
 import type { WorldContext } from '../world-builder/world-context.js';
 import { computeDedupHash } from './fingerprint.js';
-import { extractCandidateAtoms } from './extract.js';
+import { extractCandidateAtoms, resolveEntityByName } from './extract.js';
 import { decideAtomAction } from './cleaning.js';
+import {
+  coreKindForEntityType,
+  MEMORY_REFINE_SYSTEM_PROMPT,
+  memoryRefineSchema,
+} from './pipeline.js';
 import type { MemoryStore } from './store.js';
 
 export interface MemoryServiceDeps {
@@ -144,10 +149,6 @@ export class MemoryService {
 
   // ---- 以下方法在后续 Task 中实现（先占位避免类型断链）----
 
-  async processRefine(_messageId: string): Promise<void> {
-    void _messageId;
-  }
-
   async retrieve(_params: {
     projectId: string;
     text: string;
@@ -157,8 +158,144 @@ export class MemoryService {
     return [];
   }
 
-  async rebuildVectors(_projectId: string): Promise<{ rebuilt: number }> {
-    return { rebuilt: 0 };
+  async processRefine(messageId: string): Promise<void> {
+    const state = await this.deps.store.getPipelineState(messageId);
+    if (state?.status === 'done') return;
+    try {
+      const message = await this.deps.store.getMessageWithProject(messageId);
+      if (!message || !message.projectId) {
+        await this.deps.store.upsertPipelineState(messageId, { status: 'done' });
+        return;
+      }
+      const projectId = message.projectId;
+      const world = await this.deps.store.buildWorldContext(projectId);
+      const useLlm = Boolean(this.deps.llm && this.deps.llm.provider !== 'mock');
+      let atoms = await this.deps.store.findAtomsByMessage(messageId);
+
+      // ① LLM 精炼（有密钥轨）：修正内容/类型/实体链接
+      if (useLlm && this.deps.llm && atoms.length > 0) {
+        const result = await this.deps.llm.completeStructured(
+          {
+            request_id: `memory-refine:${messageId}`,
+            model: this.deps.llmModel ?? 'deepseek-chat',
+            system_prompt: MEMORY_REFINE_SYSTEM_PROMPT,
+            user_prompt: JSON.stringify({
+              statements: atoms.map((atom, index) => ({ index, content: atom.content })),
+              entities: world
+                ? [
+                    ...world.characters.map((c) => c.name),
+                    ...world.locations.map((l) => l.name),
+                    ...world.worldEvents.map((e) => e.title),
+                  ]
+                : [],
+            }),
+            temperature: 0.2,
+            max_tokens: 1_500,
+          },
+          memoryRefineSchema,
+        );
+        for (const refined of result.data.atoms) {
+          const atom = atoms[refined.index];
+          if (!atom) continue;
+          const linked = refined.entity_name ? resolveEntityByName(refined.entity_name, world) : null;
+          await this.deps.store.updateAtom(atom.id, {
+            content: refined.content,
+            factType: refined.fact_type,
+            ...(linked ? { entityType: linked.entityType, entityId: linked.entityId } : {}),
+          });
+        }
+        atoms = await this.deps.store.findAtomsByMessage(messageId);
+      }
+
+      // ② L2 聚合：按 (entityType, entityId) 分组 upsert MemoryCore
+      // 未链接实体的原子留在 L1（等 LLM 精炼轨回填实体链接后再入 L2）。
+      const groups = new Map<string, typeof atoms>();
+      for (const atom of atoms.filter((a) => a.status === 'active' && a.entityType && a.entityId)) {
+        const key = `${atom.entityType ?? ''}:${atom.entityId ?? ''}`;
+        const group = groups.get(key) ?? [];
+        group.push(atom);
+        groups.set(key, group);
+      }
+      for (const [key, group] of groups) {
+        const [entityType, entityId] = key.split(':');
+        const topic =
+          (await this.entityName(world, entityType || null, entityId || null)) ?? '未归档事实';
+        const contents: string[] = [];
+        for (const atom of [...group].reverse()) {
+          if (!contents.includes(atom.content)) contents.push(atom.content);
+        }
+        await this.deps.store.upsertCore({
+          projectId,
+          kind: coreKindForEntityType(entityType || null),
+          topic,
+          content: contents.join('\n').slice(0, 2_000),
+          sourceAtomIds: group.map((atom) => atom.id),
+        });
+      }
+
+      // ③ 向量化（embedding 可用时；mock 向量亦有效，词法语义）
+      if (this.deps.vectorStore && this.deps.embedding && atoms.length > 0) {
+        const { vectors } = await this.deps.embedding.embed({
+          request_id: `memory-vectorize:${messageId}`,
+          model: 'memory-atoms',
+          inputs: atoms.map((atom) => atom.content),
+        });
+        this.deps.vectorStore.upsert(
+          projectId,
+          atoms.map((atom, index) => ({ id: atom.id, vector: vectors[index]! })),
+        );
+      }
+
+      await this.deps.store.upsertPipelineState(messageId, {
+        status: 'done',
+        level1At: new Date(),
+        extractionMode: useLlm ? 'llm' : 'rule',
+      });
+    } catch (error) {
+      await this.deps.store.markPipelineFailure(messageId, String(error));
+      throw error;
+    }
+  }
+
+  /** 实体名解析（L2 topic 用；从 world 上下文查名字）。 */
+  private async entityName(
+    world: WorldContext | null,
+    entityType: string | null,
+    entityId: string | null,
+  ): Promise<string | null> {
+    if (!world || !entityType || !entityId) return null;
+    if (entityType === 'character') {
+      return world.characters.find((c) => c.id === entityId)?.name ?? null;
+    }
+    if (entityType === 'location') {
+      return world.locations.find((l) => l.id === entityId)?.name ?? null;
+    }
+    if (entityType === 'world_event') {
+      return world.worldEvents.find((e) => e.id === entityId)?.title ?? null;
+    }
+    if (entityType === 'story') {
+      return world.stories.find((s) => s.id === entityId)?.title ?? null;
+    }
+    if (entityType === 'project') return world.projectName;
+    return null;
+  }
+
+  /** 向量库全量重建（PG 为事实源）。 */
+  async rebuildVectors(projectId: string): Promise<{ rebuilt: number }> {
+    if (!this.deps.vectorStore || !this.deps.embedding) return { rebuilt: 0 };
+    const atoms = await this.deps.store.findActiveAtoms(projectId);
+    this.deps.vectorStore.removeByProject(projectId);
+    if (atoms.length === 0) return { rebuilt: 0 };
+    const { vectors } = await this.deps.embedding.embed({
+      request_id: `memory-rebuild:${projectId}:${Date.now()}`,
+      model: 'memory-atoms',
+      inputs: atoms.map((atom) => atom.content),
+    });
+    this.deps.vectorStore.upsert(
+      projectId,
+      atoms.map((atom, index) => ({ id: atom.id, vector: vectors[index]! })),
+    );
+    return { rebuilt: atoms.length };
   }
 
   async listAtoms(

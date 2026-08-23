@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryIngestOps } from '@zivith/domain';
 import { MemoryService } from '../src/contexts/memory/service.js';
+import { MEMORY_REFINE_SYSTEM_PROMPT } from '../src/contexts/memory/pipeline.js';
 import type {
   CreateAtomInput,
   MemoryAtomRecord,
@@ -187,5 +188,55 @@ describe('MemoryService.ingest（同步快速路径）', () => {
     const ops = await service.ingest({ messageId: 'm2', threadId: 't1', projectId: 'p1', content: '林澈性格开朗。', world });
     expect(ops.conflicts).toHaveLength(1);
     expect(store.atoms).toHaveLength(1);
+  });
+});
+
+function makeLlmRefining() {
+  return {
+    provider: 'deepseek',
+    supportedModels: [],
+    complete: async () => ({ text: '', model: 'm', input_tokens: 0, output_tokens: 0, metadata: {} }),
+    completeStructured: async (
+      request: { system_prompt: string; user_prompt: string },
+      schema: { parse: (value: unknown) => unknown },
+    ) => {
+      if (request.system_prompt === MEMORY_REFINE_SYSTEM_PROMPT) {
+        return {
+          data: schema.parse({
+            atoms: [
+              { index: 0, content: '林澈性格冷静', fact_type: 'trait', entity_name: '林澈' },
+            ],
+          }),
+          text: '', model: 'm', input_tokens: 0, output_tokens: 0, metadata: {},
+        };
+      }
+      return {
+        data: schema.parse({ summary: '林澈冷静，渴望成仙。' }),
+        text: '', model: 'm', input_tokens: 0, output_tokens: 0, metadata: {},
+      };
+    },
+  };
+}
+
+describe('MemoryService.processRefine（深加工）', () => {
+  it('refines atoms via LLM, aggregates L2 cores and marks done (mock rule path)', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    await service.ingest({ messageId: 'm1', threadId: 't1', projectId: 'p1', content: '林澈性格冷静。他渴望成为仙人。', world });
+    await service.processRefine('m1');
+    // 规则模式：无 LLM → 原子保持原文，L2 按 (character,c1) 聚合为 persona
+    expect(store.cores).toHaveLength(1);
+    expect(store.cores[0]).toMatchObject({ kind: 'persona', topic: '林澈' });
+    expect(store.cores[0]!.content).toContain('冷静');
+    expect(store.pipelineStates.get('m1')?.status).toBe('done');
+  });
+
+  it('is idempotent (second run is a no-op)', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    await service.ingest({ messageId: 'm1', threadId: 't1', projectId: 'p1', content: '林澈性格冷静。', world });
+    await service.processRefine('m1');
+    await service.processRefine('m1');
+    expect(store.cores).toHaveLength(1);
   });
 });
