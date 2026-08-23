@@ -40,5 +40,5 @@ Track I 需要回答「这个世界现在处于什么阶段」：Timeline 的 ev
 
 - `packages/domain/src/history/types.ts` 的 `HISTORY_ENTITY_TYPES` 增加 `'world_event'`；`snapshots.ts` 新增 `serializeWorldEventSnapshot`。
 - 查询面：`GET /projects/:pid/world-events?story_id=&state=`（story_id 过滤沿 `anchorStoryId`）。
-- 时态回溯查询（`at=`）与 H6 显式世界时间绑定列为后续迭代，不在 v1。
+- 时态回溯查询（`at=`）列为后续迭代，不在 v1。H6 显式世界时间绑定已于 2026-08-16 落地（`TemporalDimension` + `WorldTimeBinding` 信封；核心不做真实时间轴换算）。
 - 违反边界的诱惑（把对话记录塞进 WorldEvent 的 summary、把 ChangeEvent 当世界事实）由 ADR-0010 围栏与本次边界描述双重拦截。

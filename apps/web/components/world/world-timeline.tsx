@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { WorldLineItem, WorldLineModel, WorldSelection } from '@/lib/types';
 import { createOrderScale, integerTicks } from '@/lib/world-scale';
+import { overlayFocusOfItem, isTimelineItemActive, derivedSourceShotId, isDerivedTrackKind } from '@/lib/world-line';
 
 const TRACK_LABEL_WIDTH = 76;
 const TRACK_HEIGHT = 58;
@@ -26,6 +27,10 @@ const TRACK_COLORS: Record<string, TrackColor> = {
   world_event: { fill: 'rgba(217,119,6,0.12)', stroke: '#d97706', text: '#92400e' },
   story: { fill: 'rgba(219,39,119,0.10)', stroke: '#db2777', text: '#9d174d' },
   shot: { fill: 'rgba(225,29,72,0.10)', stroke: '#e11d48', text: '#9f1239' },
+  camera: { fill: 'rgba(13,148,136,0.12)', stroke: '#0f766e', text: '#115e59' },
+  style: { fill: 'rgba(168,85,247,0.12)', stroke: '#7c3aed', text: '#5b21b6' },
+  prompt: { fill: 'rgba(245,158,11,0.12)', stroke: '#d97706', text: '#92400e' },
+  model: { fill: 'rgba(99,102,241,0.12)', stroke: '#4f46e5', text: '#3730a3' },
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -35,6 +40,10 @@ const KIND_LABEL: Record<string, string> = {
   world_event: '事件',
   story: '故事',
   shot: '镜头',
+  camera: '机位',
+  style: '风格',
+  prompt: '提示词',
+  model: '模型',
 };
 
 function estimateTextWidth(text: string): number {
@@ -66,6 +75,16 @@ function itemDiverges(item: WorldLineItem): boolean {
   return item.extra?.world_time_diverges === true;
 }
 
+function itemRelation(item: WorldLineItem): string | null {
+  const relation = item.extra?.world_time_relation;
+  return typeof relation === 'string' ? relation : null;
+}
+
+function itemOverlay(item: WorldLineItem): boolean {
+  const relation = itemRelation(item);
+  return relation != null && relation !== 'follow';
+}
+
 interface HoverInfo {
   x: number;
   y: number;
@@ -74,16 +93,23 @@ interface HoverInfo {
   description?: string | null;
   worldTime?: string | null;
   diverges?: boolean;
+  overlay?: boolean;
 }
 
 export function WorldTimeline({
   model,
   selection,
   onSelect,
+  focusedDimensionId = null,
+  focusedDimensionLabel = null,
+  focusedIsPrimary = true,
 }: {
   model: WorldLineModel;
   selection: WorldSelection;
   onSelect: (selection: Exclude<WorldSelection, null>) => void;
+  focusedDimensionId?: string | null;
+  focusedDimensionLabel?: string | null;
+  focusedIsPrimary?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -197,6 +223,9 @@ export function WorldTimeline({
   const svgHeight = layout.totalHeight;
   const axisY = PADDING.top + axisHeight;
   const hasDivergence = model.axisMarks.some((mark) => mark.worldTimeDiverges);
+  const hasOverlay = model.axisMarks.some(
+    (mark) => mark.worldTimeRelation && mark.worldTimeRelation !== 'follow',
+  );
 
   function showItemHover(event: MouseEvent, item: WorldLineItem, kind: string) {
     const host = containerRef.current;
@@ -210,6 +239,7 @@ export function WorldTimeline({
       description: item.description,
       worldTime: itemCaption(item),
       diverges: itemDiverges(item),
+      overlay: itemOverlay(item),
     });
   }
 
@@ -227,6 +257,12 @@ export function WorldTimeline({
     <div ref={containerRef} className="relative h-full w-full overflow-auto">
       <div className="sticky top-0 z-10 mb-1 flex flex-wrap items-center gap-x-4 gap-y-1 bg-white/90 px-1 py-1 text-[11px] text-zinc-500 backdrop-blur">
         <span>刻度按呈现顺序</span>
+        <span className="inline-flex items-center gap-1.5 text-violet-700">
+          <span className="inline-block size-2 rounded-full bg-violet-500" />
+          {focusedDimensionLabel && !focusedIsPrimary
+            ? `叠层「${focusedDimensionLabel}」· 主轴仍按呈现顺序`
+            : '世界时间默认跟随主轴'}
+        </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-3 w-px bg-zinc-300" />
           事件竖线对齐主轴
@@ -235,6 +271,12 @@ export function WorldTimeline({
           <span className="inline-flex items-center gap-1.5 text-amber-700">
             <span className="inline-block size-2 rounded-full bg-amber-500" />
             琥珀色表示世界时间偏离呈现序
+          </span>
+        )}
+        {hasOverlay && (
+          <span className="inline-flex items-center gap-1.5 text-violet-700">
+            <span className="inline-block size-2 rounded-full bg-violet-500" />
+            紫色表示显式世界时间绑定（区间 / 相对 / 平行）
           </span>
         )}
       </div>
@@ -329,20 +371,17 @@ export function WorldTimeline({
             ? model.axisMarks.map((mark, index) => {
                 const x = scale(mark.order);
                 const diverges = Boolean(mark.worldTimeDiverges);
+                const overlay = mark.worldTimeRelation && mark.worldTimeRelation !== 'follow';
+                const accent = diverges ? '#d97706' : overlay ? '#7c3aed' : '#d4d4d8';
+                const labelFill = diverges ? '#b45309' : overlay ? '#5b21b6' : '#3f3f46';
+                const subFill = diverges ? '#d97706' : overlay ? '#7c3aed' : '#a1a1aa';
                 return (
                   <g key={`axis-${mark.order}-${index}`}>
-                    <line
-                      x1={x}
-                      y1={axisY}
-                      x2={x}
-                      y2={axisY + 5}
-                      stroke={diverges ? '#d97706' : '#d4d4d8'}
-                      strokeWidth="1"
-                    />
+                    <line x1={x} y1={axisY} x2={x} y2={axisY + 5} stroke={accent} strokeWidth="1" />
                     <text
                       x={x}
                       y={PADDING.top + 14}
-                      fill={diverges ? '#b45309' : '#3f3f46'}
+                      fill={labelFill}
                       fontSize="11"
                       fontWeight="600"
                       textAnchor="middle"
@@ -352,13 +391,16 @@ export function WorldTimeline({
                     <text
                       x={x}
                       y={PADDING.top + 28}
-                      fill={diverges ? '#d97706' : '#a1a1aa'}
+                      fill={subFill}
                       fontSize="9"
                       textAnchor="middle"
                     >
                       {mark.worldTimeLabel ? clipLabel(mark.worldTimeLabel, 10) : `#${mark.order}`}
                     </text>
                     {diverges && <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#d97706" />}
+                    {!diverges && overlay && (
+                      <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#7c3aed" />
+                    )}
                   </g>
                 );
               })
@@ -414,16 +456,126 @@ export function WorldTimeline({
               >
                 {label}
               </text>
+              {trackItems.length === 0 && track.kind === 'world_event' ? (
+                <text
+                  x={plotLeft + 12}
+                  y={track.trackY + track.height / 2}
+                  fill="#a1a1aa"
+                  fontSize="11"
+                  dominantBaseline="middle"
+                >
+                  {focusedDimensionLabel && !focusedIsPrimary
+                    ? `「${focusedDimensionLabel}」尚无绑定事件 · 主轴仍按呈现顺序`
+                    : '无事件 · 世界时间绑定写在事件信封上，主轴仍按呈现顺序'}
+                </text>
+              ) : null}
+              {trackItems.length === 0 && track.kind === 'story' ? (
+                <text
+                  x={plotLeft + 12}
+                  y={track.trackY + track.height / 2}
+                  fill="#a1a1aa"
+                  fontSize="11"
+                  dominantBaseline="middle"
+                >
+                  还没有故事
+                </text>
+              ) : null}
+              {trackItems.length === 0 && track.kind === 'scene' ? (
+                <text
+                  x={plotLeft + 12}
+                  y={track.trackY + track.height / 2}
+                  fill="#a1a1aa"
+                  fontSize="11"
+                  dominantBaseline="middle"
+                >
+                  还没有场景
+                </text>
+              ) : null}
+              {trackItems.length === 0 && track.kind === 'shot' ? (
+                <text
+                  x={plotLeft + 12}
+                  y={track.trackY + track.height / 2}
+                  fill="#a1a1aa"
+                  fontSize="11"
+                  dominantBaseline="middle"
+                >
+                  还没有镜头 · 派生轨会跟随镜头出现
+                </text>
+              ) : null}
+              {trackItems.length === 0 && track.kind === 'camera' ? (
+                <text
+                  x={plotLeft + 12}
+                  y={track.trackY + track.height / 2}
+                  fill="#a1a1aa"
+                  fontSize="11"
+                  dominantBaseline="middle"
+                >
+                  机位从镜头状态投影，不另存一份
+                </text>
+              ) : null}
+              {trackItems.length === 0 && track.kind === 'style' ? (
+                <text
+                  x={plotLeft + 12}
+                  y={track.trackY + track.height / 2}
+                  fill="#a1a1aa"
+                  fontSize="11"
+                  dominantBaseline="middle"
+                >
+                  风格从镜头的光线、色彩与渲染设定投影
+                </text>
+              ) : null}
+              {trackItems.length === 0 && track.kind === 'prompt' ? (
+                <text
+                  x={plotLeft + 12}
+                  y={track.trackY + track.height / 2}
+                  fill="#a1a1aa"
+                  fontSize="11"
+                  dominantBaseline="middle"
+                >
+                  提示词轨优先显示已批准版本，否则显示草稿
+                </text>
+              ) : null}
+              {trackItems.length === 0 && track.kind === 'model' ? (
+                <text
+                  x={plotLeft + 12}
+                  y={track.trackY + track.height / 2}
+                  fill="#a1a1aa"
+                  fontSize="11"
+                  dominantBaseline="middle"
+                >
+                  模型轨来自生成 provenance，只读
+                </text>
+              ) : null}
               {trackItems.map((item) => {
                 const pos = layout.positions.get(item.id);
                 if (!pos) return null;
-                const active = selection?.id === item.id;
+                const active = isTimelineItemActive(item, selection);
                 const diverges = itemDiverges(item);
+                const overlay = itemOverlay(item);
+                const crossing = itemRelation(item) === 'crossing';
+                const focus = overlayFocusOfItem(item, focusedDimensionId, focusedIsPrimary);
+                const stroke = active
+                  ? color.stroke
+                  : diverges
+                    ? '#d97706'
+                    : crossing
+                      ? '#7c3aed'
+                      : overlay
+                        ? '#8b5cf6'
+                        : 'transparent';
                 return (
                   <g
                     key={item.id}
                     className="cursor-pointer"
-                    onClick={() => onSelect({ kind: item.entityType, id: item.id })}
+                    opacity={focus === 'other' ? 0.35 : 1}
+                    onClick={() => {
+                      const shotId = derivedSourceShotId(item);
+                      if (shotId && isDerivedTrackKind(item.entityType)) {
+                        onSelect({ kind: item.entityType, id: shotId });
+                        return;
+                      }
+                      onSelect({ kind: item.entityType, id: item.id });
+                    }}
                     onMouseEnter={(event) => showItemHover(event, item, track.kind)}
                     onMouseMove={(event) => showItemHover(event, item, track.kind)}
                     onMouseLeave={() => setHover(null)}
@@ -435,8 +587,8 @@ export function WorldTimeline({
                       height={ITEM_HEIGHT}
                       rx="8"
                       fill={color.fill}
-                      stroke={active ? color.stroke : diverges ? '#d97706' : 'transparent'}
-                      strokeWidth={active || diverges ? 1.75 : 1}
+                      stroke={stroke}
+                      strokeWidth={active || diverges || overlay ? 1.75 : 1}
                       className={active ? '' : 'hover:stroke-zinc-400'}
                       filter={active ? 'url(#selected-glow)' : undefined}
                     />
@@ -450,8 +602,13 @@ export function WorldTimeline({
                     >
                       {clipLabel(item.title, 14)}
                     </text>
-                    {diverges && (
-                      <circle cx={pos.x + pos.itemWidth - 8} cy={pos.y + 8} r="3" fill="#d97706" />
+                    {(diverges || overlay) && (
+                      <circle
+                        cx={pos.x + pos.itemWidth - 8}
+                        cy={pos.y + 8}
+                        r="3"
+                        fill={diverges ? '#d97706' : '#7c3aed'}
+                      />
                     )}
                   </g>
                 );
@@ -472,9 +629,11 @@ export function WorldTimeline({
             <p className="mt-1 line-clamp-3 text-zinc-600">{hover.description}</p>
           )}
           {hover.worldTime && (
-            <p className={`mt-1 ${hover.diverges ? 'text-amber-700' : 'text-zinc-500'}`}>
+            <p
+              className={`mt-1 ${hover.diverges ? 'text-amber-700' : hover.overlay ? 'text-violet-700' : 'text-zinc-500'}`}
+            >
               世界时间 · {hover.worldTime}
-              {hover.diverges ? '（偏离呈现序）' : ''}
+              {hover.diverges ? '（偏离呈现序）' : hover.overlay ? '（显式绑定）' : ''}
             </p>
           )}
         </div>

@@ -1,13 +1,22 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma, PrismaClient } from '@zivith/database';
 import {
+  bindingsWorldRelation,
+  compactWorldTimeBinding,
+  compactWorldTimeBindings,
   parseWorldview,
+  parseWorldTimeBindings,
+  projectTimelinePatchSchema,
   proposalSchema,
   relationshipCreateSchema,
+  resolveTemporalDimensions,
   timelineItemCreateSchema,
   timelineTrackCreateSchema,
+  unknownDimensionIds,
   worldEventCreateSchema,
   worldEventPatchSchema,
+  type TemporalDimension,
+  type WorldTimeEnvelope,
 } from '@zivith/domain';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
@@ -51,10 +60,62 @@ async function requireTimeline(db: PrismaClient, projectId: string) {
   });
   if (!timeline) {
     timeline = await db.projectTimeline.create({
-      data: { projectId, name: 'World Line' },
+      data: {
+        projectId,
+        name: 'World Line',
+        temporalDimensions: resolveTemporalDimensions([]) as Prisma.InputJsonValue,
+      },
     });
   }
   return timeline;
+}
+
+async function projectDimensions(
+  db: PrismaClient,
+  projectId: string,
+): Promise<TemporalDimension[]> {
+  const timeline = await db.projectTimeline.findFirst({
+    where: { projectId, deletedAt: null },
+    select: { temporalDimensions: true },
+  });
+  return resolveTemporalDimensions(timeline?.temporalDimensions);
+}
+
+function assertBindingDimensions(bindings: WorldTimeEnvelope[], dimensions: TemporalDimension[]) {
+  const missing = unknownDimensionIds(bindings, dimensions);
+  if (missing.length > 0) {
+    throw new ApiError(400, 'TEMPORAL_DIMENSION_NOT_FOUND', `未知时间维度：${missing.join('、')}`);
+  }
+}
+
+const timelineQuerySchema = z
+  .object({
+    story_id: idSchema.optional(),
+    view: z.enum(['presentation', 'world_overlay']).optional(),
+    dimension_id: idSchema.optional(),
+    track_kind: z.string().min(1).max(64).optional(),
+    world_relation: z.enum(['follow', 'explicit', 'crossing', 'unknown']).optional(),
+  })
+  .strict();
+
+function itemBindings(item: { worldTimeBindings: Prisma.JsonValue }): WorldTimeEnvelope[] {
+  return parseWorldTimeBindings(item.worldTimeBindings ?? []);
+}
+
+function itemMatchesTimelineQuery(
+  item: { worldTimeBindings: Prisma.JsonValue; entityType: string },
+  query: z.infer<typeof timelineQuerySchema>,
+): boolean {
+  if (query.track_kind && item.entityType !== query.track_kind) return false;
+  const bindings = itemBindings(item);
+  if (query.dimension_id) {
+    const hits = bindings.filter((binding) => binding.dimension_id === query.dimension_id);
+    if (hits.length === 0) return false;
+  }
+  if (query.world_relation && bindingsWorldRelation(bindings) !== query.world_relation) {
+    return false;
+  }
+  return true;
 }
 
 export function registerWorldRoutes(
@@ -79,7 +140,7 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
     const { projectId } = projectParams.parse(request.params);
     const project = await requireProject(db, projectId);
 
-    const [stories, characters, locations, scenes, worldEvents, relationships, shots] =
+    const [stories, characters, locations, scenes, worldEvents, relationships, shots, timeline] =
       await Promise.all([
         db.story.findMany({
           where: { projectId, deletedAt: null },
@@ -116,8 +177,32 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
             state: true,
             mood: true,
             createdAt: true,
+            camera: true,
+            composition: true,
+            lighting: true,
+            color: true,
+            style: true,
+            prompt: true,
+            prompts: {
+              select: { id: true, positive: true, approvedAt: true },
+              orderBy: { createdAt: 'desc' },
+            },
+            outputs: {
+              select: {
+                provider: true,
+                model: true,
+                status: true,
+                isActive: true,
+              },
+              orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+              take: 1,
+            },
           },
           orderBy: { order: 'asc' },
+        }),
+        db.projectTimeline.findFirst({
+          where: { projectId, deletedAt: null },
+          select: { temporalDimensions: true },
         }),
       ]);
 
@@ -169,6 +254,7 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
       },
       stage,
       conflicts: detectWorldConflicts(world),
+      temporal_dimensions: resolveTemporalDimensions(timeline?.temporalDimensions),
       entities: {
         stories,
         characters: characters.map((row) => assetDto(row as unknown as Record<string, unknown>)),
@@ -176,7 +262,41 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
         scenes: scenes.map((row) => sceneDto(row as unknown as Record<string, unknown>)),
         world_events: worldEvents,
         relationships,
-        shots,
+        shots: shots.map((shot) => {
+          const approved = shot.prompts.find((version) => version.approvedAt) ?? null;
+          const output = shot.outputs[0] ?? null;
+          return {
+            id: shot.id,
+            sceneId: shot.sceneId,
+            projectId: shot.projectId,
+            order: shot.order,
+            label: shot.label,
+            state: shot.state,
+            mood: shot.mood,
+            createdAt: shot.createdAt,
+            camera: shot.camera,
+            composition: shot.composition,
+            lighting: shot.lighting,
+            color: shot.color,
+            style: shot.style,
+            prompt: shot.prompt,
+            approvedPrompt: approved
+              ? {
+                  id: approved.id,
+                  positive: approved.positive,
+                  approvedAt: approved.approvedAt,
+                }
+              : null,
+            output: output
+              ? {
+                  provider: output.provider,
+                  model: output.model,
+                  status: output.status,
+                  isActive: output.isActive,
+                }
+              : null,
+          };
+        }),
       },
     };
   });
@@ -200,13 +320,15 @@ function registerWorldEventRoutes(app: FastifyInstance, db: PrismaClient) {
     const { projectId } = projectParams.parse(request.params);
     await requireProject(db, projectId);
     const body = worldEventCreateSchema.parse(request.body ?? {});
+    const envelope = compactWorldTimeBinding(body.world_time_envelope);
+    assertBindingDimensions([envelope], await projectDimensions(db, projectId));
     const count = await db.worldEvent.count({ where: { projectId, deletedAt: null } });
     const created = await db.worldEvent.create({
       data: {
         projectId,
         title: body.title,
         description: body.description ?? null,
-        worldTimeEnvelope: body.world_time_envelope as Prisma.InputJsonValue,
+        worldTimeEnvelope: envelope as Prisma.InputJsonValue,
         anchorStoryId: body.anchor_story_id ?? null,
         presentationOrder: body.presentation_order ?? count + 1,
         characterIds: body.character_ids,
@@ -222,14 +344,19 @@ function registerWorldEventRoutes(app: FastifyInstance, db: PrismaClient) {
     const existing = await db.worldEvent.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new ApiError(404, 'WORLD_EVENT_NOT_FOUND', '世界事件不存在');
     const body = worldEventPatchBody.parse(request.body ?? {});
+    const envelope =
+      body.world_time_envelope !== undefined
+        ? compactWorldTimeBinding(body.world_time_envelope)
+        : undefined;
+    if (envelope !== undefined) {
+      assertBindingDimensions([envelope], await projectDimensions(db, existing.projectId));
+    }
     return db.worldEvent.update({
       where: { id },
       data: {
         ...(body.title !== undefined ? { title: body.title } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.world_time_envelope !== undefined
-          ? { worldTimeEnvelope: body.world_time_envelope as Prisma.InputJsonValue }
-          : {}),
+        ...(envelope !== undefined ? { worldTimeEnvelope: envelope as Prisma.InputJsonValue } : {}),
         ...(body.anchor_story_id !== undefined ? { anchorStoryId: body.anchor_story_id } : {}),
         ...(body.presentation_order !== undefined
           ? { presentationOrder: body.presentation_order }
@@ -341,6 +468,7 @@ function registerRelationshipRoutes(app: FastifyInstance, db: PrismaClient) {
 function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
   app.get('/projects/:projectId/timeline', async (request) => {
     const { projectId } = projectParams.parse(request.params);
+    const query = timelineQuerySchema.parse(request.query ?? {});
     await requireProject(db, projectId);
     const timeline = await requireTimeline(db, projectId);
     const tracks = await db.timelineTrack.findMany({
@@ -353,7 +481,69 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
         },
       },
     });
-    return { timeline, tracks };
+    const filtered = tracks
+      .filter((track) => !query.track_kind || track.kind === query.track_kind)
+      .map((track) => ({
+        ...track,
+        items: track.items.filter((item) => itemMatchesTimelineQuery(item, query)),
+      }));
+    return {
+      timeline: {
+        ...timeline,
+        temporalDimensions: resolveTemporalDimensions(timeline.temporalDimensions),
+      },
+      tracks: filtered,
+      view: query.view ?? 'presentation',
+    };
+  });
+
+  app.patch('/projects/:projectId/timeline', async (request) => {
+    const { projectId } = projectParams.parse(request.params);
+    await requireProject(db, projectId);
+    const timeline = await requireTimeline(db, projectId);
+    const body = projectTimelinePatchSchema.parse(request.body ?? {});
+    const dimensions = body.temporal_dimensions
+      ? resolveTemporalDimensions(body.temporal_dimensions)
+      : undefined;
+    const updated = await db.projectTimeline.update({
+      where: { id: timeline.id },
+      data: {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(dimensions !== undefined
+          ? { temporalDimensions: dimensions as Prisma.InputJsonValue }
+          : {}),
+      },
+    });
+    return {
+      ...updated,
+      temporalDimensions: resolveTemporalDimensions(updated.temporalDimensions),
+    };
+  });
+
+  app.get('/projects/:projectId/timeline/items', async (request) => {
+    const { projectId } = projectParams.parse(request.params);
+    const query = timelineQuerySchema.parse(request.query ?? {});
+    await requireProject(db, projectId);
+    const timeline = await requireTimeline(db, projectId);
+    const tracks = await db.timelineTrack.findMany({
+      where: { timelineId: timeline.id, deletedAt: null },
+      include: {
+        items: {
+          where: { deletedAt: null },
+          orderBy: { presentationOrder: 'asc' },
+        },
+      },
+    });
+    const items = tracks.flatMap((track) =>
+      track.items
+        .filter((item) =>
+          itemMatchesTimelineQuery(item, { ...query, track_kind: query.track_kind }),
+        )
+        .filter((item) => !query.track_kind || track.kind === query.track_kind)
+        .map((item) => ({ ...item, track_id: track.id, track_kind: track.kind })),
+    );
+    return { items, view: query.view ?? 'presentation' };
   });
 
   app.post('/projects/:projectId/timeline/tracks', async (request, reply) => {
@@ -412,6 +602,12 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
     });
     if (!track) throw new ApiError(404, 'TRACK_NOT_FOUND', '轨道不存在');
     const body = timelineItemCreateSchema.parse(request.body ?? {});
+    const bindings = compactWorldTimeBindings(body.world_time_bindings);
+    const timeline = await db.projectTimeline.findFirst({
+      where: { id: track.timelineId, deletedAt: null },
+    });
+    if (!timeline) throw new ApiError(404, 'TIMELINE_NOT_FOUND', '时间线不存在');
+    assertBindingDimensions(bindings, resolveTemporalDimensions(timeline.temporalDimensions));
     const count = await db.timelineItem.count({
       where: { trackId, deletedAt: null },
     });
@@ -423,6 +619,7 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
         presentationOrder: body.presentation_order ?? count + 1,
         startOffsetMs: body.start_offset_ms ?? null,
         durationMs: body.duration_ms ?? null,
+        worldTimeBindings: bindings as Prisma.InputJsonValue,
         metadata: body.metadata as Prisma.InputJsonValue,
       },
     });
@@ -439,6 +636,21 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
       .partial()
       .strict()
       .parse(request.body ?? {});
+    const bindings =
+      body.world_time_bindings !== undefined
+        ? compactWorldTimeBindings(body.world_time_bindings)
+        : undefined;
+    if (bindings !== undefined) {
+      const track = await db.timelineTrack.findFirst({
+        where: { id: existing.trackId, deletedAt: null },
+      });
+      if (!track) throw new ApiError(404, 'TRACK_NOT_FOUND', '轨道不存在');
+      const timeline = await db.projectTimeline.findFirst({
+        where: { id: track.timelineId, deletedAt: null },
+      });
+      if (!timeline) throw new ApiError(404, 'TIMELINE_NOT_FOUND', '时间线不存在');
+      assertBindingDimensions(bindings, resolveTemporalDimensions(timeline.temporalDimensions));
+    }
     return db.timelineItem.update({
       where: { id: itemId },
       data: {
@@ -449,6 +661,7 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
           : {}),
         ...(body.start_offset_ms !== undefined ? { startOffsetMs: body.start_offset_ms } : {}),
         ...(body.duration_ms !== undefined ? { durationMs: body.duration_ms } : {}),
+        ...(bindings !== undefined ? { worldTimeBindings: bindings as Prisma.InputJsonValue } : {}),
         ...(body.metadata !== undefined
           ? { metadata: body.metadata as Prisma.InputJsonValue }
           : {}),

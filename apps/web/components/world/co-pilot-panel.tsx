@@ -2,6 +2,7 @@
 
 import { Badge } from '@zivith/ui';
 import type { WorldResourcesDTO, WorldSelection, WorldStage } from '@/lib/types';
+import { DIMENSION_KIND_LABEL, resolveDisplayDimensions } from '@/lib/world-line';
 import { WorldConflictList } from './conflict-list';
 import { ContinueInChatButton } from './continue-in-chat';
 
@@ -23,6 +24,7 @@ export function CoPilotPanel({
   const worldview = resources.project.worldview ?? { rules: [] };
   const stageMeta = STAGE_META[resources.stage] ?? STAGE_META.bootstrap;
   const entities = resources.entities;
+  const dimensions = resolveDisplayDimensions(resources);
   const counts = [
     { label: '角色', value: entities.characters.length },
     { label: '地点', value: entities.locations.length },
@@ -94,6 +96,14 @@ export function CoPilotPanel({
           </p>
         )}
       </div>
+
+      <p className="mt-2 text-xs leading-5 text-zinc-500">
+        <span className="text-zinc-600">时间维度：</span>
+        {dimensions
+          .map((dimension) => `${dimension.label}（${DIMENSION_KIND_LABEL[dimension.kind]}）`)
+          .join(' · ')}
+        。世界时间跟随呈现顺序，除非事件上写了显式绑定。
+      </p>
 
       <WorldConflictList conflicts={resources.conflicts ?? []} onSelect={onSelect} />
 

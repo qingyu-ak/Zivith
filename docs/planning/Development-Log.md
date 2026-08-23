@@ -12,6 +12,33 @@
 
 ---
 
+## 2026-08-16 · pending · feat(api,web) · H7 Style derived track
+
+Style 轨从 Shot lighting/color/style/mood 投影，插入机位与提示词之间，仍不落库。
+
+- 验证：web `world-line`；web/api `tsc --noEmit`
+- 模块：`apps/api/src/routes/world.ts`、`apps/web/{lib,components/world}`、`docs/**`
+
+## 2026-08-16 · pending · feat(api,web) · H7 derived Camera/Prompt/Model tracks
+
+制作视图增加只读派生轨：机位从 Shot.camera/composition 投影，提示词优先已批准 PromptVersion，模型来自 Output provenance。不写入 TimelineItem。
+
+- **feat(api)** `GET /world/projects/:id/resources` 镜头附带 camera/composition/prompt/approved_prompt/output
+- **feat(web)** `buildProductionLineModel` 投影 camera/prompt/model 轨；关联高亮；Inspector 只读并链到镜头真源
+- 验证：web `world-line` 15；web/api `tsc --noEmit`
+- 模块：`apps/api/src/routes/world.ts`、`apps/web/{lib,components/world}`、`docs/**`
+
+## 2026-08-16 · pending · feat(domain,api,web) · H6 variable WorldTime binding
+
+可变世界时间绑定落地：Project 自定义 `TemporalDimension`，核心只校验 `WorldTimeBinding` 信封（follow / point / range / relative / crossing / unknown），不解释历法值。空信封仍跟随呈现主轴。
+
+- **feat(domain)** TemporalDimension + WorldTimeBinding schema；follow 不重复存储；mode 别名 canonicalization
+- **feat(db)** `project_timelines.temporal_dimensions`、`timeline_items.world_time_bindings`
+- **feat(api)** PATCH timeline 维度；timeline items 绑定校验；`world_relation` / `dimension_id` 过滤；WorldEvent 信封升级
+- **feat(web)** Inspector 编辑维度与事件绑定；世界线紫色 overlay 标记区间/相对/平行
+- 验证：domain `world` 35；web `world-line` 11；api/web/domain `tsc --noEmit`
+- 模块：`packages/domain`、`packages/database`、`apps/api/src/routes/world.ts`、`apps/web/{lib,components/world}`、`docs/**`
+
 ## 2026-08-16 · docs · sync docs with creator-layer v1 closure
 
 创造层 v1 已闭环（2026-08-16 合并进 `main`），但多份文档仍停留在 2026-07 状态：Technical-Architecture 的「拟议」标记、Core-Domain-Model 的「planned」标记、docs/README 状态表、Next-Tasks 当前基线与工作顺序图。本轮按 Development-Log 约定做一次全量文档同步，不改变代码。

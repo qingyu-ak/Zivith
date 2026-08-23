@@ -173,7 +173,7 @@ Project 级实体（已入契约，[ADR-0011](../architecture/adr/0011-world-eve
 
 Presentation Time 是稳定的主轴。World Time 默认跟随它，仅当创作者表达闪回、近似时期、区间、时间跳跃或平行世界时才偏离。见 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md)。
 
-世界线 v1 已落地（2026-08-05，`/projects/:id/world`：非均匀刻度 + 轨道化 + 关系连线；2026-08-14 细化地点轨、事件刻度标题、角色/地点锚定与世界时间偏离标记）。可变 WorldTime binding 属 H6，尚未落地。
+世界线 v1 已落地（2026-08-05，`/projects/:id/world`：非均匀刻度 + 轨道化 + 关系连线；2026-08-14 细化地点轨、事件刻度标题、角色/地点锚定与世界时间偏离标记）。H6 可变 WorldTime binding 已落地（2026-08-16）：Project 自定义 `TemporalDimension`，`WorldTimeBinding` 信封表达 follow / 时刻 / 区间 / 相对 / 平行；核心不解释历法值。
 
 ---
 
@@ -613,7 +613,7 @@ Timeline 不是审计日志。已提交的系统事实是 `ChangeEvent`。World 
 
 已批准快照仍是领域级冻结记录。修订历史或 Timeline 移动，不允许后续的 Asset、Scene、Track、Branch 或 Workflow 更改改写已批准 Shot 或既有 Output 的创建时上下文。
 
-**实现状态（2026-08-16）：** H1–H3 已落地（`entity_revisions` / `change_events` / `project_sequences` 表 + 基线回填 + 双写助手默认关）；世界线 v1 已落地（世界/制作双视图、event/character/scene/location 四轨道、Shot 轨道、显式 Track/Item CRUD）；H9 v1 规则冲突检测只报告不修复；WorldEvent / Relationship 已落库；Creator Chat 持续对话（ADR-0010 修订 / ADR-0013）与世界观 Json（`Project.worldview`）已落地。可变 WorldTime 绑定（H6）、高级派生 Track（H7）、`Organization`（I3）与 CreativeBranch（H10）仍属后续。
+**实现状态（2026-08-16）：** H1–H3 已落地（`entity_revisions` / `change_events` / `project_sequences` 表 + 基线回填 + 双写助手默认关）；世界线 v1 已落地（世界/制作双视图、event/character/scene/location 四轨道、Shot 轨道、显式 Track/Item CRUD）；H6 可变 WorldTime 绑定已落地（TemporalDimension + WorldTimeBinding 信封）；H7 派生 Track v1 已落地（Camera/Style/Prompt/Model 只读投影）；H9 v1 规则冲突检测只报告不修复；WorldEvent / Relationship 已落库；Creator Chat 持续对话（ADR-0010 修订 / ADR-0013）与世界观 Json（`Project.worldview`）已落地。`Organization`（I3）与 CreativeBranch（H10）仍属后续。
 
 ---
 

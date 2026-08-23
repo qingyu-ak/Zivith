@@ -14,6 +14,15 @@ import {
   serializeWorldEventSnapshot,
   timelineItemCreateSchema,
   timelineTrackCreateSchema,
+  canonicalizeWorldTimeMode,
+  compactWorldTimeBinding,
+  compactWorldTimeBindings,
+  isFollowWorldTime,
+  bindingWorldRelation,
+  bindingsWorldRelation,
+  resolveTemporalDimensions,
+  temporalDimensionsSchema,
+  unknownDimensionIds,
   worldEventCreateSchema,
   worldEventPatchSchema,
   worldEventSchema,
@@ -98,6 +107,79 @@ describe('world time envelope (opaque)', () => {
 
   it('rejects non-integer order', () => {
     expect(() => worldTimeEnvelopeSchema.parse({ order: 1.5 })).toThrow();
+  });
+});
+
+describe('H6 TemporalDimension + WorldTimeBinding', () => {
+  it('canonicalizes mode aliases without interpreting calendar values', () => {
+    expect(worldTimeEnvelopeSchema.parse({ mode: 'exact', label: '童年' }).mode).toBe('point');
+    expect(worldTimeEnvelopeSchema.parse({ mode: 'instant', value: { year: 3 } }).mode).toBe(
+      'point',
+    );
+    expect(worldTimeEnvelopeSchema.parse({ mode: 'parallel', dimension_id: 'dream' }).mode).toBe(
+      'crossing',
+    );
+    expect(canonicalizeWorldTimeMode('relative')).toBe('relative');
+  });
+
+  it('validates range / relative / crossing envelopes and keeps values opaque', () => {
+    const range = worldTimeEnvelopeSchema.parse({
+      dimension_id: 'main',
+      mode: 'range',
+      start: { era: 1 },
+      end: { era: 3 },
+      confidence: 'approximate',
+    });
+    expect(range.start).toEqual({ era: 1 });
+    expect(range.end).toEqual({ era: 3 });
+
+    expect(
+      worldTimeEnvelopeSchema.parse({
+        mode: 'relative',
+        relation: 'before',
+        anchor_item_id: 'item-1',
+        label: '闪回',
+      }).relation,
+    ).toBe('before');
+
+    expect(() => worldTimeEnvelopeSchema.parse({ mode: 'range' })).toThrow();
+    expect(() => worldTimeEnvelopeSchema.parse({ mode: 'relative' })).toThrow();
+    expect(() => worldTimeEnvelopeSchema.parse({ mode: 'crossing' })).toThrow();
+  });
+
+  it('treats empty bindings as follow and does not store follow duplicates', () => {
+    expect(isFollowWorldTime({})).toBe(true);
+    expect(isFollowWorldTime({ mode: 'follow' })).toBe(true);
+    expect(isFollowWorldTime({ label: '第一纪元' })).toBe(false);
+    expect(compactWorldTimeBinding({ mode: 'follow' })).toEqual({});
+    expect(compactWorldTimeBindings([{ mode: 'follow' }, { label: '秋' }])).toEqual([
+      { label: '秋' },
+    ]);
+    expect(bindingWorldRelation({})).toBe('follow');
+    expect(bindingWorldRelation({ mode: 'crossing', dimension_id: 'dream' })).toBe('crossing');
+    expect(bindingsWorldRelation([])).toBe('follow');
+  });
+
+  it('resolves a default worldline dimension and rejects unknown dimension ids', () => {
+    expect(resolveTemporalDimensions([])).toEqual([
+      { id: 'main', label: '主世界线', kind: 'worldline' },
+    ]);
+    const dimensions = temporalDimensionsSchema.parse([
+      { id: 'main', label: '主世界线', kind: 'worldline' },
+      { id: 'dream', label: '梦境', kind: 'dream' },
+    ]);
+    expect(
+      unknownDimensionIds([{ dimension_id: 'void', mode: 'point', label: 'x' }], dimensions),
+    ).toEqual(['void']);
+    expect(
+      unknownDimensionIds([{ dimension_id: 'dream', mode: 'point', label: 'x' }], dimensions),
+    ).toEqual([]);
+    expect(() =>
+      temporalDimensionsSchema.parse([
+        { id: 'main', label: 'A', kind: 'worldline' },
+        { id: 'main', label: 'B', kind: 'custom' },
+      ]),
+    ).toThrow();
   });
 });
 
@@ -207,6 +289,7 @@ describe('timeline schemas (H4+ world line)', () => {
       presentation_order: 3,
     });
     expect(parsed.metadata).toEqual({});
+    expect(parsed.world_time_bindings).toEqual([]);
     expect(parsed.start_offset_ms).toBeUndefined();
     expect(() =>
       timelineItemCreateSchema.parse({

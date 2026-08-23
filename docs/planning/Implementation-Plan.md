@@ -35,13 +35,13 @@
 | 2.5 First Providers | ~85% | DeepSeek + SiliconFlow 适配器 + 提供商 UI；BYOK 稍后（C7） |
 | **V0.4（间奏）** | ~95% | W1–W7 首轮已落地（`usage_records` 记录；freeze/limits 稍后）。见 [V0.4-Modification-Plan.md](../archive/V0.4-Modification-Plan.md) |
 | 2.5 polish（Track G） | **已完成** | 真实密钥 Story→Video E2E；Wan 加固 + MinIO 持久化 + 余额告警 + 无自动重复计费 |
-| **IP Core foundation（Track H）** | H3 已完成；H4/H5 世界线 v1 已落地，2026-08-14 细化地点轨与呈现主轴；H9 一致性 v1 | Entity + State + Timeline + Track。双写助手 + 按 Entity 开关（默认关）；H4/H5 世界线视图 v1 于 2026-08-05 落地；**2026-08-14 地点轨 + 事件刻度 + 世界时间偏离可见**；**H9 Lore Keeper v1（2026-08-13）规则冲突检测，只报告不修复** |
+| **IP Core foundation（Track H）** | H3 已完成；H4/H5 世界线 v1 已落地，2026-08-14 细化地点轨与呈现主轴；H6 可变 WorldTime 绑定；H9 一致性 v1 | Entity + State + Timeline + Track。双写助手 + 按 Entity 开关（默认关）；H4/H5 世界线视图 v1 于 2026-08-05 落地；**2026-08-14 地点轨 + 事件刻度 + 世界时间偏离标记**；**H6 TemporalDimension + WorldTimeBinding 信封（2026-08-16）**；**H9 Lore Keeper v1（2026-08-13）规则冲突检测，只报告不修复** |
 | **IP Core world entities（Track I）** | I1 / I2 已落地 | WorldEvent 已落库（[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md)）；Relationship 已提升为独立实体（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）；Organization 待偿 |
 | **Creator Chat 持续对话（Track J）** | 已落地 | 世界优先的持续对话创作面；后端（会话运行时 + World Builder Agent + 提案→确认→落库 + 知识上下文 + 冲突检测 v1 + 主动引导 v1）已落地。Web 为浅色独立对话壳（可收起历史侧栏），世界详情在 Studio。由 ADR-0010 划界 |
 | **World-first UI（Track K）** | K1/K3/K5 已完成；K2/K4 世界视图 v1 | 项目首页已拆分为 World Overview + `/production` + `/settings`（2026-08-05，侧栏新增 制作/设置）；Creator Chat 已为默认页 `/`（2026-08-05）；`/world` 三栏工作区 v1 只读（2026-08-05）；**世界观 Chat→Studio 核心闭环已落地（2026-08-05）：`Project.worldview Json` + 自动提炼落库 + Explorer「世界观」组 + 副驾驶只读摘要 + chat「进入 Studio」入口**。见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md) |
 | 3–5 | 0% | 生成生产化现排在 IP Core 之后 |
 
-**近期工程待办：** [Next-Tasks.md](Next-Tasks.md) 创造层 v1 已闭环；Inspector 可编辑、制作视图 Shot 轨道、Creator Chat 流式 SSE、ADR-0013 免登录 API、H9 冲突检测 v1、**主动引导 v1** 已落地。设定表 / 地点表与 T2I·I2I·T2V·I2V 矩阵见 [Asset-Model.md](../domain/Asset-Model.md)。
+**近期工程待办：** [Next-Tasks.md](Next-Tasks.md) 创造层 v1 已闭环；H6 可变世界时间绑定已落地。Inspector 可编辑、制作视图 Shot 轨道、Creator Chat 流式 SSE、ADR-0013 免登录 API、H9 冲突检测 v1、**主动引导 v1** 已落地。设定表 / 地点表与 T2I·I2I·T2V·I2V 矩阵见 [Asset-Model.md](../domain/Asset-Model.md)。
 
 ### Entity + State + Timeline + Track 实施门禁
 
@@ -49,7 +49,7 @@ ADR-0007 已 Accepted；Track H 已明确排期。运行时历史表尚未成为
 
 1. **V1 Entity + State：** `[x]` 规范快照（H1）→ `[x]` EntityRevision/ChangeEvent 表 + 基线回填（H2）→ `[x]` 事务双写助手/开关（H3）；
 2. **V2 Timeline：** `[x]` 从既有 Scene/Shot 顺序得到只读 Presentation Time；World Time 默认跟随（世界线 v1 2026-08-05；2026-08-14 细化地点轨/事件刻度/锚定/偏离标记）；
-3. **V3 Track System：** 在 Scene/Character/Shot 验证之后增加可变 World Time 维度与高级派生 Track；
+3. **V3 Track System：** `[x]` 可变 World Time 维度与绑定信封（H6，2026-08-16）；`[x]` 高级派生 Track v1（H7 Camera/Style/Prompt/Model 只读投影，2026-08-16）；
 4. **V4 AI consistency：** `[~]` 规则冲突检测 v1（H9，2026-08-13）— 同名 / 关系循环 / 事件顺序 / 题材偏离 / 极性事实；修复经人工确认。跨修订 State 与知识策展后续；
 5. **稍后 CreativeBranch：** 备选 State 对比/合并，明确与 Timeline Track 分离。
 
@@ -73,7 +73,7 @@ Phase 2.5: First Provider Integration (2-3 weeks)
     ↓
 ─────────────  IP Core (product foundation, ADR-0008)  ─────────────
     ↓
-Track H: Entity + State + Timeline + Track       [H0–H5 v1 done; H9 v1 done; H6/H7 next]
+Track H: Entity + State + Timeline + Track       [H0–H7 v1 done; H9 v1 done]
     │   World line v1 landed 2026-08-05, refined 2026-08-14
     ↓
 Track I: IP Core world entities  (slice-gated)

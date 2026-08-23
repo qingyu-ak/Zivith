@@ -155,6 +155,10 @@ export function entityTitle(
   switch (selection.kind) {
     case 'project':
       return resources.project.name || '当前项目';
+    case 'dimension':
+      return (
+        resources.temporal_dimensions?.find((item) => item.id === selection.id)?.label ?? '时间维度'
+      );
     case 'character':
       return entities.characters.find((item) => item.id === selection.id)?.name ?? null;
     case 'location':
@@ -170,6 +174,15 @@ export function entityTitle(
       if (!relationship) return null;
       return relationship.label?.trim() || relationship.kind || '关系';
     }
+    case 'shot':
+    case 'camera':
+    case 'style':
+    case 'prompt':
+    case 'model':
+      return (
+        entities.shots?.find((item) => item.id === selection.id)?.label?.trim() ||
+        '镜头'
+      );
     default:
       return null;
   }

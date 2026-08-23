@@ -1,8 +1,10 @@
 import type { Prisma } from '@zivith/database';
 import {
   type Proposal,
+  compactWorldTimeBinding,
   mergeWorldview,
   worldEventCreateSchema,
+  worldTimeEnvelopeSchema,
   relationshipCreateSchema,
 } from '@zivith/domain';
 import { ApiError } from '../../errors.js';
@@ -127,7 +129,9 @@ async function applyCreateWorldEvent(
       projectId,
       title: input.title,
       description: input.description ?? null,
-      worldTimeEnvelope: input.world_time_envelope as Prisma.InputJsonValue,
+      worldTimeEnvelope: compactWorldTimeBinding(
+        input.world_time_envelope,
+      ) as Prisma.InputJsonValue,
       anchorStoryId: input.anchor_story_id ?? null,
       presentationOrder,
       characterIds: input.character_ids,
@@ -343,7 +347,8 @@ async function applyUpdateEntity(
       }
       if (typeof fields.description === 'string') data.description = fields.description.trim();
       if (fields.world_time_envelope && typeof fields.world_time_envelope === 'object') {
-        data.worldTimeEnvelope = fields.world_time_envelope;
+        const envelope = worldTimeEnvelopeSchema.parse(fields.world_time_envelope);
+        data.worldTimeEnvelope = compactWorldTimeBinding(envelope) as Prisma.InputJsonValue;
       }
       if (typeof fields.presentation_order === 'number') {
         data.presentationOrder = fields.presentation_order;

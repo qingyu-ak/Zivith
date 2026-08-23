@@ -6,7 +6,7 @@
 >
 > Synced: 2026-08-16
 >
-> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）：IP 核心数据库（Track I I1/I2，[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md) / [ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）+ Creator Chat 持续对话（Track J，[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 修订）+ 世界线视图（Track H H4/H5 + Track K）均已落地。下一步：H6 可变世界时间绑定、H7 高级派生 Track、I3 `Organization`（需真实项目晋级证据，不随计划启动）；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
+> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。下一步：I3 `Organization`（需真实项目晋级证据，不随计划启动）；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
 >
 > Related: [Product-Positioning.md](../product/Product-Positioning.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [IP World Model Repositioning RFC](../architecture/rfc/IP-World-Model-Repositioning-RFC.md)
 
@@ -17,9 +17,9 @@
 创造层 v1 已闭环（2026-08-16 合并进 `main`）：
 
 - Backend：世界线 / WorldEvent / Relationship / Creator Chat 路由（[`apps/api/src/routes/world.ts`](../../apps/api/src/routes/world.ts)）；World Builder Agent + 冲突检测（H9 v1，只报告不修复）+ 提案应用（`apply-intent`，全部 `draft` + 幂等键）；`entity_revisions` / `change_events` / `project_sequences` 表 + 双写助手（per-Entity 开关默认关）
-- Frontend：`/` Creator Chat 默认页（无登录，浅色独立对话壳 + 可收起历史侧栏）；`/projects/:id/world` 三栏世界工作区（Explorer / 世界线 / Inspector 可编辑 + 冲突列表 + 「在对话中继续」）；`/production` 与 `/settings` 承接原工作流与提供商面板
-- Domain：[`packages/domain/src/history/*`](../../packages/domain/src/history/) 快照与 ChangeEvent schema；WorldEvent / Relationship / Timeline Track/Item schema
-- Database：`20260804000000_creator_layer_world` 迁移（world_events / relationships / project_timelines / timeline_tracks / timeline_items / creator_chat_threads / creator_chat_messages）；`Project.worldview` Json（K5 世界观单点表示）
+- Frontend：`/` Creator Chat 默认页（无登录，浅色独立对话壳 + 可收起历史侧栏）；`/projects/:id/world` 三栏世界工作区（Explorer / 世界线 / Inspector 可编辑 + 冲突列表 + 「在对话中继续」）；Inspector 可编辑世界时间绑定与时间维度；`/production` 与 `/settings` 承接原工作流与提供商面板
+- Domain：[`packages/domain/src/history/*`](../../packages/domain/src/history/) 快照与 ChangeEvent schema；WorldEvent / Relationship / Timeline Track/Item schema；H6 `TemporalDimension` + `WorldTimeBinding` 信封
+- Database：`20260804000000_creator_layer_world` 迁移（world_events / relationships / project_timelines / timeline_tracks / timeline_items / creator_chat_threads / creator_chat_messages）；`20260816000000_h6_world_time_binding`（`temporal_dimensions` / `world_time_bindings`）；`Project.worldview` Json（K5 世界观单点表示）
 
 仍为 stub（501）：BYOK 凭证、提供商用量/限额/回调 — 见 [`apps/api/src/routes/stubs.ts`](../../apps/api/src/routes/stubs.ts)。
 
@@ -174,8 +174,8 @@
 | H3 | 先影子写再事务性 State 双写 | 功能开关默认 **关**；经 env 按 Entity 使用 `shadow` / `dual` | 已完成 2026-07-30 |
 | H4 | 只读 Presentation Timeline | 导入既有 Scene/Shot 顺序；World Time 默认跟随；**2026-08-04 起以世界线视图优先落地**（非均匀刻度 + 轨道化）；**2026-08-05 世界线 v1 已落地（`/projects/:id/world`）** | **已完成 v1（2026-08-05）** — Production 视图后续 |
 | H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；**2026-08-14** 补地点轨、事件标题刻度、角色按 `character_ids` 锚定事件、地点按场景 `location_id` 锚定、世界时间偏离可见（信封 label 原样展示，不改写呈现主轴）；首发无拖拽编辑 | **已完成 v1（2026-08-05）+ 2026-08-14 细化** — 高级 track/编辑后续 |
-| H6 | 可变 WorldTime 绑定 | 自定义维度、模糊/区间/相对/平行时间 | 计划中 |
-| H7 | 高级派生 Track 投影 | 先 Camera/Prompt/Model；Style 稍后 | 计划中 |
+| H6 | 可变 WorldTime 绑定 | 自定义维度、模糊/区间/相对/平行时间；核心只校验信封，不解释历法值 | **已完成（2026-08-16）** |
+| H7 | 高级派生 Track 投影 | Camera/Style/Prompt/Model 只读投影 | **已完成 v1（2026-08-16）** — 制作视图投影，不落库 |
 | H8 | Object/Event/Organization Entity 扩展 | **已被 Track I 取代** — 世界实体扩展现有独立的分片门禁轨道 | 已取代 2026-07-31 |
 | H9 | AI 一致性建议 | 跨 State/时间绑定检查；需人工确认。**Lore Keeper 第一片（2026-08-13）**：规则检测同名、关系自指/对向循环、事件顺序撞车、题材偏离、极性事实矛盾；`GET /world/projects/:id/resources.conflicts` + Creator Chat「检查设定冲突」；**只报告，从不静默修复**。后续：跨修订 State、发现驳回持久化、`Asset(type=knowledge)` 策展 | **已完成 v1（2026-08-13）** — 修订级/知识策展后续 |
 | H10 | CreativeBranch 评估 | 仅稍后；不是 Timeline Track 依赖 | 已延期 |
@@ -264,7 +264,7 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓
          Track G (provider stability polish) ✓ 2026-07-29
               ↓
-         Track H (IP Core foundation): H0–H3 ✓ → H4/H5 ✓ v1 (world-line first) → H9 ✓ v1 → H6/H7 planned
+         Track H (IP Core foundation): H0–H3 ✓ → H4/H5 ✓ v1 (world-line first) → H9 ✓ v1 → H6 ✓ → H7 ✓ v1
               ↓
          Track I (world entities): I0 ✓ (ADR-0011) → I1 ✓ → I2 ✓ (ADR-0012 晋级) → [evidence] → I3
               ↓          ╲

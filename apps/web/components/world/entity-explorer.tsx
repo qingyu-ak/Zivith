@@ -9,6 +9,7 @@ import type {
   WorldResourcesDTO,
   WorldSelection,
 } from '@/lib/types';
+import { DIMENSION_KIND_LABEL, resolveDisplayDimensions, worldTimeCaption } from '@/lib/world-line';
 
 interface GroupItem {
   id: string;
@@ -23,6 +24,7 @@ const GROUP_COLORS: Record<string, string> = {
   world_event: 'border-l-[#fbbf24]',
   story: 'border-l-[#f472b6]',
   project: 'border-l-zinc-400',
+  dimension: 'border-l-violet-500',
   relationship: 'border-l-[#f59e0b]',
 };
 
@@ -52,9 +54,9 @@ function Group({
       ) : (
         <ul className="space-y-0.5 px-2">
           {items.map((item) => {
-            const active = selection?.id === item.id;
+            const active = selection?.kind === kind && selection.id === item.id;
             return (
-              <li key={item.id}>
+              <li key={`${kind}-${item.id}-${item.title}`}>
                 <button
                   type="button"
                   onClick={() => onSelect(item, kind)}
@@ -106,7 +108,7 @@ export function EntityExplorer({
   const eventItems: GroupItem[] = world_events.map((item: WorldEventDTO) => ({
     id: item.id,
     title: item.title,
-    subtitle: item.description || undefined,
+    subtitle: worldTimeCaption(item.world_time_envelope) || item.description || undefined,
   }));
   const storyItems: GroupItem[] = stories.map((item: StoryDTO) => ({
     id: item.id,
@@ -133,6 +135,12 @@ export function EntityExplorer({
     },
   ];
 
+  const dimensionItems: GroupItem[] = resolveDisplayDimensions(resources).map((dimension) => ({
+    id: dimension.id,
+    title: dimension.label,
+    subtitle: `${DIMENSION_KIND_LABEL[dimension.kind]} · 切换叠层，主轴不变`,
+  }));
+
   const handleSelect = (item: GroupItem, kind: string) => {
     onSelect({
       kind: kind as Exclude<WorldSelection, null>['kind'],
@@ -151,6 +159,14 @@ export function EntityExplorer({
         kind="project"
         count={hasWorldview ? 1 : 0}
         items={worldviewItems}
+        selection={selection}
+        onSelect={handleSelect}
+      />
+      <Group
+        label="时间维度"
+        kind="dimension"
+        count={dimensionItems.length}
+        items={dimensionItems}
         selection={selection}
         onSelect={handleSelect}
       />

@@ -6,6 +6,7 @@ import type {
   AssetDTO,
   SceneDTO,
   StoryDTO,
+  TemporalDimensionDTO,
   WorldConflictDTO,
   WorldEventDTO,
   WorldRelationshipDTO,
@@ -14,7 +15,21 @@ import type {
 } from '@/lib/types';
 import { api, errorMessage } from '@/lib/api';
 import { focusFromSelection } from '@/lib/creator-chat-nav';
-import { worldTimeCaption, worldTimeOrder } from '@/lib/world-line';
+import {
+  canonicalizeWorldTimeMode,
+  DIMENSION_KIND_LABEL,
+  resolveDisplayDimensions,
+  countEventsBoundToDimension,
+  projectCameraCaption,
+  projectStyleCaption,
+  projectPromptCaption,
+  projectModelCaption,
+  worldTimeCaption,
+  worldTimeMode,
+  worldTimeModeLabel,
+  worldTimeOrder,
+  worldTimeRelation,
+} from '@/lib/world-line';
 import { ContinueInChatButton } from './continue-in-chat';
 import { conflictsForSelection } from '@/lib/world-conflicts';
 
@@ -25,8 +40,13 @@ const KIND_COLOR: Record<string, string> = {
   world_event: 'text-[#fbbf24] border-[#fbbf24]/40 bg-[#fbbf24]/10',
   story: 'text-[#f472b6] border-[#f472b6]/40 bg-[#f472b6]/10',
   project: 'text-zinc-700 border-zinc-500/40 bg-zinc-500/10',
+  dimension: 'text-violet-800 border-violet-400/50 bg-violet-500/10',
   relationship: 'text-[#f59e0b] border-[#f59e0b]/40 bg-[#f59e0b]/10',
   shot: 'text-[#fb7185] border-[#fb7185]/40 bg-[#fb7185]/10',
+  camera: 'text-teal-800 border-teal-400/50 bg-teal-500/10',
+  style: 'text-violet-800 border-violet-400/50 bg-violet-500/10',
+  prompt: 'text-amber-800 border-amber-400/50 bg-amber-500/10',
+  model: 'text-indigo-800 border-indigo-400/50 bg-indigo-500/10',
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -36,12 +56,43 @@ const KIND_LABEL: Record<string, string> = {
   world_event: '世界事件',
   story: '故事',
   project: '项目',
+  dimension: '时间维度',
   relationship: '关系',
   shot: '镜头',
+  camera: '机位',
+  style: '风格',
+  prompt: '提示词',
+  model: '模型',
 };
 
 const fieldClass =
   'w-full rounded-md border border-line bg-white px-2.5 py-1.5 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-accent/60';
+
+const WORLD_TIME_MODE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'follow', label: '跟随呈现顺序' },
+  { value: 'point', label: '时刻（可模糊）' },
+  { value: 'range', label: '区间' },
+  { value: 'relative', label: '相对（闪回/跳跃）' },
+  { value: 'crossing', label: '平行维度' },
+  { value: 'unknown', label: '未知' },
+];
+
+const DIMENSION_KIND_OPTIONS: Array<{ value: TemporalDimensionDTO['kind']; label: string }> = [
+  { value: 'worldline', label: '世界线' },
+  { value: 'calendar', label: '历法' },
+  { value: 'dream', label: '梦境' },
+  { value: 'simulation', label: '模拟' },
+  { value: 'custom', label: '自定义' },
+];
+
+function opaqueField(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'label' in value) {
+    const label = (value as { label?: unknown }).label;
+    if (typeof label === 'string') return label;
+  }
+  return '';
+}
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === '') return null;
@@ -159,6 +210,35 @@ function Field({
   );
 }
 
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-zinc-500">{label}</span>
+      <select
+        className={fieldClass}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function SaveActions({
   saving,
   error,
@@ -254,9 +334,20 @@ function locationDraft(asset: AssetDTO): EntityDraft {
 }
 
 function eventDraft(event: WorldEventDTO): EntityDraft {
+  const envelope = event.world_time_envelope ?? {};
+  const caption = worldTimeCaption(envelope);
+  const mode = canonicalizeWorldTimeMode(envelope.mode) ?? (caption ? 'point' : 'follow');
   return {
     title: event.title ?? '',
     description: event.description ?? '',
+    world_time_mode: mode,
+    dimension_id: typeof envelope.dimension_id === 'string' ? envelope.dimension_id : 'main',
+    world_time_label: typeof envelope.label === 'string' ? envelope.label : (caption ?? ''),
+    confidence: typeof envelope.confidence === 'string' ? envelope.confidence : 'approximate',
+    world_time_start: opaqueField(envelope.start),
+    world_time_end: opaqueField(envelope.end),
+    world_time_relation: typeof envelope.relation === 'string' ? envelope.relation : 'before',
+    anchor_item_id: typeof envelope.anchor_item_id === 'string' ? envelope.anchor_item_id : '',
   };
 }
 
@@ -287,6 +378,10 @@ function storyDraft(story: StoryDTO): EntityDraft {
   };
 }
 
+function defaultDimensions(resources: WorldResourcesDTO): TemporalDimensionDTO[] {
+  return resolveDisplayDimensions(resources);
+}
+
 function projectDraftFrom(resources: WorldResourcesDTO): EntityDraft {
   const worldview = resources.project.worldview ?? {};
   return {
@@ -296,7 +391,60 @@ function projectDraftFrom(resources: WorldResourcesDTO): EntityDraft {
     premise: worldview.premise ?? '',
     rulesText: (worldview.rules ?? []).join('\n'),
     notes: worldview.notes ?? '',
+    dimensions_json: JSON.stringify(defaultDimensions(resources)),
   };
+}
+
+function dimensionDraft(dimension: TemporalDimensionDTO): EntityDraft {
+  return {
+    label: dimension.label ?? '',
+    kind: dimension.kind,
+  };
+}
+
+function envelopeFromDraft(draft: EntityDraft): Record<string, unknown> {
+  const mode = draft.world_time_mode || 'follow';
+  const label = (draft.world_time_label ?? '').trim();
+  if (mode === 'follow') {
+    return label ? { mode: 'point', dimension_id: draft.dimension_id || 'main', label } : {};
+  }
+  const envelope: Record<string, unknown> = {
+    mode,
+    dimension_id: (draft.dimension_id ?? '').trim() || 'main',
+  };
+  if (label) envelope.label = label;
+  if (mode === 'point' && draft.confidence) envelope.confidence = draft.confidence;
+  if (mode === 'range') {
+    const start = (draft.world_time_start ?? '').trim();
+    const end = (draft.world_time_end ?? '').trim();
+    if (start) envelope.start = start;
+    if (end) envelope.end = end;
+    if (!start && !end && !label) envelope.label = '区间';
+  }
+  if (mode === 'relative') {
+    envelope.relation = draft.world_time_relation || 'before';
+    const anchor = (draft.anchor_item_id ?? '').trim();
+    if (anchor) envelope.anchor_item_id = anchor;
+  }
+  return envelope;
+}
+
+function parseDimensionsDraft(draft: EntityDraft): TemporalDimensionDTO[] {
+  try {
+    const parsed = JSON.parse(draft.dimensions_json || '[]') as unknown;
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return [{ id: 'main', label: '主世界线', kind: 'worldline' }];
+    }
+    return parsed.filter(
+      (item): item is TemporalDimensionDTO =>
+        Boolean(item) &&
+        typeof item === 'object' &&
+        typeof (item as TemporalDimensionDTO).id === 'string' &&
+        typeof (item as TemporalDimensionDTO).label === 'string',
+    );
+  } catch {
+    return [{ id: 'main', label: '主世界线', kind: 'worldline' }];
+  }
 }
 
 function draftForSelection(
@@ -307,6 +455,10 @@ function draftForSelection(
   switch (selection.kind) {
     case 'project':
       return projectDraftFrom(resources);
+    case 'dimension': {
+      const dimension = resolveDisplayDimensions(resources).find((item) => item.id === selection.id);
+      return dimension ? dimensionDraft(dimension) : {};
+    }
     case 'character': {
       const asset = entities.characters.find((item) => item.id === selection.id);
       return asset ? characterDraft(asset) : {};
@@ -339,10 +491,14 @@ function draftForSelection(
 export function InspectorPanel({
   resources,
   selection,
+  view = 'world',
+  onSelect,
   onUpdated,
 }: {
   resources: WorldResourcesDTO;
   selection: WorldSelection;
+  view?: 'world' | 'production';
+  onSelect?: (selection: Exclude<WorldSelection, null>) => void;
   onUpdated?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -411,7 +567,13 @@ export function InspectorPanel({
       <section className="border-b border-line">
         <header className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
           <h2 className="text-xs font-semibold tracking-wider text-zinc-500">世界线属性</h2>
-          {selection && !editing && selection.kind !== 'shot' ? (
+          {selection &&
+          !editing &&
+          selection.kind !== 'shot' &&
+          selection.kind !== 'camera' &&
+          selection.kind !== 'style' &&
+          selection.kind !== 'prompt' &&
+          selection.kind !== 'model' ? (
             <div className="flex items-center gap-2">
               <ContinueInChatButton
                 projectId={resources.project.id}
@@ -440,10 +602,38 @@ export function InspectorPanel({
             ) : null}
             {detail}
           </>
+        ) : view === 'production' ? (
+          <div className="px-4 pb-6">
+            <p className="text-sm leading-6 text-zinc-600">
+              这是制作视图。中间按呈现顺序排：故事 → 场景 → 镜头，下面四条是镜头的只读投影（机位 / 风格 / 提示词 / 模型）。
+            </p>
+            <p className="mt-3 text-xs leading-5 text-zinc-500">
+              这个项目还没有故事和镜头，所以轨是空的。去创作聊天先写故事，或点左上角「世界」看角色与时间维度。
+            </p>
+          </div>
         ) : (
           <div className="px-4 pb-6">
-            <p className="rounded-lg border border-dashed border-line p-4 text-sm leading-6 text-zinc-500">
-              未选择实体。在左侧 Explorer 或中间世界线上点击任意实体查看属性。
+            <p className="text-sm leading-6 text-zinc-600">
+              世界时间默认跟随呈现顺序。点时间维度芯片或左侧「世界观」可增改梦境、历法、平行世界。
+            </p>
+            <ul className="mt-3 space-y-1.5">
+              {defaultDimensions(resources).map((dimension) => (
+                <li key={dimension.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect?.({ kind: 'dimension', id: dimension.id })}
+                    className="w-full rounded-md border border-violet-200 bg-violet-50/70 px-3 py-2 text-left text-sm text-violet-950 hover:border-violet-400"
+                  >
+                    {dimension.label}
+                    <span className="ml-2 text-xs text-violet-600">
+                      {DIMENSION_KIND_LABEL[dimension.kind]}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs leading-5 text-zinc-500">
+              有世界事件后，在事件上声明闪回（相对）、区间或平行绑定；主轴不会改成真实日历。
             </p>
           </div>
         )}
@@ -455,8 +645,9 @@ export function InspectorPanel({
         </header>
         <div className="px-4 pb-6">
           <p className="text-sm leading-relaxed text-zinc-600">
-            创作线属性将在后续版本呈现：15 秒 AI 视频镜头提示词、风格固定词与镜头参数将
-            沿创作线轨道逐镜头展开（双时间线下半部分）。
+            {view === 'production'
+              ? '机位、风格、提示词、模型已经在中间时间线投影，不另存一份。选中条目后属性显示在上方。'
+              : '点右上角「制作」可看到机位 / 风格 / 提示词 / 模型派生轨。它们跟随镜头状态，不另存 TimelineItem。'}
           </p>
         </div>
       </section>
@@ -493,6 +684,62 @@ function EditorShell({
         {children}
         <SaveActions saving={saving} error={error} onSave={onSave} onCancel={onCancel} />
       </div>
+    </div>
+  );
+}
+
+function DimensionEditor({
+  dimensions,
+  onChange,
+}: {
+  dimensions: TemporalDimensionDTO[];
+  onChange: (next: TemporalDimensionDTO[]) => void;
+}) {
+  function update(index: number, patch: Partial<TemporalDimensionDTO>) {
+    onChange(
+      dimensions.map((dimension, current) =>
+        current === index ? { ...dimension, ...patch } : dimension,
+      ),
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <span className="block text-xs text-zinc-500">时间维度</span>
+      {dimensions.map((dimension, index) => (
+        <div key={dimension.id} className="flex gap-2">
+          <input
+            className={fieldClass}
+            value={dimension.label}
+            onChange={(event) => update(index, { label: event.target.value })}
+            placeholder="维度名称"
+          />
+          <select
+            className={`${fieldClass} w-28 shrink-0`}
+            value={dimension.kind}
+            onChange={(event) =>
+              update(index, { kind: event.target.value as TemporalDimensionDTO['kind'] })
+            }
+          >
+            {DIMENSION_KIND_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="text-xs text-accent hover:underline"
+        onClick={() =>
+          onChange([...dimensions, { id: `dim-${Date.now()}`, label: '新维度', kind: 'custom' }])
+        }
+      >
+        + 添加维度
+      </button>
+      <p className="text-[11px] leading-4 text-zinc-500">
+        维度只定义这个世界如何计时，核心不会换算真实日历。空绑定仍跟随呈现顺序。
+      </p>
     </div>
   );
 }
@@ -558,6 +805,37 @@ function renderEditor(
             onChange={(value) => updateDraft('notes', value)}
             rows={3}
           />
+          <DimensionEditor
+            dimensions={parseDimensionsDraft(draft)}
+            onChange={(next) => updateDraft('dimensions_json', JSON.stringify(next))}
+          />
+        </>,
+      );
+    case 'dimension':
+      return shell(
+        <>
+          <Field
+            label="名称"
+            value={draft.label ?? ''}
+            onChange={(value) => updateDraft('label', value)}
+          />
+          <label className="block">
+            <span className="mb-1 block text-xs text-zinc-500">类型</span>
+            <select
+              className={fieldClass}
+              value={draft.kind ?? 'custom'}
+              onChange={(event) => updateDraft('kind', event.target.value)}
+            >
+              {DIMENSION_KIND_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[11px] leading-4 text-zinc-500">
+            维度只命名这个世界如何计时。事件把信封的 dimension_id 指到这里；核心不会把历法换算成真实日期。
+          </p>
         </>,
       );
     case 'character':
@@ -669,6 +947,79 @@ function renderEditor(
             onChange={(value) => updateDraft('description', value)}
             rows={4}
           />
+          <SelectField
+            label="世界时间"
+            value={draft.world_time_mode ?? 'follow'}
+            onChange={(value) => updateDraft('world_time_mode', value)}
+            options={WORLD_TIME_MODE_OPTIONS}
+          />
+          {(draft.world_time_mode ?? 'follow') !== 'follow' ? (
+            <>
+              <SelectField
+                label="时间维度"
+                value={draft.dimension_id || 'main'}
+                onChange={(value) => updateDraft('dimension_id', value)}
+                options={defaultDimensions(resources).map((dimension) => ({
+                  value: dimension.id,
+                  label: dimension.label,
+                }))}
+              />
+              <Field
+                label="世界时间标签"
+                value={draft.world_time_label ?? ''}
+                onChange={(value) => updateDraft('world_time_label', value)}
+                placeholder="如：第一纪元 · 秋"
+              />
+            </>
+          ) : null}
+          {draft.world_time_mode === 'point' ? (
+            <SelectField
+              label="精确程度"
+              value={draft.confidence ?? 'approximate'}
+              onChange={(value) => updateDraft('confidence', value)}
+              options={[
+                { value: 'exact', label: '精确' },
+                { value: 'approximate', label: '模糊' },
+                { value: 'ambiguous', label: '含混' },
+              ]}
+            />
+          ) : null}
+          {draft.world_time_mode === 'range' ? (
+            <>
+              <Field
+                label="区间起点"
+                value={draft.world_time_start ?? ''}
+                onChange={(value) => updateDraft('world_time_start', value)}
+                placeholder="不透明世界时间值"
+              />
+              <Field
+                label="区间终点"
+                value={draft.world_time_end ?? ''}
+                onChange={(value) => updateDraft('world_time_end', value)}
+              />
+            </>
+          ) : null}
+          {draft.world_time_mode === 'relative' ? (
+            <>
+              <SelectField
+                label="相对关系"
+                value={draft.world_time_relation ?? 'before'}
+                onChange={(value) => updateDraft('world_time_relation', value)}
+                options={[
+                  { value: 'before', label: '之前（闪回）' },
+                  { value: 'after', label: '之后' },
+                  { value: 'same_as', label: '同时' },
+                  { value: 'overlaps', label: '重叠' },
+                ]}
+              />
+              <Field
+                label="锚定条目 ID"
+                value={draft.anchor_item_id ?? ''}
+                onChange={(value) => updateDraft('anchor_item_id', value)}
+                placeholder="可选"
+              />
+            </>
+          ) : null}
         </>,
       );
     case 'relationship':
@@ -832,6 +1183,18 @@ function renderReadonly(
       const hintedOrder = worldTimeOrder(event.world_time_envelope);
       const presentation = event.presentation_order ?? 0;
       const diverges = hintedOrder != null && hintedOrder !== presentation;
+      const relation = worldTimeRelation(event.world_time_envelope);
+      const mode = worldTimeMode(event.world_time_envelope);
+      const relationLabel =
+        relation === 'follow'
+          ? '跟随呈现顺序'
+          : relation === 'crossing'
+            ? '平行维度'
+            : relation === 'unknown'
+              ? '时间未知'
+              : diverges
+                ? `偏离呈现序（信封 order=${hintedOrder}）`
+                : (worldTimeModeLabel(mode) ?? '显式世界时间');
       return (
         <EntityDetail
           kind="world_event"
@@ -849,7 +1212,7 @@ function renderReadonly(
             },
             {
               label: '与主轴关系',
-              value: diverges ? `偏离呈现序（信封 order=${hintedOrder}）` : '跟随呈现顺序',
+              value: relationLabel,
             },
             { label: '世界时间信封', value: <JsonValue value={event.world_time_envelope} /> },
           ]}
@@ -906,6 +1269,35 @@ function renderReadonly(
             { label: '世界规则', value: (worldview.rules ?? []).join(' · ') },
             { label: '补充', value: worldview.notes },
             { label: 'ID', value: resources.project.id },
+            {
+              label: '时间维度',
+              value: defaultDimensions(resources)
+                .map((dimension) => `${dimension.label}（${dimension.kind}）`)
+                .join(' · '),
+            },
+          ]}
+        />
+      );
+    }
+    case 'dimension': {
+      const dimension = resolveDisplayDimensions(resources).find((item) => item.id === selection.id);
+      if (!dimension) return null;
+      const bound = countEventsBoundToDimension(resources.entities.world_events, dimension.id);
+      return (
+        <EntityDetail
+          kind="dimension"
+          label="时间维度"
+          fields={[
+            { label: '名称', value: dimension.label },
+            { label: '类型', value: DIMENSION_KIND_LABEL[dimension.kind] },
+            { label: 'ID', value: dimension.id },
+            {
+              label: '绑定事件',
+              value:
+                bound === 0
+                  ? '尚无。没有绑定事件时，格子里仍是同一批角色和地点。'
+                  : `${bound} 个事件指向此维度`,
+            },
           ]}
         />
       );
@@ -940,6 +1332,89 @@ function renderReadonly(
         </div>
       );
     }
+    case 'camera':
+    case 'style':
+    case 'prompt':
+    case 'model': {
+      const shot = (resources.entities.shots ?? []).find((item) => item.id === selection.id);
+      if (!shot) return null;
+      const scene = entities.scenes.find((item) => item.id === shot.scene_id);
+      const href = scene?.story_id
+        ? `/projects/${resources.project.id}/stories/${scene.story_id}/scenes/${scene.id}/shots/${shot.id}`
+        : null;
+      const camera = (shot.camera ?? {}) as Record<string, unknown>;
+      const composition = (shot.composition ?? {}) as Record<string, unknown>;
+      const lighting = (shot.lighting ?? {}) as Record<string, unknown>;
+      const color = (shot.color ?? {}) as Record<string, unknown>;
+      const style = (shot.style ?? {}) as Record<string, unknown>;
+      const prompt = (shot.prompt ?? {}) as Record<string, unknown>;
+      const fields =
+        selection.kind === 'camera'
+          ? [
+              { label: '投影摘要', value: projectCameraCaption(shot) },
+              { label: '景别', value: typeof camera.shot_type === 'string' ? camera.shot_type : '' },
+              { label: '机位', value: typeof camera.angle === 'string' ? camera.angle : '' },
+              { label: '运动', value: typeof camera.movement === 'string' ? camera.movement : '' },
+              {
+                label: '构图',
+                value: typeof composition.framing === 'string' ? composition.framing : '',
+              },
+            ]
+          : selection.kind === 'style'
+            ? [
+                { label: '投影摘要', value: projectStyleCaption(shot) },
+                { label: '渲染', value: typeof style.rendering === 'string' ? style.rendering : '' },
+                { label: '光线', value: typeof lighting.type === 'string' ? lighting.type : '' },
+                {
+                  label: '方向',
+                  value: typeof lighting.direction === 'string' ? lighting.direction : '',
+                },
+                {
+                  label: '饱和度',
+                  value: typeof color.saturation === 'string' ? color.saturation : '',
+                },
+                { label: '氛围', value: shot.mood ?? '' },
+              ]
+          : selection.kind === 'prompt'
+            ? [
+                { label: '投影摘要', value: projectPromptCaption(shot) },
+                { label: '已批准', value: shot.approved_prompt?.positive ?? '' },
+                {
+                  label: '当前草稿',
+                  value: typeof prompt.positive === 'string' ? prompt.positive : '',
+                },
+              ]
+            : [
+                { label: '投影摘要', value: projectModelCaption(shot) },
+                { label: '提供商', value: shot.output?.provider ?? '' },
+                { label: '模型', value: shot.output?.model ?? '' },
+                { label: '状态', value: shot.output?.status ?? '' },
+              ];
+      return (
+        <div>
+          <EntityDetail
+            kind={selection.kind}
+            label={KIND_LABEL[selection.kind]}
+            fields={[
+              { label: '所属镜头', value: shot.label || `镜头 ${shot.order}` },
+              { label: '所属场景', value: scene?.title },
+              ...fields,
+              {
+                label: '说明',
+                value: '只读派生轨：从镜头当前状态投影，不另存 TimelineItem。',
+              },
+            ]}
+          />
+          {href ? (
+            <div className="px-4 pb-4">
+              <Link href={href} className="text-xs text-accent hover:underline">
+                在镜头规格里编辑真源 →
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
     default:
       return null;
   }
@@ -968,7 +1443,31 @@ async function persistSelection(
           },
         },
       });
+      await api(`/world/projects/${resources.project.id}/timeline`, {
+        method: 'PATCH',
+        body: { temporal_dimensions: parseDimensionsDraft(draft) },
+      });
       return;
+    case 'dimension': {
+      const allowed = new Set(DIMENSION_KIND_OPTIONS.map((option) => option.value));
+      const nextKind = allowed.has(draft.kind as TemporalDimensionDTO['kind'])
+        ? (draft.kind as TemporalDimensionDTO['kind'])
+        : 'custom';
+      const dimensions = resolveDisplayDimensions(resources).map((dimension) =>
+        dimension.id === selection.id
+          ? {
+              ...dimension,
+              label: requiredText(draft.label ?? '', dimension.label),
+              kind: nextKind,
+            }
+          : dimension,
+      );
+      await api(`/world/projects/${resources.project.id}/timeline`, {
+        method: 'PATCH',
+        body: { temporal_dimensions: dimensions },
+      });
+      return;
+    }
     case 'character': {
       const existing = resources.entities.characters.find((item) => item.id === selection.id);
       await api(`/assets/${selection.id}`, {
@@ -1012,6 +1511,7 @@ async function persistSelection(
         body: {
           title: requiredText(draft.title ?? '', '未命名事件'),
           description: (draft.description ?? '').trim() || null,
+          world_time_envelope: envelopeFromDraft(draft),
         },
       });
       return;
@@ -1047,6 +1547,12 @@ async function persistSelection(
           synopsis: (draft.synopsis ?? '').trim() || null,
         },
       });
+      return;
+    case 'camera':
+    case 'style':
+    case 'prompt':
+    case 'model':
+    case 'shot':
       return;
     default:
       throw new Error('当前实体暂不支持在 Inspector 中保存');

@@ -42,16 +42,7 @@ export interface PresentationTime {
   duration_ms?: number | null;
 }
 
-/** World Time binding envelope — opaque Project-defined values (H6+). */
-export interface WorldTimeBinding {
-  dimension_id: string;
-  mode: 'follow' | 'exact' | 'range' | 'relative' | 'parallel' | 'unknown';
-  relation?: string;
-  value?: unknown;
-  start?: unknown;
-  end?: unknown;
-  schema?: unknown;
-}
+/** World Time envelope contracts live in `world.ts` (H6 TemporalDimension + WorldTimeBinding). */
 
 export interface EntityCommand<TPayload = unknown> {
   project_id: string;

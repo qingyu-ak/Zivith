@@ -59,7 +59,7 @@ export function buildWorldBuilderSystemPrompt(
   - "create_character"：创建角色。payload: { name, description?, aliases?: string[], tags?: string[] }。
   - "create_location"：创建地点。payload: { name, description?, aliases?: string[], tags?: string[] }。
   - "create_scene"：创建场景。payload: { story_id, title, description?, time?, weather?, mood? }。
-  - "create_world_event"：创建世界事件。payload: { title, description?, world_time_envelope?: { label?, order? }, anchor_story_id?, presentation_order?, character_ids?: string[], scene_ids?: string[] }。
+  - "create_world_event"：创建世界事件。payload: { title, description?, world_time_envelope?: { dimension_id?, mode?: "follow"|"point"|"range"|"relative"|"crossing"|"unknown", label?, value?, start?, end?, relation?: "before"|"after"|"same_as"|"overlaps", confidence?: "exact"|"approximate"|"ambiguous", order? }, anchor_story_id?, presentation_order?, character_ids?: string[], scene_ids?: string[] }。世界时间信封只描述这个世界自己的计时（闪回用 relative+before，区间用 range，平行世界用 crossing），不要换算真实日历；空信封表示跟随呈现顺序。
   - "create_relationship"：创建关系。payload: { kind, source: { type, id }, target: { type, id }, direction?: "directed"|"undirected", label?, description?, valid_from? }。type 取值：project|story|asset|scene|world_event|relationship；角色/地点实体用 asset（id 以 [character:...]/[location:...] 标记为准）。
   - "update_entity"：修改既有实体。payload: { type, id, fields: {...} }。type 取值：project|world_event|character|location|scene|story|relationship。fields 的键与对应创建提案一致（character 用 name/description/aliases/tags，world_event 用 title/description/world_time_envelope/character_ids/scene_ids，project 用 worldview）。
 - project_id: 提案所属项目 id。create_project 提案必须为空（null）；其他提案必须填当前项目 id。

@@ -2,7 +2,7 @@
 
 > Zivith 世界创作状态与可变时间维度体系
 >
-> Status: Accepted design — revised 2026-07-29; H1–H3 landed (2026-07-30); 世界线 v1 已落地（2026-08-05 `/projects/:id/world`，2026-08-14 细化地点轨/事件刻度/锚定/偏离标记）；WorldEvent / Relationship 已落库（ADR-0011 / ADR-0012）；H6 可变 WorldTime 绑定与 H7 派生 Track 计划中
+> Status: Accepted design — revised 2026-07-29; H1–H3 landed (2026-07-30); 世界线 v1 已落地（2026-08-05 `/projects/:id/world`，2026-08-14 细化地点轨/事件刻度/锚定/偏离标记）；WorldEvent / Relationship 已落库（ADR-0011 / ADR-0012）；H6 可变 WorldTime 绑定已落地（2026-08-16）；H7 派生 Track v1 已落地（Camera/Style/Prompt/Model 只读投影）
 >
 > Scope: Domain architecture, presentation-led variable time model, API contract, UI boundary, and migration plan
 >
@@ -560,11 +560,11 @@ Project sequence 使用原子 allocator，不用时间戳模拟顺序。
 4. World Time 全部默认 follow，不要求用户填写（世界时间信封偏离可见，不改写主轴）；
 5. 显式 Track/Item CRUD API 已落地（`world.ts`），UI 首发无拖拽编辑。
 
-### V3：Track System（**计划中**，Track H H6/H7）
+### V3：Track System（**H6 已落地 2026-08-16**；**H7 Camera/Style/Prompt/Model v1 已落地 2026-08-16**）
 
-1. 增加 WorldTime binding 与 Project-defined TemporalDimension；
-2. 支持模糊值、范围、相对关系和平行维度；
-3. Camera、Prompt、Model 先作为只读派生 Track，Style 后续；
+1. **已落地**：WorldTime binding 与 Project-defined TemporalDimension（核心只校验信封，不解释历法值；空绑定跟随呈现主轴）；
+2. **已落地**：模糊值（confidence）、范围、相对关系和平行维度（crossing）；
+3. Camera、Prompt、Model、Style 作为只读派生 Track（H7 v1，制作视图投影，不落库）；
 4. 验证折叠、过滤、关联高亮和大型 Project 虚拟化；
 5. Object、Event、Organization 仅在真实项目需求出现后逐类增加（Event 已落地，见 §2.1）。
 

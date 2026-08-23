@@ -671,16 +671,18 @@ model Relationship {
 
 /// H4+ — Presentation Timeline aggregate (world line).
 /// Abstract, non-uniform scale: pure presentation coordinates, no real time conversion (ADR-0007).
+/// H6: temporal_dimensions is Project-defined; core does not interpret calendar values.
 model ProjectTimeline {
-  id          String          @id @default(uuid())
-  projectId   String          @unique @map("project_id")
-  name        String          @default("World Line")
-  description String?
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-  deletedAt   DateTime?       @map("deleted_at")
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tracks      TimelineTrack[]
+  id                  String          @id @default(uuid())
+  projectId           String          @unique @map("project_id")
+  name                String          @default("World Line")
+  description         String?
+  temporalDimensions  Json            @default("[]") @map("temporal_dimensions")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  deletedAt           DateTime?       @map("deleted_at")
+  project             Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tracks              TimelineTrack[]
 
   @@index([projectId, deletedAt])
   @@map("project_timelines")
@@ -712,6 +714,8 @@ model TimelineItem {
   presentationOrder Int           @map("presentation_order")
   startOffsetMs     Int?          @map("start_offset_ms")
   durationMs        Int?          @map("duration_ms")
+  /// H6 WorldTimeBinding[] — empty means follow Presentation Time.
+  worldTimeBindings Json          @default("[]") @map("world_time_bindings")
   metadata          Json?         @default("{}")
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")

@@ -5,11 +5,12 @@ import { useParams } from 'next/navigation';
 import { Badge, Spinner } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { WorldResourcesDTO, WorldSelection } from '@/lib/types';
-import { buildWorldLineModel, buildProductionLineModel } from '@/lib/world-line';
+import { buildWorldLineModel, buildProductionLineModel, resolveDisplayDimensions, isPrimaryWorldline, countEventsBoundToDimension } from '@/lib/world-line';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import { IconPanelLeft, IconPanelRight } from '@/components/nav-icons';
 import { EntityExplorer } from './entity-explorer';
 import { WorldTimeline } from './world-timeline';
+import { WorldTimeBar } from './world-time-bar';
 import { InspectorPanel } from './inspector-panel';
 import { CoPilotPanel } from './co-pilot-panel';
 import { ContinueInChatButton } from './continue-in-chat';
@@ -62,6 +63,18 @@ export function WorldWorkspace() {
       resources.entities.scenes.length +
       resources.entities.world_events.length
     : 0;
+
+  const dimensions = resources ? resolveDisplayDimensions(resources) : [];
+  const focusedDimension =
+    selection?.kind === 'dimension'
+      ? (dimensions.find((dimension) => dimension.id === selection.id) ?? null)
+      : null;
+  const boundEventCount = focusedDimension
+    ? countEventsBoundToDimension(resources?.entities.world_events ?? [], focusedDimension.id)
+    : 0;
+  const dimensionCaption = (focusedDimension ? [focusedDimension] : dimensions)
+    .map((dimension) => dimension.label)
+    .join(' / ');
 
   const sortedStories = resources
     ? [...resources.entities.stories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -116,12 +129,12 @@ export function WorldWorkspace() {
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">
             {view === 'world'
-              ? `呈现顺序主轴 · ${entityCount} 个实体 · ${model.relationships.length} 条关系${
+              ? `${focusedDimension ? `叠层「${dimensionCaption}」` : `世界时间「${dimensionCaption}」`} · 呈现顺序主轴 · ${entityCount} 个实体 · ${model.relationships.length} 条关系${
                   (resources.conflicts ?? []).length > 0
                     ? ` · ${resources.conflicts?.length} 处冲突`
                     : ''
                 }`
-              : `${resources.entities.stories.length} 个故事 · ${resources.entities.scenes.length} 个场景 · ${(resources.entities.shots ?? []).length} 个镜头`}
+              : `${resources.entities.stories.length} 个故事 · ${resources.entities.scenes.length} 个场景 · ${(resources.entities.shots ?? []).length} 个镜头 · 派生机位/风格/提示词/模型轨`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -239,28 +252,60 @@ export function WorldWorkspace() {
 
         {/* 中栏：时间线（世界 / 制作）+ 世界视图副驾驶 */}
         <section className="flex min-h-0 flex-col">
+          {view === 'world' ? (
+            <>
+              <WorldTimeBar
+                resources={resources}
+                selectedDimensionId={focusedDimension?.id ?? null}
+                onSelectDimension={(dimension) =>
+                  setSelection({ kind: 'dimension', id: dimension.id })
+                }
+                onUpdated={() => void load()}
+              />
+              {focusedDimension ? (
+                <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-4 py-2 text-xs leading-5 text-violet-950">
+                  {isPrimaryWorldline(focusedDimension) ? (
+                    <>
+                      正在查看「{focusedDimension.label}」。这是默认世界时间，角色和地点跟随呈现顺序，不会另建一条时间轴。
+                    </>
+                  ) : boundEventCount === 0 ? (
+                    <>
+                      正在查看「{focusedDimension.label}」叠层。还没有事件绑到这个维度，所以中间格子仍是同一批角色和地点——主轴不会变成历法或梦境。
+                    </>
+                  ) : (
+                    <>
+                      正在查看「{focusedDimension.label}」叠层，已有 {boundEventCount} 个事件绑在此维度；其他维度的事件会淡显。
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="shrink-0 border-b border-line bg-zinc-50 px-4 py-2 text-xs leading-5 text-zinc-600">
+              机位 / 风格 / 提示词 / 模型是从镜头当前状态投影的只读轨，不另存 TimelineItem。
+            </div>
+          )}
           <div className="min-h-0 flex-1 p-3">
-            {model.tracks.every((track) => track.items.length === 0) ? (
+            {view === 'production' || !model.tracks.every((track) => track.items.length === 0) ? (
+              <WorldTimeline
+                model={model}
+                selection={selection}
+                onSelect={setSelection}
+                focusedDimensionId={focusedDimension?.id ?? null}
+                focusedDimensionLabel={focusedDimension?.label ?? null}
+                focusedIsPrimary={focusedDimension ? isPrimaryWorldline(focusedDimension) : true}
+              />
+            ) : (
               <div className="grid h-full place-items-center">
                 <div className="max-w-sm text-center">
-                  <p className="text-zinc-400">
-                    {view === 'world'
-                      ? '这个世界还没有任何世界线条目。'
-                      : '还没有故事与场景，先沿 Presentation 顺序创建制作内容。'}
-                  </p>
+                  <p className="text-zinc-400">这个世界还没有任何世界线条目。</p>
                   <ContinueInChatButton
                     projectId={resources.project.id}
-                    label={
-                      view === 'world'
-                        ? '去创作聊天引导创建角色、场景与事件 →'
-                        : '去创作聊天创建故事与场景 →'
-                    }
+                    label="去创作聊天引导创建角色、场景与事件 →"
                     className="mt-3 inline-block text-sm text-accent hover:underline disabled:opacity-50"
                   />
                 </div>
               </div>
-            ) : (
-              <WorldTimeline model={model} selection={selection} onSelect={setSelection} />
             )}
           </div>
           {/* 副驾驶 Agent 面板（v1 只读世界状态摘要，仅世界视图） */}
@@ -274,6 +319,8 @@ export function WorldWorkspace() {
           <InspectorPanel
             resources={resources}
             selection={selection}
+            view={view}
+            onSelect={setSelection}
             onUpdated={() => void load()}
           />
         </aside>

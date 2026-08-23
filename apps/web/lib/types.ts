@@ -434,6 +434,14 @@ export interface WorldEventDTO {
   created_at: string;
 }
 
+export interface TemporalDimensionDTO {
+  id: string;
+  label: string;
+  kind: 'calendar' | 'worldline' | 'dream' | 'simulation' | 'custom';
+  parent_dimension_id?: string;
+  schema?: unknown;
+}
+
 export interface WorldRelationshipDTO {
   id: string;
   project_id: string;
@@ -467,6 +475,25 @@ export interface WorldLineShotDTO {
   state?: string;
   mood?: string | null;
   created_at?: string;
+  /** Current Shot camera JSON; derived Camera Track reads this, does not copy it */
+  camera?: Record<string, unknown> | null;
+  composition?: Record<string, unknown> | null;
+  lighting?: Record<string, unknown> | null;
+  color?: Record<string, unknown> | null;
+  style?: Record<string, unknown> | null;
+  prompt?: Record<string, unknown> | null;
+  approved_prompt?: {
+    id: string;
+    positive: string;
+    approved_at?: string | null;
+  } | null;
+  /** Latest/active Output provenance for Model Track */
+  output?: {
+    provider?: string | null;
+    model?: string | null;
+    status?: string | null;
+    is_active?: boolean;
+  } | null;
 }
 
 export interface WorldConflictDTO {
@@ -487,6 +514,8 @@ export interface WorldResourcesDTO {
   stage: WorldStage;
   /** Lore Keeper v1 规则发现；只报告不修复 */
   conflicts?: WorldConflictDTO[];
+  /** H6 Project-defined time dimensions; core does not interpret calendar values */
+  temporal_dimensions?: TemporalDimensionDTO[];
   entities: {
     stories: StoryDTO[];
     characters: AssetDTO[];
@@ -500,7 +529,16 @@ export interface WorldResourcesDTO {
 
 /** 世界线条目（前端从 resources 派生；anchorOrder 用于非均匀刻度定位） */
 export type WorldLineEntityType =
-  'character' | 'location' | 'scene' | 'world_event' | 'story' | 'shot';
+  | 'character'
+  | 'location'
+  | 'scene'
+  | 'world_event'
+  | 'story'
+  | 'shot'
+  | 'camera'
+  | 'style'
+  | 'prompt'
+  | 'model';
 
 export interface WorldLineItem {
   id: string;
@@ -517,7 +555,7 @@ export interface WorldLineItem {
 
 export interface WorldLineTrack {
   id: string;
-  kind: 'character' | 'location' | 'scene' | 'world_event' | 'story' | 'shot';
+  kind: WorldLineEntityType;
   title: string;
   items: WorldLineItem[];
 }
@@ -530,6 +568,9 @@ export interface WorldLineAxisMark {
   worldTimeLabel?: string | null;
   /** envelope.order 与 presentation_order 不一致时为 true */
   worldTimeDiverges?: boolean;
+  /** H6 overlay relation: follow | explicit | crossing | unknown */
+  worldTimeRelation?: 'follow' | 'explicit' | 'crossing' | 'unknown';
+  worldTimeMode?: string | null;
 }
 
 export interface WorldLineRelationship {
@@ -562,7 +603,12 @@ export type WorldSelection = {
     | 'world_event'
     | 'story'
     | 'project'
+    | 'dimension'
     | 'relationship'
-    | 'shot';
+    | 'shot'
+    | 'camera'
+    | 'style'
+    | 'prompt'
+    | 'model';
   id: string;
 } | null;

@@ -152,7 +152,7 @@
 - 语义 Track 配置与派生 Track 投影
 - 乐观修订检查、命令幂等性，以及依赖过期传播
 
-该上下文规范见 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md)。实现状态（2026-08-16）：H1–H3 已落地（`entity_revisions` / `change_events` / `project_sequences` 表 + 基线回填 + `recordEntityChange` 双写助手，per-Entity `off|shadow|dual` 默认关）；H4/H5 世界线 v1 已落地（`/projects/:id/world` 世界视图 + 世界/制作双视图 + Shot 轨道；显式 Track/Item CRUD API 见 §4.2）；H9 v1 冲突检测只报告不修复。它不拥有 Story、Shot、Asset、Workflow 或 Generation 的当前状态；各既有限界上下文仍负责其专用表与领域转换。
+该上下文规范见 [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md)。实现状态（2026-08-16）：H1–H3 已落地（`entity_revisions` / `change_events` / `project_sequences` 表 + 基线回填 + `recordEntityChange` 双写助手，per-Entity `off|shadow|dual` 默认关）；H4/H5 世界线 v1 已落地（`/projects/:id/world` 世界视图 + 世界/制作双视图 + Shot 轨道；显式 Track/Item CRUD API 见 §4.2）；H6 可变 WorldTime 绑定已落地（Project `TemporalDimension` + `WorldTimeBinding` 信封，核心不解释历法值）；H9 v1 冲突检测只报告不修复。它不拥有 Story、Shot、Asset、Workflow 或 Generation 的当前状态；各既有限界上下文仍负责其专用表与领域转换。
 
 ## 3.3 上下文通信模式
 
@@ -263,7 +263,7 @@
 
 | 方法 | 路径 | 说明 |
 |--------|------|-------------|
-| `GET` | `/projects/{pid}/resources` | 世界工作区聚合资源：世界观（`Project.worldview` Json，genre/premise/rules/notes）、stage（bootstrap/growing/mature）、`conflicts`（H9 v1 规则冲突）、stories/characters/locations/scenes/world_events/relationships/shots |
+| `GET` | `/projects/{pid}/resources` | 世界工作区聚合资源：世界观（`Project.worldview` Json，genre/premise/rules/notes）、stage（bootstrap/growing/mature）、`conflicts`（H9 v1 规则冲突）、`temporal_dimensions`（H6）、stories/characters/locations/scenes/world_events/relationships/shots |
 | `GET` | `/projects/{pid}/world-events` | 列出 WorldEvent（ADR-0011） |
 | `POST` | `/projects/{pid}/world-events` | 创建 WorldEvent draft（世界时间信封、受影响实体、前置条件、后果） |
 | `PATCH` / `DELETE` | `/world-events/{id}` | 更新 / 软删除 WorldEvent |
@@ -271,13 +271,15 @@
 | `GET` | `/projects/{pid}/relationships` | 列出 Relationship（ADR-0012：独立表、多态 EntityRef、directed/undirected） |
 | `POST` | `/projects/{pid}/relationships` | 创建 Relationship |
 | `PATCH` / `DELETE` | `/relationships/{id}` | 更新 / 软删除 Relationship |
-| `GET` | `/projects/{pid}/timeline` | 查询唯一 ProjectTimeline + 全部 Track 与 Item（世界线数据源） |
+| `GET` | `/projects/{pid}/timeline` | 查询唯一 ProjectTimeline + 全部 Track 与 Item（含 `temporal_dimensions`；`view` / `dimension_id` / `world_relation` 过滤） |
+| `PATCH` | `/projects/{pid}/timeline` | 更新名称与 Project 自定义时间维度 |
+| `GET` | `/projects/{pid}/timeline/items` | 按维度 / 世界时间关系过滤 TimelineItem |
 | `POST` | `/projects/{pid}/timeline/tracks` | 创建语义 Track |
 | `PATCH` / `DELETE` | `/timeline/tracks/{trackId}` | 更新 / 软删除 Track |
-| `POST` | `/timeline/tracks/{trackId}/items` | 将 Entity State 放置到 Presentation Time（`presentation_order`、可选 `start_offset_ms`/`duration_ms`） |
-| `PATCH` / `DELETE` | `/timeline/items/{itemId}` | 移动或重标注显式 TimelineItem |
+| `POST` | `/timeline/tracks/{trackId}/items` | 将 Entity State 放置到 Presentation Time（`presentation_order`、可选 `world_time_bindings`） |
+| `PATCH` / `DELETE` | `/timeline/items/{itemId}` | 移动、重标注或绑定 World Time；空绑定即跟随主轴 |
 
-仍为设计契约、尚未实现：`GET /projects/{pid}/entities/{type}/{id}/revisions`（EntityRevision 只读查询面）与 `GET /projects/{pid}/changes`（ChangeEvent 游标分页）。可变 WorldTime 绑定（H6）与高级派生 Track（H7）未落地。
+仍为设计契约、尚未实现：`GET /projects/{pid}/entities/{type}/{id}/revisions`（EntityRevision 只读查询面）与 `GET /projects/{pid}/changes`（ChangeEvent 游标分页）。H7 Camera/Style/Prompt/Model 派生 Track v1 已在制作视图只读投影（不落库）。
 
 **One Timeline, several views.（一条时间线，多种视图。）** 一个 Project 恰好有一个 `ProjectTimeline`，以 Presentation Time 作为稳定主轴存储，可选的 World Time 绑定作为跟随层（ADR-0007）。`view` 参数选择该唯一存储的投影 — 面向产品的 *World View（世界视图）* 与 *Production View（制作视图）*（[UI-Information-Architecture.md](../product/UI-Information-Architecture.md) §5.2）是两种此类投影，而不是两条持久化时间线。工作流运行与生成任务是执行对象，永不出现在这条 Timeline 上；它们仅通过产出溯源与之关联。
 
