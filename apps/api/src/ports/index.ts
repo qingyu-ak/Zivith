@@ -9,7 +9,8 @@ export type QueueJobType =
   | 'workflow_step'
   | 'review_analysis'
   | 'thumbnail_generate'
-  | 'media_process';
+  | 'media_process'
+  | 'memory_refine';
 
 export interface QueueJob<T = unknown> {
   id: string;
@@ -34,4 +35,22 @@ export interface StoragePort {
   put(request: StoragePutRequest): Promise<{ key: string; url: string }>;
   delete(key: string): Promise<void>;
   signedReadUrl(key: string, expiresInSeconds?: number): Promise<string>;
+}
+
+export interface EmbeddingRequest {
+  request_id: string;
+  model: string;
+  inputs: string[];
+}
+
+export interface EmbeddingResult {
+  vectors: number[][];
+  model: string;
+  dimensions: number;
+}
+
+export interface EmbeddingAdapter {
+  readonly provider: string;
+  readonly dimensions: number;
+  embed(request: EmbeddingRequest): Promise<EmbeddingResult>;
 }
