@@ -36,6 +36,8 @@ export interface WorldBuilderInput {
   stage: WorldStage;
   /** Studio 选中的实体；只进本轮 prompt，不写入聊天记录。 */
   focus?: WorldBuilderFocus | null;
+  /** 长期记忆召回摘要（M1 记忆系统注入；null/空串表示无）。 */
+  memoryDigest?: string | null;
 }
 
 /** LLM often emits a single string where the schema wants a string array. */
@@ -589,7 +591,12 @@ export class WorldBuilderAgent {
       {
         request_id: `world-builder:${Date.now()}`,
         model: this.model,
-        system_prompt: buildWorldBuilderSystemPrompt(input.world, input.stage, input.focus),
+        system_prompt: buildWorldBuilderSystemPrompt(
+          input.world,
+          input.stage,
+          input.focus,
+          input.memoryDigest ?? null,
+        ),
         user_prompt: JSON.stringify({
           recent_conversation: historyText,
           focus: input.focus ?? null,

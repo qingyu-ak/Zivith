@@ -17,6 +17,7 @@ import {
   worldEventPatchSchema,
   type TemporalDimension,
   type WorldTimeEnvelope,
+  type MemoryIngestOps,
 } from '@zivith/domain';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
@@ -34,6 +35,8 @@ import {
   assembleWorldContext,
 } from '../contexts/world-builder/world-context.js';
 import { detectWorldConflicts } from '../contexts/world-builder/conflict-detector.js';
+import { formatMemoryDigest } from '../contexts/memory/retrieval.js';
+import type { MemoryService } from '../contexts/memory/service.js';
 import { formatSseEvent } from '../lib/sse.js';
 import type { LLMAdapter } from '../ports/llm.js';
 
@@ -123,12 +126,13 @@ export function registerWorldRoutes(
   db: PrismaClient,
   llm?: LLMAdapter,
   llmModel?: string,
+  memory?: MemoryService | null,
 ) {
   registerProjectResources(app, db);
   registerWorldEventRoutes(app, db);
   registerRelationshipRoutes(app, db);
   registerTimelineRoutes(app, db);
-  registerCreatorChatRoutes(app, db, llm, llmModel);
+  registerCreatorChatRoutes(app, db, llm, llmModel, memory);
 }
 
 // ---------------------------------------------------------------------------
@@ -766,28 +770,67 @@ async function createAssistantReply(
   db: PrismaClient,
   builder: WorldBuilderAgent,
   thread: { id: string; projectId: string | null },
-  userContent: string,
+  userMessage: { id: string; content: string },
   focus?: z.infer<typeof sendMessageBody>['focus'],
+  memory?: MemoryService | null,
 ) {
   const rows = await db.creatorChatMessage.findMany({
     where: { threadId: thread.id },
     orderBy: { createdAt: 'asc' },
-    take: 40,
+    take: 200,
   });
-  const history: WorldBuilderChatMessage[] = rows.map((row) => ({
-    role:
-      row.role === 'user' || row.role === 'assistant' || row.role === 'system'
-        ? row.role
-        : 'system',
-    content: row.content,
-  }));
+  const historyRows = rows.filter((row) => row.id !== userMessage.id);
   const world = thread.projectId ? await buildWorldContext(db, thread.projectId) : null;
+
+  // M1 记忆：同步归档 + 三路召回注入
+  let memoryOps: MemoryIngestOps | null = null;
+  let memoryDigest: string | null = null;
+  if (memory && thread.projectId) {
+    memoryOps = await memory.ingest({
+      messageId: userMessage.id,
+      threadId: thread.id,
+      projectId: thread.projectId,
+      content: userMessage.content,
+      world,
+    });
+    const retrieved = await memory.retrieve({
+      projectId: thread.projectId,
+      text: userMessage.content,
+      world,
+    });
+    memoryDigest = formatMemoryDigest(retrieved) || null;
+  }
+
+  // M1 上下文窗口：滚动摘要 + 预算内最近原文（无 memory 时回退最近 40 条）
+  let history: WorldBuilderChatMessage[];
+  let evicted: Array<{ id: string; role: string; content: string }> = [];
+  if (memory) {
+    const window = await memory.getContextWindow(
+      thread.id,
+      historyRows.map((row) => ({ id: row.id, role: row.role, content: row.content })),
+    );
+    history = window.window.map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
+    evicted = window.evicted;
+  } else {
+    history = historyRows.slice(-40).map((row) => ({
+      role:
+        row.role === 'user' || row.role === 'assistant' || row.role === 'system'
+          ? row.role
+          : 'system',
+      content: row.content,
+    }));
+  }
+
   const response = await builder.respond({
-    text: userContent,
+    text: userMessage.content,
     history,
     world,
     stage: inferWorldStage(world),
     focus: focus ?? null,
+    memoryDigest,
   });
   const proposalKey =
     response.proposals.length > 0
@@ -807,7 +850,10 @@ async function createAssistantReply(
         : {}),
     },
   });
-  return { assistantMessage, response };
+  if (memory && evicted.length > 0) {
+    await memory.updateThreadSummary(thread.id, evicted);
+  }
+  return { assistantMessage, response, memoryOps };
 }
 
 function wantsEventStream(request: FastifyRequest): boolean {
@@ -832,6 +878,7 @@ async function pipeCreatorChatSse(
     createdAt: Date;
   },
   focus?: z.infer<typeof sendMessageBody>['focus'],
+  memory?: MemoryService | null,
 ): Promise<void> {
   const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
   reply.hijack();
@@ -863,13 +910,17 @@ async function pipeCreatorChatSse(
   writeEvent('status', { phase: 'thinking' });
 
   try {
-    const { assistantMessage, response } = await createAssistantReply(
+    const { assistantMessage, response, memoryOps } = await createAssistantReply(
       db,
       builder,
       thread,
-      userMessage.content,
+      { id: userMessage.id, content: userMessage.content },
       focus,
+      memory,
     );
+    if (memoryOps) {
+      writeEvent('memory', { ops: memoryOps });
+    }
     await db.creatorChatThread.update({
       where: { id: thread.id },
       data: { updatedAt: new Date() },
@@ -896,6 +947,7 @@ function registerCreatorChatRoutes(
   db: PrismaClient,
   llm?: LLMAdapter,
   llmModel?: string,
+  memory?: MemoryService | null,
 ) {
   const builder = new WorldBuilderAgent(
     llm ??
@@ -1009,21 +1061,24 @@ function registerCreatorChatRoutes(
     });
 
     if (body.role === 'user' && wantsEventStream(request)) {
-      await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage, body.focus);
+      await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage, body.focus, memory);
       return;
     }
 
     // User turns trigger the World Builder: read world → reply → propose.
     let assistantMessage = null;
+    let memoryOps: MemoryIngestOps | null = null;
     if (body.role === 'user') {
       const created = await createAssistantReply(
         db,
         builder,
         thread,
-        userMessage.content,
+        { id: userMessage.id, content: userMessage.content },
         body.focus,
+        memory,
       );
       assistantMessage = created.assistantMessage;
+      memoryOps = created.memoryOps;
     }
 
     await db.creatorChatThread.update({
@@ -1033,6 +1088,7 @@ function registerCreatorChatRoutes(
     return reply.status(201).send({
       user_message: chatMessageDto(userMessage),
       assistant_message: assistantMessage ? chatMessageDto(assistantMessage) : null,
+      memory_ops: memoryOps,
     });
   });
 
@@ -1055,7 +1111,7 @@ function registerCreatorChatRoutes(
         content: body.content,
       },
     });
-    await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage, body.focus);
+    await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage, body.focus, memory);
   });
 
   app.post('/creator-chats/:threadId/proposals/:messageId/apply', async (request) => {

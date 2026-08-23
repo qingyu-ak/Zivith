@@ -39,6 +39,7 @@ export function buildWorldBuilderSystemPrompt(
   world: WorldContext | null,
   stage: 'bootstrap' | 'growing' | 'mature',
   focus?: WorldBuilderFocus | null,
+  memoryDigest?: string | null,
 ): string {
   return `你是一位「世界构建者」（World Builder），正在帮助创作者把一个 IP 世界逐步构建成一个可持续演化的领域模型。
 
@@ -72,6 +73,7 @@ export function buildWorldBuilderSystemPrompt(
 ## 世界现状
 ${worldContextToPrompt(world)}
 ${formatFocusPrompt(focus)}
+${memoryDigest ? `\n## 相关记忆（历史对话的长期记忆，仅供理解，已确认事实勿重复提案）\n${memoryDigest}\n` : ''}
 
 ## 当前缺口（系统规则，按优先级）
 ${formatGapPrompt(world)}
