@@ -34,7 +34,8 @@
 | 6 | [`architecture/architecture-principles.md`](../architecture/architecture-principles.md) | 理解约束一切决策的架构宪章 |
 | 7 | [`engineering/Technical-Architecture.md`](Technical-Architecture.md) | 理解系统边界与数据流 |
 | 8 | [`planning/Implementation-Plan.md`](../planning/Implementation-Plan.md) | 理解分阶段路线图与各阶段范围 |
-| 9 | `engineering/Code-Agent-Design-Guide.md` | （本文档）实现约定 |
+| 9 | [`planning/Memory-Novel-Roleplay-Design.md`](../planning/Memory-Novel-Roleplay-Design.md) | 分层记忆、小说导入、扮演（ADR-0014 / 0015） |
+| 10 | `engineering/Code-Agent-Design-Guide.md` | （本文档）实现约定 |
 
 具有架构重要性的变更还必须遵循
 `architecture/adr-guide.md` 与 `architecture/rfc-guide.md`：不可逆决策记录为 ADR，跨上下文或带迁移的变更在实现前需要 RFC。
@@ -505,6 +506,7 @@ class MockGenerationAdapter implements VideoGenerationAdapter {
 
 - 新功能先落在 `contexts/` 下独立目录，不塞进既有 context
 - 跨模块复用只允许通过 domain 契约或公开 service 接口，禁止复制实现
+- **`apps/api` 的 Prisma 类型从 `@zivith/database` 进口，不要 `import … from '@prisma/client'`。** `@zivith/api` 不直接依赖 `@prisma/client`；GitHub CI 隔离安装下后者解析为 `any`，会触发 `no-unsafe-*`（见 `d3b3e8d`）
 - 更换实现（如 LLM 提供商、存储适配器、队列）通过接口 + adapter 完成，业务层无感
 - 模块可独立演进：一个模块的失败/回滚不影响其他模块（参见 Track J 绊线）
 
@@ -528,7 +530,7 @@ class MockGenerationAdapter implements VideoGenerationAdapter {
 |------|----------|----------|
 | 世界线视图（Track K / H4-H5，v1 已落地 2026-08-05） | 交互式时间线 / 甘特图 | 评估结论：vis-timeline 不采用（命令式 API、强绑定日历时间、7.x 后维护停滞）；借鉴其「轨道+条目」数据模型 + d3-scale 的 domain→range 抽象，零依赖手写（`lib/world-scale.ts`） |
 | 实体 Explorer（Track K 左栏） | 树状目录 / 递归导航 | 成熟 React tree 组件 + 现有 App Shell 导航模式 |
-| Creator Chat 流式（Track J 后续） | Agent 持续对话 | Codex / Claude Code 的会话 + 提案/工具围栏交互模式 |
+| Creator Chat 流式（Track J，已落地 2026-08-13） | Agent 持续对话 | Codex / Claude Code 的会话 + 提案/工具围栏交互模式 |
 | 提案确认围栏（已完成） | 审阅/补丁审批流 | 现有 ProposalCard + apply 模式（本项目首创落地） |
 | 视频生成管线 | 媒体生成任务编排 | 现有 WorkflowOrchestrator + BullMQ（已完成，不重写） |
 

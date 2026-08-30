@@ -213,7 +213,7 @@
 | J1 | 会话运行时 + World Builder Agent | `creator_chat_*` 表（**无 userId**）；`world-builder-agent` + 中英双语文案；mock 分支可演示落库（[AI-Agent-Collaboration.md §2](../domain/AI-Agent-Collaboration.md)） | **已完成 2026-08-05**（会话运行时 + Agent + mock 落库 E2E） |
 | J2 | 提案 → 确认 → 落库 | `apply-intent` 按 kind 分发既有 service（project/character/location/world_event/relationship）；全部 `draft`；幂等键 `message_id + proposal_key`；确认「创建世界」自动建 Project 并回绑线程 | **已完成 2026-08-05**（提案→确认→落库 + 幂等 + 自动建世界；错误路径 400/409 覆盖） |
 | J3 | 世界知识上下文 + 世界状态面板 | `buildWorldContext` 聚合 project/stories/assets/world_events/relationships → prompt 插槽；**2026-08-06** 曾在聊天右侧展示世界摘要；**2026-08-13** Creator Chat 改为简洁对话面（类 DeepSeek），世界摘要/冲突改由 Studio 副驾驶承担；**2026-08-14** 浅色独立对话壳 + 可收起历史侧栏，Studio 左栏与世界工作区左右栏可收起 | **已完成**；展示面 2026-08-13 收束到 Studio |
-| J4 | 与结构化工作区联动 | 右侧面板/实体跳转 `/projects/[pid]/world`；对话与 Studio 双向可达。**2026-08-14**：Studio 选中实体「在对话中继续」打开该项目最近线程并立刻交接一轮（关注点只进 agent 上下文） | **已完成 2026-08-05**；**2026-08-14** 选中实体继续对话 |
+| J4 | 与结构化工作区联动 | 右侧面板/实体跳转 `/projects/[pid]/world`；对话与 Studio 双向可达。**2026-08-14**：Studio 选中实体「在对话中继续」打开该项目最近**世界构建**线程并立刻交接一轮（关注点只进 agent 上下文）。**2026-08-30**：解析线程时排除 `RoleplayThread`，避免跳进最近扮演会话 | **已完成 2026-08-05**；**2026-08-14** 选中实体继续对话；**2026-08-30** 排除扮演 |
 
 **退出标准：** 每个落库动作都有可观测的用户确认记录；产物一律为通过既有 review gate 的结构化 `draft` 实体；对话记录不作为创作产物存储、不进领域模型、不参与导出；不绕过任何强制门禁；每次生成携带 usage 埋点与 provenance（P7）。
 
@@ -241,6 +241,21 @@
 **Timeline 决策（2026-07-31）：** World View 与 Production View 是单一 `ProjectTimeline` 的两种投影，不是两条持久化时间线。独立世界轴需要全局可排序的世界年表 — 这正是 [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md) 放弃的，因为虚构历法、模糊时段与平行世界无法合并为一条序列。ADR-0007 保持不变；无需新 ADR。工作流运行与生成任务完全不在 Timeline 上 — 执行时间是第三种时间，位于 `/production`。
 
 **护栏：** 在替换达到对等前不删除既有路由（IDE RFC §9）。本轨道无 Director Console — 槽位预留，Phase 3+。每个 UI 动作映射到 API 命令（P3）。`WorkflowPanel` 搬迁后每个强制门禁仍存活（P6）。此处不产生新领域实体；Track K 渲染 Track H 与 Track I 提供的内容。
+
+---
+## Track M — 记忆 / 小说导入 / 角色扮演
+
+目标：Creator Chat 获得跨会话记忆；小说一次性灌进世界层；在世界时间锚点上与角色对话。权威设计：[Memory-Novel-Roleplay-Design.md](Memory-Novel-Roleplay-Design.md)；边界 [ADR-0014](../architecture/adr/0014-layered-memory-system.md)、[ADR-0015](../architecture/adr/0015-novel-import-is-batch-memory-ingest.md)。
+
+| ID | 任务 | 备注 | 状态 |
+|----|------|-------|--------|
+| M1 | 分层记忆 + 上下文窗口 | L0 原文 / L1 原子 / L2 核心；同步规则归档 + 队列深加工；三路 RRF 检索；ThreadContextState 压缩；世界工作区记忆面板 | **已完成 2026-08-23**（ADR-0014） |
+| M2 | 小说导入 | 上传 txt → 切章 → 规则抽取 → Asset/WorldEvent/Relationship + 记忆卡；UTF-8/GB18030；人名停用词；整体撤销。按章 retry / 轻量升级路由未做 | **已完成 v1 2026-08-23**（ADR-0015）；解码与停用词 **2026-08-30** |
+| M3 | 时间锚定扮演 | `RoleplayThread` 旁表复用消息层；侧栏「角色」Tab；不反写世界实体。认知边界 / 锚点过滤 v1 | **已完成 v1 2026-08-23**；侧栏分 Tab **2026-08-30** |
+
+**退出标准：** 无密钥时规则记忆 + 导入 + 扮演全链路可跑；导入可整体撤销；扮演不经提案写入世界层。
+
+**不属于本轨道：** 独立 `/roleplay` 产品路由；完整记忆中心页面；SiliconFlow 真实 embedding（仍 mock / bigram）。
 
 ---
 
@@ -271,6 +286,8 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               │           ╲ Track J (Creator Chat continuous conversation): J1 ✓ → J2 ✓ → J3 ✓ → J4 ✓
               │           ╱
               ↓          ╱
+         Track M (memory / novel / roleplay): M1 ✓ → M2 ✓ v1 → M3 ✓ v1
+              ↓
          Phase 3 (generation productionize) — continues to defer, per ADR-0008
 
    Track K (world-first UI) runs alongside, each step gated on its supply:

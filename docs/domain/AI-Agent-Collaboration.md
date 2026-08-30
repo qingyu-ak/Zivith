@@ -4,9 +4,9 @@
 >
 > Version: 2.1
 >
-> Status: Active（生效）— 已于 2026-07-28 同步（prompt-draft Visual Prep + 延后 generate）；Agent 角色已于 2026-07-31 按 IP 世界模型重组（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）；2026-07-31 重组为四部分（仅结构调整，无内容变更）
+> Status: Active（生效）— 已于 2026-07-28 同步（prompt-draft Visual Prep + 延后 generate）；Agent 角色已于 2026-07-31 按 IP 世界模型重组（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）；2026-08-30 增补 Roleplay Agent（非流水线角色）
 >
-> Related: [Product-Positioning.md](../product/Product-Positioning.md), [Core-Domain-Model.md](Core-Domain-Model.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Shot-Specification.md](Shot-Specification.md), [Asset-Model.md](Asset-Model.md), [Next-Tasks.md](../planning/Next-Tasks.md), [ADR-0009](../architecture/adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)
+> Related: [Product-Positioning.md](../product/Product-Positioning.md), [Core-Domain-Model.md](Core-Domain-Model.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Shot-Specification.md](Shot-Specification.md), [Asset-Model.md](Asset-Model.md), [Next-Tasks.md](../planning/Next-Tasks.md), [ADR-0009](../architecture/adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0014](../architecture/adr/0014-layered-memory-system.md), [ADR-0015](../architecture/adr/0015-novel-import-is-batch-memory-ingest.md), [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md)
 
 ---
 
@@ -16,6 +16,7 @@
 
 1. 目的
 2. World Builder Agent
+   - 2.3 Roleplay Agent（扮演；非第五流水线角色）
 3. Lore Keeper Agent
 4. Production Planner Agent
 5. Generation Agent
@@ -113,6 +114,21 @@ User provides world lore → asset stage structures Knowledge → User reviews
 两个约束在两个方向上都成立。该阶段产出一律经提案与用户确认后以 `draft` 进入，并保持可编辑、可拒绝——Creator Chat 不得写入已批准状态（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)）。且该阶段不扩展领域模型：它产出 `Asset`、`WorldEvent` 与 Relationship State，均定义于 [Core-Domain-Model.md](Core-Domain-Model.md) §3。
 
 此次反转的落地顺序见 [Next-Tasks.md](../planning/Next-Tasks.md) 的 Track I（世界实体）与 Track J（Creator Chat 持续对话）。UI 侧为 Track K，规范见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md)。
+
+#### 2.3 Roleplay Agent（扮演）
+
+**在世界时间锚点上以角色口吻对话；不是第五个流水线角色。**
+
+它复用 Creator Chat 的 `CreatorChatThread` / `CreatorChatMessage` 与 SSE，旁表 `RoleplayThread` 记录角色 Asset 与可选 `WorldEvent` 锚点。侧栏「角色」Tab 列出扮演线程，与世界构建历史分开（[UI-Information-Architecture.md](../product/UI-Information-Architecture.md) §6）。实现：`apps/api/src/contexts/roleplay/roleplay-agent.ts`。
+
+| 方面 | 详情 |
+|---|---|
+| 输入 | 角色卡（MemoryCore persona）、锚点 T 之前该角色亲历 WorldEvent、关系快照、用户对白 |
+| 输出 | 扮演回复（SSE）；可选 episodic `MemoryAtom`（链接该角色） |
+| 执行阶段 | 无 — 不在 Story→Video DAG 中 |
+| 硬约束 | **不创建或修改** `Asset` / `WorldEvent` / `Relationship` / `Project.worldview`。反写世界层必须走 World Builder 提案确认（ADR-0010）。Studio「在对话中继续」不得打开扮演线程 |
+
+设计见 [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md) §6。
 
 ### 3. Lore Keeper Agent
 
@@ -221,7 +237,7 @@ Orchestrator 不是 Agent。它是规划执行并管理状态转换的工作流�
 | `review` | Generation | 评审备注 | —（未实现） |
 | `orchestrator` | —（引擎） | 执行计划 | — |
 
-Lore Keeper 不出现在任何行：它在 story-to-video 流水线中不拥有阶段，并独立于流水线运行。
+Lore Keeper 不出现在任何行：它在 story-to-video 流水线中不拥有阶段，并独立于流水线运行。Roleplay Agent 同样不占阶段。
 
 ---
 

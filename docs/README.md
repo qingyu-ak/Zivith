@@ -4,9 +4,9 @@
 >
 > Version: 0.1.0-pre
 >
-> Status: 实现中 — 创造层 v1 已闭环；H6 可变世界时间绑定、H7 派生 Track v1 已落地；下一步 I3 Organization（需晋级证据）
+> Status: 实现中 — 创造层 v1 已闭环；M1 记忆 / M2 小说导入 / M3 角色扮演已落地；下一步 I3 Organization（需晋级证据）
 >
-> Last Progress Sync: 2026-08-16 · 重新定位 2026-07-31（[ADR-0008](architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）
+> Last Progress Sync: 2026-08-30 · 重新定位 2026-07-31（[ADR-0008](architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）
 
 ---
 
@@ -78,6 +78,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 | 写代码前应遵循的约定 | [Code Agent Design Guide](engineering/Code-Agent-Design-Guide.md) |
 | 现在该做什么 | [Next Tasks](planning/Next-Tasks.md) |
 | 某个界面或路由应落在哪里 | [UI Information Architecture](product/UI-Information-Architecture.md) |
+| 记忆、小说导入、角色扮演如何工作 | [Memory / Novel / Roleplay 设计](planning/Memory-Novel-Roleplay-Design.md) |
 
 ### product/ — 为何
 
@@ -108,9 +109,10 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 | 文档 | 说明 |
 |----------|-------------|
-| [Next Tasks](planning/Next-Tasks.md) | 当前工程 backlog（创造层 v1 已闭环；H6/H7 v1 已落地；I3 Organization 待晋级证据；Phase 3 稍后） |
+| [Next Tasks](planning/Next-Tasks.md) | 当前工程 backlog（创造层 v1 已闭环；M1–M3 已落地；I3 Organization 待晋级证据；Phase 3 稍后） |
 | [Implementation Plan](planning/Implementation-Plan.md) | 分阶段路线图与实时进度勾选 |
 | [Development Log](planning/Development-Log.md) | 逐次修改的开发记录（每次提交同步追加） |
+| [Memory / Novel / Roleplay 设计](planning/Memory-Novel-Roleplay-Design.md) | 分层记忆、小说导入、时间锚定扮演 |
 
 ### architecture/ — 决策
 
@@ -170,7 +172,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 ---
 
-## 项目状态（2026-08-16）
+## 项目状态（2026-08-30）
 
 | 阶段 | 状态 | 说明 |
 |-------|--------|-------|
@@ -181,13 +183,14 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 | Track G polish | **Done** | 真密钥 Story→Video E2E；Wan harden / MinIO / balance / 无自动重计费 |
 | Track H — IP Core foundation | H0–H7 v1 + H9 v1 | Entity/State/Timeline。双写 helpers（flags 默认关闭）；世界线 v1 已落地（世界/制作双视图、四轨道、Shot 轨道，2026-08-05 → 08-14 细化）；H6 可变 WorldTime 绑定（TemporalDimension + 信封，2026-08-16）；H7 派生 Track v1（Camera/Style/Prompt/Model 只读投影）；H9 规则冲突检测只报告不修复 |
 | Track I — IP Core world entities | I1 / I2 落地 | WorldEvent（ADR-0011）与 Relationship（ADR-0012）已入 domain contract；Organization 待真实项目证据 |
-| Track J — Creator Chat | **已完成** | 世界优先的持续对话创作面，应用默认页 `/`，无登录（ADR-0010 修订 / ADR-0013）；流式 SSE + 冲突检测 + 主动引导 v1 |
-| Track K — World-first UI | **已完成 v1** | 项目主页 World Overview；`/world` 三栏工作区 + Inspector 可编辑；世界观 Chat→Studio 闭环；见 UI Information Architecture |
+| Track J — Creator Chat | **已完成** | 世界优先的持续对话创作面，应用默认页 `/`，无登录（ADR-0010 修订 / ADR-0013）；流式 SSE + 冲突检测 + 主动引导 v1；历史栏世界/角色 Tab（2026-08-30） |
+| Track K — World-first UI | **已完成 v1** | 项目主页 World Overview；`/world` 三栏工作区（可拖分栏、轴标签抽稀，2026-08-30）+ Inspector 可编辑；世界观 Chat→Studio 闭环；见 UI Information Architecture |
+| Track M — Memory / Novel / Roleplay | **M1–M3 已落地** | 分层记忆（ADR-0014）；小说导入批量预授权写入 + 整体撤销（ADR-0015）；时间锚定扮演，复用 Creator Chat 消息层、不反写世界实体 |
 | Phase 3–5 | Not started | 生成生产化，在 IP Core 之后重新排序（ADR-0008） |
 
 **仓库：** 活跃 monorepo（`apps/web`、`apps/api`、`packages/*`）。  
 **策略：** B-Line — 先 Agent 管线；真 SiliconFlow 路径已在 Track G 验证。自 2026-07-31 起 IP Core 优先；2026-08-04 创造层优先（分支 `feat/creator-layer-first`，2026-08-16 合并进 `main`）。  
-**近期焦点：** [Next Tasks](planning/Next-Tasks.md) — 创造层 v1 已闭环；H6 可变世界时间绑定与 H7 派生 Track v1 已落地；下一步 I3 Organization（需晋级证据）。资产表 + 提供商矩阵见 [Asset Model](domain/Asset-Model.md)。后续仍待：用量冻结/限额、BYOK（C7）、Phase 3 生成生产化。
+**近期焦点：** [Next Tasks](planning/Next-Tasks.md) — 创造层 v1 与 M1–M3 已闭环（2026-08-30 合进 `main`，PR #1）；下一步 I3 Organization（需晋级证据）。资产表 + 提供商矩阵见 [Asset Model](domain/Asset-Model.md)。后续仍待：用量冻结/限额、BYOK（C7）、Phase 3 生成生产化。
 
 ---
 

@@ -4,9 +4,9 @@
 >
 > Version: 1.2
 >
-> Status: Active — 已于 2026-08-16 同步（创造层 v1：世界线、WorldEvent/Relationship、Creator Chat、世界优先 UI）
+> Status: Active — 已于 2026-08-30 同步（创造层 v1 + 分层记忆 / 小说导入 / 角色扮演）
 >
-> Related: [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md), [Shot-Specification.md](../domain/Shot-Specification.md), [Asset-Model.md](../domain/Asset-Model.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md)
+> Related: [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md), [Shot-Specification.md](../domain/Shot-Specification.md), [Asset-Model.md](../domain/Asset-Model.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0014](../architecture/adr/0014-layered-memory-system.md), [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md)
 
 ---
 
@@ -278,10 +278,47 @@
 | `PATCH` / `DELETE` | `/timeline/tracks/{trackId}` | 更新 / 软删除 Track |
 | `POST` | `/timeline/tracks/{trackId}/items` | 将 Entity State 放置到 Presentation Time（`presentation_order`、可选 `world_time_bindings`） |
 | `PATCH` / `DELETE` | `/timeline/items/{itemId}` | 移动、重标注或绑定 World Time；空绑定即跟随主轴 |
+| `GET` | `/creator-chats` | 会话列表（`/world` 前缀）；DTO 含 `kind`（`world` \| `roleplay`）与 `character_name`；join `RoleplayThread` |
+| `GET` | `/creator-chats/{threadId}` | 会话详情（同上 `kind`） |
+| `POST` | `/creator-chats/{threadId}/messages/stream` | 世界构建 SSE；扮演线程走 `/roleplay` |
 
 仍为设计契约、尚未实现：`GET /projects/{pid}/entities/{type}/{id}/revisions`（EntityRevision 只读查询面）与 `GET /projects/{pid}/changes`（ChangeEvent 游标分页）。H7 Camera/Style/Prompt/Model 派生 Track v1 已在制作视图只读投影（不落库）。
 
 **One Timeline, several views.（一条时间线，多种视图。）** 一个 Project 恰好有一个 `ProjectTimeline`，以 Presentation Time 作为稳定主轴存储，可选的 World Time 绑定作为跟随层（ADR-0007）。`view` 参数选择该唯一存储的投影 — 面向产品的 *World View（世界视图）* 与 *Production View（制作视图）*（[UI-Information-Architecture.md](../product/UI-Information-Architecture.md) §5.2）是两种此类投影，而不是两条持久化时间线。工作流运行与生成任务是执行对象，永不出现在这条 Timeline 上；它们仅通过产出溯源与之关联。
+
+### Memory（分层记忆，ADR-0014；前缀 `/memory`）
+
+免登录（ADR-0013）。实现见 [`apps/api/src/routes/memory.ts`](../../apps/api/src/routes/memory.ts)。
+
+| 方法 | 路径 | 说明 |
+|--------|------|-------------|
+| `GET` | `/memory/projects/{pid}/atoms` | 分页浏览 L1 `MemoryAtom`（可按 entity 过滤） |
+| `GET` | `/memory/projects/{pid}/cores` | 浏览 L2 `MemoryCore` |
+| `DELETE` | `/memory/atoms/{id}` | 软失效原子（`invalidated`） |
+| `POST` | `/memory/rebuild` | 从 PG 原子重建该项目本地 sqlite 向量库 |
+| `POST` | `/memory/search` | 三路混合检索（调试 / 面板） |
+
+### Novel import（小说导入，ADR-0015）
+
+免登录。实现见 [`apps/api/src/routes/novel-imports.ts`](../../apps/api/src/routes/novel-imports.ts)。文本解码 UTF-8 优先，非法则 GB18030。设计中的按章 retry / 轻量升级尚未提供路由。
+
+| 方法 | 路径 | 说明 |
+|--------|------|-------------|
+| `POST` | `/novel-imports` | multipart 上传 txt + `project_id`；同步抽取并写入世界层 + 记忆层 |
+| `GET` | `/novel-imports?project_id=` | 该项目导入记录列表 |
+| `GET` | `/novel-imports/{id}` | 单条记录与报告 |
+| `DELETE` | `/novel-imports/{id}` | 按报告 ID 级联撤销（软删世界实体、删记忆、关扮演线程） |
+
+### Roleplay（时间锚定扮演）
+
+免登录。实现见 [`apps/api/src/routes/roleplay.ts`](../../apps/api/src/routes/roleplay.ts)。消息落在 `CreatorChatMessage`；`RoleplayThread` 旁表指向同一线程。不反写 Asset / WorldEvent / Relationship。
+
+| 方法 | 路径 | 说明 |
+|--------|------|-------------|
+| `POST` | `/roleplay/threads` | 开启扮演（角色 Asset + 可选 WorldEvent 锚点） |
+| `GET` | `/roleplay/threads` | 扮演线程列表 |
+| `GET` | `/roleplay/threads/{id}/messages` | 历史消息 |
+| `POST` | `/roleplay/threads/{id}/messages` | 发送并 SSE 流式回复 |
 
 ### Generation（生成）
 
@@ -350,7 +387,7 @@ PATCH /shots/shot_123
 | **Job Queue（任务队列）** | 异步任务管理 | 生成任务、工作流步骤、通知 |
 | **Cache（缓存）** | 频繁访问、很少变更的数据 | 已解析 Asset 数据、提示词模板、模型能力 |
 
-State/Timeline 层（已落库，2026-08-04 迁移 `20260804000000_creator_layer_world`）在 PostgreSQL 中存储 `EntityRevision`、`ChangeEvent`、`ProjectSequence`、`ProjectTimeline`、`TimelineTrack`、`TimelineItem`、`WorldEvent`、`Relationship`，以及 Creator Chat 的 `CreatorChatThread` / `CreatorChatMessage`。专用业务表仍是当前状态权威；修订是状态历史权威。Timeline 行需要 Presentation 放置，并可选择携带不透明的项目自定义 World Time 绑定。大型快照使用对象存储引用加规范哈希，而不是把二进制或提供商载荷复制进 PostgreSQL。
+State/Timeline 层（已落库，2026-08-04 迁移 `20260804000000_creator_layer_world`）在 PostgreSQL 中存储 `EntityRevision`、`ChangeEvent`、`ProjectSequence`、`ProjectTimeline`、`TimelineTrack`、`TimelineItem`、`WorldEvent`、`Relationship`，以及 Creator Chat 的 `CreatorChatThread` / `CreatorChatMessage`。记忆层（ADR-0014）另存 `MemoryAtom`、`MemoryCore`、`MemoryPipelineState`、`ThreadContextState`；每项目一份可重建的本地 sqlite 向量文件（`apps/api/data/memory-vectors/<projectId>.sqlite`）。小说导入存 `NovelImport` / `NovelImportChapter`；扮演存 `RoleplayThread`（旁表，`threadId` 指向 `CreatorChatThread`）。专用业务表仍是当前状态权威；修订是状态历史权威。Timeline 行需要 Presentation 放置，并可选择携带不透明的项目自定义 World Time 绑定。大型快照使用对象存储引用加规范哈希，而不是把二进制或提供商载荷复制进 PostgreSQL。
 
 ## 5.2 主数据库 — 实体关系总览
 ```
@@ -375,6 +412,12 @@ TimelineTrack 1──N TimelineItem
 TimelineItem N──1 EntityRevision (logical reference; optional)
 Project 1──N CreatorChatThread
 CreatorChatThread 1──N CreatorChatMessage
+CreatorChatThread 0..1──1 RoleplayThread
+Project 1──N MemoryAtom
+Project 1──N MemoryCore
+CreatorChatThread 0..1──1 ThreadContextState
+Project 1──N NovelImport
+NovelImport 1──N NovelImportChapter
 ```
 
 ## 5.3 关键模式决策

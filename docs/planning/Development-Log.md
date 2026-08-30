@@ -12,6 +12,19 @@
 
 ---
 
+## 2026-08-30 · pending · docs · 同步 M1–M3 与 PR #1 进总览 / 工程文档
+
+创造层后续能力已合进 `main`，规划文档已写 Tab/分栏，但 README 状态表、Technical-Architecture 路由、Next-Tasks 轨道图仍停在 08-16。本轮只改文档。
+
+- **docs** README 状态表 + Last Progress Sync 2026-08-30；Technical-Architecture 补 `/memory` `/novel-imports` `/roleplay` 与存储；Next-Tasks Track M + J4 排除扮演；Implementation-Plan 进度行
+- **docs** ADR-0015 小说导入即批量记忆摄取；AI-Agent-Collaboration 扮演 Agent（非第五流水线角色、不反写世界层）；Code-Agent-Design-Guide：Prisma 从 `@zivith/database` 进口
+- **docs** Development-Log：补 `eb83324` 合并记录；08-16/08-23 及部分 08-05 条目补 commit hash
+- 模块：`docs/**`
+
+## 2026-08-30 · eb83324 · docs · 合并 PR #1（zcode → main）
+
+GitHub Actions CI #11 全绿后合并。含对话历史分 Tab、世界线可调分栏、Prettier、Prisma 进口修复。
+
 ## 2026-08-30 · d3b3e8d · fix(api) · CI lint：Prisma 从 @zivith/database 进口
 
 PR CI 在 `pnpm lint` 失败：`novel-import/service.ts` 上 `this.db.novelImport` 被当成 `any`（`no-unsafe-*`）。`@zivith/api` 不直接依赖 `@prisma/client`，GitHub 隔离安装下该进口解析不到生成类型；本地 hoisted 所以能过。
@@ -36,11 +49,10 @@ GitHub Actions「检查格式」在 `pnpm format:check` 上失败：记忆 / 小
 - **feat(web)** 历史栏世界/角色 Tab；扮演按所属世界分组；Studio「在对话中继续」排除扮演线程
 - **feat(web)** 世界工作区左右栏与时间线/下坞可拖拽改尺寸（localStorage）；副驾驶/记忆/导入可折叠；轴标签与导轨抽稀
 - **fix(api)** 小说导入人名停用词；txt 解码 UTF-8 优先、非法时回退 GB18030
-- **chore** 清理 ESLint（unused / require-await / 多余断言）；删开发库冒烟账号
 - 验证：web `chat-history` / `world-scale`；api `novel-import` / `memory-service`；`@zivith/ui` typecheck；世界页 DOM 含分栏拖动手柄
 - 模块：`apps/api/src/{routes,contexts/novel-import}`、`apps/web/{components/creator-chat,components/world,lib}`、`docs/**`
 
-## 2026-08-23 · pending · feat(api,web,domain,db) · M1 记忆地基 + 上下文管理器落地
+## 2026-08-23 · 44a8d58 · feat(api,web,domain,db) · M1 记忆地基 + 上下文管理器落地
 
 分层记忆（L0 原文 / L1 原子 / L2 核心）+ 双路径管线（同步规则归档 + 队列异步深加工）+ 三路混合检索（实体链接 / 向量 / bigram 关键词 RRF 融合）+ ThreadContextState 滚动摘要压缩（[Memory-Novel-Roleplay-Design.md](Memory-Novel-Roleplay-Design.md)，ADR-0014）。mock-first：无任何密钥时规则提炼 + bigram 检索全链路可用。
 
@@ -51,14 +63,14 @@ GitHub Actions「检查格式」在 `pnpm format:check` 上失败：记忆 / 小
 - 验证：api `vitest` 34 文件 164 用例全绿；api/web `tsc --noEmit`
 - 模块：`packages/domain`、`packages/database`、`apps/api/src/{contexts/memory,adapters/memory,routes}`、`apps/web/{lib/api.ts,components/{creator-chat,world}}`、`docs/**`
 
-## 2026-08-16 · pending · feat(api,web) · H7 Style derived track
+## 2026-08-16 · 352a363 · feat(api,web) · H7 Style derived track
 
 Style 轨从 Shot lighting/color/style/mood 投影，插入机位与提示词之间，仍不落库。
 
 - 验证：web `world-line`；web/api `tsc --noEmit`
 - 模块：`apps/api/src/routes/world.ts`、`apps/web/{lib,components/world}`、`docs/**`
 
-## 2026-08-16 · pending · feat(api,web) · H7 derived Camera/Prompt/Model tracks
+## 2026-08-16 · 352a363 · feat(api,web) · H7 derived Camera/Prompt/Model tracks
 
 制作视图增加只读派生轨：机位从 Shot.camera/composition 投影，提示词优先已批准 PromptVersion，模型来自 Output provenance。不写入 TimelineItem。
 
@@ -67,7 +79,7 @@ Style 轨从 Shot lighting/color/style/mood 投影，插入机位与提示词之
 - 验证：web `world-line` 15；web/api `tsc --noEmit`
 - 模块：`apps/api/src/routes/world.ts`、`apps/web/{lib,components/world}`、`docs/**`
 
-## 2026-08-16 · pending · feat(domain,api,web) · H6 variable WorldTime binding
+## 2026-08-16 · 352a363 · feat(domain,api,web) · H6 variable WorldTime binding
 
 可变世界时间绑定落地：Project 自定义 `TemporalDimension`，核心只校验 `WorldTimeBinding` 信封（follow / point / range / relative / crossing / unknown），不解释历法值。空信封仍跟随呈现主轴。
 
@@ -229,7 +241,7 @@ LLM 偶尔在项目已存在时仍误产出 `create_project`，与真实实体�
 - 验证：全库计数无损——threads 9→9、assets 74→74、worldEvents 3→3，projects(active) 7→5；`GET /projects`（demo）只剩 1 个「凡人修仙传」+「UI 回归验证项目」；`resources` 返回韩立（描述已并入两段）/天南大陆/2 事件；`/world/creator-chats` 2 条对话均归属主体项目、无对话指向已归档项目；浏览器回归：/projects 1 张卡片、工作区可见韩立/天南大陆/2 事件、两条对话「进入 Studio →」均指向 `239cb924`，无报错
 - 模块：数据操作（无代码变更，脚本已清理）；说明：对话标题 `?????` 为早期测试乱码残留，非本次引入
 
-## 2026-08-05 · `(pending commit)` · feat(api/web) · Studio Inspector 项目属性内联编辑（K5 衍生）
+## 2026-08-05 · 9e9b248 · feat(api/web) · Studio Inspector 项目属性内联编辑（K5 衍生）
 
 右栏 Inspector 支持项目级内联编辑：名称/描述/题材/核心设定/世界规则/补充 六项可改可存，保存后刷新持久化。进入工作区 → 左栏选中「项目」节点 → Inspector 顶部右上「编辑」→ 修改 → 保存（成功后自动刷新资源并回显）。编辑按钮置于「世界线属性」区块标题右上角，符合「动作按钮右上角快速可达」的交互偏好。
 
@@ -239,7 +251,7 @@ LLM 偶尔在项目已存在时仍误产出 `create_project`，与真实实体�
 - 说明：上一轮清理已移除 chat 测试建的「凡人修仙传」；库内仅存两个早期孤立「凡人修仙传」（`b62f238b`/`239cb924`，owner=local 且无 ProjectMember，不在 /projects 列表、PATCH 403）。本轮验证另建 demo-owned 的「凡人修仙传」`4c50e7cc`（已带成员、可编辑），是否保留待用户确认
 - 模块：`apps/api/src/routes/resources.ts`、`apps/api/test/resource-contracts.test.ts`、`apps/web/components/world/{inspector-panel,world-workspace}.tsx`
 
-## 2026-08-05 · `(pending commit)` · feat(api/web/domain) · 世界观 Chat→Studio 核心闭环（K5）
+## 2026-08-05 · 6e74287 · feat(api/web/domain) · 世界观 Chat→Studio 核心闭环（K5）
 
 愿景核对报告 + 核心闭环落地：Creator Chat 引导 IP → 自动识别世界观 → 落库 → Studio 三栏展示 → 副驾驶摘要 → 切换入口。Chat 引导/Studio 三栏/实体列表/timeline/Inspector 与愿景对齐；补齐世界观单点表示与自动识别。
 
@@ -254,14 +266,14 @@ LLM 偶尔在项目已存在时仍误产出 `create_project`，与真实实体�
 - 验证：typecheck（api/web/domain）✓ 0 error；lint ✓ 0 error；单测 domain 54 / api 95 / web 11 全过；E2E `verify-proposal-flow.ts` 48/48 ✓；API 级世界观闭环冒烟 ✓（世界观提案 → apply → worldview 落库 → resources 返回）；浏览器回归（127.0.0.1:3100，mock API）A–E 五点全 PASS（Chat 引导世界观提案/确认落库 → header 常驻「进入 Studio →」跳转 → 左栏世界观组 → 副驾驶面板阶段+摘要+计数 → Inspector 世界观属性）
 - 回归期修复 6 处：① `update_entity` 的 `type='project'` 且 payload 缺 `id` 时兜底为 projectId（LLM/mock 漏带）；② mock 世界观提案显式带 `id: projectId`；③ mock 世界观 premise 正则优化（移除「设定：」前缀捕获）；④ CoPilotPanel/InspectorPanel 补 `worldview ?? { rules: [] }` 空值防护（防旧版 API 契约缺失崩溃）；⑤ **真实 LLM 占位 project_id 修复**：LLM 会在提案里填 `project_placeholder`/`proj-001` 等占位 ID，`requireProjectId` 改为上下文归属（批量 apply 的 currentProjectId / thread.projectId）优先，`type='project'` 的实体 id 恒用 projectId；apply 循环包进 `db.$transaction`（失败整体回滚、提案保持 pending 可重试，消除部分应用与重复确认死锁）。定向复测 7 项全过（占位 ID apply 200 + 角色落库于正确项目 + 批量失败回滚 + pending 可重试 + 4xx 非 500）；⑥ **Creator Chat 项目进 /projects 列表**：applyCreateProject 建项目时自动写入 `ProjectMember`（优先当前登录用户——world 路由无 auth 但前端统一带 Bearer token，apply 端点可选 `jwtVerify` 解析；匿名/无 token 回退 local owner），与手动建项目（resources.ts nested create）行为一致，按成员过滤的 /projects 列表可见。定向验证 + 浏览器端到端全 PASS（chat 建项目 → /projects 列表出现 → 可进入工作区）
 
-## 2026-08-05 · `(pending commit)` · feat(web) · K3 Creator Chat 设为应用默认页 `/`
+## 2026-08-05 · 6e74287 · feat(web) · K3 Creator Chat 设为应用默认页 `/`
 
 Track K3 落地：根路由 `apps/web/app/page.tsx` 重定向由 `/projects` 改为 `/creator-chats`，打开应用即进入持续对话创作面（Track J 门禁已满足）。
 
 - 模块：`apps/web/app/page.tsx`
 - 验证：web typecheck ✓ / eslint ✓ / 浏览器回归（127.0.0.1:3100）：`/` 正确重定向 `/creator-chats`，侧栏「创作聊天」激活，对话列表与新建入口可用，`/projects` 回归正常，无 500
 
-## 2026-08-05 · `(pending commit)` · feat(web) · K1 项目首页拆分为 World Overview + /production + /settings
+## 2026-08-05 · 6e74287 · feat(web) · K1 项目首页拆分为 World Overview + /production + /settings
 
 Track K1 落地（世界优先 UI 第一步，只搬不移逻辑）：项目页移除 `ProviderPanel`/`UsageSummaryCard`/`WorkflowPanel`/`GenerationQueuePanel`，改为 World Overview（顶部项目名 + 「本地创作」徽标 + 「去创作对话」入口 + 分区导航：世界工作区/故事/实体库/制作/设置）；新增 `apps/web/app/(studio)/projects/[projectId]/production/page.tsx`（WorkflowPanel + GenerationQueuePanel）与 `settings/page.tsx`（ProviderPanel + UsageSummaryCard）；新增 `apps/web/components/project-sub-nav.tsx` 分区导航组件；侧栏新增「制作」「设置」入口并修正激活态逻辑。
 
@@ -269,7 +281,7 @@ Track K1 落地（世界优先 UI 第一步，只搬不移逻辑）：项目页�
 - 验证：web typecheck ✓ / eslint 5 文件 0 错误 ✓ / 浏览器回归（browser_use 对 3100 dev server）5 页全过：projects 列表、World Overview、/production、/settings、/world 均正常渲染，无 500 / 无应用级红色报错
 - 已知遗留（非本任务）：API 大多数路由仍强制 JWT（仅 `/world` 免认证），ADR-0013「打开即用」后端未闭环；浏览器验证时以 seed 账号 `demo@zivith.local` 登录，并新建了「UI 回归验证项目」（ID `38701dd8-46cc-465d-a725-afebb93cb7b7`）作为验证载体，可删除
 
-## 2026-08-05 · `(pending commit)` · test(api/domain/web) · 测试基线修复 + lint 清理 + 阶段 G 零 DB 单测补齐
+## 2026-08-05 · 6e74287 · test(api/domain/web) · 测试基线修复 + lint 清理 + 阶段 G 零 DB 单测补齐
 
 复盘全量测试基线：API 95 单测、Domain 23 单测、提案流 E2E 48 项全部通过。修复 `history-baseline.test.ts` 2 项回归（mock db 缺 `worldEvent` 模型 → 补 `findMany` mock）。lint 清理 535 → 45：删除 `apps/web/scripts/syntax-check/` webpack 残留（~500 项噪音），新代码 lint 清零（剩余为既有文件基线债务，非本任务范围）。阶段 G 新增零 DB 单测：`packages/domain/test/world.test.ts`（25 项：worldEvent/relationship/timeline schema parse、世界时间信封 opaque、快照序列化、HISTORY_ENTITY_TYPES 扩展）+ `apps/web/lib/world-scale.test.ts`（11 项：createOrderScale/interpolateOrders/integerTicks 刻度算法），`apps/web/package.json` 接入 `test` 脚本（`vitest run`，依赖 workspace hoisted vitest v2.1.9）。补齐 B3 缺口：`HISTORY_ENTITY_TYPES` 增加 `'relationship'`，新增 `serializeRelationshipSnapshot` 并并入 `serializeHistorySnapshot` 分发。
 
@@ -277,7 +289,7 @@ Track K1 落地（世界优先 UI 第一步，只搬不移逻辑）：项目页�
 - 验证：api / web / domain typecheck 全绿；api 95 单测 ✓、domain 48 单测 ✓（+25）、web 11 单测 ✓；新文件 eslint 0 错误
 - 环境备注：本机 Node v24 触发 `engine-strict`，pnpm 命令需带 `--config.engine-strict=false`；`pnpm install` 会因「包管理器不一致」移动 node_modules 到 `.ignored` 并崩溃，勿在本机运行（已发生过一次，已手动恢复）
 
-## 2026-08-05 · `(pending commit)` · fix(infra) · dev server 进程风暴修复 + 免登录可用落地
+## 2026-08-05 · 6e74287 · fix(infra) · dev server 进程风暴修复 + 免登录可用落地
 
 解决「浏览器 502 / 登录页点了没反应 / 页面卡死」三连问题，根因是 dev server 编译 worker 崩溃-重启死循环（458 个僵尸 node 进程占满 CPU，webpack 产物损坏：login chunk 0 字节、chunk 加载超时）。
 
