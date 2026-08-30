@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-30 · pending · fix(api) · CI lint：Prisma 从 @zivith/database 进口
+## 2026-08-30 · d3b3e8d · fix(api) · CI lint：Prisma 从 @zivith/database 进口
 
 PR CI 在 `pnpm lint` 失败：`novel-import/service.ts` 上 `this.db.novelImport` 被当成 `any`（`no-unsafe-*`）。`@zivith/api` 不直接依赖 `@prisma/client`，GitHub 隔离安装下该进口解析不到生成类型；本地 hoisted 所以能过。
 
