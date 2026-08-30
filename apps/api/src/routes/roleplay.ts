@@ -1,6 +1,6 @@
 // M3 角色扮演路由（设计 §7）——镜像 Creator Chat 的 SSE 协议与消息模型。
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { buildWorldContext } from '../contexts/world-builder/world-context.js';

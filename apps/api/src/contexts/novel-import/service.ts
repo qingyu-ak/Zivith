@@ -1,7 +1,7 @@
 // M2 小说导入服务（设计 §5.2–§5.6）
 // 导入 = 显式用户动作 = 批量预授权：产物直接写世界层（Asset/WorldEvent/Relationship）
 // + 记忆层（MemoryAtom trait / MemoryCore persona 卡），报告记录全部产物 ID 支持整体撤销。
-import type { PrismaClient, Prisma } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@zivith/database';
 import { computeDedupHash } from '../memory/fingerprint.js';
 import { splitChapters, type ChapterText } from './chapter-splitter.js';
 import {

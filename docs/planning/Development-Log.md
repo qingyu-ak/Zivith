@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-08-30 · pending · fix(api) · CI lint：Prisma 从 @zivith/database 进口
+
+PR CI 在 `pnpm lint` 失败：`novel-import/service.ts` 上 `this.db.novelImport` 被当成 `any`（`no-unsafe-*`）。`@zivith/api` 不直接依赖 `@prisma/client`，GitHub 隔离安装下该进口解析不到生成类型；本地 hoisted 所以能过。
+
+- **fix(api)** `NovelImportService` / `roleplay` 路由与 Agent 改为 `import type { PrismaClient } from '@zivith/database'`
+- 验证：`pnpm lint`
+- 模块：`apps/api/src/contexts/novel-import`、`apps/api/src/contexts/roleplay`、`apps/api/src/routes/roleplay.ts`
+
 ## 2026-08-30 · ceb17cd · chore · Prettier 对齐，修复 CI format:check
 
 GitHub Actions「检查格式」在 `pnpm format:check` 上失败：记忆 / 小说导入 / 扮演 / 世界工作区等 35 个文件未按 Prettier 排版（多为超长行折行与尾逗号）。
