@@ -1,12 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Badge, Spinner } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { WorldResourcesDTO, WorldSelection } from '@/lib/types';
-import { buildWorldLineModel, buildProductionLineModel, resolveDisplayDimensions, isPrimaryWorldline, countEventsBoundToDimension } from '@/lib/world-line';
+import {
+  buildWorldLineModel,
+  buildProductionLineModel,
+  resolveDisplayDimensions,
+  isPrimaryWorldline,
+  countEventsBoundToDimension,
+} from '@/lib/world-line';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
+import {
+  WORKSPACE_LAYOUT_KEYS,
+  clampPx,
+  usePersistedFlag,
+  usePersistedPx,
+} from '@/lib/workspace-layout';
 import { IconPanelLeft, IconPanelRight } from '@/components/nav-icons';
 import { EntityExplorer } from './entity-explorer';
 import { WorldTimeline } from './world-timeline';
@@ -16,6 +28,7 @@ import { CoPilotPanel } from './co-pilot-panel';
 import { MemoryPanel } from './memory-panel';
 import { NovelImportPanel } from './novel-import-panel';
 import { ContinueInChatButton } from './continue-in-chat';
+import { DockSection, ResizeHandle } from './workspace-split';
 
 export function WorldWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -26,6 +39,23 @@ export function WorldWorkspace() {
   const [error, setError] = useState('');
   const [leftCollapsed, toggleLeft] = useCollapsedSidebar('worldLeft');
   const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
+  const [leftWidth, setLeftWidth] = usePersistedPx(WORKSPACE_LAYOUT_KEYS.leftWidth, 248, 180, 440);
+  const [rightWidth, setRightWidth] = usePersistedPx(
+    WORKSPACE_LAYOUT_KEYS.rightWidth,
+    320,
+    240,
+    560,
+  );
+  const [dockHeight, setDockHeight] = usePersistedPx(
+    WORKSPACE_LAYOUT_KEYS.dockHeight,
+    160,
+    40,
+    720,
+  );
+  const [copilotOpen, toggleCopilot] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.dockCopilot, true);
+  const [memoryOpen, toggleMemory] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.dockMemory, false);
+  const [importOpen, toggleImport] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.dockImport, false);
+  const centerRef = useRef<HTMLElement | null>(null);
 
   function switchView(next: 'world' | 'production') {
     setView(next);
@@ -202,58 +232,59 @@ export function WorldWorkspace() {
         </div>
       </header>
 
-      <div
-        className="grid min-h-0 flex-1"
-        style={{
-          gridTemplateColumns: `${leftCollapsed ? '0px' : '248px'} minmax(0,1fr) ${rightCollapsed ? '0px' : '320px'}`,
-        }}
-      >
+      <div className="flex min-h-0 flex-1">
         {/* 左栏：世界视图 = 实体 Explorer；制作视图 = 故事列表 */}
-        {view === 'production' ? (
-          <aside
-            className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : 'overflow-y-auto'}`}
-          >
-            <div className="border-b border-line px-4 py-3">
-              <p className="text-xs font-medium uppercase tracking-wider text-zinc-600">故事</p>
-            </div>
-            {sortedStories.length === 0 ? (
-              <p className="px-4 py-4 text-sm text-zinc-600">还没有故事</p>
-            ) : (
-              <ul className="p-2">
-                {sortedStories.map((story) => {
-                  const active = selection?.kind === 'story' && selection.id === story.id;
-                  return (
-                    <li key={story.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelection({ kind: 'story', id: story.id })}
-                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition ${
-                          active
-                            ? 'bg-zinc-100 text-zinc-900'
-                            : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
-                        }`}
-                      >
-                        <span className="truncate text-sm font-medium">{story.title}</span>
-                        <span className="shrink-0 text-xs text-zinc-600">
-                          {story.scene_count ?? 0} 场景
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </aside>
-        ) : (
-          <aside
-            className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : ''}`}
-          >
+        <aside
+          className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : view === 'production' ? 'overflow-y-auto' : ''}`}
+          style={{ width: leftCollapsed ? 0 : leftWidth }}
+        >
+          {view === 'production' ? (
+            <>
+              <div className="border-b border-line px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-zinc-600">故事</p>
+              </div>
+              {sortedStories.length === 0 ? (
+                <p className="px-4 py-4 text-sm text-zinc-600">还没有故事</p>
+              ) : (
+                <ul className="p-2">
+                  {sortedStories.map((story) => {
+                    const active = selection?.kind === 'story' && selection.id === story.id;
+                    return (
+                      <li key={story.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelection({ kind: 'story', id: story.id })}
+                          className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition ${
+                            active
+                              ? 'bg-zinc-100 text-zinc-900'
+                              : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                          }`}
+                        >
+                          <span className="truncate text-sm font-medium">{story.title}</span>
+                          <span className="shrink-0 text-xs text-zinc-600">
+                            {story.scene_count ?? 0} 场景
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          ) : (
             <EntityExplorer resources={resources} selection={selection} onSelect={setSelection} />
-          </aside>
+          )}
+        </aside>
+        {!leftCollapsed && (
+          <ResizeHandle
+            orientation="vertical"
+            label="调整左侧栏宽度"
+            onDrag={(delta) => setLeftWidth((width) => width + delta)}
+          />
         )}
 
-        {/* 中栏：时间线（世界 / 制作）+ 世界视图副驾驶 */}
-        <section className="flex min-h-0 flex-col">
+        {/* 中栏：时间线 + 可拖拽的下方面板 */}
+        <section ref={centerRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
           {view === 'world' ? (
             <>
               <WorldTimeBar
@@ -268,15 +299,18 @@ export function WorldWorkspace() {
                 <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-4 py-2 text-xs leading-5 text-violet-950">
                   {isPrimaryWorldline(focusedDimension) ? (
                     <>
-                      正在查看「{focusedDimension.label}」。这是默认世界时间，角色和地点跟随呈现顺序，不会另建一条时间轴。
+                      正在查看「{focusedDimension.label}
+                      」。这是默认世界时间，角色和地点跟随呈现顺序，不会另建一条时间轴。
                     </>
                   ) : boundEventCount === 0 ? (
                     <>
-                      正在查看「{focusedDimension.label}」叠层。还没有事件绑到这个维度，所以中间格子仍是同一批角色和地点——主轴不会变成历法或梦境。
+                      正在查看「{focusedDimension.label}
+                      」叠层。还没有事件绑到这个维度，所以中间格子仍是同一批角色和地点——主轴不会变成历法或梦境。
                     </>
                   ) : (
                     <>
-                      正在查看「{focusedDimension.label}」叠层，已有 {boundEventCount} 个事件绑在此维度；其他维度的事件会淡显。
+                      正在查看「{focusedDimension.label}」叠层，已有 {boundEventCount}{' '}
+                      个事件绑在此维度；其他维度的事件会淡显。
                     </>
                   )}
                 </div>
@@ -310,17 +344,46 @@ export function WorldWorkspace() {
               </div>
             )}
           </div>
-          {/* 副驾驶 Agent 面板（v1 只读世界状态摘要，仅世界视图） */}
-          {view === 'world' && <CoPilotPanel resources={resources} onSelect={setSelection} />}
-          {/* M1 记忆面板：L1 原子列表 + 重建向量 */}
-          <MemoryPanel projectId={projectId} />
-          {/* M2 小说导入：上传 → 提炼世界层 + 角色卡 */}
-          <NovelImportPanel projectId={projectId} onImported={() => void load()} />
+          <ResizeHandle
+            orientation="horizontal"
+            label="调整时间线高度"
+            onDrag={(delta) => {
+              const host = centerRef.current;
+              const max = host ? Math.max(40, host.clientHeight - 220) : 720;
+              setDockHeight((height) => clampPx(height - delta, 40, max));
+            }}
+          />
+          <div className="min-h-0 shrink-0 overflow-y-auto" style={{ height: dockHeight }}>
+            {view === 'world' && (
+              <DockSection title="副驾驶" open={copilotOpen} onToggle={toggleCopilot}>
+                <CoPilotPanel resources={resources} onSelect={setSelection} showTitle={false} />
+              </DockSection>
+            )}
+            <DockSection title="长期记忆" open={memoryOpen} onToggle={toggleMemory}>
+              <MemoryPanel projectId={projectId} showTitle={false} />
+            </DockSection>
+            <DockSection title="导入小说" open={importOpen} onToggle={toggleImport}>
+              <NovelImportPanel
+                projectId={projectId}
+                onImported={() => void load()}
+                showTitle={false}
+              />
+            </DockSection>
+          </div>
         </section>
+
+        {!rightCollapsed && (
+          <ResizeHandle
+            orientation="vertical"
+            label="调整右侧栏宽度"
+            onDrag={(delta) => setRightWidth((width) => width - delta)}
+          />
+        )}
 
         {/* 右栏：Inspector */}
         <aside
           className={`min-h-0 overflow-hidden border-l border-line ${rightCollapsed ? 'pointer-events-none' : ''}`}
+          style={{ width: rightCollapsed ? 0 : rightWidth }}
         >
           <InspectorPanel
             resources={resources}

@@ -205,7 +205,8 @@ export class MemoryService {
     for (const id of fused) {
       const atom = byId.get(id);
       if (!atom) continue;
-      if (atom.entityType && atom.entityId) linkedEntityIds.add(`${atom.entityType}:${atom.entityId}`);
+      if (atom.entityType && atom.entityId)
+        linkedEntityIds.add(`${atom.entityType}:${atom.entityId}`);
       results.push({
         source: 'atom',
         id: atom.id,
@@ -220,7 +221,12 @@ export class MemoryService {
     const cores = await this.deps.store.listCores(params.projectId);
     const linkedAtomIds = new Set(
       active
-        .filter((atom) => atom.entityType && atom.entityId && linkedEntityIds.has(`${atom.entityType}:${atom.entityId}`))
+        .filter(
+          (atom) =>
+            atom.entityType &&
+            atom.entityId &&
+            linkedEntityIds.has(`${atom.entityType}:${atom.entityId}`),
+        )
         .map((atom) => atom.id),
     );
     for (const core of cores) {
@@ -279,7 +285,9 @@ export class MemoryService {
         for (const refined of result.data.atoms) {
           const atom = atoms[refined.index];
           if (!atom) continue;
-          const linked = refined.entity_name ? resolveEntityByName(refined.entity_name, world) : null;
+          const linked = refined.entity_name
+            ? resolveEntityByName(refined.entity_name, world)
+            : null;
           await this.deps.store.updateAtom(atom.id, {
             content: refined.content,
             factType: refined.fact_type,
@@ -300,8 +308,7 @@ export class MemoryService {
       }
       for (const [key, group] of groups) {
         const [entityType, entityId] = key.split(':');
-        const topic =
-          (await this.entityName(world, entityType || null, entityId || null)) ?? '未归档事实';
+        const topic = this.entityName(world, entityType || null, entityId || null) ?? '未归档事实';
         const contents: string[] = [];
         for (const atom of [...group].reverse()) {
           if (!contents.includes(atom.content)) contents.push(atom.content);
@@ -340,11 +347,11 @@ export class MemoryService {
   }
 
   /** 实体名解析（L2 topic 用；从 world 上下文查名字）。 */
-  private async entityName(
+  private entityName(
     world: WorldContext | null,
     entityType: string | null,
     entityId: string | null,
-  ): Promise<string | null> {
+  ): string | null {
     if (!world || !entityType || !entityId) return null;
     if (entityType === 'character') {
       return world.characters.find((c) => c.id === entityId)?.name ?? null;
@@ -419,7 +426,10 @@ export class MemoryService {
       keepRecentMessages: 8,
     });
     const window = summary
-      ? [{ id: 'summary', role: 'system' as const, content: `## 此前对话摘要\n${summary}` }, ...built.window]
+      ? [
+          { id: 'summary', role: 'system' as const, content: `## 此前对话摘要\n${summary}` },
+          ...built.window,
+        ]
       : built.window;
     return { window, evicted: built.evicted };
   }

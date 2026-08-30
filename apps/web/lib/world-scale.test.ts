@@ -1,5 +1,5 @@
 /// <reference types="vitest/globals" />
-import { createOrderScale, integerTicks, interpolateOrders } from './world-scale';
+import { createOrderScale, integerTicks, interpolateOrders, thinByMinGap } from './world-scale';
 
 describe('createOrderScale (线性 domain→range 映射 + clamp)', () => {
   it('maps domain midpoint to range midpoint', () => {
@@ -65,5 +65,20 @@ describe('integerTicks (整数刻度轴)', () => {
   it('falls back to a single rounded tick when range is empty', () => {
     expect(integerTicks(5.5, 2.1)).toEqual([6]);
     expect(integerTicks(3, 3)).toEqual([3]);
+  });
+});
+
+describe('thinByMinGap (刻度抽稀)', () => {
+  it('keeps first and last and drops crowded middle points', () => {
+    expect(thinByMinGap([0, 10, 40, 80], 25)).toEqual([true, false, true, true]);
+  });
+
+  it('drops the point that collides with the forced last tick', () => {
+    expect(thinByMinGap([0, 30, 35], 20)).toEqual([true, false, true]);
+  });
+
+  it('keeps a single position', () => {
+    expect(thinByMinGap([12], 40)).toEqual([true]);
+    expect(thinByMinGap([], 40)).toEqual([]);
   });
 });

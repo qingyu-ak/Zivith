@@ -50,6 +50,10 @@ export function isChatFocusKind(value: unknown): value is ChatFocusKind {
   return typeof value === 'string' && (CHAT_FOCUS_KINDS as readonly string[]).includes(value);
 }
 
+function asChatKind(value: unknown): CreatorChatThreadDTO['kind'] {
+  return value === 'roleplay' ? 'roleplay' : 'world';
+}
+
 export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
   const record = asRecord(value);
   if (!record || typeof record.id !== 'string') return null;
@@ -59,6 +63,8 @@ export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
     project_name: asString(record.project_name) ?? asString(record.projectName),
     title: asString(record.title),
     state: asString(record.state) ?? 'active',
+    kind: asChatKind(record.kind),
+    character_name: asString(record.character_name) ?? asString(record.characterName),
     created_at: asString(record.created_at) ?? asString(record.createdAt) ?? '',
     updated_at: asString(record.updated_at) ?? asString(record.updatedAt) ?? '',
   };
@@ -179,10 +185,7 @@ export function entityTitle(
     case 'style':
     case 'prompt':
     case 'model':
-      return (
-        entities.shots?.find((item) => item.id === selection.id)?.label?.trim() ||
-        '镜头'
-      );
+      return entities.shots?.find((item) => item.id === selection.id)?.label?.trim() || '镜头';
     default:
       return null;
   }
@@ -194,7 +197,8 @@ export async function resolveThreadForProject(projectId: string): Promise<string
   );
   const threads = unwrapList(listed)
     .map(normalizeThread)
-    .filter((thread): thread is CreatorChatThreadDTO => Boolean(thread?.id));
+    .filter((thread): thread is CreatorChatThreadDTO => Boolean(thread?.id))
+    .filter((thread) => thread.kind !== 'roleplay');
   if (threads[0]?.id) return threads[0].id;
   const created = await api<unknown>('/world/creator-chats', {
     method: 'POST',

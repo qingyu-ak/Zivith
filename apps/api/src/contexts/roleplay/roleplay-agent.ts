@@ -1,7 +1,7 @@
 // M3 角色扮演 Agent（设计 §6）
 // CharacterStateBuilder 组装：角色卡（MemoryCore persona）+ 锚点前亲历事件 + 关系快照
 // + 认知边界（只含角色亲历事件，防剧透）。Mock 降级 = 模板化应答（无密钥全链路可跑）。
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@zivith/database';
 import type { LLMAdapter } from '../../ports/llm.js';
 import { estimateTokens } from '../memory/context-window.js';
 
@@ -44,7 +44,9 @@ export async function buildCharacterState(
   // 时间锚定：只取锚点之前且角色亲历的事件（认知边界，防剧透）。
   // 无锚点（或锚点缺序号）= 全书读完：不加 presentationOrder 过滤，避免大哨兵值溢出 INT4。
   const anchor = anchoredWorldEventId
-    ? await db.worldEvent.findFirst({ where: { id: anchoredWorldEventId, projectId, deletedAt: null } })
+    ? await db.worldEvent.findFirst({
+        where: { id: anchoredWorldEventId, projectId, deletedAt: null },
+      })
     : null;
   const anchorOrder =
     anchor?.presentationOrder !== null && anchor?.presentationOrder !== undefined
@@ -78,7 +80,10 @@ export async function buildCharacterState(
     ),
   ];
   const counterparts = counterpartIds.length
-    ? await db.asset.findMany({ where: { id: { in: counterpartIds } }, select: { id: true, name: true } })
+    ? await db.asset.findMany({
+        where: { id: { in: counterpartIds } },
+        select: { id: true, name: true },
+      })
     : [];
   const nameById = new Map(counterparts.map((c) => [c.id, c.name]));
   const relations = relationships
@@ -100,15 +105,14 @@ export async function buildCharacterState(
   };
 }
 
-function buildRoleplaySystemPrompt(
-  state: CharacterState,
-  memoryDigest: string | null,
-): string {
+function buildRoleplaySystemPrompt(state: CharacterState, memoryDigest: string | null): string {
   const sections = [
     `你正在扮演小说角色「${state.name}」，与用户（扮演故事中的另一位人物或读者）对话。`,
     '\n## 角色档案',
     state.persona,
-    state.traits.length > 0 ? `\n## 关于你的已知细节\n${state.traits.map((t) => `· ${t}`).join('\n')}` : '',
+    state.traits.length > 0
+      ? `\n## 关于你的已知细节\n${state.traits.map((t) => `· ${t}`).join('\n')}`
+      : '',
     state.relations.length > 0 ? `\n## 你认识的人\n${state.relations.join('\n')}` : '',
     state.experiences.length > 0
       ? `\n## 你亲历过的事（当前时间点之前）\n${state.experiences.join('\n')}`
@@ -130,7 +134,9 @@ function mockRoleplayReply(state: CharacterState, text: string): string {
   const experience = state.experiences[Math.min(1, state.experiences.length - 1)];
   const lines = [
     `（${state.name}的语气）嗯……「${trimmed}」是吗。`,
-    trait ? `我这人${trait.includes('：') ? trait.split('：').slice(1).join('：') : trait}，这事我自有分寸。` : '这事我自有分寸。',
+    trait
+      ? `我这人${trait.includes('：') ? trait.split('：').slice(1).join('：') : trait}，这事我自有分寸。`
+      : '这事我自有分寸。',
     experience ? `这让我想起——${experience.replace(/^· /, '')}……罢了，不提也罢。` : '',
   ];
   return lines.filter(Boolean).join('\n');
@@ -162,7 +168,9 @@ export class RoleplayAgent {
 
     const historyText = input.history
       .slice(-16)
-      .map((message) => `${message.role === 'user' ? '用户' : input.state.name}：${message.content}`)
+      .map(
+        (message) => `${message.role === 'user' ? '用户' : input.state.name}：${message.content}`,
+      )
       .join('\n');
 
     const completion = await this.llm.complete({
@@ -173,6 +181,9 @@ export class RoleplayAgent {
       temperature: 0.8,
       max_tokens: 1_500,
     });
-    return { reply: completion.text.trim() || mockRoleplayReply(input.state, input.text), promptTokens };
+    return {
+      reply: completion.text.trim() || mockRoleplayReply(input.state, input.text),
+      promptTokens,
+    };
   }
 }

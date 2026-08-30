@@ -46,7 +46,21 @@ export class PrismaMemoryStore implements MemoryStore {
 
   async updateAtom(
     id: string,
-    patch: Partial<Pick<MemoryAtomRecord, 'status' | 'supersededById' | 'validTo' | 'memoryOp' | 'content' | 'factType' | 'entityType' | 'entityId' | 'confidence' | 'dedupHash'>>,
+    patch: Partial<
+      Pick<
+        MemoryAtomRecord,
+        | 'status'
+        | 'supersededById'
+        | 'validTo'
+        | 'memoryOp'
+        | 'content'
+        | 'factType'
+        | 'entityType'
+        | 'entityId'
+        | 'confidence'
+        | 'dedupHash'
+      >
+    >,
   ): Promise<void> {
     await this.db.memoryAtom.update({ where: { id }, data: patch });
   }
@@ -154,7 +168,12 @@ export class PrismaMemoryStore implements MemoryStore {
 
   async upsertContextState(
     threadId: string,
-    patch: Partial<Pick<ThreadContextStateRecord, 'rollingSummary' | 'summarizedUntilMessageId' | 'summaryVersion' | 'tokenEstimate'>>,
+    patch: Partial<
+      Pick<
+        ThreadContextStateRecord,
+        'rollingSummary' | 'summarizedUntilMessageId' | 'summaryVersion' | 'tokenEstimate'
+      >
+    >,
   ): Promise<void> {
     await this.db.threadContextState.upsert({
       where: { threadId },

@@ -3,7 +3,6 @@ import type { LLMAdapter } from '../../ports/llm.js';
 import { detectFactType, splitStatements } from './extract.js';
 import { MEMORY_SUMMARY_SYSTEM_PROMPT, memorySummarySchema } from './pipeline.js';
 
-
 export interface ContextMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -94,7 +93,10 @@ export async function compressHistory(options: {
         system_prompt: MEMORY_SUMMARY_SYSTEM_PROMPT,
         user_prompt: JSON.stringify({
           previous_summary: options.previousSummary,
-          evicted: options.evicted.map((message) => ({ role: message.role, content: message.content })),
+          evicted: options.evicted.map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
         }),
         temperature: 0.2,
         max_tokens: 800,

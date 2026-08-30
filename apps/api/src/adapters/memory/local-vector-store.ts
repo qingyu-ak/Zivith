@@ -66,9 +66,10 @@ export class LocalVectorStore {
   }
 
   search(projectId: string, query: number[], topK: number): Array<{ id: string; score: number }> {
-    const rows = this.db(projectId)
-      .prepare('SELECT id, vector FROM vectors')
-      .all() as Array<{ id: string; vector: Buffer }>;
+    const rows = this.db(projectId).prepare('SELECT id, vector FROM vectors').all() as Array<{
+      id: string;
+      vector: Buffer;
+    }>;
     const queryVector = new Float32Array(query);
     return rows
       .map((row) => ({ id: row.id, score: cosine(queryVector, bufferToFloat32(row.vector)) }))
@@ -82,7 +83,9 @@ export class LocalVectorStore {
   }
 
   count(projectId: string): number {
-    const row = this.db(projectId).prepare('SELECT COUNT(*) AS n FROM vectors').get() as { n: number };
+    const row = this.db(projectId).prepare('SELECT COUNT(*) AS n FROM vectors').get() as {
+      n: number;
+    };
     return row.n;
   }
 

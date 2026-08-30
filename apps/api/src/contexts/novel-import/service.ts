@@ -1,10 +1,18 @@
 // M2 小说导入服务（设计 §5.2–§5.6）
 // 导入 = 显式用户动作 = 批量预授权：产物直接写世界层（Asset/WorldEvent/Relationship）
 // + 记忆层（MemoryAtom trait / MemoryCore persona 卡），报告记录全部产物 ID 支持整体撤销。
-import type { PrismaClient, Prisma } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@zivith/database';
 import { computeDedupHash } from '../memory/fingerprint.js';
 import { splitChapters, type ChapterText } from './chapter-splitter.js';
-import { aggregateCharacters, extractFromChapter, type ChapterExtraction } from './novel-extract.js';
+import {
+  aggregateCharacters,
+  extractFromChapter,
+  type ChapterExtraction,
+} from './novel-extract.js';
+
+function jsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 export interface NovelImportConfig {
   maxFullCards?: number;
@@ -19,7 +27,13 @@ const DEFAULTS: Required<NovelImportConfig> = {
 };
 
 export interface NovelImportReport {
-  characters: Array<{ id: string; name: string; aliases: string[]; mentions: number; tier: 'full' | 'light' }>;
+  characters: Array<{
+    id: string;
+    name: string;
+    aliases: string[];
+    mentions: number;
+    tier: 'full' | 'light';
+  }>;
   locations: Array<{ id: string; name: string }>;
   events: Array<{ id: string; title: string; chapterIndex: number }>;
   relationships: Array<{ id: string; source: string; target: string }>;
@@ -50,7 +64,7 @@ export class NovelImportService {
         sourceFilename: params.filename,
         totalChapters: chapters.length,
         mode: 'rule',
-        config: config as unknown as Prisma.InputJsonValue,
+        config: jsonValue(config),
       },
     });
 
@@ -58,13 +72,13 @@ export class NovelImportService {
       const report = await this.process(record.id, params.projectId, chapters, config);
       await this.db.novelImport.update({
         where: { id: record.id },
-        data: { status: 'done', processedChapters: chapters.length, report: report as unknown as Prisma.InputJsonValue },
+        data: { status: 'done', processedChapters: chapters.length, report: jsonValue(report) },
       });
       return { importId: record.id, report };
     } catch (error) {
       await this.db.novelImport.update({
         where: { id: record.id },
-        data: { status: 'failed', report: { error: String(error) } as unknown as Prisma.InputJsonValue },
+        data: { status: 'failed', report: jsonValue({ error: String(error) }) },
       });
       throw error;
     }
@@ -91,7 +105,8 @@ export class NovelImportService {
           chapterIndex: chapter.index,
           title: chapter.title,
           status: 'done',
-          extractedEntityCount: extraction.characterMentions.size + extraction.locationMentions.size,
+          extractedEntityCount:
+            extraction.characterMentions.size + extraction.locationMentions.size,
         },
       });
     }
@@ -130,7 +145,9 @@ export class NovelImportService {
           type: 'character',
           state: 'active',
           name: character.name,
-          description: character.traits[0]?.slice(0, 120) ?? `《${'导入角色'}》出场 ${character.chapters.size} 章`,
+          description:
+            character.traits[0]?.slice(0, 120) ??
+            `《${'导入角色'}》出场 ${character.chapters.size} 章`,
           aliases: character.aliases,
           data: { source: 'novel_import', importId, mentions: character.mentions },
         },
@@ -230,7 +247,10 @@ export class NovelImportService {
       const worldEvent = await this.db.worldEvent.create({
         data: {
           projectId,
-          title: (chapterTitles.get(event.chapterIndex) ? `${chapterTitles.get(event.chapterIndex)}·` : '') + event.text.slice(0, 30),
+          title:
+            (chapterTitles.get(event.chapterIndex)
+              ? `${chapterTitles.get(event.chapterIndex)}·`
+              : '') + event.text.slice(0, 30),
           description: event.text,
           presentationOrder: presentationOrder++,
           state: 'approved',
@@ -320,7 +340,9 @@ export class NovelImportService {
     if (!record) return false;
     const report = (record.report ?? {}) as Partial<NovelImportReport>;
     const now = new Date();
-    const assetIds = (report.characters ?? []).map((c) => c.id).concat((report.locations ?? []).map((l) => l.id));
+    const assetIds = (report.characters ?? [])
+      .map((c) => c.id)
+      .concat((report.locations ?? []).map((l) => l.id));
     if (assetIds.length > 0) {
       await this.db.asset.updateMany({ where: { id: { in: assetIds } }, data: { deletedAt: now } });
     }

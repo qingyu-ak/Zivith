@@ -90,19 +90,19 @@ export function WorldTimeBar({
             </button>
           );
         })}
-        {PRESETS.filter((preset) => !dimensions.some((dimension) => dimension.kind === preset.kind)).map(
-          (preset) => (
-            <button
-              key={preset.kind}
-              type="button"
-              disabled={saving}
-              onClick={() => addPreset(preset)}
-              className="rounded-full border border-dashed border-violet-300 px-2.5 py-0.5 text-[11px] text-violet-700 hover:bg-white disabled:opacity-50"
-            >
-              + {preset.label}
-            </button>
-          ),
-        )}
+        {PRESETS.filter(
+          (preset) => !dimensions.some((dimension) => dimension.kind === preset.kind),
+        ).map((preset) => (
+          <button
+            key={preset.kind}
+            type="button"
+            disabled={saving}
+            onClick={() => addPreset(preset)}
+            className="rounded-full border border-dashed border-violet-300 px-2.5 py-0.5 text-[11px] text-violet-700 hover:bg-white disabled:opacity-50"
+          >
+            + {preset.label}
+          </button>
+        ))}
         <button
           type="button"
           onClick={() => setAdding((current) => !current)}

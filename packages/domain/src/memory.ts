@@ -6,7 +6,14 @@ import { z } from 'zod';
  */
 
 export const memoryFactTypeSchema = z.enum([
-  'trait', 'desire', 'event', 'relation', 'rule', 'preference', 'constraint', 'episodic',
+  'trait',
+  'desire',
+  'event',
+  'relation',
+  'rule',
+  'preference',
+  'constraint',
+  'episodic',
 ]);
 export type MemoryFactType = z.infer<typeof memoryFactTypeSchema>;
 
@@ -17,7 +24,13 @@ export const memoryAtomStatusSchema = z.enum(['active', 'merged', 'superseded', 
 export type MemoryAtomStatus = z.infer<typeof memoryAtomStatusSchema>;
 
 export const memoryEntityTypeSchema = z.enum([
-  'character', 'location', 'world_event', 'scene', 'story', 'project', 'relationship',
+  'character',
+  'location',
+  'world_event',
+  'scene',
+  'story',
+  'project',
+  'relationship',
 ]);
 export type MemoryEntityType = z.infer<typeof memoryEntityTypeSchema>;
 
@@ -100,10 +113,7 @@ export function normalizeForFingerprint(text: string): string {
   return text
     .normalize('NFKC')
     .replace(/[\s\u3000]+/g, '')
-    .replace(
-      /[。，、；：？！“”‘’（）《》【】〔〕…—·,.:;?!"'`()\[\]{}<>@#$%^&*_+=/\\|~]/g,
-      '',
-    )
+    .replace(/[[\](){}<>。，、；：？！“”‘’（）《》【】〔〕…—·,.:;?!"'`@#$%^&*_+=/\\|~]/g, '')
     .toLowerCase();
 }
 

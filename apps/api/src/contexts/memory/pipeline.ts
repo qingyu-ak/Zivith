@@ -9,7 +9,14 @@ export const memoryRefineSchema = z
             index: z.number().int().min(0),
             content: z.string().trim().min(1).max(500),
             fact_type: z.enum([
-              'trait', 'desire', 'event', 'relation', 'rule', 'preference', 'constraint', 'episodic',
+              'trait',
+              'desire',
+              'event',
+              'relation',
+              'rule',
+              'preference',
+              'constraint',
+              'episodic',
             ]),
             entity_name: z.string().trim().max(200).nullable(),
           })

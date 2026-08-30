@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   filterThreadsByQuery,
+  groupRoleplayByProject,
   groupThreadsByRecency,
+  partitionThreadsByKind,
   threadDisplayTitle,
+  threadKind,
 } from '@/lib/chat-history';
-import type { CreatorChatThreadDTO } from '@/lib/types';
+import type { CreatorChatKind, CreatorChatThreadDTO } from '@/lib/types';
 import { AccountMenu } from '@/components/account-menu';
 import { IconPlusCircle, IconSearch, IconSidebar } from '@/components/nav-icons';
 
@@ -26,13 +29,31 @@ export function ChatSidebar({
 }) {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
+  const [tab, setTab] = useState<CreatorChatKind>('world');
+  const syncedThreadId = useRef<string | undefined>(undefined);
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const filtered = filterThreadsByQuery(threads, query);
-  const history = groupThreadsByRecency(filtered);
+  const { world, roleplay } = partitionThreadsByKind(threads);
+  const tabThreads = tab === 'roleplay' ? roleplay : world;
+  const filtered = filterThreadsByQuery(tabThreads, query);
+  const history =
+    tab === 'roleplay' ? groupRoleplayByProject(filtered) : groupThreadsByRecency(filtered);
 
   useEffect(() => {
     if (searching) searchRef.current?.focus();
   }, [searching]);
+
+  useEffect(() => {
+    if (!threadId || threadId === syncedThreadId.current) return;
+    const current = threads.find((item) => item.id === threadId);
+    if (!current) return;
+    syncedThreadId.current = threadId;
+    setTab(threadKind(current));
+  }, [threadId, threads]);
+
+  function startNewChat() {
+    setTab('world');
+    onNewChat();
+  }
 
   return (
     <aside className="flex h-full w-[268px] shrink-0 flex-col bg-[#f7f8fa]">
@@ -66,12 +87,33 @@ export function ChatSidebar({
         <button
           type="button"
           disabled={busy}
-          onClick={onNewChat}
+          onClick={startNewChat}
           className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-medium text-zinc-800 shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-zinc-200/80 transition hover:bg-zinc-50 disabled:opacity-40"
         >
           <IconPlusCircle className="size-4 text-zinc-600" />
           开启新对话
         </button>
+      </div>
+
+      <div
+        className="mx-3 mt-3 grid grid-cols-2 gap-0.5 rounded-lg bg-zinc-200/70 p-0.5"
+        role="tablist"
+        aria-label="对话类型"
+      >
+        <TabButton
+          id="world"
+          label="世界"
+          count={world.length}
+          active={tab === 'world'}
+          onSelect={setTab}
+        />
+        <TabButton
+          id="roleplay"
+          label="角色"
+          count={roleplay.length}
+          active={tab === 'roleplay'}
+          onSelect={setTab}
+        />
       </div>
 
       {searching && (
@@ -80,7 +122,7 @@ export function ChatSidebar({
             ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索对话"
+            placeholder={tab === 'roleplay' ? '搜索角色或世界' : '搜索对话'}
             className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-[#4d6bfe]"
           />
         </div>
@@ -88,8 +130,8 @@ export function ChatSidebar({
 
       <nav className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="会话列表">
         {filtered.length === 0 ? (
-          <p className="px-3 py-4 text-xs text-zinc-400">
-            {threads.length === 0 ? '还没有对话' : '没有匹配的对话'}
+          <p className="px-3 py-4 text-xs leading-5 text-zinc-400">
+            {emptyCopy(tab, tabThreads.length === 0, Boolean(query.trim()))}
           </p>
         ) : (
           history.map((group) => (
@@ -98,6 +140,7 @@ export function ChatSidebar({
               <ul className="grid gap-0.5">
                 {group.threads.map((item) => {
                   const active = item.id === threadId;
+                  const roleplayItem = threadKind(item) === 'roleplay';
                   return (
                     <li key={item.id}>
                       <Link
@@ -108,7 +151,12 @@ export function ChatSidebar({
                             : 'text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900'
                         }`}
                       >
-                        <p className="truncate">{threadDisplayTitle(item)}</p>
+                        <p className="flex items-center gap-1.5">
+                          <span className="min-w-0 truncate">{threadDisplayTitle(item)}</span>
+                          {roleplayItem && (
+                            <span className="shrink-0 text-[10px] text-zinc-400">扮演</span>
+                          )}
+                        </p>
                       </Link>
                     </li>
                   );
@@ -124,6 +172,45 @@ export function ChatSidebar({
       </div>
     </aside>
   );
+}
+
+function TabButton({
+  id,
+  label,
+  count,
+  active,
+  onSelect,
+}: {
+  id: CreatorChatKind;
+  label: string;
+  count: number;
+  active: boolean;
+  onSelect: (id: CreatorChatKind) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={() => onSelect(id)}
+      className={`rounded-md px-2 py-1.5 text-xs font-medium transition ${
+        active ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'
+      }`}
+    >
+      {label}
+      <span className={`ml-1 tabular-nums ${active ? 'text-zinc-500' : 'text-zinc-400'}`}>
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function emptyCopy(tab: CreatorChatKind, tabEmpty: boolean, searching: boolean): string {
+  if (!tabEmpty && searching) return '没有匹配的对话';
+  if (tab === 'roleplay') {
+    return '还没有角色对话。在 Studio 选中角色，或在已绑定世界的对话顶栏切换扮演。';
+  }
+  return tabEmpty ? '还没有对话' : '没有匹配的对话';
 }
 
 export function ChatSidebarRail({

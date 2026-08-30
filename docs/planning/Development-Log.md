@@ -12,6 +12,34 @@
 
 ---
 
+## 2026-08-30 · d3b3e8d · fix(api) · CI lint：Prisma 从 @zivith/database 进口
+
+PR CI 在 `pnpm lint` 失败：`novel-import/service.ts` 上 `this.db.novelImport` 被当成 `any`（`no-unsafe-*`）。`@zivith/api` 不直接依赖 `@prisma/client`，GitHub 隔离安装下该进口解析不到生成类型；本地 hoisted 所以能过。
+
+- **fix(api)** `NovelImportService` / `roleplay` 路由与 Agent 改为 `import type { PrismaClient } from '@zivith/database'`
+- 验证：`pnpm lint`
+- 模块：`apps/api/src/contexts/novel-import`、`apps/api/src/contexts/roleplay`、`apps/api/src/routes/roleplay.ts`
+
+## 2026-08-30 · ceb17cd · chore · Prettier 对齐，修复 CI format:check
+
+GitHub Actions「检查格式」在 `pnpm format:check` 上失败：记忆 / 小说导入 / 扮演 / 世界工作区等 35 个文件未按 Prettier 排版（多为超长行折行与尾逗号）。
+
+- **chore** `pnpm format` 写回 34 个源文件；本地 `format:check` 已全绿
+- 验证：`pnpm format:check` → All matched files use Prettier code style
+- 模块：`apps/api`、`apps/web`、`packages/domain/src/memory.ts`
+
+## 2026-08-30 · aec52d4 · feat(web,api) · 对话历史分 Tab + 世界线可调分栏
+
+世界构建与角色扮演仍共用 `/creator-chats` 与消息表，侧栏按类型分开；世界工作区时间线不再被下方面板挤扁，轴上事件标题按间距抽稀。
+
+- **feat(api)** `GET /world/creator-chats` 列表/详情 join `RoleplayThread`，DTO 标 `kind` + `character_name`
+- **feat(web)** 历史栏世界/角色 Tab；扮演按所属世界分组；Studio「在对话中继续」排除扮演线程
+- **feat(web)** 世界工作区左右栏与时间线/下坞可拖拽改尺寸（localStorage）；副驾驶/记忆/导入可折叠；轴标签与导轨抽稀
+- **fix(api)** 小说导入人名停用词；txt 解码 UTF-8 优先、非法时回退 GB18030
+- **chore** 清理 ESLint（unused / require-await / 多余断言）；删开发库冒烟账号
+- 验证：web `chat-history` / `world-scale`；api `novel-import` / `memory-service`；`@zivith/ui` typecheck；世界页 DOM 含分栏拖动手柄
+- 模块：`apps/api/src/{routes,contexts/novel-import}`、`apps/web/{components/creator-chat,components/world,lib}`、`docs/**`
+
 ## 2026-08-23 · pending · feat(api,web,domain,db) · M1 记忆地基 + 上下文管理器落地
 
 分层记忆（L0 原文 / L1 原子 / L2 核心）+ 双路径管线（同步规则归档 + 队列异步深加工）+ 三路混合检索（实体链接 / 向量 / bigram 关键词 RRF 融合）+ ThreadContextState 滚动摘要压缩（[Memory-Novel-Roleplay-Design.md](Memory-Novel-Roleplay-Design.md)，ADR-0014）。mock-first：无任何密钥时规则提炼 + bigram 检索全链路可用。

@@ -4,15 +4,32 @@ import { jaccardSimilarity, tokenizeForSimilarity } from '@zivith/domain';
 
 describe('computeDedupHash', () => {
   it('normalizes punctuation and whitespace before hashing', () => {
-    const a = computeDedupHash({ entityType: 'character', entityId: 'c1', factType: 'trait', content: '林澈，性格冷静！' });
-    const b = computeDedupHash({ entityType: 'character', entityId: 'c1', factType: 'trait', content: '林澈 性格冷静' });
+    const a = computeDedupHash({
+      entityType: 'character',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '林澈，性格冷静！',
+    });
+    const b = computeDedupHash({
+      entityType: 'character',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '林澈 性格冷静',
+    });
     expect(a).toBe(b);
   });
 
   it('differs by entity and fact type', () => {
-    const base = { entityType: 'character', entityId: 'c1', factType: 'trait', content: '性格冷静' } as const;
+    const base = {
+      entityType: 'character',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '性格冷静',
+    } as const;
     expect(computeDedupHash(base)).not.toBe(computeDedupHash({ ...base, entityId: 'c2' }));
-    expect(computeDedupHash(base)).not.toBe(computeDedupHash({ ...base, factType: 'desire' as const }));
+    expect(computeDedupHash(base)).not.toBe(
+      computeDedupHash({ ...base, factType: 'desire' as const }),
+    );
   });
 });
 

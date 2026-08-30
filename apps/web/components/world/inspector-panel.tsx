@@ -457,7 +457,9 @@ function draftForSelection(
     case 'project':
       return projectDraftFrom(resources);
     case 'dimension': {
-      const dimension = resolveDisplayDimensions(resources).find((item) => item.id === selection.id);
+      const dimension = resolveDisplayDimensions(resources).find(
+        (item) => item.id === selection.id,
+      );
       return dimension ? dimensionDraft(dimension) : {};
     }
     case 'character': {
@@ -581,7 +583,8 @@ export function InspectorPanel({
                   projectId={resources.project.id}
                   characterAssetId={selection.id}
                   characterName={
-                    resources.entities.characters.find((character) => character.id === selection.id)?.name ?? '该角色'
+                    resources.entities.characters.find((character) => character.id === selection.id)
+                      ?.name ?? '该角色'
                   }
                   worldEvents={resources.entities.world_events}
                 />
@@ -616,7 +619,8 @@ export function InspectorPanel({
         ) : view === 'production' ? (
           <div className="px-4 pb-6">
             <p className="text-sm leading-6 text-zinc-600">
-              这是制作视图。中间按呈现顺序排：故事 → 场景 → 镜头，下面四条是镜头的只读投影（机位 / 风格 / 提示词 / 模型）。
+              这是制作视图。中间按呈现顺序排：故事 → 场景 → 镜头，下面四条是镜头的只读投影（机位 /
+              风格 / 提示词 / 模型）。
             </p>
             <p className="mt-3 text-xs leading-5 text-zinc-500">
               这个项目还没有故事和镜头，所以轨是空的。去创作聊天先写故事，或点左上角「世界」看角色与时间维度。
@@ -904,7 +908,8 @@ function renderEditor(
             </select>
           </label>
           <p className="text-[11px] leading-4 text-zinc-500">
-            维度只命名这个世界如何计时。事件把信封的 dimension_id 指到这里；核心不会把历法换算成真实日期。
+            维度只命名这个世界如何计时。事件把信封的 dimension_id
+            指到这里；核心不会把历法换算成真实日期。
           </p>
         </>,
       );
@@ -1350,7 +1355,9 @@ function renderReadonly(
       );
     }
     case 'dimension': {
-      const dimension = resolveDisplayDimensions(resources).find((item) => item.id === selection.id);
+      const dimension = resolveDisplayDimensions(resources).find(
+        (item) => item.id === selection.id,
+      );
       if (!dimension) return null;
       const bound = countEventsBoundToDimension(resources.entities.world_events, dimension.id);
       return (
@@ -1412,17 +1419,20 @@ function renderReadonly(
       const href = scene?.story_id
         ? `/projects/${resources.project.id}/stories/${scene.story_id}/scenes/${scene.id}/shots/${shot.id}`
         : null;
-      const camera = (shot.camera ?? {}) as Record<string, unknown>;
-      const composition = (shot.composition ?? {}) as Record<string, unknown>;
-      const lighting = (shot.lighting ?? {}) as Record<string, unknown>;
-      const color = (shot.color ?? {}) as Record<string, unknown>;
-      const style = (shot.style ?? {}) as Record<string, unknown>;
-      const prompt = (shot.prompt ?? {}) as Record<string, unknown>;
+      const camera = shot.camera ?? {};
+      const composition = shot.composition ?? {};
+      const lighting = shot.lighting ?? {};
+      const color = shot.color ?? {};
+      const style = shot.style ?? {};
+      const prompt = shot.prompt ?? {};
       const fields =
         selection.kind === 'camera'
           ? [
               { label: '投影摘要', value: projectCameraCaption(shot) },
-              { label: '景别', value: typeof camera.shot_type === 'string' ? camera.shot_type : '' },
+              {
+                label: '景别',
+                value: typeof camera.shot_type === 'string' ? camera.shot_type : '',
+              },
               { label: '机位', value: typeof camera.angle === 'string' ? camera.angle : '' },
               { label: '运动', value: typeof camera.movement === 'string' ? camera.movement : '' },
               {
@@ -1433,7 +1443,10 @@ function renderReadonly(
           : selection.kind === 'style'
             ? [
                 { label: '投影摘要', value: projectStyleCaption(shot) },
-                { label: '渲染', value: typeof style.rendering === 'string' ? style.rendering : '' },
+                {
+                  label: '渲染',
+                  value: typeof style.rendering === 'string' ? style.rendering : '',
+                },
                 { label: '光线', value: typeof lighting.type === 'string' ? lighting.type : '' },
                 {
                   label: '方向',
@@ -1445,21 +1458,21 @@ function renderReadonly(
                 },
                 { label: '氛围', value: shot.mood ?? '' },
               ]
-          : selection.kind === 'prompt'
-            ? [
-                { label: '投影摘要', value: projectPromptCaption(shot) },
-                { label: '已批准', value: shot.approved_prompt?.positive ?? '' },
-                {
-                  label: '当前草稿',
-                  value: typeof prompt.positive === 'string' ? prompt.positive : '',
-                },
-              ]
-            : [
-                { label: '投影摘要', value: projectModelCaption(shot) },
-                { label: '提供商', value: shot.output?.provider ?? '' },
-                { label: '模型', value: shot.output?.model ?? '' },
-                { label: '状态', value: shot.output?.status ?? '' },
-              ];
+            : selection.kind === 'prompt'
+              ? [
+                  { label: '投影摘要', value: projectPromptCaption(shot) },
+                  { label: '已批准', value: shot.approved_prompt?.positive ?? '' },
+                  {
+                    label: '当前草稿',
+                    value: typeof prompt.positive === 'string' ? prompt.positive : '',
+                  },
+                ]
+              : [
+                  { label: '投影摘要', value: projectModelCaption(shot) },
+                  { label: '提供商', value: shot.output?.provider ?? '' },
+                  { label: '模型', value: shot.output?.model ?? '' },
+                  { label: '状态', value: shot.output?.status ?? '' },
+                ];
       return (
         <div>
           <EntityDetail
