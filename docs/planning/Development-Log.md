@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-30 · pending · docs · 同步 M1–M3 与 PR #1 进总览 / 工程文档
+## 2026-08-30 · aae14c4 · docs · 同步 M1–M3 与 PR #1 进总览 / 工程文档
 
 创造层后续能力已合进 `main`，规划文档已写 Tab/分栏，但 README 状态表、Technical-Architecture 路由、Next-Tasks 轨道图仍停在 08-16。本轮只改文档。
 
