@@ -1,9 +1,14 @@
 // M3 角色扮演 Agent（设计 §6）
-// CharacterStateBuilder 组装：角色卡（MemoryCore persona）+ 锚点前亲历事件 + 关系快照
+// CharacterStateBuilder 组装：Studio 角色卡（Asset）+ MemoryCore 档案补充 + 锚点前亲历事件 + 关系快照
 // + 认知边界（只含角色亲历事件，防剧透）。Mock 降级 = 模板化应答（无密钥全链路可跑）。
 import type { PrismaClient } from '@zivith/database';
 import type { LLMAdapter } from '../../ports/llm.js';
 import { estimateTokens } from '../memory/context-window.js';
+import {
+  composeCharacterPersona,
+  formatCharacterCard,
+  personalityFromAssetData,
+} from '../world/character-card.js';
 
 export interface RoleplayChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -94,10 +99,16 @@ export async function buildCharacterState(
     })
     .slice(0, 12);
 
+  const card = formatCharacterCard({
+    name: asset.name,
+    description: asset.description,
+    personality: personalityFromAssetData(asset.data),
+    aliases: asset.aliases,
+  });
   return {
     name: asset.name,
     description: asset.description,
-    persona: core?.content ?? `角色「${asset.name}」：${asset.description}`,
+    persona: composeCharacterPersona(card, core?.content),
     experiences,
     relations,
     anchorLabel: anchor ? `《${anchor.title}》之后` : '全书读完（知晓全部亲历剧情）',

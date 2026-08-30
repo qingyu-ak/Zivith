@@ -48,6 +48,22 @@ describe('detectWorldGaps', () => {
     expect(gaps.some((item) => item.topic === 'pacing')).toBe(true);
   });
 
+  it('skips character-depth when personality is filled even if description is short', () => {
+    const gaps = detectWorldGaps(
+      world({
+        worldview: { genre: '都市', premise: '混血种', rules: ['言灵'] },
+        characters: [
+          { id: 'c1', name: '路明非', description: '学生', personality: '废柴清醒', tags: [] },
+        ],
+        stories: [{ id: 's1', title: '龙族', genre: null, logline: '混血种少年屠龙' }],
+        locations: [{ id: 'l1', name: '卡塞尔', description: '学院', tags: [] }],
+        worldEvents: [{ id: 'e1', title: '入学', description: null, order: 1 }],
+        relationships: [],
+      }),
+    );
+    expect(gaps.some((item) => item.topic === 'character_depth')).toBe(false);
+  });
+
   it('caps the next prompt to three questions', () => {
     expect(nextGuidanceGaps(world())).toHaveLength(3);
   });

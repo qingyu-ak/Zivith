@@ -76,7 +76,9 @@ export function detectWorldGaps(world: WorldContext | null): WorldGap[] {
     );
   } else {
     const thin = world.characters.find(
-      (character) => !character.description || character.description.trim().length < 8,
+      (character) =>
+        !character.personality?.trim() &&
+        (!character.description || character.description.trim().length < 8),
     );
     if (thin) {
       findings.push(

@@ -364,7 +364,7 @@ apps/api/src/contexts/roleplay/
 用户在世界工作区：选角色 + 选时间锚点（某 WorldEvent 或「全书读完」）
         ↓
 CharacterStateBuilder 组装：
-  ├─ 角色卡（MemoryCore persona 8 要素）
+  ├─ 角色卡（Asset 名称/简介/个性/别名；MemoryCore persona 作补充，不覆盖）
   ├─ 该角色在锚点时刻 T 之前的事件经历（WorldEvent 过滤：时间 < T 且角色参与）
   ├─ 时刻 T 的关系快照（Relationship + MemoryAtom validTo ≤ T）
   └─ 认知边界：只含角色亲历事件，无全知视角 ← 防剧透核心

@@ -79,7 +79,7 @@ Zivith 不是单一 AI 在做视频。它是一支在持久世界上协作的专
 
 | 方面 | 详情 |
 |---|---|
-| 输入 | 创作者的自然语言描述、参考图、既有世界状态 |
+| 输入 | 创作者的自然语言描述、参考图、既有世界状态（角色含 Studio 角色卡） |
 | 输出 | 世界实体草稿及其初始 State |
 | 执行阶段 | `asset` |
 | 实现 | `apps/api/src/contexts/agent/asset-agent.ts` — 所需的输入契约反转见 §2.2 |
@@ -123,7 +123,7 @@ User provides world lore → asset stage structures Knowledge → User reviews
 
 | 方面 | 详情 |
 |---|---|
-| 输入 | 角色卡（MemoryCore persona）、锚点 T 之前该角色亲历 WorldEvent、关系快照、用户对白 |
+| 输入 | Studio 角色卡（Asset 名称/简介/个性/别名）+ MemoryCore 档案补充、锚点 T 之前该角色亲历 WorldEvent、关系快照、用户对白 |
 | 输出 | 扮演回复（SSE）；可选 episodic `MemoryAtom`（链接该角色） |
 | 执行阶段 | 无 — 不在 Story→Video DAG 中 |
 | 硬约束 | **不创建或修改** `Asset` / `WorldEvent` / `Relationship` / `Project.worldview`。反写世界层必须走 World Builder 提案确认（ADR-0010）。Studio「在对话中继续」不得打开扮演线程 |

@@ -54,7 +54,7 @@ Asset 层围绕两个关键设计目标：
 | `description` | `string` | Yes | 供 AI prompt 上下文使用的详细角色描述 |
 | `base_character_id` | `CharacterId` | No | 用于替身/双胞胎角色：从另一 Character 继承外观，仅覆盖不同之处。用于共享同一张脸的角色。 |
 | `appearance` | `object` | Yes | 外观规格（若设置了 `base_character_id` 可为部分字段——未指定字段继承） |
-| `personality` | `string` | No | 性格特征，用于一致的行为刻画 |
+| `personality` | `string` | No | 性格特征。与 `name` / `description` / `aliases` 组成 Studio 角色卡，世界构建对话与扮演共用；导入档案（MemoryCore persona）只作补充，不覆盖这张卡 |
 | `default_outfit` | `string` | No | 默认服装 / 戏服描述 |
 | `reference_images[]` | `MediaId[]` | No | 用于视觉一致性的参考图。视频生成时，这些图作为 image-to-video 条件输入传入，以在 Shot 间维持角色外观。 |
 | `voice_profile_id` | `AssetId` | No | 若使用声音克隆，引用 voice profile |

@@ -12,6 +12,17 @@
 
 ---
 
+## 2026-08-30 · pending · feat(api,web) · Studio 角色卡回灌扮演与世界构建对话
+
+Studio 改角色名称/简介/个性后，扮演仍只读导入档案（MemoryCore persona），世界构建对话也不带个性。本轮让两路对话读同一张 Asset 角色卡；导入档案只作补充，不覆盖。
+
+- **feat(api)** `character-card`：格式化卡面、卡在前档案在后；扮演 `buildCharacterState` 与 `worldContextToPrompt` 共用
+- **feat(api)** 有个性则不再因简介过短追问 `character_depth`
+- **feat(web)** Inspector 标明名称/简介/个性是共用角色卡
+- **docs** Track M3、Asset-Model、扮演 Agent 输入改为 Asset 卡 + MemoryCore 补充
+- 验证：`vitest` `character-card` / `guidance` / `world-builder-stream` / `conflict-detector`
+- 模块：`apps/api/src/contexts/world/character-card.ts`、`roleplay-agent`、`world-context`、`guidance`、`inspector-panel.tsx`
+
 ## 2026-08-30 · aae14c4 · docs · 同步 M1–M3 与 PR #1 进总览 / 工程文档
 
 创造层后续能力已合进 `main`，规划文档已写 Tab/分栏，但 README 状态表、Technical-Architecture 路由、Next-Tasks 轨道图仍停在 08-16。本轮只改文档。

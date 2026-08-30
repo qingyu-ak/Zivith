@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@zivith/database';
 import { type Worldview, parseWorldview } from '@zivith/domain';
+import { formatCharacterCard, personalityFromAssetData } from '../world/character-card.js';
 
 /**
  * World context for the World Builder agent.
@@ -13,7 +14,14 @@ export interface WorldContext {
   projectName: string;
   worldview: Worldview;
   stories: Array<{ id: string; title: string; genre: string | null; logline: string | null }>;
-  characters: Array<{ id: string; name: string; description: string | null; tags: string[] }>;
+  characters: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    personality?: string | null;
+    aliases?: string[];
+    tags: string[];
+  }>;
   locations: Array<{ id: string; name: string; description: string | null; tags: string[] }>;
   scenes: Array<{ id: string; title: string; description: string | null; time: string | null }>;
   worldEvents: Array<{
@@ -52,7 +60,7 @@ export async function buildWorldContext(
     }),
     db.asset.findMany({
       where: { projectId, type: 'character', deletedAt: null },
-      select: { id: true, name: true, description: true, tags: true },
+      select: { id: true, name: true, description: true, tags: true, aliases: true, data: true },
       orderBy: { createdAt: 'asc' },
     }),
     db.asset.findMany({
@@ -114,7 +122,15 @@ export function assembleWorldContext(input: {
   projectName: string;
   worldview: unknown;
   stories: WorldContext['stories'];
-  characters: Array<{ id: string; name: string; description: string | null; tags?: unknown }>;
+  characters: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    tags?: unknown;
+    aliases?: string[] | null;
+    personality?: string | null;
+    data?: unknown;
+  }>;
   locations: Array<{ id: string; name: string; description: string | null; tags?: unknown }>;
   scenes: WorldContext['scenes'];
   worldEvents: WorldContext['worldEvents'];
@@ -129,6 +145,8 @@ export function assembleWorldContext(input: {
       id: character.id,
       name: character.name,
       description: character.description,
+      personality: character.personality ?? personalityFromAssetData(character.data),
+      aliases: (character.aliases ?? []).map((alias) => alias.trim()).filter(Boolean),
       tags: stringTags(character.tags),
     })),
     locations: input.locations.map((location) => ({
@@ -200,9 +218,13 @@ export function worldContextToPrompt(context: WorldContext | null): string {
     lines.push('## 角色');
     for (const c of context.characters) {
       const tags = c.tags.length > 0 ? ` [标签:${c.tags.join(',')}]` : '';
-      lines.push(
-        `- [character:${c.id}] ${c.name}${c.description ? `：${c.description}` : ''}${tags}`,
-      );
+      const card = formatCharacterCard({
+        name: c.name,
+        description: c.description,
+        personality: c.personality,
+        aliases: c.aliases,
+      }).replaceAll('\n', ' · ');
+      lines.push(`- [character:${c.id}] ${card}${tags}`);
     }
   }
   if (context.locations.length > 0) {

@@ -965,6 +965,9 @@ function renderEditor(
             value={draft.default_outfit ?? ''}
             onChange={(value) => updateDraft('default_outfit', value)}
           />
+          <p className="text-[11px] leading-5 text-zinc-500">
+            名称、简介、个性是角色卡：世界构建对话和「与此角色对话」共用这一份。
+          </p>
         </>,
       );
     case 'location':
@@ -1198,21 +1201,26 @@ function renderReadonly(
       if (!asset) return null;
       const appearance = asset.appearance;
       return (
-        <EntityDetail
-          kind="character"
-          label="角色"
-          fields={[
-            { label: '名称', value: asset.name },
-            { label: '别名', value: (asset.aliases ?? []).join(' · ') },
-            { label: '描述', value: asset.description },
-            { label: '标签', value: tagsOf(asset.tags) },
-            { label: '性别', value: appearance?.gender },
-            { label: '年龄', value: appearance?.age_range },
-            { label: '身形', value: appearance?.build },
-            { label: '个性', value: asset.personality },
-            { label: '常服', value: asset.default_outfit },
-          ]}
-        />
+        <>
+          <EntityDetail
+            kind="character"
+            label="角色"
+            fields={[
+              { label: '名称', value: asset.name },
+              { label: '别名', value: (asset.aliases ?? []).join(' · ') },
+              { label: '描述', value: asset.description },
+              { label: '标签', value: tagsOf(asset.tags) },
+              { label: '性别', value: appearance?.gender },
+              { label: '年龄', value: appearance?.age_range },
+              { label: '身形', value: appearance?.build },
+              { label: '个性', value: asset.personality },
+              { label: '常服', value: asset.default_outfit },
+            ]}
+          />
+          <p className="px-4 pb-3 text-[11px] leading-5 text-zinc-500">
+            名称、简介、个性是角色卡：世界构建对话和「与此角色对话」共用这一份。
+          </p>
+        </>
       );
     }
     case 'location': {
