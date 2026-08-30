@@ -72,7 +72,12 @@ export function registerRoleplayRoutes(
       .strict()
       .parse(request.body ?? {});
     const asset = await db.asset.findFirst({
-      where: { id: body.character_asset_id, projectId: body.project_id, type: 'character', deletedAt: null },
+      where: {
+        id: body.character_asset_id,
+        projectId: body.project_id,
+        type: 'character',
+        deletedAt: null,
+      },
     });
     if (!asset) throw new ApiError(404, 'CHARACTER_NOT_FOUND', '角色不存在');
 
@@ -103,7 +108,10 @@ export function registerRoleplayRoutes(
   });
 
   app.get('/roleplay/threads', async (request) => {
-    const query = z.object({ project_id: idSchema }).strict().parse(request.query ?? {});
+    const query = z
+      .object({ project_id: idSchema })
+      .strict()
+      .parse(request.query ?? {});
     const threads = await db.roleplayThread.findMany({
       where: { projectId: query.project_id, status: 'active' },
       orderBy: { updatedAt: 'desc' },
@@ -111,11 +119,21 @@ export function registerRoleplayRoutes(
     });
     const assetIds = [...new Set(threads.map((t) => t.characterAssetId))];
     const assets = assetIds.length
-      ? await db.asset.findMany({ where: { id: { in: assetIds } }, select: { id: true, name: true, description: true } })
+      ? await db.asset.findMany({
+          where: { id: { in: assetIds } },
+          select: { id: true, name: true, description: true },
+        })
       : [];
-    const anchorIds = [...new Set(threads.map((t) => t.anchoredWorldEventId).filter((id): id is string => Boolean(id)))];
+    const anchorIds = [
+      ...new Set(
+        threads.map((t) => t.anchoredWorldEventId).filter((id): id is string => Boolean(id)),
+      ),
+    ];
     const anchors = anchorIds.length
-      ? await db.worldEvent.findMany({ where: { id: { in: anchorIds } }, select: { id: true, title: true } })
+      ? await db.worldEvent.findMany({
+          where: { id: { in: anchorIds } },
+          select: { id: true, title: true },
+        })
       : [];
     return {
       items: threads.map((thread) => ({
@@ -123,7 +141,8 @@ export function registerRoleplayRoutes(
         thread_id: thread.threadId,
         character_asset_id: thread.characterAssetId,
         character_name: assets.find((a) => a.id === thread.characterAssetId)?.name ?? '未知角色',
-        character_description: assets.find((a) => a.id === thread.characterAssetId)?.description ?? '',
+        character_description:
+          assets.find((a) => a.id === thread.characterAssetId)?.description ?? '',
         anchored_world_event_id: thread.anchoredWorldEventId,
         anchor_title: anchors.find((a) => a.id === thread.anchoredWorldEventId)?.title ?? null,
         updated_at: thread.updatedAt.toISOString(),
@@ -178,7 +197,13 @@ export function registerRoleplayRoutes(
 async function createRoleplayReply(
   db: PrismaClient,
   agent: RoleplayAgent,
-  roleplay: { id: string; projectId: string; characterAssetId: string; threadId: string; anchoredWorldEventId: string | null },
+  roleplay: {
+    id: string;
+    projectId: string;
+    characterAssetId: string;
+    threadId: string;
+    anchoredWorldEventId: string | null;
+  },
   userMessage: { id: string; content: string },
   memory?: MemoryService | null,
 ) {
@@ -243,7 +268,13 @@ async function pipeRoleplaySse(
   reply: FastifyReply,
   db: PrismaClient,
   agent: RoleplayAgent,
-  roleplay: { id: string; projectId: string; characterAssetId: string; threadId: string; anchoredWorldEventId: string | null },
+  roleplay: {
+    id: string;
+    projectId: string;
+    characterAssetId: string;
+    threadId: string;
+    anchoredWorldEventId: string | null;
+  },
   userMessage: { id: string; threadId: string; role: string; content: string; createdAt: Date },
   memory?: MemoryService | null,
 ): Promise<void> {

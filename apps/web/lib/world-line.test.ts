@@ -119,7 +119,12 @@ describe('buildProductionLineModel shot track', () => {
               positive: 'approved courtyard mist',
               approved_at: '2026-08-01',
             },
-            output: { provider: 'siliconflow', model: 'Wan-2.2', status: 'completed', is_active: true },
+            output: {
+              provider: 'siliconflow',
+              model: 'Wan-2.2',
+              status: 'completed',
+              is_active: true,
+            },
           },
         ],
       }),
@@ -217,9 +222,9 @@ describe('resolveDisplayDimensions', () => {
 
 describe('dimension overlay focus', () => {
   it('counts explicit bindings without interpreting calendar values', () => {
-    expect(worldTimeDimensionId({ dimension_id: 'calendar-1', mode: 'point', value: '第三纪' })).toBe(
-      'calendar-1',
-    );
+    expect(
+      worldTimeDimensionId({ dimension_id: 'calendar-1', mode: 'point', value: '第三纪' }),
+    ).toBe('calendar-1');
     expect(
       countEventsBoundToDimension(
         [
@@ -233,13 +238,9 @@ describe('dimension overlay focus', () => {
   });
 
   it('keeps follow items visible when focusing a non-primary dimension', () => {
-    expect(
-      overlayFocusOfItem(
-        { entityType: 'character', extra: {} },
-        'calendar-1',
-        false,
-      ),
-    ).toBe('follow');
+    expect(overlayFocusOfItem({ entityType: 'character', extra: {} }, 'calendar-1', false)).toBe(
+      'follow',
+    );
     expect(
       overlayFocusOfItem(
         {

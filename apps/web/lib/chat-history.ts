@@ -18,9 +18,7 @@ function isThread(value: unknown): value is CreatorChatThreadDTO {
   );
 }
 
-export function threadKind(
-  thread: Pick<CreatorChatThreadDTO, 'kind'>,
-): CreatorChatKind {
+export function threadKind(thread: Pick<CreatorChatThreadDTO, 'kind'>): CreatorChatKind {
   return thread.kind === 'roleplay' ? 'roleplay' : 'world';
 }
 

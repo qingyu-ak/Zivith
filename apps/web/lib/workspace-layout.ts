@@ -57,10 +57,7 @@ export function usePersistedPx(
   return [value, update];
 }
 
-export function usePersistedFlag(
-  key: string,
-  fallback: boolean,
-): [boolean, () => void] {
+export function usePersistedFlag(key: string, fallback: boolean): [boolean, () => void] {
   const [value, setValue] = useState(fallback);
 
   useEffect(() => {

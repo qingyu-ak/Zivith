@@ -79,14 +79,28 @@ class FakeStore implements MemoryStore {
   async getPipelineState(messageId: string) {
     const state = this.pipelineStates.get(messageId);
     return state
-      ? { messageId, level1At: null, extractionMode: 'rule', status: state.status, attempts: state.attempts, lastError: null }
+      ? {
+          messageId,
+          level1At: null,
+          extractionMode: 'rule',
+          status: state.status,
+          attempts: state.attempts,
+          lastError: null,
+        }
       : null;
   }
   async getMessageWithProject(messageId: string) {
     return { id: messageId, content: '林澈性格冷静。', projectId: 'p1' };
   }
-  async upsertCore(input: { kind: string; topic: string; content: string; sourceAtomIds: string[] }) {
-    const existing = this.cores.find((core) => core.kind === input.kind && core.topic === input.topic);
+  async upsertCore(input: {
+    kind: string;
+    topic: string;
+    content: string;
+    sourceAtomIds: string[];
+  }) {
+    const existing = this.cores.find(
+      (core) => core.kind === input.kind && core.topic === input.topic,
+    );
     if (existing) {
       existing.content = input.content;
       existing.sourceAtomIds = input.sourceAtomIds;
@@ -174,8 +188,20 @@ describe('MemoryService.ingest（同步快速路径）', () => {
   it('second identical ingest is NOOP (no new atoms, no enqueue)', async () => {
     const store = new FakeStore();
     const { service, enqueued } = makeService(store);
-    await service.ingest({ messageId: 'm1', threadId: 't1', projectId: 'p1', content: '林澈性格冷静。', world });
-    await service.ingest({ messageId: 'm2', threadId: 't1', projectId: 'p1', content: '林澈性格冷静！', world });
+    await service.ingest({
+      messageId: 'm1',
+      threadId: 't1',
+      projectId: 'p1',
+      content: '林澈性格冷静。',
+      world,
+    });
+    await service.ingest({
+      messageId: 'm2',
+      threadId: 't1',
+      projectId: 'p1',
+      content: '林澈性格冷静！',
+      world,
+    });
     expect(store.atoms).toHaveLength(1);
     expect(enqueued).toHaveLength(1);
   });
@@ -183,8 +209,20 @@ describe('MemoryService.ingest（同步快速路径）', () => {
   it('antonym conflict is reported, not written', async () => {
     const store = new FakeStore();
     const { service } = makeService(store);
-    await service.ingest({ messageId: 'm1', threadId: 't1', projectId: 'p1', content: '林澈性格阴郁。', world });
-    const ops = await service.ingest({ messageId: 'm2', threadId: 't1', projectId: 'p1', content: '林澈性格开朗。', world });
+    await service.ingest({
+      messageId: 'm1',
+      threadId: 't1',
+      projectId: 'p1',
+      content: '林澈性格阴郁。',
+      world,
+    });
+    const ops = await service.ingest({
+      messageId: 'm2',
+      threadId: 't1',
+      projectId: 'p1',
+      content: '林澈性格开朗。',
+      world,
+    });
     expect(ops.conflicts).toHaveLength(1);
     expect(store.atoms).toHaveLength(1);
   });
@@ -194,7 +232,13 @@ describe('MemoryService.processRefine（深加工）', () => {
   it('refines atoms via LLM, aggregates L2 cores and marks done (mock rule path)', async () => {
     const store = new FakeStore();
     const { service } = makeService(store);
-    await service.ingest({ messageId: 'm1', threadId: 't1', projectId: 'p1', content: '林澈性格冷静。他渴望成为仙人。', world });
+    await service.ingest({
+      messageId: 'm1',
+      threadId: 't1',
+      projectId: 'p1',
+      content: '林澈性格冷静。他渴望成为仙人。',
+      world,
+    });
     await service.processRefine('m1');
     // 规则模式：无 LLM → 原子保持原文，L2 按 (character,c1) 聚合为 persona
     expect(store.cores).toHaveLength(1);
@@ -206,7 +250,13 @@ describe('MemoryService.processRefine（深加工）', () => {
   it('is idempotent (second run is a no-op)', async () => {
     const store = new FakeStore();
     const { service } = makeService(store);
-    await service.ingest({ messageId: 'm1', threadId: 't1', projectId: 'p1', content: '林澈性格冷静。', world });
+    await service.ingest({
+      messageId: 'm1',
+      threadId: 't1',
+      projectId: 'p1',
+      content: '林澈性格冷静。',
+      world,
+    });
     await service.processRefine('m1');
     await service.processRefine('m1');
     expect(store.cores).toHaveLength(1);

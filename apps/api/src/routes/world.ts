@@ -1117,7 +1117,16 @@ function registerCreatorChatRoutes(
     });
 
     if (body.role === 'user' && wantsEventStream(request)) {
-      await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage, body.focus, memory);
+      await pipeCreatorChatSse(
+        request,
+        reply,
+        db,
+        builder,
+        thread,
+        userMessage,
+        body.focus,
+        memory,
+      );
       return;
     }
 

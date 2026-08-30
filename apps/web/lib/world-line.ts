@@ -445,8 +445,7 @@ export function isTimelineItemActive(
   const shotId = derivedSourceShotId(item);
   if (isDerivedTrackKind(selection.kind)) {
     return (
-      shotId === selection.id &&
-      (item.entityType === selection.kind || item.entityType === 'shot')
+      shotId === selection.id && (item.entityType === selection.kind || item.entityType === 'shot')
     );
   }
   if (selection.kind === 'shot') {
@@ -474,9 +473,12 @@ export function projectCameraCaption(shot: WorldLineShotDTO): string {
 }
 
 export function projectStyleCaption(shot: WorldLineShotDTO): string {
-  const palette = shot.color && typeof shot.color === 'object' && Array.isArray(shot.color.palette)
-    ? shot.color.palette.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).join('/')
-    : null;
+  const palette =
+    shot.color && typeof shot.color === 'object' && Array.isArray(shot.color.palette)
+      ? shot.color.palette
+          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+          .join('/')
+      : null;
   const caption = [
     recordField(shot.style, 'rendering'),
     recordField(shot.lighting, 'type'),

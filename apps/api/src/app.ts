@@ -181,19 +181,21 @@ export async function buildApp(options: BuildAppOptions = {}) {
           { prefix: '/memory' },
         );
       }
-      api.register(
-        (roleplayApi, _roleplayOptions, roleplayDone) => {
-          registerRoleplayRoutes(roleplayApi, db, worldProviders.llm, worldProviders.llmModel, options.memory);
-          roleplayDone();
-        },
-      );
-      if (options.novelImport) {
-        api.register(
-          (novelApi, _novelOptions, novelDone) => {
-            registerNovelImportRoutes(novelApi, options.novelImport!);
-            novelDone();
-          },
+      api.register((roleplayApi, _roleplayOptions, roleplayDone) => {
+        registerRoleplayRoutes(
+          roleplayApi,
+          db,
+          worldProviders.llm,
+          worldProviders.llmModel,
+          options.memory,
         );
+        roleplayDone();
+      });
+      if (options.novelImport) {
+        api.register((novelApi, _novelOptions, novelDone) => {
+          registerNovelImportRoutes(novelApi, options.novelImport!);
+          novelDone();
+        });
       }
       done();
     },

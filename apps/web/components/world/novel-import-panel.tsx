@@ -4,7 +4,13 @@ import { useRef, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
 
 interface ImportReport {
-  characters?: Array<{ id: string; name: string; aliases?: string[]; mentions?: number; tier?: string }>;
+  characters?: Array<{
+    id: string;
+    name: string;
+    aliases?: string[];
+    mentions?: number;
+    tier?: string;
+  }>;
   locations?: Array<{ id: string; name: string }>;
   events?: Array<{ id: string; title: string; chapterIndex?: number }>;
   relationships?: Array<{ id: string; source: string; target: string }>;
@@ -97,7 +103,8 @@ export function NovelImportPanel({
       {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
       {!report && !busy && (
         <p className="text-xs text-zinc-400">
-          上传 UTF-8 或 Windows 记事本 ANSI/GBK 编码的小说文本，自动提炼角色卡、场景、事件与关系写入世界层。
+          上传 UTF-8 或 Windows 记事本 ANSI/GBK
+          编码的小说文本，自动提炼角色卡、场景、事件与关系写入世界层。
         </p>
       )}
       {report && (

@@ -5,7 +5,13 @@ import { useParams } from 'next/navigation';
 import { Badge, Spinner } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { WorldResourcesDTO, WorldSelection } from '@/lib/types';
-import { buildWorldLineModel, buildProductionLineModel, resolveDisplayDimensions, isPrimaryWorldline, countEventsBoundToDimension } from '@/lib/world-line';
+import {
+  buildWorldLineModel,
+  buildProductionLineModel,
+  resolveDisplayDimensions,
+  isPrimaryWorldline,
+  countEventsBoundToDimension,
+} from '@/lib/world-line';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import {
   WORKSPACE_LAYOUT_KEYS,
@@ -293,15 +299,18 @@ export function WorldWorkspace() {
                 <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-4 py-2 text-xs leading-5 text-violet-950">
                   {isPrimaryWorldline(focusedDimension) ? (
                     <>
-                      正在查看「{focusedDimension.label}」。这是默认世界时间，角色和地点跟随呈现顺序，不会另建一条时间轴。
+                      正在查看「{focusedDimension.label}
+                      」。这是默认世界时间，角色和地点跟随呈现顺序，不会另建一条时间轴。
                     </>
                   ) : boundEventCount === 0 ? (
                     <>
-                      正在查看「{focusedDimension.label}」叠层。还没有事件绑到这个维度，所以中间格子仍是同一批角色和地点——主轴不会变成历法或梦境。
+                      正在查看「{focusedDimension.label}
+                      」叠层。还没有事件绑到这个维度，所以中间格子仍是同一批角色和地点——主轴不会变成历法或梦境。
                     </>
                   ) : (
                     <>
-                      正在查看「{focusedDimension.label}」叠层，已有 {boundEventCount} 个事件绑在此维度；其他维度的事件会淡显。
+                      正在查看「{focusedDimension.label}」叠层，已有 {boundEventCount}{' '}
+                      个事件绑在此维度；其他维度的事件会淡显。
                     </>
                   )}
                 </div>

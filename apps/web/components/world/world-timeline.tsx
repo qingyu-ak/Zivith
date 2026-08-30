@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { WorldLineItem, WorldLineModel, WorldSelection } from '@/lib/types';
 import { createOrderScale, integerTicks, thinByMinGap } from '@/lib/world-scale';
-import { overlayFocusOfItem, isTimelineItemActive, derivedSourceShotId, isDerivedTrackKind } from '@/lib/world-line';
+import {
+  overlayFocusOfItem,
+  isTimelineItemActive,
+  derivedSourceShotId,
+  isDerivedTrackKind,
+} from '@/lib/world-line';
 
 const TRACK_LABEL_WIDTH = 76;
 const TRACK_HEIGHT = 64;
@@ -194,7 +199,8 @@ export function WorldTimeline({
 
       track.items.forEach((item, itemIndex) => {
         const naturalWidth = Math.min(Math.max(estimateTextWidth(item.title) + 24, 84), 190);
-        const compactWidth = unitPx < 72 ? Math.max(18, Math.min(naturalWidth, unitPx * 0.82)) : naturalWidth;
+        const compactWidth =
+          unitPx < 72 ? Math.max(18, Math.min(naturalWidth, unitPx * 0.82)) : naturalWidth;
         const itemWidth = stacked ? naturalWidth : compactWidth;
         const maxLeft = Math.max(plotLeft + ITEM_INSET, plotRight - itemWidth - ITEM_INSET);
         const x = Math.min(

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateCharacters, extractFromChapter } from '../src/contexts/novel-import/novel-extract.js';
+import {
+  aggregateCharacters,
+  extractFromChapter,
+} from '../src/contexts/novel-import/novel-extract.js';
 import { splitChapters } from '../src/contexts/novel-import/chapter-splitter.js';
 import { decodeNovelBuffer } from '../src/contexts/novel-import/decode-text.js';
 
@@ -33,7 +36,9 @@ describe('splitChapters', () => {
 describe('extractFromChapter + aggregateCharacters', () => {
   it('detects characters, locations, events and cooccurrence', () => {
     const chapters = splitChapters(SAMPLE);
-    const extractions = chapters.map((chapter) => extractFromChapter(chapter.index, chapter.content));
+    const extractions = chapters.map((chapter) =>
+      extractFromChapter(chapter.index, chapter.content),
+    );
     const characters = aggregateCharacters(extractions);
     const names = characters.map((c) => c.name);
     expect(names).toContain('林澈');
@@ -48,8 +53,12 @@ describe('extractFromChapter + aggregateCharacters', () => {
   });
 
   it('merges near-identical names (路明非 = 路明飞)', () => {
-    const chapters = splitChapters('第一章\n路明非说了一句话。\n路明非说了第二句话。\n路明飞说了第三句话。\n路明非说了第四句话。');
-    const extractions = chapters.map((chapter) => extractFromChapter(chapter.index, chapter.content));
+    const chapters = splitChapters(
+      '第一章\n路明非说了一句话。\n路明非说了第二句话。\n路明飞说了第三句话。\n路明非说了第四句话。',
+    );
+    const extractions = chapters.map((chapter) =>
+      extractFromChapter(chapter.index, chapter.content),
+    );
     const characters = aggregateCharacters(extractions);
     const mains = characters.map((c) => c.name);
     expect(mains).toContain('路明非');

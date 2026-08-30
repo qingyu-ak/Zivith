@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-08-30 · pending · chore · Prettier 对齐，修复 CI format:check
+
+GitHub Actions「检查格式」在 `pnpm format:check` 上失败：记忆 / 小说导入 / 扮演 / 世界工作区等 35 个文件未按 Prettier 排版（多为超长行折行与尾逗号）。
+
+- **chore** `pnpm format` 写回 34 个源文件；本地 `format:check` 已全绿
+- 验证：`pnpm format:check` → All matched files use Prettier code style
+- 模块：`apps/api`、`apps/web`、`packages/domain/src/memory.ts`
+
 ## 2026-08-30 · aec52d4 · feat(web,api) · 对话历史分 Tab + 世界线可调分栏
 
 世界构建与角色扮演仍共用 `/creator-chats` 与消息表，侧栏按类型分开；世界工作区时间线不再被下方面板挤扁，轴上事件标题按间距抽稀。

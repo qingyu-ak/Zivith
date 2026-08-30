@@ -12,13 +12,18 @@ export function registerNovelImportRoutes(app: FastifyInstance, service: NovelIm
     const file = await request.file({ limits: { fileSize: 20 * 1024 * 1024 } });
     if (!file) throw new ApiError(400, 'FILE_REQUIRED', '请上传小说文本文件');
     const projectField = file.fields['project_id'];
-    const projectId = projectField && 'value' in projectField ? String(projectField.value) : undefined;
+    const projectId =
+      projectField && 'value' in projectField ? String(projectField.value) : undefined;
     const parsed = idSchema.safeParse(projectId);
     if (!parsed.success) throw new ApiError(400, 'PROJECT_ID_REQUIRED', '缺少 project_id');
     const buffer = await file.toBuffer();
     const text = decodeNovelBuffer(buffer);
     if (text.trim().length < 200) {
-      throw new ApiError(400, 'NOVEL_TOO_SHORT', '文本过短（需 ≥200 字符）。请使用 UTF-8 或 GBK/ANSI 编码的 txt');
+      throw new ApiError(
+        400,
+        'NOVEL_TOO_SHORT',
+        '文本过短（需 ≥200 字符）。请使用 UTF-8 或 GBK/ANSI 编码的 txt',
+      );
     }
     const { importId, report } = await service.start({
       projectId: parsed.data,

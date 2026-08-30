@@ -143,11 +143,15 @@ export async function sendCreatorChatTurn(
   onEvent: (event: string, data: unknown) => void,
   focus?: { kind: string; id: string; name: string } | null,
 ): Promise<void> {
-  await postChatTurn(`/world/creator-chats/${threadId}/messages`, {
-    role: 'user',
-    content,
-    ...(focus ? { focus } : {}),
-  }, onEvent);
+  await postChatTurn(
+    `/world/creator-chats/${threadId}/messages`,
+    {
+      role: 'user',
+      content,
+      ...(focus ? { focus } : {}),
+    },
+    onEvent,
+  );
 }
 
 /** POST a roleplay turn (same SSE protocol as Creator Chat). */

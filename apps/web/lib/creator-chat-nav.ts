@@ -185,10 +185,7 @@ export function entityTitle(
     case 'style':
     case 'prompt':
     case 'model':
-      return (
-        entities.shots?.find((item) => item.id === selection.id)?.label?.trim() ||
-        '镜头'
-      );
+      return entities.shots?.find((item) => item.id === selection.id)?.label?.trim() || '镜头';
     default:
       return null;
   }

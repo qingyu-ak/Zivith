@@ -79,7 +79,21 @@ export interface MemoryStore {
   createAtom(input: CreateAtomInput): Promise<MemoryAtomRecord>;
   updateAtom(
     id: string,
-    patch: Partial<Pick<MemoryAtomRecord, 'status' | 'supersededById' | 'validTo' | 'memoryOp' | 'content' | 'factType' | 'entityType' | 'entityId' | 'confidence' | 'dedupHash'>>,
+    patch: Partial<
+      Pick<
+        MemoryAtomRecord,
+        | 'status'
+        | 'supersededById'
+        | 'validTo'
+        | 'memoryOp'
+        | 'content'
+        | 'factType'
+        | 'entityType'
+        | 'entityId'
+        | 'confidence'
+        | 'dedupHash'
+      >
+    >,
   ): Promise<void>;
   invalidateAtom(id: string): Promise<boolean>;
   listAtoms(
@@ -101,6 +115,11 @@ export interface MemoryStore {
   findContextState(threadId: string): Promise<ThreadContextStateRecord | null>;
   upsertContextState(
     threadId: string,
-    patch: Partial<Pick<ThreadContextStateRecord, 'rollingSummary' | 'summarizedUntilMessageId' | 'summaryVersion' | 'tokenEstimate'>>,
+    patch: Partial<
+      Pick<
+        ThreadContextStateRecord,
+        'rollingSummary' | 'summarizedUntilMessageId' | 'summaryVersion' | 'tokenEstimate'
+      >
+    >,
   ): Promise<void>;
 }

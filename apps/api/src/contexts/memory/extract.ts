@@ -12,13 +12,23 @@ export function splitStatements(text: string): string[] {
 }
 
 const FACT_TYPE_RULES: Array<{ type: MemoryFactType; pattern: RegExp }> = [
-  { type: 'relation', pattern: /(师徒|恋人|情侣|宿敌|敌人|挚友|同伴|兄弟|姐妹|父子|母女|夫妇|夫妻|师兄弟|结拜|关系)/ },
+  {
+    type: 'relation',
+    pattern: /(师徒|恋人|情侣|宿敌|敌人|挚友|同伴|兄弟|姐妹|父子|母女|夫妇|夫妻|师兄弟|结拜|关系)/,
+  },
   { type: 'rule', pattern: /(规则|力量体系|世界法则|设定上|必须|禁止|修炼需要|魔法需要)/ },
   { type: 'desire', pattern: /(目标|想要|渴望|希望|梦想|立志|目的是|为了成为)/ },
-  { type: 'event', pattern: /(发生了|爆发|战争|大战|事件|事故|去世|死了|诞生|成立|毁灭|背叛|叛乱|大典)/ },
+  {
+    type: 'event',
+    pattern: /(发生了|爆发|战争|大战|事件|事故|去世|死了|诞生|成立|毁灭|背叛|叛乱|大典)/,
+  },
   { type: 'preference', pattern: /(喜欢|讨厌|偏爱|最爱|不爱|忌口|习惯于)/ },
   { type: 'constraint', pattern: /(限制|上限|代价|副作用|弱点|克星|禁忌)/ },
-  { type: 'trait', pattern: /(性格|脾气|外貌|长相|身份|职业|身高|年龄|冷静|热血|善良|邪恶|开朗|阴郁|沉默|幽默|认真|是一名|是个)/ },
+  {
+    type: 'trait',
+    pattern:
+      /(性格|脾气|外貌|长相|身份|职业|身高|年龄|冷静|热血|善良|邪恶|开朗|阴郁|沉默|幽默|认真|是一名|是个)/,
+  },
 ];
 
 /** 规则事实分类（M1 规则路径；异步 LLM 深加工会修正）。 */
@@ -69,10 +79,7 @@ export interface CandidateAtom {
 }
 
 /** 同步快速路径的规则抽取：切句 → 分类 → 实体链接。 */
-export function extractCandidateAtoms(
-  text: string,
-  world: WorldContext | null,
-): CandidateAtom[] {
+export function extractCandidateAtoms(text: string, world: WorldContext | null): CandidateAtom[] {
   const atoms: CandidateAtom[] = [];
   for (const statement of splitStatements(text)) {
     const linked = linkEntities(statement, world);
@@ -83,17 +90,17 @@ export function extractCandidateAtoms(
 }
 
 /** 实体名 → id 解析（LLM 精炼回填实体链接用）。 */
-export function resolveEntityByName(
-  name: string,
-  world: WorldContext | null,
-): LinkedEntity | null {
+export function resolveEntityByName(name: string, world: WorldContext | null): LinkedEntity | null {
   if (!world) return null;
   const target = normalizeEntityName(name);
   if (!target) return null;
   const pools: Array<{ items: Array<{ id: string; name: string }>; type: MemoryEntityType }> = [
     { items: world.characters, type: 'character' },
     { items: world.locations, type: 'location' },
-    { items: world.worldEvents.map((event) => ({ id: event.id, name: event.title })), type: 'world_event' },
+    {
+      items: world.worldEvents.map((event) => ({ id: event.id, name: event.title })),
+      type: 'world_event',
+    },
   ];
   for (const pool of pools) {
     for (const item of pool.items) {

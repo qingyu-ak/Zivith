@@ -79,7 +79,9 @@ export function MemoryPanel({
   return (
     <section className={showTitle ? 'rounded-lg border border-line bg-white/70 p-3' : 'px-3 pb-1'}>
       <div className={`mb-2 flex items-center ${showTitle ? 'justify-between' : 'justify-end'}`}>
-        {showTitle ? <h3 className="text-sm font-medium text-zinc-700">长期记忆（L1 原子）</h3> : null}
+        {showTitle ? (
+          <h3 className="text-sm font-medium text-zinc-700">长期记忆（L1 原子）</h3>
+        ) : null}
         <button
           type="button"
           onClick={() => void rebuild()}
@@ -91,7 +93,9 @@ export function MemoryPanel({
       </div>
       {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
       {atoms.length === 0 ? (
-        <p className="text-xs text-zinc-400">还没有归档的记忆。在 Creator Chat 中聊设定即可沉淀。</p>
+        <p className="text-xs text-zinc-400">
+          还没有归档的记忆。在 Creator Chat 中聊设定即可沉淀。
+        </p>
       ) : (
         <ul className="max-h-64 space-y-1.5 overflow-y-auto">
           {atoms.map((atom) => (

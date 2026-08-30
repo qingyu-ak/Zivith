@@ -56,10 +56,7 @@ function coreDto(core: {
 /** 记忆面板 + 调试 API（ADR-0013 本地单用户，随 world 路由免登录）。 */
 export function registerMemoryRoutes(app: FastifyInstance, memory: MemoryService) {
   app.get('/projects/:projectId/atoms', async (request) => {
-    const { projectId } = z
-      .object({ projectId: idSchema })
-      .strict()
-      .parse(request.params);
+    const { projectId } = z.object({ projectId: idSchema }).strict().parse(request.params);
     const query = z
       .object({
         entity_type: z.string().max(64).optional(),
@@ -79,10 +76,7 @@ export function registerMemoryRoutes(app: FastifyInstance, memory: MemoryService
   });
 
   app.get('/projects/:projectId/cores', async (request) => {
-    const { projectId } = z
-      .object({ projectId: idSchema })
-      .strict()
-      .parse(request.params);
+    const { projectId } = z.object({ projectId: idSchema }).strict().parse(request.params);
     const cores = await memory.listCores(projectId);
     return { items: cores.map(coreDto) };
   });
