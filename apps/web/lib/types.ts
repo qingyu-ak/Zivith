@@ -215,6 +215,8 @@ export interface ApiList<T> {
 
 export type ChatRole = 'user' | 'assistant' | 'system';
 
+export type CreatorChatKind = 'world' | 'roleplay';
+
 export interface CreatorChatThreadDTO {
   id: string;
   project_id?: string | null;
@@ -222,6 +224,9 @@ export interface CreatorChatThreadDTO {
   project_name?: string | null;
   title?: string | null;
   state: string;
+  /** Derived from RoleplayThread sidecar; omitted/unknown payloads default to world. */
+  kind?: CreatorChatKind;
+  character_name?: string | null;
   created_at: string;
   updated_at: string;
 }

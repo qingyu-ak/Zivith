@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryIngestOps } from '@zivith/domain';
 import { MemoryService } from '../src/contexts/memory/service.js';
-import { MEMORY_REFINE_SYSTEM_PROMPT } from '../src/contexts/memory/pipeline.js';
 import type {
   CreateAtomInput,
   MemoryAtomRecord,
@@ -190,33 +189,6 @@ describe('MemoryService.ingest（同步快速路径）', () => {
     expect(store.atoms).toHaveLength(1);
   });
 });
-
-function makeLlmRefining() {
-  return {
-    provider: 'deepseek',
-    supportedModels: [],
-    complete: async () => ({ text: '', model: 'm', input_tokens: 0, output_tokens: 0, metadata: {} }),
-    completeStructured: async (
-      request: { system_prompt: string; user_prompt: string },
-      schema: { parse: (value: unknown) => unknown },
-    ) => {
-      if (request.system_prompt === MEMORY_REFINE_SYSTEM_PROMPT) {
-        return {
-          data: schema.parse({
-            atoms: [
-              { index: 0, content: '林澈性格冷静', fact_type: 'trait', entity_name: '林澈' },
-            ],
-          }),
-          text: '', model: 'm', input_tokens: 0, output_tokens: 0, metadata: {},
-        };
-      }
-      return {
-        data: schema.parse({ summary: '林澈冷静，渴望成仙。' }),
-        text: '', model: 'm', input_tokens: 0, output_tokens: 0, metadata: {},
-      };
-    },
-  };
-}
 
 describe('MemoryService.processRefine（深加工）', () => {
   it('refines atoms via LLM, aggregates L2 cores and marks done (mock rule path)', async () => {

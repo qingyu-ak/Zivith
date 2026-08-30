@@ -64,7 +64,21 @@ describe('normalizeThread', () => {
         updated_at: '2026-01-02T00:00:00.000Z',
         state: 'active',
       }),
-    ).toMatchObject({ project_id: 'p1', updated_at: '2026-01-02T00:00:00.000Z' });
+    ).toMatchObject({ project_id: 'p1', updated_at: '2026-01-02T00:00:00.000Z', kind: 'world' });
+  });
+
+  it('defaults missing kind to world and keeps roleplay character name', () => {
+    expect(normalizeThread({ id: 't1', updatedAt: '2026-01-01T00:00:00.000Z' })?.kind).toBe(
+      'world',
+    );
+    expect(
+      normalizeThread({
+        id: 't2',
+        kind: 'roleplay',
+        character_name: '楚子航',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      }),
+    ).toMatchObject({ kind: 'roleplay', character_name: '楚子航' });
   });
 });
 

@@ -49,10 +49,15 @@ export function registerRoleplayRoutes(
     llm ?? {
       provider: 'mock',
       supportedModels: [],
-      complete: async () => ({ text: '', model: 'mock', input_tokens: 0, output_tokens: 0, metadata: {} }),
-      completeStructured: async () => {
-        throw new Error('mock structured not supported');
-      },
+      complete: () =>
+        Promise.resolve({
+          text: '',
+          model: 'mock',
+          input_tokens: 0,
+          output_tokens: 0,
+          metadata: {},
+        }),
+      completeStructured: () => Promise.reject(new Error('mock structured not supported')),
     },
     llmModel,
   );

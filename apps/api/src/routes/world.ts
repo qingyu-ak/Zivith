@@ -544,7 +544,7 @@ function registerTimelineRoutes(app: FastifyInstance, db: PrismaClient) {
         .filter((item) =>
           itemMatchesTimelineQuery(item, { ...query, track_kind: query.track_kind }),
         )
-        .filter((item) => !query.track_kind || track.kind === query.track_kind)
+        .filter(() => !query.track_kind || track.kind === query.track_kind)
         .map((item) => ({ ...item, track_id: track.id, track_kind: track.kind })),
     );
     return { items, view: query.view ?? 'presentation' };
@@ -722,26 +722,78 @@ const sendMessageBody = z
 
 const applyProposalBody = z.object({ proposal_key: z.string().max(256).optional() }).strict();
 
+type ChatThreadRecord = {
+  id: string;
+  projectId: string | null;
+  title: string | null;
+  state: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type RoleplayMeta = { characterName: string };
+
+async function loadRoleplayMeta(
+  db: PrismaClient,
+  threadIds: string[],
+): Promise<Map<string, RoleplayMeta>> {
+  const meta = new Map<string, RoleplayMeta>();
+  if (threadIds.length === 0) return meta;
+  const roleplays = await db.roleplayThread.findMany({
+    where: { threadId: { in: threadIds }, status: 'active' },
+    select: { threadId: true, characterAssetId: true },
+  });
+  if (roleplays.length === 0) return meta;
+  const assetIds = [...new Set(roleplays.map((item) => item.characterAssetId))];
+  const assets =
+    assetIds.length > 0
+      ? await db.asset.findMany({
+          where: { id: { in: assetIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+  const nameById = new Map(assets.map((asset) => [asset.id, asset.name]));
+  for (const roleplay of roleplays) {
+    meta.set(roleplay.threadId, {
+      characterName: nameById.get(roleplay.characterAssetId) ?? '',
+    });
+  }
+  return meta;
+}
+
 function chatThreadDto(
-  thread: {
-    id: string;
-    projectId: string | null;
-    title: string | null;
-    state: string;
-    createdAt: Date;
-    updatedAt: Date;
-  },
-  projectName?: string | null,
+  thread: ChatThreadRecord,
+  extras?: { projectName?: string | null; roleplay?: RoleplayMeta | null },
 ) {
+  const roleplay = extras?.roleplay ?? null;
   return {
     id: thread.id,
     project_id: thread.projectId,
-    project_name: projectName ?? null,
+    project_name: extras?.projectName ?? null,
     title: thread.title,
     state: thread.state,
+    kind: roleplay ? ('roleplay' as const) : ('world' as const),
+    character_name: roleplay?.characterName ? roleplay.characterName : null,
     created_at: thread.createdAt.toISOString(),
     updated_at: thread.updatedAt.toISOString(),
   };
+}
+
+async function chatThreadDtos(
+  db: PrismaClient,
+  threads: ChatThreadRecord[],
+  projectNameOf: (thread: ChatThreadRecord) => string | null,
+) {
+  const meta = await loadRoleplayMeta(
+    db,
+    threads.map((thread) => thread.id),
+  );
+  return threads.map((thread) =>
+    chatThreadDto(thread, {
+      projectName: projectNameOf(thread),
+      roleplay: meta.get(thread.id) ?? null,
+    }),
+  );
 }
 
 function chatMessageDto(message: {
@@ -984,7 +1036,7 @@ function registerCreatorChatRoutes(
       where: { projectId, state: 'active' },
       orderBy: { updatedAt: 'desc' },
     });
-    return threads.map((thread) => chatThreadDto(thread, project.name));
+    return chatThreadDtos(db, threads, () => project.name);
   });
 
   // Local single user (ADR-0013): list every active thread with its project name.
@@ -1007,8 +1059,8 @@ function registerCreatorChatRoutes(
           })
         : [];
     const nameById = new Map(projects.map((project) => [project.id, project.name]));
-    return threads.map((thread) =>
-      chatThreadDto(thread, thread.projectId ? (nameById.get(thread.projectId) ?? null) : null),
+    return chatThreadDtos(db, threads, (thread) =>
+      thread.projectId ? (nameById.get(thread.projectId) ?? null) : null,
     );
   });
 
@@ -1028,8 +1080,12 @@ function registerCreatorChatRoutes(
           })
         )?.name ?? null)
       : null;
+    const roleplayMeta = await loadRoleplayMeta(db, [thread.id]);
     return {
-      thread: chatThreadDto(thread, projectName),
+      thread: chatThreadDto(thread, {
+        projectName,
+        roleplay: roleplayMeta.get(thread.id) ?? null,
+      }),
       messages: messages.map(chatMessageDto),
     };
   });

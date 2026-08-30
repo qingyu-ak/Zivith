@@ -12,23 +12,15 @@ interface ImportReport {
   skipped?: string[];
 }
 
-interface ImportItem {
-  id: string;
-  status: string;
-  source_filename: string;
-  total_chapters: number;
-  processed_chapters: number;
-  created_at: string;
-  report?: ImportReport | null;
-}
-
 /** M2 小说导入面板：上传 txt → 规则提取 → 世界层 + 角色卡，支持整体撤销。 */
 export function NovelImportPanel({
   projectId,
   onImported,
+  showTitle = true,
 }: {
   projectId: string;
   onImported: () => void;
+  showTitle?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -80,9 +72,9 @@ export function NovelImportPanel({
   const fullCards = report?.characters?.filter((c) => c.tier === 'full').length ?? 0;
 
   return (
-    <section className="rounded-lg border border-line bg-white/70 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-zinc-700">导入小说</h3>
+    <section className={showTitle ? 'rounded-lg border border-line bg-white/70 p-3' : 'px-3 pb-1'}>
+      <div className={`mb-2 flex items-center ${showTitle ? 'justify-between' : 'justify-end'}`}>
+        {showTitle ? <h3 className="text-sm font-medium text-zinc-700">导入小说</h3> : null}
         <input
           ref={fileInputRef}
           type="file"
@@ -105,7 +97,7 @@ export function NovelImportPanel({
       {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
       {!report && !busy && (
         <p className="text-xs text-zinc-400">
-          上传 UTF-8 编码的小说文本，自动提炼角色卡、场景、事件与关系写入世界层。
+          上传 UTF-8 或 Windows 记事本 ANSI/GBK 编码的小说文本，自动提炼角色卡、场景、事件与关系写入世界层。
         </p>
       )}
       {report && (

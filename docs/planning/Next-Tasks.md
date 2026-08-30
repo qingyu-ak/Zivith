@@ -4,7 +4,7 @@
 >
 > Status: Active
 >
-> Synced: 2026-08-16
+> Synced: 2026-08-30
 >
 > Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。下一步：I3 `Organization`（需真实项目晋级证据，不随计划启动）；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
 >
@@ -17,7 +17,7 @@
 创造层 v1 已闭环（2026-08-16 合并进 `main`）：
 
 - Backend：世界线 / WorldEvent / Relationship / Creator Chat 路由（[`apps/api/src/routes/world.ts`](../../apps/api/src/routes/world.ts)）；World Builder Agent + 冲突检测（H9 v1，只报告不修复）+ 提案应用（`apply-intent`，全部 `draft` + 幂等键）；`entity_revisions` / `change_events` / `project_sequences` 表 + 双写助手（per-Entity 开关默认关）
-- Frontend：`/` Creator Chat 默认页（无登录，浅色独立对话壳 + 可收起历史侧栏）；`/projects/:id/world` 三栏世界工作区（Explorer / 世界线 / Inspector 可编辑 + 冲突列表 + 「在对话中继续」）；Inspector 可编辑世界时间绑定与时间维度；`/production` 与 `/settings` 承接原工作流与提供商面板
+- Frontend：`/` Creator Chat 默认页（无登录，浅色独立对话壳 + 可收起历史侧栏，世界/角色 Tab）；`/projects/:id/world` 三栏世界工作区（Explorer / 世界线 / Inspector 可编辑 + 冲突列表 + 「在对话中继续」；栏宽与时间线高度可拖）；Inspector 可编辑世界时间绑定与时间维度；`/production` 与 `/settings` 承接原工作流与提供商面板
 - Domain：[`packages/domain/src/history/*`](../../packages/domain/src/history/) 快照与 ChangeEvent schema；WorldEvent / Relationship / Timeline Track/Item schema；H6 `TemporalDimension` + `WorldTimeBinding` 信封
 - Database：`20260804000000_creator_layer_world` 迁移（world_events / relationships / project_timelines / timeline_tracks / timeline_items / creator_chat_threads / creator_chat_messages）；`20260816000000_h6_world_time_binding`（`temporal_dimensions` / `world_time_bindings`）；`Project.worldview` Json（K5 世界观单点表示）
 
@@ -233,8 +233,8 @@
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
 | K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | **已完成 2026-08-05**（World Overview：项目名 + 「本地创作」徽标 + 「去创作对话」入口 + 分区导航；`/production` `/settings` 承接原面板只搬不移；侧栏新增 制作/设置；浏览器回归 5 页全过） |
-| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector；**2026-08-14** 左右栏可收起；**2026-08-14 世界线细化**：地点轨 + 事件刻度标题 + 角色/地点锚定 + 世界时间偏离标记；**2026-08-05 v1 只读已落地**；**2026-08-13 Inspector 内联编辑**；**2026-08-13 副驾驶展示 `resources.conflicts`（H9 v1）** | 已完成 v1 + Inspector 可编辑 + 冲突列表 + 左右栏可收起 + 世界线细化 |
-| K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；Chat 为独立浅色壳，Studio 左栏「创作聊天」可达 | **已完成 2026-08-05**；**2026-08-13 ADR-0013 API 闭环**；**2026-08-14** 可收起历史侧栏 |
+| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector；**2026-08-14** 左右栏可收起；**2026-08-14 世界线细化**：地点轨 + 事件刻度标题 + 角色/地点锚定 + 世界时间偏离标记；**2026-08-05 v1 只读已落地**；**2026-08-13 Inspector 内联编辑**；**2026-08-13 副驾驶展示 `resources.conflicts`（H9 v1）**；**2026-08-30** 左右栏与时间线/下坞可拖拽改尺寸；轴标签抽稀 | 已完成 v1 + Inspector 可编辑 + 冲突列表 + 左右栏可收起 + 世界线细化 + 可调分栏 |
+| K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；Chat 为独立浅色壳，Studio 左栏「创作聊天」可达 | **已完成 2026-08-05**；**2026-08-13 ADR-0013 API 闭环**；**2026-08-14** 可收起历史侧栏；**2026-08-30** 世界/角色 Tab |
 | K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），**2026-08-06 Production 视图 v1**（世界/制作 tab；故事 + 场景轨道），**2026-08-13 Shot 轨道**：镜头嵌在所属场景刻度区间，Inspector 只读 + 跳转镜头编辑器 | **已完成 v1 + Shot 轨道（2026-08-13）** |
 | K5 | 世界观 Chat→Studio 核心闭环 | 世界观自动识别 → 落库 → Studio 展示：`Project.worldview Json`（genre/premise/rules/notes，additive 迁移）+ mock/LLM 自动提炼（`update_entity` type='project'）+ resources 返回 worldview/stage + chat header 常驻「进入 Studio」入口 | **已完成 2026-08-05**（愿景核对报告：Chat 引导/Studio 三栏/实体列表/timeline/Inspector 均已对齐；补齐世界观单点表示与识别、副驾驶摘要） |
 

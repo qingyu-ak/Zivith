@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aggregateCharacters, extractFromChapter } from '../src/contexts/novel-import/novel-extract.js';
 import { splitChapters } from '../src/contexts/novel-import/chapter-splitter.js';
+import { decodeNovelBuffer } from '../src/contexts/novel-import/decode-text.js';
 
 const SAMPLE = `第一章 踏入学院
 
@@ -55,5 +56,31 @@ describe('extractFromChapter + aggregateCharacters', () => {
     expect(mains).not.toContain('路明飞');
     const lu = characters.find((c) => c.name === '路明非');
     expect(lu?.aliases).toContain('路明飞');
+  });
+
+  it('does not treat common adverbs as character names', () => {
+    const chapter = extractFromChapter(
+      0,
+      '没有说出口。忽然出现一个人。甚至知道答案。电梯出现故障。喜欢看热闹。林澈说了一句话。林澈说了第二句话。',
+    );
+    const names = [...chapter.characterMentions.keys()];
+    expect(names).toContain('林澈');
+    expect(names).not.toContain('没有');
+    expect(names).not.toContain('忽然');
+    expect(names).not.toContain('甚至');
+    expect(names).not.toContain('电梯');
+    expect(names).not.toContain('喜欢');
+  });
+});
+
+describe('decodeNovelBuffer', () => {
+  it('keeps utf-8 and strips nulls', () => {
+    expect(decodeNovelBuffer(Buffer.from('林澈', 'utf8'))).toBe('林澈');
+    expect(decodeNovelBuffer(Buffer.from('a\0b', 'utf8'))).toBe('ab');
+  });
+
+  it('decodes gb18030 when the bytes are not valid utf-8', () => {
+    const buffer = Buffer.from([0xd6, 0xd0, 0xce, 0xc4]);
+    expect(decodeNovelBuffer(buffer)).toBe('中文');
   });
 });

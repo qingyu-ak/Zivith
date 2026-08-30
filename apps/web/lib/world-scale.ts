@@ -54,3 +54,37 @@ export function integerTicks(min: number, max: number): number[] {
   if (start > end) return [Math.round(min)];
   return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 }
+
+/**
+ * 按像素间距抽稀：保留首尾，中间只留下与上一保留点至少相距 minGap 的项。
+ * 若末点与最后保留点过近，丢掉末点之前那个挤着的点。
+ */
+export function thinByMinGap(positions: number[], minGap: number): boolean[] {
+  const count = positions.length;
+  const keep = Array.from({ length: count }, () => false);
+  const first = positions[0];
+  if (count === 0 || first === undefined) return keep;
+  keep[0] = true;
+  if (count === 1) return keep;
+  let lastKeptX = first;
+  for (let index = 1; index < count - 1; index += 1) {
+    const x = positions[index];
+    if (x === undefined) continue;
+    if (x - lastKeptX >= minGap) {
+      keep[index] = true;
+      lastKeptX = x;
+    }
+  }
+  const lastX = positions[count - 1];
+  if (lastX === undefined) return keep;
+  keep[count - 1] = true;
+  if (lastX - lastKeptX < minGap) {
+    for (let index = count - 2; index >= 1; index -= 1) {
+      if (!keep[index]) continue;
+      const previous = positions[index];
+      if (previous !== undefined && lastX - previous < minGap) keep[index] = false;
+      else break;
+    }
+  }
+  return keep;
+}

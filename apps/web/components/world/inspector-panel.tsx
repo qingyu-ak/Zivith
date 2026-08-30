@@ -1412,12 +1412,12 @@ function renderReadonly(
       const href = scene?.story_id
         ? `/projects/${resources.project.id}/stories/${scene.story_id}/scenes/${scene.id}/shots/${shot.id}`
         : null;
-      const camera = (shot.camera ?? {}) as Record<string, unknown>;
-      const composition = (shot.composition ?? {}) as Record<string, unknown>;
-      const lighting = (shot.lighting ?? {}) as Record<string, unknown>;
-      const color = (shot.color ?? {}) as Record<string, unknown>;
-      const style = (shot.style ?? {}) as Record<string, unknown>;
-      const prompt = (shot.prompt ?? {}) as Record<string, unknown>;
+      const camera = shot.camera ?? {};
+      const composition = shot.composition ?? {};
+      const lighting = shot.lighting ?? {};
+      const color = shot.color ?? {};
+      const style = shot.style ?? {};
+      const prompt = shot.prompt ?? {};
       const fields =
         selection.kind === 'camera'
           ? [

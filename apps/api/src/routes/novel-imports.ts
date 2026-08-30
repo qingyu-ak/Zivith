@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import type { NovelImportService } from '../contexts/novel-import/service.js';
+import { decodeNovelBuffer } from '../contexts/novel-import/decode-text.js';
 
 const idSchema = z.string().min(1).max(128);
 
@@ -15,9 +16,9 @@ export function registerNovelImportRoutes(app: FastifyInstance, service: NovelIm
     const parsed = idSchema.safeParse(projectId);
     if (!parsed.success) throw new ApiError(400, 'PROJECT_ID_REQUIRED', '缺少 project_id');
     const buffer = await file.toBuffer();
-    const text = buffer.toString('utf-8').replace(/\u0000/g, '');
+    const text = decodeNovelBuffer(buffer);
     if (text.trim().length < 200) {
-      throw new ApiError(400, 'NOVEL_TOO_SHORT', '文本过短（需 ≥200 字符）。注意：目前仅支持 UTF-8 编码的 txt 文件');
+      throw new ApiError(400, 'NOVEL_TOO_SHORT', '文本过短（需 ≥200 字符）。请使用 UTF-8 或 GBK/ANSI 编码的 txt');
     }
     const { importId, report } = await service.start({
       projectId: parsed.data,

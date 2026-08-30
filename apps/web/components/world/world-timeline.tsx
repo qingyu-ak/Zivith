@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { WorldLineItem, WorldLineModel, WorldSelection } from '@/lib/types';
-import { createOrderScale, integerTicks } from '@/lib/world-scale';
+import { createOrderScale, integerTicks, thinByMinGap } from '@/lib/world-scale';
 import { overlayFocusOfItem, isTimelineItemActive, derivedSourceShotId, isDerivedTrackKind } from '@/lib/world-line';
 
 const TRACK_LABEL_WIDTH = 76;
-const TRACK_HEIGHT = 58;
-const TRACK_GAP = 10;
-const PADDING = { top: 8, right: 18, bottom: 14 };
-const ITEM_HEIGHT = 32;
+const TRACK_HEIGHT = 64;
+const TRACK_GAP = 12;
+const PADDING = { top: 10, right: 18, bottom: 16 };
+const ITEM_HEIGHT = 30;
 const ITEM_INSET = 8;
 const CHAR_LANE_GAP = 6;
 const CHAR_LANE_PAD = 8;
@@ -127,9 +127,11 @@ export function WorldTimeline({
   }, []);
 
   const namedAxis = model.axisMarks.length > 0;
-  const axisHeight = namedAxis ? 52 : 30;
+  const axisHeight = namedAxis ? 56 : 32;
   const plotLeft = TRACK_LABEL_WIDTH + 8;
   const plotRight = Math.max(width - PADDING.right, plotLeft + 120);
+  const domainSpan = Math.max(1, model.scaleDomain.max - model.scaleDomain.min);
+  const unitPx = (plotRight - plotLeft) / domainSpan;
 
   const scale = useMemo(() => {
     const { min, max } = model.scaleDomain;
@@ -140,6 +142,28 @@ export function WorldTimeline({
     () => integerTicks(model.scaleDomain.min, model.scaleDomain.max),
     [model.scaleDomain],
   );
+
+  const axisLabelKeep = useMemo(() => {
+    if (namedAxis) {
+      const positions = model.axisMarks.map((mark) => scale(mark.order));
+      const gaps = model.axisMarks.map((mark) =>
+        Math.max(48, estimateTextWidth(clipLabel(mark.label, 6)) + 12),
+      );
+      const minGap = gaps.length ? Math.max(48, Math.min(...gaps)) : 48;
+      return thinByMinGap(positions, minGap);
+    }
+    return thinByMinGap(
+      fallbackTicks.map((tick) => scale(tick)),
+      40,
+    );
+  }, [namedAxis, model.axisMarks, fallbackTicks, scale]);
+
+  const guideKeep = useMemo(() => {
+    const positions = namedAxis
+      ? model.axisMarks.map((mark) => scale(mark.order))
+      : fallbackTicks.map((tick) => scale(tick));
+    return thinByMinGap(positions, 10);
+  }, [namedAxis, model.axisMarks, fallbackTicks, scale]);
 
   const layout = useMemo(() => {
     let y = PADDING.top + axisHeight;
@@ -169,7 +193,9 @@ export function WorldTimeline({
       tracks.push({ id: track.id, title: track.title, kind: track.kind, trackY, height });
 
       track.items.forEach((item, itemIndex) => {
-        const itemWidth = Math.min(Math.max(estimateTextWidth(item.title) + 24, 84), 190);
+        const naturalWidth = Math.min(Math.max(estimateTextWidth(item.title) + 24, 84), 190);
+        const compactWidth = unitPx < 72 ? Math.max(18, Math.min(naturalWidth, unitPx * 0.82)) : naturalWidth;
+        const itemWidth = stacked ? naturalWidth : compactWidth;
         const maxLeft = Math.max(plotLeft + ITEM_INSET, plotRight - itemWidth - ITEM_INSET);
         const x = Math.min(
           Math.max(scale(item.anchorOrder) - itemWidth / 2, plotLeft + ITEM_INSET),
@@ -192,7 +218,7 @@ export function WorldTimeline({
     }
 
     return { tracks, positions, totalHeight: y - TRACK_GAP + PADDING.bottom };
-  }, [model.tracks, plotLeft, plotRight, scale, axisHeight]);
+  }, [model.tracks, plotLeft, plotRight, scale, axisHeight, unitPx]);
 
   const links = useMemo(
     () =>
@@ -303,21 +329,22 @@ export function WorldTimeline({
         {/* 事件竖导轨：把呈现主轴落到各轨道 */}
         <g>
           {(namedAxis ? model.axisMarks : fallbackTicks.map((tick) => ({ order: tick }))).map(
-            (mark, index) => (
-              <line
-                key={`guide-${mark.order}-${index}`}
-                x1={scale(mark.order)}
-                y1={axisY}
-                x2={scale(mark.order)}
-                y2={svgHeight - PADDING.bottom}
-                stroke={
-                  'worldTimeDiverges' in mark && mark.worldTimeDiverges
-                    ? 'rgba(217,119,6,0.28)'
-                    : 'rgba(24,24,27,0.08)'
-                }
-                strokeWidth="1"
-              />
-            ),
+            (mark, index) =>
+              guideKeep[index] ? (
+                <line
+                  key={`guide-${mark.order}-${index}`}
+                  x1={scale(mark.order)}
+                  y1={axisY}
+                  x2={scale(mark.order)}
+                  y2={svgHeight - PADDING.bottom}
+                  stroke={
+                    'worldTimeDiverges' in mark && mark.worldTimeDiverges
+                      ? 'rgba(217,119,6,0.28)'
+                      : 'rgba(24,24,27,0.08)'
+                  }
+                  strokeWidth="1"
+                />
+              ) : null,
           )}
         </g>
 
@@ -334,6 +361,7 @@ export function WorldTimeline({
                   onSelect({ kind: 'relationship', id: link.id });
                 }}
               >
+                {link.label && <title>{link.label}</title>}
                 <path
                   d={link.d}
                   fill="none"
@@ -341,7 +369,7 @@ export function WorldTimeline({
                   strokeWidth={active ? 2.25 : 1.25}
                   strokeDasharray="4 3"
                 />
-                {link.label && (
+                {link.label && active && (
                   <text
                     x={link.midX}
                     y={link.midY}
@@ -375,36 +403,49 @@ export function WorldTimeline({
                 const accent = diverges ? '#d97706' : overlay ? '#7c3aed' : '#d4d4d8';
                 const labelFill = diverges ? '#b45309' : overlay ? '#5b21b6' : '#3f3f46';
                 const subFill = diverges ? '#d97706' : overlay ? '#7c3aed' : '#a1a1aa';
+                const showLabel = axisLabelKeep[index];
+                const caption = mark.worldTimeLabel
+                  ? `${mark.label} · ${mark.worldTimeLabel}`
+                  : `${mark.label} · #${mark.order}`;
                 return (
                   <g key={`axis-${mark.order}-${index}`}>
+                    <title>{caption}</title>
                     <line x1={x} y1={axisY} x2={x} y2={axisY + 5} stroke={accent} strokeWidth="1" />
-                    <text
-                      x={x}
-                      y={PADDING.top + 14}
-                      fill={labelFill}
-                      fontSize="11"
-                      fontWeight="600"
-                      textAnchor="middle"
-                    >
-                      {clipLabel(mark.label, 8)}
-                    </text>
-                    <text
-                      x={x}
-                      y={PADDING.top + 28}
-                      fill={subFill}
-                      fontSize="9"
-                      textAnchor="middle"
-                    >
-                      {mark.worldTimeLabel ? clipLabel(mark.worldTimeLabel, 10) : `#${mark.order}`}
-                    </text>
-                    {diverges && <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#d97706" />}
-                    {!diverges && overlay && (
+                    {showLabel && (
+                      <>
+                        <text
+                          x={x}
+                          y={PADDING.top + 14}
+                          fill={labelFill}
+                          fontSize="11"
+                          fontWeight="600"
+                          textAnchor="middle"
+                        >
+                          {clipLabel(mark.label, 8)}
+                        </text>
+                        <text
+                          x={x}
+                          y={PADDING.top + 28}
+                          fill={subFill}
+                          fontSize="9"
+                          textAnchor="middle"
+                        >
+                          {mark.worldTimeLabel
+                            ? clipLabel(mark.worldTimeLabel, 10)
+                            : `#${mark.order}`}
+                        </text>
+                      </>
+                    )}
+                    {showLabel && diverges && (
+                      <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#d97706" />
+                    )}
+                    {showLabel && !diverges && overlay && (
                       <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#7c3aed" />
                     )}
                   </g>
                 );
               })
-            : fallbackTicks.map((tick) => (
+            : fallbackTicks.map((tick, index) => (
                 <g key={tick}>
                   <line
                     x1={scale(tick)}
@@ -414,15 +455,17 @@ export function WorldTimeline({
                     stroke="#d4d4d8"
                     strokeWidth="1"
                   />
-                  <text
-                    x={scale(tick)}
-                    y={PADDING.top + 10}
-                    fill="#71717a"
-                    fontSize="11"
-                    textAnchor="middle"
-                  >
-                    #{tick}
-                  </text>
+                  {axisLabelKeep[index] && (
+                    <text
+                      x={scale(tick)}
+                      y={PADDING.top + 12}
+                      fill="#71717a"
+                      fontSize="11"
+                      textAnchor="middle"
+                    >
+                      #{tick}
+                    </text>
+                  )}
                 </g>
               ))}
         </g>
@@ -600,7 +643,7 @@ export function WorldTimeline({
                       dominantBaseline="middle"
                       style={{ pointerEvents: 'none' }}
                     >
-                      {clipLabel(item.title, 14)}
+                      {pos.itemWidth < 36 ? '' : clipLabel(item.title, pos.itemWidth < 72 ? 4 : 14)}
                     </text>
                     {(diverges || overlay) && (
                       <circle

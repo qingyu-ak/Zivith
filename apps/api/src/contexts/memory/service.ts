@@ -301,7 +301,7 @@ export class MemoryService {
       for (const [key, group] of groups) {
         const [entityType, entityId] = key.split(':');
         const topic =
-          (await this.entityName(world, entityType || null, entityId || null)) ?? '未归档事实';
+          this.entityName(world, entityType || null, entityId || null) ?? '未归档事实';
         const contents: string[] = [];
         for (const atom of [...group].reverse()) {
           if (!contents.includes(atom.content)) contents.push(atom.content);
@@ -340,11 +340,11 @@ export class MemoryService {
   }
 
   /** 实体名解析（L2 topic 用；从 world 上下文查名字）。 */
-  private async entityName(
+  private entityName(
     world: WorldContext | null,
     entityType: string | null,
     entityId: string | null,
-  ): Promise<string | null> {
+  ): string | null {
     if (!world || !entityType || !entityId) return null;
     if (entityType === 'character') {
       return world.characters.find((c) => c.id === entityId)?.name ?? null;

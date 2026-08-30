@@ -95,8 +95,8 @@ export const temporalDimensionsSchema = z
 const worldTimeModeInputSchema = z.enum([...WORLD_TIME_MODES, 'exact', 'instant', 'parallel']);
 
 export function canonicalizeWorldTimeMode(mode: string): WorldTimeMode {
-  if (mode === 'exact' || mode === 'instant') return 'point';
-  if (mode === 'parallel') return 'crossing';
+  const aliased = WORLD_TIME_MODE_ALIASES[mode as keyof typeof WORLD_TIME_MODE_ALIASES];
+  if (aliased) return aliased;
   if ((WORLD_TIME_MODES as readonly string[]).includes(mode)) return mode as WorldTimeMode;
   return 'unknown';
 }

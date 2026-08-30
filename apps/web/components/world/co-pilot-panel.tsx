@@ -16,9 +16,11 @@ const STAGE_META: Record<WorldStage, { label: string; tone: 'neutral' | 'warning
 export function CoPilotPanel({
   resources,
   onSelect,
+  showTitle = true,
 }: {
   resources: WorldResourcesDTO;
   onSelect?: (selection: NonNullable<WorldSelection>) => void;
+  showTitle?: boolean;
 }) {
   const { name } = resources.project;
   const worldview = resources.project.worldview ?? { rules: [] };
@@ -39,13 +41,20 @@ export function CoPilotPanel({
     Boolean(worldview.notes?.trim());
 
   return (
-    <div className="shrink-0 border-t border-line px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span className="size-2 rounded-full bg-accent/80" aria-hidden />
-        <h3 className="text-sm font-medium text-zinc-700">副驾驶</h3>
-        <Badge tone={stageMeta.tone}>{stageMeta.label}</Badge>
-        <span className="text-xs text-zinc-600">建议性核对</span>
-      </div>
+    <div className={showTitle ? 'shrink-0 border-t border-line px-4 py-3' : 'px-3 pb-2'}>
+      {showTitle ? (
+        <div className="flex items-center gap-2">
+          <span className="size-2 rounded-full bg-accent/80" aria-hidden />
+          <h3 className="text-sm font-medium text-zinc-700">副驾驶</h3>
+          <Badge tone={stageMeta.tone}>{stageMeta.label}</Badge>
+          <span className="text-xs text-zinc-600">建议性核对</span>
+        </div>
+      ) : (
+        <div className="mb-2 flex items-center gap-2 px-1">
+          <Badge tone={stageMeta.tone}>{stageMeta.label}</Badge>
+          <span className="text-xs text-zinc-600">建议性核对</span>
+        </div>
+      )}
 
       <div className="mt-2 grid grid-cols-5 gap-2">
         {counts.map((item) => (

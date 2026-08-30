@@ -6,7 +6,7 @@
 >
 > Status: Accepted v1 — Track K 已完成（2026-08-05 起陆续落地，2026-08-13/14 细化；§8 分期表已收口）。落地任务见 [Next Tasks](../planning/Next-Tasks.md)
 >
-> Last Updated: 2026-08-16
+> Last Updated: 2026-08-30
 >
 > Related: [Product-Positioning.md](Product-Positioning.md), [Design-Philosophy.md](Design-Philosophy.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI Creative IDE RFC](../architecture/rfc/AI-Creative-IDE-RFC.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)
 
@@ -189,13 +189,13 @@ flowchart TD
 
 ## 6. Creator Chat 的落点
 
-**路由：`/`，应用默认页。** 打开即用，无登录（本地单用户模式，[ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)）。Creator Chat 为独立浅色对话面（可收起的左侧历史栏 + 居中消息流 + 底部输入），不再套 Studio 导航；世界观摘要、实体表、冲突列表与 Inspector **在 Studio 世界工作区**。Studio 左侧项目导航与世界工作区左右栏均可收起。功能按能力爬坡逐步实现（v1：会话运行时 + 世界构建 agent；提案 → 确认 → 落库；世界知识上下文；冲突检测规则 v1）。
+**路由：`/`，应用默认页。** 打开即用，无登录（本地单用户模式，[ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)）。Creator Chat 为独立浅色对话面（可收起的左侧历史栏 + 居中消息流 + 底部输入），不再套 Studio 导航。历史栏分 **世界 / 角色** 两个 Tab：世界构建线程与扮演线程共用 `/creator-chats/[threadId]` 与消息表，列表 DTO 用 `kind`（join `RoleplayThread`）区分；不新建 `/roleplay` 路由。世界观摘要、实体表、冲突列表与 Inspector **在 Studio 世界工作区**。Studio 左侧项目导航可收起；世界工作区左实体栏 / 右 Inspector 可收起，亦可拖拽改宽度，中栏时间线与下方副驾驶/记忆/导入坞可拖拽改高度。功能按能力爬坡逐步实现（v1：会话运行时 + 世界构建 agent；提案 → 确认 → 落库；世界知识上下文；冲突检测规则 v1）。
 
 **对话与项目的关系。** 线程在用户确认「创建世界」提案之前没有 `projectId`；确认后经 apply-intent 创建 `Project` 并回绑线程。AI 永不自主写库：写库必须提案且经用户确认，经既有 service 落 `draft`，gate 不可绕过（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 围栏）。
 
 **对话记录是会话工作底稿。** 不进领域模型，不作为创作产物展示或导出（宪法 §9.2，2026-08-04 修订）。
 
-**切换到 Studio。** 内容足够丰富后，用户可像 Trae / Cursor 切换 IDE 一样进入世界工作区 `/projects/[id]/world`（对话顶栏「Studio ↗」）。Studio 使用左侧可收起项目导航；世界工作区左实体栏 / 右 Inspector 也可收起。
+**切换到 Studio。** 内容足够丰富后，用户可像 Trae / Cursor 切换 IDE 一样进入世界工作区 `/projects/[id]/world`（对话顶栏「Studio ↗」）。Studio「在对话中继续」只复用该项目下的世界构建线程，不会跳进扮演会话。
 
 **它不是 Director Copilot。** 后者是项目内常驻的咨询侧栏，面向已经存在的世界，排期 Phase 3+，scope 由其自身 RFC 管辖，不因本文档而放宽。
 
@@ -217,8 +217,8 @@ flowchart TD
 | 阶段 | 内容 | 依赖 / 状态 |
 |------|------|------|
 | **K1** | 项目主页重构为世界总览；`ProviderPanel` / `UsageSummaryCard` 迁至 `/settings`，`WorkflowPanel` / `GenerationQueuePanel` 迁至 `/production`；侧栏导航更名与扩充 | **已完成 2026-08-05**（「只搬不移」；浏览器回归 5 页全过） |
-| **K2** | `/world` 工作区（2026-08-04 三栏）：左 Entity Explorer / 中 Timeline + 副驾驶 agent / 右 Inspector（右上世界线属性、右下创作线属性置灰）；世界线抽象刻度、轨道化实体、关系连线 | **已完成 v1 2026-08-05**；2026-08-13 Inspector 内联编辑 + 冲突列表 + 副驾驶摘要；2026-08-14 左右栏可收起 + 地点轨 / 事件刻度 / 锚定 / 偏离标记 |
-| **K3** | Creator Chat 为应用默认页 `/`，无登录；对话自动建项目（提案 → 确认 → 落库），产出 `draft` 实体；与 `/world` 双向切换 | **已完成 2026-08-05**；2026-08-13 ADR-0013 API 闭环 + 流式 SSE；2026-08-14 可收起历史侧栏 + 浅色独立对话壳 |
+| **K2** | `/world` 工作区（2026-08-04 三栏）：左 Entity Explorer / 中 Timeline + 副驾驶 agent / 右 Inspector（右上世界线属性、右下创作线属性置灰）；世界线抽象刻度、轨道化实体、关系连线 | **已完成 v1 2026-08-05**；2026-08-13 Inspector 内联编辑 + 冲突列表 + 副驾驶摘要；2026-08-14 左右栏可收起 + 地点轨 / 事件刻度 / 锚定 / 偏离标记；**2026-08-30** 左右栏与时间线/下坞可拖拽改尺寸（localStorage）；轴标签按像素间距抽稀，避免事件标题重叠 |
+| **K3** | Creator Chat 为应用默认页 `/`，无登录；对话自动建项目（提案 → 确认 → 落库），产出 `draft` 实体；与 `/world` 双向切换 | **已完成 2026-08-05**；2026-08-13 ADR-0013 API 闭环 + 流式 SSE；2026-08-14 可收起历史侧栏 + 浅色独立对话壳；**2026-08-30** 历史栏分世界/角色 Tab，列表标 `kind` |
 | **K4** | 创作线视图（v1 置灰标「后续」）：从世界线经 Production Skill 转换，15 秒镜头提示词 / 风格固定词 / 镜头参数 | 后续迭代 |
 
 K1 不依赖任何在途工作，且它单独就能解决「打开项目先看到模型选择器」这个最刺眼的问题。K1–K3 已完成，K4（创作线）属扩展层，等 Production Skill 成熟后再实装。

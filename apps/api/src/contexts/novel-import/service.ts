@@ -6,6 +6,10 @@ import { computeDedupHash } from '../memory/fingerprint.js';
 import { splitChapters, type ChapterText } from './chapter-splitter.js';
 import { aggregateCharacters, extractFromChapter, type ChapterExtraction } from './novel-extract.js';
 
+function jsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
 export interface NovelImportConfig {
   maxFullCards?: number;
   maxLocations?: number;
@@ -50,7 +54,7 @@ export class NovelImportService {
         sourceFilename: params.filename,
         totalChapters: chapters.length,
         mode: 'rule',
-        config: config as unknown as Prisma.InputJsonValue,
+        config: jsonValue(config),
       },
     });
 
@@ -58,13 +62,13 @@ export class NovelImportService {
       const report = await this.process(record.id, params.projectId, chapters, config);
       await this.db.novelImport.update({
         where: { id: record.id },
-        data: { status: 'done', processedChapters: chapters.length, report: report as unknown as Prisma.InputJsonValue },
+        data: { status: 'done', processedChapters: chapters.length, report: jsonValue(report) },
       });
       return { importId: record.id, report };
     } catch (error) {
       await this.db.novelImport.update({
         where: { id: record.id },
-        data: { status: 'failed', report: { error: String(error) } as unknown as Prisma.InputJsonValue },
+        data: { status: 'failed', report: jsonValue({ error: String(error) }) },
       });
       throw error;
     }

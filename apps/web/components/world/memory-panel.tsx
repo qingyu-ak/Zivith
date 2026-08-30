@@ -23,7 +23,13 @@ const FACT_LABEL: Record<string, string> = {
   episodic: '事实',
 };
 
-export function MemoryPanel({ projectId }: { projectId: string }) {
+export function MemoryPanel({
+  projectId,
+  showTitle = true,
+}: {
+  projectId: string;
+  showTitle?: boolean;
+}) {
   const [atoms, setAtoms] = useState<MemoryAtomItem[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState('');
@@ -71,9 +77,9 @@ export function MemoryPanel({ projectId }: { projectId: string }) {
   };
 
   return (
-    <section className="rounded-lg border border-line bg-white/70 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-zinc-700">长期记忆（L1 原子）</h3>
+    <section className={showTitle ? 'rounded-lg border border-line bg-white/70 p-3' : 'px-3 pb-1'}>
+      <div className={`mb-2 flex items-center ${showTitle ? 'justify-between' : 'justify-end'}`}>
+        {showTitle ? <h3 className="text-sm font-medium text-zinc-700">长期记忆（L1 原子）</h3> : null}
         <button
           type="button"
           onClick={() => void rebuild()}

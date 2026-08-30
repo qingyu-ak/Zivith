@@ -21,9 +21,9 @@ export class MockEmbeddingAdapter implements EmbeddingAdapter {
   readonly provider = 'mock';
   readonly dimensions = DIMENSIONS;
 
-  async embed(request: EmbeddingRequest): Promise<EmbeddingResult> {
+  embed(request: EmbeddingRequest): Promise<EmbeddingResult> {
     const vectors = request.inputs.map((text) => this.vectorFor(text));
-    return { vectors, model: request.model, dimensions: DIMENSIONS };
+    return Promise.resolve({ vectors, model: request.model, dimensions: DIMENSIONS });
   }
 
   private vectorFor(text: string): number[] {

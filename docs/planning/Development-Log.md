@@ -12,6 +12,18 @@
 
 ---
 
+## 2026-08-30 · c85695f · feat(web,api) · 对话历史分 Tab + 世界线可调分栏
+
+世界构建与角色扮演仍共用 `/creator-chats` 与消息表，侧栏按类型分开；世界工作区时间线不再被下方面板挤扁，轴上事件标题按间距抽稀。
+
+- **feat(api)** `GET /world/creator-chats` 列表/详情 join `RoleplayThread`，DTO 标 `kind` + `character_name`
+- **feat(web)** 历史栏世界/角色 Tab；扮演按所属世界分组；Studio「在对话中继续」排除扮演线程
+- **feat(web)** 世界工作区左右栏与时间线/下坞可拖拽改尺寸（localStorage）；副驾驶/记忆/导入可折叠；轴标签与导轨抽稀
+- **fix(api)** 小说导入人名停用词；txt 解码 UTF-8 优先、非法时回退 GB18030
+- **chore** 清理 ESLint（unused / require-await / 多余断言）；删开发库冒烟账号
+- 验证：web `chat-history` / `world-scale`；api `novel-import` / `memory-service`；`@zivith/ui` typecheck；世界页 DOM 含分栏拖动手柄
+- 模块：`apps/api/src/{routes,contexts/novel-import}`、`apps/web/{components/creator-chat,components/world,lib}`、`docs/**`
+
 ## 2026-08-23 · pending · feat(api,web,domain,db) · M1 记忆地基 + 上下文管理器落地
 
 分层记忆（L0 原文 / L1 原子 / L2 核心）+ 双路径管线（同步规则归档 + 队列异步深加工）+ 三路混合检索（实体链接 / 向量 / bigram 关键词 RRF 融合）+ ThreadContextState 滚动摘要压缩（[Memory-Novel-Roleplay-Design.md](Memory-Novel-Roleplay-Design.md)，ADR-0014）。mock-first：无任何密钥时规则提炼 + bigram 检索全链路可用。

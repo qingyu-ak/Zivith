@@ -101,7 +101,7 @@ export function normalizeForFingerprint(text: string): string {
     .normalize('NFKC')
     .replace(/[\s\u3000]+/g, '')
     .replace(
-      /[。，、；：？！“”‘’（）《》【】〔〕…—·,.:;?!"'`()\[\]{}<>@#$%^&*_+=/\\|~]/g,
+      /[[\](){}<>。，、；：？！“”‘’（）《》【】〔〕…—·,.:;?!"'`@#$%^&*_+=/\\|~]/g,
       '',
     )
     .toLowerCase();

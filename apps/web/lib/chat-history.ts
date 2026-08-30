@@ -1,4 +1,4 @@
-import type { CreatorChatThreadDTO } from './types';
+import type { CreatorChatKind, CreatorChatThreadDTO } from './types';
 
 export const PENDING_CHAT_TURN_KEY = 'zivith.pendingChatTurn';
 
@@ -16,6 +16,25 @@ function isThread(value: unknown): value is CreatorChatThreadDTO {
     value !== null &&
     typeof (value as CreatorChatThreadDTO).id === 'string'
   );
+}
+
+export function threadKind(
+  thread: Pick<CreatorChatThreadDTO, 'kind'>,
+): CreatorChatKind {
+  return thread.kind === 'roleplay' ? 'roleplay' : 'world';
+}
+
+export function partitionThreadsByKind(threads: CreatorChatThreadDTO[]): {
+  world: CreatorChatThreadDTO[];
+  roleplay: CreatorChatThreadDTO[];
+} {
+  const world: CreatorChatThreadDTO[] = [];
+  const roleplay: CreatorChatThreadDTO[] = [];
+  for (const thread of threads) {
+    if (threadKind(thread) === 'roleplay') roleplay.push(thread);
+    else world.push(thread);
+  }
+  return { world, roleplay };
 }
 
 export function groupThreadsByRecency(threads: unknown): ThreadHistoryGroup[] {
@@ -38,6 +57,29 @@ export function groupThreadsByRecency(threads: unknown): ThreadHistoryGroup[] {
   return buckets.filter((group) => group.threads.length > 0);
 }
 
+export function groupRoleplayByProject(threads: CreatorChatThreadDTO[]): ThreadHistoryGroup[] {
+  const groups = new Map<string, ThreadHistoryGroup>();
+  const order: string[] = [];
+  const sorted = [...threads].sort(
+    (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+  );
+  for (const thread of sorted) {
+    const key = thread.project_id ?? '__unbound__';
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        id: key,
+        label: thread.project_name?.trim() || '未绑定世界',
+        threads: [],
+      };
+      groups.set(key, group);
+      order.push(key);
+    }
+    group.threads.push(thread);
+  }
+  return order.map((id) => groups.get(id)!);
+}
+
 export function filterThreadsByQuery(
   threads: CreatorChatThreadDTO[],
   query: string,
@@ -47,7 +89,8 @@ export function filterThreadsByQuery(
   return threads.filter((thread) => {
     const title = (thread.title ?? '').toLowerCase();
     const project = (thread.project_name ?? '').toLowerCase();
-    return title.includes(needle) || project.includes(needle);
+    const character = (thread.character_name ?? '').toLowerCase();
+    return title.includes(needle) || project.includes(needle) || character.includes(needle);
   });
 }
 

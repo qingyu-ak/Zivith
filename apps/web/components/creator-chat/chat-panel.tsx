@@ -302,9 +302,8 @@ export function ChatPanel() {
     const projectId = thread?.project_id;
     if (!projectId || switching) return;
     if (value === 'world') {
-      const roleplayThreadIds = new Set(roleplayThreads.map((item) => item.thread_id));
       const existing = threads.find(
-        (item) => item.project_id === projectId && !roleplayThreadIds.has(item.id),
+        (item) => item.project_id === projectId && item.kind !== 'roleplay',
       );
       if (existing) {
         router.push(`/creator-chats/${existing.id}`);
@@ -660,7 +659,13 @@ export function ChatPanel() {
                 )}
                 <textarea
                   className="min-h-[52px] w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 text-zinc-800 outline-none placeholder:text-zinc-400"
-                  placeholder={focus ? `继续完善「${focus.name}」…` : '发给世界构建者…'}
+                  placeholder={
+                    focus
+                      ? `继续完善「${focus.name}」…`
+                      : activeRoleplay
+                        ? `对「${activeRoleplay.character_name}」说…`
+                        : '发给世界构建者…'
+                  }
                   value={input}
                   disabled={sending || busy}
                   rows={1}
