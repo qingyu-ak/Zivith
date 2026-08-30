@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-30 · pending · chore · Prettier 对齐，修复 CI format:check
+## 2026-08-30 · ceb17cd · chore · Prettier 对齐，修复 CI format:check
 
 GitHub Actions「检查格式」在 `pnpm format:check` 上失败：记忆 / 小说导入 / 扮演 / 世界工作区等 35 个文件未按 Prettier 排版（多为超长行折行与尾逗号）。
 
