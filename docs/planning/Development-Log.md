@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-08-30 · pending · feat(api,web) · Studio 角色卡回灌扮演与世界构建对话
+## 2026-08-30 · d8c414a · feat(api,web) · Studio 角色卡回灌扮演与世界构建对话
 
 Studio 改角色名称/简介/个性后，扮演仍只读导入档案（MemoryCore persona），世界构建对话也不带个性。本轮让两路对话读同一张 Asset 角色卡；导入档案只作补充，不覆盖。
 
