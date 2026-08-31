@@ -7,15 +7,21 @@ export interface ChapterText {
   content: string;
 }
 
+/** 独立成行的「第N章/回/卷…」标题；允许【】包裹、数字两侧空格、较长副标题。 */
 const CHAPTER_TITLE =
-  /^[ \t]*(第[0-9０-９一二三四五六七八九十百千零〇两]+[章回卷节部集][^\n]{0,40})$/gm;
+  /^[ \t]*[【\[]?(第[ \t]*[0-9０-９一二三四五六七八九十百千零〇两]+[ \t]*[章回卷节部集][^\n【\]]{0,80})[】\]]?[ \t]*$/gm;
 
 /** 极短章节（<50 字）并入前一章，避免正则误切。 */
 export function splitChapters(raw: string, fallbackChunkChars = 4000): ChapterText[] {
   const text = raw.replace(/\r\n/g, '\n').replace(/\u3000/g, ' ');
   const matches = [...text.matchAll(CHAPTER_TITLE)];
-  if (matches.length >= 2) {
+  if (matches.length >= 1) {
     const blocks: Array<{ title: string; content: string }> = [];
+    const firstIndex = matches[0]?.index ?? 0;
+    const preamble = text.slice(0, firstIndex).trim();
+    if (preamble.length >= 50) {
+      blocks.push({ title: '开篇', content: preamble });
+    }
     for (let i = 0; i < matches.length; i++) {
       const m = matches[i];
       if (!m || m.index === undefined) continue;
@@ -23,9 +29,9 @@ export function splitChapters(raw: string, fallbackChunkChars = 4000): ChapterTe
       const start = m.index + m[0].length;
       const end = next?.index ?? text.length;
       const content = text.slice(start, end).trim();
-      const title = (m[1] ?? '').trim();
+      const title = (m[1] ?? '').replace(/\s+/g, ' ').trim();
       const last = blocks.length > 0 ? blocks[blocks.length - 1] : undefined;
-      if (content.length < 50 && last) {
+      if (content.length < 50 && last && last.title !== '开篇') {
         last.content += `\n${content}`;
         continue;
       }

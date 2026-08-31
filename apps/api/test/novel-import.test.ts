@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateCharacters,
   extractFromChapter,
+  formatEventTitle,
+  mergeLocationMentions,
+  normalizeLocationName,
+  selectImportEvents,
 } from '../src/contexts/novel-import/novel-extract.js';
 import { splitChapters } from '../src/contexts/novel-import/chapter-splitter.js';
 import { decodeNovelBuffer } from '../src/contexts/novel-import/decode-text.js';
@@ -23,6 +27,30 @@ describe('splitChapters', () => {
     expect(chapters[0]?.title).toContain('第一章');
     expect(chapters[1]?.title).toContain('第二章');
     expect(chapters[0]?.content).toContain('青云学院');
+  });
+
+  it('keeps text before the first heading as 开篇', () => {
+    const chapters = splitChapters(
+      [
+        '封面题记。这是一段足够长的开场白，用来交代故事从哪一页真正开始，',
+        '免得被切章程序丢掉。再补一句人物尚未登场的气氛描写，凑过五十字。',
+        '',
+        '第2章 全民公敌 1',
+        '',
+        '路明非说了一句话。楚子航站在他身后，两个人谁也没有再开口。',
+      ].join('\n'),
+    );
+    expect(chapters[0]?.title).toBe('开篇');
+    expect(chapters[0]?.content).toContain('封面题记');
+    expect(chapters[1]?.title).toContain('第2章');
+  });
+
+  it('splits a single 第N章 heading instead of falling back to chunks', () => {
+    const chapters = splitChapters(
+      '第一章 只有一章\n\n林澈走进学院大门，开始新的生活。后面还有很长很长的正文。',
+    );
+    expect(chapters).toHaveLength(1);
+    expect(chapters[0]?.title).toContain('第一章');
   });
 
   it('falls back to chunking without titles', () => {
@@ -79,6 +107,121 @@ describe('extractFromChapter + aggregateCharacters', () => {
     expect(names).not.toContain('甚至');
     expect(names).not.toContain('电梯');
     expect(names).not.toContain('喜欢');
+  });
+
+  it('does not promote function words or glued suffixes into character cards', () => {
+    const chapters = splitChapters(`第一章
+路明非说了一句话。路明非也知道这件事。路明非心里明白。跟路明非说一声。
+就是说没关系。或者说明天。世界出现裂缝。一个说好。或者问一句。
+路鸣泽说了一句话。路鸣泽说了第二句话。路鸣泽知道答案。
+`);
+    const extractions = chapters.map((chapter) =>
+      extractFromChapter(chapter.index, chapter.content),
+    );
+    const characters = aggregateCharacters(extractions);
+    const names = characters.map((c) => c.name);
+    expect(names).toContain('路明非');
+    expect(names).toContain('路鸣泽');
+    expect(names).not.toContain('一个');
+    expect(names).not.toContain('就是');
+    expect(names).not.toContain('世界');
+    expect(names).not.toContain('或者');
+    expect(names).not.toContain('路明非心');
+    const lu = characters.find((c) => c.name === '路明非');
+    expect(lu?.aliases ?? []).not.toContain('路明非心');
+    expect(lu?.aliases ?? []).not.toContain('路明非也');
+    expect(lu?.aliases ?? []).not.toContain('跟路明非');
+  });
+
+  it('does not split a longer name into a contained fragment', () => {
+    const chapter = extractFromChapter(
+      0,
+      '楚子航说了一句话。楚子航说了第二句话。阿巴斯说了一句话。阿巴斯说了第二句话。',
+    );
+    const names = [...chapter.characterMentions.keys()];
+    expect(names).toContain('楚子航');
+    expect(names).toContain('阿巴斯');
+    expect(names).not.toContain('子航');
+    expect(names).not.toContain('巴斯');
+  });
+
+  it('does not merge unrelated two-character names', () => {
+    const chapters = splitChapters(`第一章
+诺诺说了一句话。诺诺说了第二句话。恺撒说了一句话。恺撒说了第二句话。布宁说了一句话。布宁说了第二句话。
+`);
+    const names = aggregateCharacters(
+      chapters.map((chapter) => extractFromChapter(chapter.index, chapter.content)),
+    ).map((c) => c.name);
+    expect(names).toContain('诺诺');
+    expect(names).toContain('恺撒');
+    expect(names).toContain('布宁');
+    const nono = aggregateCharacters(
+      chapters.map((chapter) => extractFromChapter(chapter.index, chapter.content)),
+    ).find((c) => c.name === '诺诺');
+    expect(nono?.aliases ?? []).not.toContain('恺撒');
+    expect(nono?.aliases ?? []).not.toContain('布宁');
+  });
+});
+
+describe('locations and plot events', () => {
+  it('peels glued prefixes off real place names and drops fragments', () => {
+    expect(normalizeLocationName('青云学院')).toBe('青云学院');
+    expect(normalizeLocationName('但卡塞尔学院')).toBe('卡塞尔学院');
+    expect(normalizeLocationName('在卡塞尔学院')).toBe('卡塞尔学院');
+    expect(normalizeLocationName('走进青云学院')).toBe('青云学院');
+    expect(normalizeLocationName('卧槽学院')).toBeNull();
+    expect(normalizeLocationName('开了会议室')).toBeNull();
+    expect(normalizeLocationName('你是学院')).toBeNull();
+    const merged = mergeLocationMentions(
+      new Map([
+        ['但卡塞尔学院', 3],
+        ['在卡塞尔学院', 2],
+        ['卡塞尔学院', 10],
+        ['卧槽学院', 2],
+      ]),
+    );
+    expect(merged.get('卡塞尔学院')).toBe(15);
+    expect(merged.has('但卡塞尔学院')).toBe(false);
+    expect(merged.has('卧槽学院')).toBe(false);
+  });
+
+  it('keeps fight beats and drops "开始/发现" chatter as plot events', () => {
+    const fight = extractFromChapter(
+      1,
+      '林澈打败了对手，获得第一名。艾拉笑了。凯撒说，你很不错。林澈说要继续变强。',
+    );
+    expect(fight.events.some((event) => event.text.includes('打败'))).toBe(true);
+
+    const chatter = extractFromChapter(
+      2,
+      '林澈说，我们开始讨论明天的安排。凯撒说，我发现这件事没那么重要。',
+    );
+    expect(chatter.events).toHaveLength(0);
+
+    const selected = selectImportEvents(
+      [
+        { chapterIndex: 1, text: '林澈打败了对手', characters: ['林澈'] },
+        { chapterIndex: 1, text: '林澈打败了对手', characters: ['林澈'] },
+        { chapterIndex: 1, text: '林澈又打败了一人', characters: ['林澈'] },
+        { chapterIndex: 2, text: '林澈发现了一本残卷', characters: ['林澈'] },
+      ],
+      new Set(['林澈']),
+      10,
+    );
+    expect(selected).toHaveLength(2);
+    expect(selected.every((event) => event.text.includes('打败'))).toBe(true);
+    expect(selected.some((event) => event.text.includes('发现'))).toBe(false);
+  });
+
+  it('titles events as 谁 · 做了什么 instead of a raw sentence prefix', () => {
+    expect(formatEventTitle('林澈打败了对手，获得第一名。', ['林澈'])).toBe('林澈 · 打败对手');
+    expect(formatEventTitle('艾拉与凯撒在广场重逢，两人都没说话。', ['艾拉', '凯撒'])).toBe(
+      '艾拉、凯撒 · 重逢',
+    );
+    expect(formatEventTitle('路明非忽然从冰窖里救出芬格尔。', ['路明非', '芬格尔'])).toBe(
+      '路明非 · 救出芬格尔',
+    );
+    expect(formatEventTitle('路明非忽然站了起来。', ['路明非'])).not.toContain('忽然');
   });
 });
 

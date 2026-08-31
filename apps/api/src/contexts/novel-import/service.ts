@@ -7,6 +7,9 @@ import { splitChapters, type ChapterText } from './chapter-splitter.js';
 import {
   aggregateCharacters,
   extractFromChapter,
+  mergeLocationMentions,
+  selectImportEvents,
+  formatEventTitle,
   type ChapterExtraction,
 } from './novel-extract.js';
 
@@ -93,11 +96,9 @@ export class NovelImportService {
     // ① 逐章规则提取（已知名字累积增强跨章召回）
     const known = new Set<string>();
     const extractions: ChapterExtraction[] = [];
-    const chapterTitles = new Map<number, string | null>();
     for (const chapter of chapters) {
       const extraction = extractFromChapter(chapter.index, chapter.content, known);
       extractions.push(extraction);
-      chapterTitles.set(chapter.index, chapter.title);
       for (const name of extraction.characterMentions.keys()) known.add(name);
       await this.db.novelImportChapter.create({
         data: {
@@ -117,11 +118,13 @@ export class NovelImportService {
     const light = characters.slice(config.maxFullCards, config.maxFullCards + 25);
     const locationTotal = new Map<string, number>();
     for (const extraction of extractions) {
-      for (const [location, count] of extraction.locationMentions) {
+      const folded = mergeLocationMentions(extraction.locationMentions);
+      for (const [location, count] of folded) {
         locationTotal.set(location, (locationTotal.get(location) ?? 0) + count);
       }
     }
-    const locations = [...locationTotal.entries()]
+    const locations = [...mergeLocationMentions(locationTotal).entries()]
+      .filter(([, count]) => count >= 3)
       .sort((a, b) => b[1] - a[1])
       .slice(0, config.maxLocations);
 
@@ -233,24 +236,20 @@ export class NovelImportService {
       report.locations.push({ id: asset.id, name });
     }
 
-    // ⑤ 主线事件 WorldEvent（每章取参与主要角色最多的 1-2 句）
+    // ⑤ 主线事件：每章最多 2 条，优先多名主要角色同场的强情节句。
     const fullNames = new Set(full.map((c) => c.name));
-    const eventCandidates = extractions
-      .flatMap((extraction) => extraction.events)
-      .map((event) => ({
-        ...event,
-        weight: event.characters.filter((name) => fullNames.has(name)).length,
-      }))
-      .sort((a, b) => b.weight - a.weight);
+    const selectedEvents = selectImportEvents(
+      extractions.flatMap((extraction) => extraction.events),
+      fullNames,
+      config.maxEvents,
+    );
     let presentationOrder = 0;
-    for (const event of eventCandidates.slice(0, config.maxEvents)) {
+    for (const event of selectedEvents) {
+      const who = event.characters.filter((name) => fullNames.has(name));
       const worldEvent = await this.db.worldEvent.create({
         data: {
           projectId,
-          title:
-            (chapterTitles.get(event.chapterIndex)
-              ? `${chapterTitles.get(event.chapterIndex)}·`
-              : '') + event.text.slice(0, 30),
+          title: formatEventTitle(event.text, who.length > 0 ? who : event.characters),
           description: event.text,
           presentationOrder: presentationOrder++,
           state: 'approved',
