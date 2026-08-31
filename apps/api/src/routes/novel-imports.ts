@@ -85,4 +85,17 @@ export function registerNovelImportRoutes(app: FastifyInstance, service: NovelIm
     if (!ok) throw new ApiError(404, 'IMPORT_NOT_FOUND', '导入记录不存在');
     return { ok: true };
   });
+
+  app.post('/novel-imports/:id/upgrade', async (request) => {
+    const { id } = z.object({ id: idSchema }).strict().parse(request.params);
+    const body = z
+      .object({ asset_id: idSchema })
+      .strict()
+      .parse(request.body ?? {});
+    const result = await service.upgrade(id, body.asset_id);
+    return {
+      character: result.character,
+      reused: result.reused,
+    };
+  });
 }

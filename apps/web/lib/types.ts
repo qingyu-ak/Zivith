@@ -171,6 +171,11 @@ export interface AssetDTO {
   cover_image?: MediaDTO | null;
   /** Location design-sheet prompt draft */
   location_sheet_prompt?: string;
+  /** Novel-import light card (`data.tier`). */
+  tier?: string;
+  /** Novel import id when this asset came from an import. */
+  import_id?: string;
+  state?: string;
   created_at?: string;
 }
 

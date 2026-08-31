@@ -2,6 +2,7 @@
 // 导入 = 显式用户动作 = 批量预授权：产物直接写世界层（Asset/WorldEvent/Relationship）
 // + 记忆层（MemoryAtom trait / MemoryCore persona 卡），报告记录全部产物 ID 支持整体撤销。
 import type { PrismaClient, Prisma } from '@zivith/database';
+import { ApiError } from '../../errors.js';
 import { computeDedupHash } from '../memory/fingerprint.js';
 import { splitChapters, type ChapterText } from './chapter-splitter.js';
 import {
@@ -12,6 +13,32 @@ import {
   formatEventTitle,
   type ChapterExtraction,
 } from './novel-extract.js';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function asReport(raw: unknown): NovelImportReport {
+  const value = isRecord(raw) ? raw : {};
+  return {
+    characters: Array.isArray(value.characters)
+      ? (value.characters as NovelImportReport['characters'])
+      : [],
+    locations: Array.isArray(value.locations)
+      ? (value.locations as NovelImportReport['locations'])
+      : [],
+    events: Array.isArray(value.events) ? (value.events as NovelImportReport['events']) : [],
+    relationships: Array.isArray(value.relationships)
+      ? (value.relationships as NovelImportReport['relationships'])
+      : [],
+    memoryCoreIds: Array.isArray(value.memoryCoreIds) ? (value.memoryCoreIds as string[]) : [],
+    memoryAtomIds: Array.isArray(value.memoryAtomIds) ? (value.memoryAtomIds as string[]) : [],
+    skipped: Array.isArray(value.skipped) ? (value.skipped as string[]) : [],
+    worldviewHighlights: Array.isArray(value.worldviewHighlights)
+      ? (value.worldviewHighlights as string[])
+      : [],
+  };
+}
 
 function jsonValue(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -317,6 +344,70 @@ export class NovelImportService {
 
   async get(importId: string) {
     return this.db.novelImport.findUnique({ where: { id: importId } });
+  }
+
+  /** 把导入产生的轻量角色升为全量卡（写 persona，state=active）。显式用户动作，可超过 15 张上限。 */
+  async upgrade(
+    importId: string,
+    assetId: string,
+  ): Promise<{ character: NovelImportReport['characters'][number]; reused: boolean }> {
+    const record = await this.db.novelImport.findUnique({ where: { id: importId } });
+    if (!record) throw new ApiError(404, 'IMPORT_NOT_FOUND', '导入记录不存在');
+    const report = asReport(record.report);
+    const entry = report.characters.find((character) => character.id === assetId);
+    if (!entry) throw new ApiError(404, 'CHARACTER_NOT_IN_IMPORT', '该角色不属于这次导入');
+
+    const asset = await this.db.asset.findFirst({
+      where: { id: assetId, projectId: record.projectId, type: 'character', deletedAt: null },
+    });
+    if (!asset) throw new ApiError(404, 'CHARACTER_NOT_FOUND', '角色不存在');
+    const data = isRecord(asset.data) ? { ...asset.data } : {};
+    if (data.source !== 'novel_import' || data.importId !== importId) {
+      throw new ApiError(400, 'NOT_IMPORT_CHARACTER', '只能升级这次导入产生的角色');
+    }
+    if (entry.tier === 'full' && data.tier === 'full') {
+      return { character: entry, reused: true };
+    }
+
+    const nextData = { ...data, tier: 'full', upgraded: true };
+    await this.db.asset.update({
+      where: { id: assetId },
+      data: { state: 'active', data: jsonValue(nextData) },
+    });
+
+    const existingCore = await this.db.memoryCore.findFirst({
+      where: { projectId: record.projectId, kind: 'persona', topic: asset.name },
+      orderBy: { version: 'desc' },
+    });
+    if (!existingCore) {
+      const aliases = asset.aliases ?? [];
+      const persona = [
+        `姓名：${asset.name}${aliases.length > 0 ? `（又称：${aliases.join('、')}）` : ''}`,
+        entry.mentions
+          ? `提及 ${entry.mentions} 次（由轻量条目升级）`
+          : '由轻量条目升级为全量角色卡',
+        asset.description ? `简介：${asset.description}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      const core = await this.db.memoryCore.create({
+        data: {
+          projectId: record.projectId,
+          kind: 'persona',
+          topic: asset.name,
+          content: persona,
+          sourceAtomIds: [],
+        },
+      });
+      report.memoryCoreIds = [...report.memoryCoreIds, core.id];
+    }
+
+    entry.tier = 'full';
+    await this.db.novelImport.update({
+      where: { id: importId },
+      data: { report: jsonValue(report) },
+    });
+    return { character: entry, reused: false };
   }
 
   async list(projectId: string) {

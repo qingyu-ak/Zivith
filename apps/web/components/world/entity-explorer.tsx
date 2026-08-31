@@ -93,7 +93,7 @@ export function EntityExplorer({
   const characterItems: GroupItem[] = characters.map((item: AssetDTO) => ({
     id: item.id,
     title: item.name,
-    subtitle: item.description || undefined,
+    subtitle: item.tier === 'light' ? '轻量条目（可升级为角色卡）' : item.description || undefined,
   }));
   const locationItems: GroupItem[] = locations.map((item: AssetDTO) => ({
     id: item.id,

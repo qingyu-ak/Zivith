@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
 
 interface ImportReport {
@@ -18,7 +18,7 @@ interface ImportReport {
   skipped?: string[];
 }
 
-/** M2 小说导入面板：上传 txt → 规则提取 → 世界层 + 角色卡，支持整体撤销。 */
+/** M2 小说导入面板：上传 txt → 规则提取 → 世界层 + 角色卡，支持整体撤销与轻量升级。 */
 export function NovelImportPanel({
   projectId,
   onImported,
@@ -34,6 +34,32 @@ export function NovelImportPanel({
   const [report, setReport] = useState<ImportReport | null>(null);
   const [lastImportId, setLastImportId] = useState('');
   const [filename, setFilename] = useState('');
+  const [upgradingId, setUpgradingId] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const value = await api<{
+          items?: Array<{
+            id: string;
+            source_filename?: string;
+            report?: ImportReport | null;
+          }>;
+        }>(`/novel-imports?project_id=${encodeURIComponent(projectId)}`);
+        const latest = value.items?.[0];
+        if (cancelled || !latest) return;
+        setLastImportId(latest.id);
+        setFilename(latest.source_filename ?? '');
+        if (latest.report) setReport(latest.report);
+      } catch {
+        /* 列表失败时保持空态，上传仍可用 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   async function upload(file: File) {
     setBusy(true);
@@ -74,8 +100,36 @@ export function NovelImportPanel({
     }
   }
 
+  async function upgrade(assetId: string) {
+    if (!lastImportId || busy) return;
+    setUpgradingId(assetId);
+    setError('');
+    try {
+      const value = await api<{ character?: { id: string; tier?: string } }>(
+        `/novel-imports/${lastImportId}/upgrade`,
+        { method: 'POST', body: { asset_id: assetId } },
+      );
+      const nextTier = value.character?.tier ?? 'full';
+      setReport((current) => {
+        if (!current?.characters) return current;
+        return {
+          ...current,
+          characters: current.characters.map((character) =>
+            character.id === assetId ? { ...character, tier: nextTier } : character,
+          ),
+        };
+      });
+      onImported();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setUpgradingId('');
+    }
+  }
+
   const characterCount = report?.characters?.length ?? 0;
   const fullCards = report?.characters?.filter((c) => c.tier === 'full').length ?? 0;
+  const lightCards = report?.characters?.filter((c) => c.tier === 'light') ?? [];
 
   return (
     <section className={showTitle ? 'rounded-lg border border-line bg-white/70 p-3' : 'px-3 pb-1'}>
@@ -129,6 +183,26 @@ export function NovelImportPanel({
                   {character.name}
                 </span>
               ))}
+            </div>
+          )}
+          {lightCards.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-zinc-500">轻量条目可升级为全量角色卡：</p>
+              <ul className="space-y-0.5">
+                {lightCards.map((character) => (
+                  <li key={character.id} className="flex items-center justify-between gap-2">
+                    <span className="truncate text-zinc-600">{character.name}</span>
+                    <button
+                      type="button"
+                      disabled={busy || Boolean(upgradingId)}
+                      onClick={() => void upgrade(character.id)}
+                      className="shrink-0 text-[11px] text-[#4d6bfe] hover:underline disabled:opacity-50"
+                    >
+                      {upgradingId === character.id ? '升级中…' : '升级'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           <button

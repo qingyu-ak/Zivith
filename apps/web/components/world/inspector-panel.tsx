@@ -579,6 +579,12 @@ export function InspectorPanel({
           selection.kind !== 'model' ? (
             <div className="flex items-center gap-2">
               {selection.kind === 'character' && (
+                <ImportUpgradeButton
+                  asset={resources.entities.characters.find((item) => item.id === selection.id)}
+                  onUpgraded={onUpdated}
+                />
+              )}
+              {selection.kind === 'character' && (
                 <RoleplayLaunchButton
                   projectId={resources.project.id}
                   characterAssetId={selection.id}
@@ -668,6 +674,50 @@ export function InspectorPanel({
         </div>
       </section>
     </div>
+  );
+}
+
+/** 导入轻量条目 → 全量角色卡（设计 §5.6）。 */
+function ImportUpgradeButton({
+  asset,
+  onUpgraded,
+}: {
+  asset?: AssetDTO;
+  onUpgraded?: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const importId = asset?.import_id;
+  if (!asset || asset.tier !== 'light' || !importId) return null;
+
+  async function upgrade() {
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/novel-imports/${importId}/upgrade`, {
+        method: 'POST',
+        body: { asset_id: asset.id },
+      });
+      onUpgraded?.();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void upgrade()}
+        className="rounded-md border border-[#4d6bfe]/40 px-2 py-0.5 text-xs text-[#1e3a8a] transition hover:bg-[#eef2ff] disabled:opacity-50"
+      >
+        {busy ? '升级中…' : '升级为角色卡'}
+      </button>
+      {error ? <span className="text-[10px] text-red-500">{error}</span> : null}
+    </span>
   );
 }
 
