@@ -12,6 +12,29 @@
 
 ---
 
+## 2026-08-31 · e2d4ffb · fix(api) · 锚点之后的剧情问句不再交给模型
+
+验收时真人模型会用预训练知识确认尚未发生的事（例如锚在开篇却承认已到冰湖）。问句若与锚点之后事件的标题/摘要重叠，此轮跳过生成，角色只表示不知情。
+
+- **fix(api)** `mentionsLaterPlot`：标题/摘要 4 字重叠 ≥2 则锁定
+- **fix(api)** 锁定后不调用 LLM；空亲历不再暗示「自然编造」
+- **test** `roleplay-agent.test.ts` 覆盖问句命中与提示词硬约束
+- **docs** Track M3、扮演认知边界、API 地图、Agent 硬约束
+- 验证：单元测试；本机扮演问冰湖/父亲不知情，闲聊仍走模型
+- 模块：`roleplay-agent.ts`、`Memory-Novel-Roleplay-Design.md`、`Technical-Architecture.md`
+
+## 2026-08-31 · b6e892a · fix(api) · 收紧小说导入人名、地点与事件标题
+
+规则抽取把虚词和粘连地名当成实体，时间轴标题是原句截断。本轮停用词、剥粘连、地点 ≥3 次才入库，事件标题改为「谁 · 做了什么」。
+
+- **fix(api)** 切章保留开篇，允许「第 2 章」与【】标题
+- **fix(api)** 禁止「路明非心」类碎片别名；地点规范化后合并
+- **fix(api)** 每章最多 2 条强情节事件；`formatEventTitle`
+- **test** `novel-import.test.ts` 15 个用例
+- **docs** Track M2、导入规模控制、Implementation-Plan Track M
+- 验证：单元测试；《龙族Ⅴ》重导 40 角色 / 8 地点 / 60 事件
+- 模块：`chapter-splitter.ts`、`novel-extract.ts`、`service.ts`
+
 ## 2026-08-31 · 89bb7d7 · feat(api,web,db) · 扮演用户可选读者或角色卡
 
 与 AI 对话时用户默认是读者；也可选已有角色卡，或新建一张当自己。身份存在 `RoleplayThread.userCharacterAssetId`，与「对面是谁」分开。对话顶栏与 Inspector 都能切换。
