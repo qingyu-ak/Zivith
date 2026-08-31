@@ -115,7 +115,10 @@ export class NovelImportService {
     // ② 跨章消歧聚合 + 重要性分层
     const characters = aggregateCharacters(extractions).sort((a, b) => b.mentions - a.mentions);
     const full = characters.slice(0, config.maxFullCards);
-    const light = characters.slice(config.maxFullCards, config.maxFullCards + 25);
+    const light = characters
+      .slice(config.maxFullCards)
+      .filter((character) => character.mentions >= 5)
+      .slice(0, 25);
     const locationTotal = new Map<string, number>();
     for (const extraction of extractions) {
       const folded = mergeLocationMentions(extraction.locationMentions);

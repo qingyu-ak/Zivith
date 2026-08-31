@@ -14,10 +14,10 @@ export interface ChapterExtraction {
   cooccurrences: Map<string, number>;
 }
 
-/** 只保留「名前 + 说/动作」这类强信号；知道/出现/看 会把「就是说」「世界出现」当成角色。 */
+/** 只保留「名前 + 说/动作」这类强信号；知道/发现 会把「明非忽然知道」当成角色。出现仍保留（「凯撒出现」）。 */
 const SPEECH_VERB =
-  '(?:点了点头|转过头|转过身|说道|问道|答道|喝道|低声说|大声说|说|问|答|喊|叫|吼|骂|笑|哭|叹|嘀咕|点头|摇头|皱眉|宣布|打败|击败|出现|知道|发现)';
-const NAME = '([\\u4e00-\\u9fa5]{2,4})';
+  '(?:点了点头|转过头|转过身|说道|问道|答道|喝道|低声说|大声说|说|问|答|喊|叫|吼|骂|笑|哭|叹|嘀咕|点头|摇头|皱眉|宣布|打败|击败|出现)';
+const NAME = '([\\u4e00-\\u9fa5]{2,4}?)';
 
 const NAME_STOPWORDS = new Set(
   `
@@ -36,7 +36,8 @@ const NAME_STOPWORDS = new Set(
   而是 也是 想要 个人 不知 不会 不能 不要 不用 只有 只要 只是 只得 只怕
   没有 没什么 什么样 为什么 怎么样 那是 这是 可是 还是 总是 老是
   它们 家族 学院 能力 难道 句话 确实 准确 并非 两个人 永远 秒钟 很难 没有人 简单 混血种
-  老板 师姐 老爹 元老 惊讶 实在 显然 要是 直接 我这
+  老板 师姐 老爹 元老 惊讶 实在 显然 要是 直接 我这 你这 没人 还没 却又
+  也就是 却没有 个男人 明非忽然 更别 按理 按道理 理论上 也可以 委实 毫无疑 且不 慢悠悠 我跟你
   也不能 也不是 一觉睡醒 时候他 让人 不如 简直 无声 比如 不再 前方 秘书 老妈 屏幕上
   `
     .split(/\s+/)
@@ -45,9 +46,15 @@ const NAME_STOPWORDS = new Set(
 
 const GLUE_PREFIX = new Set('跟给让把被从向对和与在到以用为连'.split(''));
 const GLUE_SUFFIX = new Set(
-  '也还都就却又点心在对来不没已正再才并都大小很却笑低冷苦难点头着过知道'.split(''),
+  '也还都就却又点心在对来不没已正再才并都大小很却笑低冷苦难点头着过知道摇以微'.split(''),
 );
-const MANNER_SUFFIX = /(?:低声|大声|冷冷|淡淡|微微|轻轻|沉声|苦笑|微笑|怒|地)$/;
+const ADVERB_SUFFIX = /(?:忽然|突然|终于|立刻|马上|不禁|差点|猛地|赶紧|随口|还是)$/;
+const MANNER_SUFFIX =
+  /(?:低声|大声|冷冷|淡淡|微微|轻轻|轻声|沉声|苦笑|微笑|怒|地|缓缓|幽幽|悠悠|慢悠悠)$/;
+/** 纯虚词拼出来的「人名」（也就是 / 却没有 / 还没）。 */
+const FUNCTION_CHARS = new Set(
+  '的了是在和与对从不也就都还没却但又而可这那有人说想把被给让个几吗呢吧啊哦嘛以跟'.split(''),
+);
 
 const LOCATION_SUFFIX =
   '学院|大学|中学|学校|城堡|庄园|教堂|医院|研究所|实验室|基地|车站|机场|码头|酒馆|旅馆|图书馆|宫殿|神殿|总部|会议室';
@@ -154,11 +161,15 @@ function dropContainedFragments(mentions: Map<string, number>) {
 function isLikelyName(candidate: string): boolean {
   if (candidate.length < 2 || candidate.length > 4) return false;
   if (NAME_STOPWORDS.has(candidate)) return false;
-  if (/^[的了是在和与对从向被把这有人那每某各]/.test(candidate)) return false;
+  if ([...candidate].every((ch) => FUNCTION_CHARS.has(ch))) return false;
+  if (/^[的了是在和与对从向被把这有人那每某各个几俩两]/.test(candidate)) return false;
   if (/[的了着过吗呢吧啊哦嘛之地得]/.test(candidate)) return false;
-  if (/^[我你他她它谁这那][是说想有的了在不也就都还]/.test(candidate)) return false;
-  if (/^[也但而却可就还跟][不有是说他她你我的了]$/.test(candidate)) return false;
-  if (/^(时候|一觉|让人|也不是|也不能)/.test(candidate)) return false;
+  if (/^[我你他她它谁这那][是说想有的了在不也就都还这那]/.test(candidate)) return false;
+  if (/^[也但而却可就还跟][不有是说他她你我的了没又]$/.test(candidate)) return false;
+  if (/^[我你他她它谁]/.test(candidate)) return false;
+  if (candidate.length === 2 && GLUE_SUFFIX.has(candidate[1] ?? '')) return false;
+  if (/^(时候|一觉|让人|也不是|也不能|没人|有人|个人|男人|女人|大夫|按理)/.test(candidate))
+    return false;
   return true;
 }
 
@@ -175,6 +186,8 @@ export function normalizeCharacterName(raw: string): string | null {
   while (name.length > 2 && GLUE_SUFFIX.has(name[name.length - 1] ?? '')) {
     name = name.slice(0, -1);
   }
+  const stripped = name.replace(ADVERB_SUFFIX, '');
+  if (stripped.length >= 2) name = stripped;
   if (!isLikelyName(name)) return null;
   return name;
 }

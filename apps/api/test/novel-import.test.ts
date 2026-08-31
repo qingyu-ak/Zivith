@@ -133,6 +133,30 @@ describe('extractFromChapter + aggregateCharacters', () => {
     expect(lu?.aliases ?? []).not.toContain('跟路明非');
   });
 
+  it('drops leftover function-word name fragments', () => {
+    const chapter = extractFromChapter(
+      0,
+      [
+        '没人说得清。你这说的是什么。还没说完。也就是说。却没有说。却又说。',
+        '个男人说了一句话。我跟你说一声。路明非轻声说。路明非摇头。',
+        '路明非忽然知道答案。路明非说了一句话。路明非说了第二句话。',
+      ].join(''),
+    );
+    const names = [...chapter.characterMentions.keys()];
+    expect(names).toContain('路明非');
+    expect(names).not.toContain('没人');
+    expect(names).not.toContain('你这');
+    expect(names).not.toContain('还没');
+    expect(names).not.toContain('也就是');
+    expect(names).not.toContain('却没有');
+    expect(names).not.toContain('却又');
+    expect(names).not.toContain('个男人');
+    expect(names).not.toContain('明非忽然');
+    expect(names).not.toContain('明非轻声');
+    expect(names).not.toContain('我跟你');
+    expect(names).not.toContain('路明非摇');
+  });
+
   it('does not split a longer name into a contained fragment', () => {
     const chapter = extractFromChapter(
       0,
