@@ -12,6 +12,17 @@
 
 ---
 
+## 2026-08-31 · 89bb7d7 · feat(api,web,db) · 扮演用户可选读者或角色卡
+
+与 AI 对话时用户默认是读者；也可选已有角色卡，或新建一张当自己。身份存在 `RoleplayThread.userCharacterAssetId`，与「对面是谁」分开。对话顶栏与 Inspector 都能切换。
+
+- **feat(db)** `roleplay_threads.user_character_asset_id`（null = 读者）
+- **feat(api)** 开线程时校验用户卡 ≠ AI 角色；复用匹配用户身份 + 锚点；提示词带用户发言人
+- **feat(web)** Inspector 与对话顶栏「你是」下拉（读者 / 已有卡 / 新建我自己…）
+- **docs** Track M3、扮演 Agent 输入、API 地图、README 下一刀改为验收时间锚定扮演
+- 验证：`vitest` `character-card` / `creator-chat-nav`
+- 模块：`character-card.ts`、`roleplay.ts`、`roleplay-agent.ts`、`chat-panel.tsx`、`inspector-panel.tsx`、`schema.prisma`
+
 ## 2026-08-30 · d8c414a · feat(api,web) · Studio 角色卡回灌扮演与世界构建对话
 
 Studio 改角色名称/简介/个性后，扮演仍只读导入档案（MemoryCore persona），世界构建对话也不带个性。本轮让两路对话读同一张 Asset 角色卡；导入档案只作补充，不覆盖。
