@@ -365,6 +365,7 @@ apps/api/src/contexts/roleplay/
         ↓
 CharacterStateBuilder 组装：
   ├─ 角色卡（Asset 名称/简介/个性/别名；MemoryCore persona 作补充，不覆盖）
+  ├─ 用户身份（默认读者；或另一张 Asset 角色卡；或启动时新建「我自己」卡）
   ├─ 该角色在锚点时刻 T 之前的事件经历（WorldEvent 过滤：时间 < T 且角色参与）
   ├─ 时刻 T 的关系快照（Relationship + MemoryAtom validTo ≤ T）
   └─ 认知边界：只含角色亲历事件，无全知视角 ← 防剧透核心
@@ -386,6 +387,7 @@ model RoleplayThread {
   id                  String   @id @default(uuid())
   projectId           String
   characterAssetId    String                 // 扮演的角色的 Asset
+  userCharacterAssetId String?               // 用户扮演谁；null = 读者
   threadId            String                 // 复用对话线程（SSE/上下文管理共用）
   anchoredWorldEventId String?               // 时间锚点（null = 全书读完状态）
   status              String   @default("active")
@@ -426,7 +428,7 @@ GET    /api/v1/roleplay/threads/:id/messages/stream   # SSE（复用现有流式
 1. **对话流内嵌记忆状态**：当轮 SSE 追加 `memory_ops` 摘要（「已归档 3 条事实 · 合并 1 条重复 · 发现 1 个冲突」），冲突项内联确认卡片（复用 H9 冲突 UI 样式）；
 2. **世界工作区记忆面板**：右侧 Inspector 区新增「记忆」标签页——L1 原子列表（按实体过滤）+ L2 核心块（可展开溯源到 sourceAtomIds），支持删除；
 3. **小说导入入口**：世界工作区「导入小说」按钮 → 上传 → 进度条（章/总章）→ 报告页；文本解码优先 UTF-8，非法 UTF-8 回退 GB18030（Windows 记事本 ANSI/GBK）；规则抽取对人名停用词过滤（避免「没有 / 忽然 / 甚至」等误判为角色）；
-4. **扮演入口**：实体浏览器中角色卡片「与此角色对话」+ 时间锚点选择器（下拉 WorldEvent 列表/全书读完）。扮演线程复用 Creator Chat 消息层，侧栏单独「角色」Tab 列出（按所属世界分组），不与世界构建历史混排。
+4. **扮演入口**：实体浏览器中角色卡片「与此角色对话」+ 时间锚点选择器 + **用户身份**（默认读者 / 选已有角色卡 / 新建一张当自己）。对话顶栏在扮演线程里同样可切换「你是谁」（与「扮演：对面是谁」分开）。扮演线程复用 Creator Chat 消息层，侧栏单独「角色」Tab 列出（按所属世界分组），不与世界构建历史混排。新建「我自己」走 Asset 创建（`tags: ['user_self']`，显式用户动作），不是扮演 Agent 写世界层。复用线程时匹配 AI 角色 + 用户身份 + 锚点。
 
 不新建独立顶级页面（不做完整记忆中心——YAGNI，D5 已确认）。
 

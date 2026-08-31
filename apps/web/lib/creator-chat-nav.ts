@@ -65,6 +65,7 @@ export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
     state: asString(record.state) ?? 'active',
     kind: asChatKind(record.kind),
     character_name: asString(record.character_name) ?? asString(record.characterName),
+    user_character_name: asString(record.user_character_name) ?? asString(record.userCharacterName),
     created_at: asString(record.created_at) ?? asString(record.createdAt) ?? '',
     updated_at: asString(record.updated_at) ?? asString(record.updatedAt) ?? '',
   };

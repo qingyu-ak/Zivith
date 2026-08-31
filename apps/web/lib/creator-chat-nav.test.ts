@@ -76,9 +76,14 @@ describe('normalizeThread', () => {
         id: 't2',
         kind: 'roleplay',
         character_name: '楚子航',
+        user_character_name: '路明非',
         updated_at: '2026-01-01T00:00:00.000Z',
       }),
-    ).toMatchObject({ kind: 'roleplay', character_name: '楚子航' });
+    ).toMatchObject({
+      kind: 'roleplay',
+      character_name: '楚子航',
+      user_character_name: '路明非',
+    });
   });
 });
 

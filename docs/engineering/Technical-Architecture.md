@@ -311,11 +311,11 @@
 
 ### Roleplay（时间锚定扮演）
 
-免登录。实现见 [`apps/api/src/routes/roleplay.ts`](../../apps/api/src/routes/roleplay.ts)。消息落在 `CreatorChatMessage`；`RoleplayThread` 旁表指向同一线程。不反写 Asset / WorldEvent / Relationship。
+免登录。实现见 [`apps/api/src/routes/roleplay.ts`](../../apps/api/src/routes/roleplay.ts)。消息落在 `CreatorChatMessage`；`RoleplayThread` 旁表指向同一线程。`userCharacterAssetId` 为空表示用户是读者；非空则用户以该角色卡发言，且不得与 AI 角色相同。不反写 Asset / WorldEvent / Relationship。对话顶栏与 Inspector 均可切换「你是谁」。
 
 | 方法 | 路径 | 说明 |
 |--------|------|-------------|
-| `POST` | `/roleplay/threads` | 开启扮演（角色 Asset + 可选 WorldEvent 锚点） |
+| `POST` | `/roleplay/threads` | 开启扮演（AI 角色 Asset + 可选用户角色卡 + 可选 WorldEvent 锚点；用户卡缺省为读者） |
 | `GET` | `/roleplay/threads` | 扮演线程列表 |
 | `GET` | `/roleplay/threads/{id}/messages` | 历史消息 |
 | `POST` | `/roleplay/threads/{id}/messages` | 发送并 SSE 流式回复 |
@@ -387,7 +387,7 @@ PATCH /shots/shot_123
 | **Job Queue（任务队列）** | 异步任务管理 | 生成任务、工作流步骤、通知 |
 | **Cache（缓存）** | 频繁访问、很少变更的数据 | 已解析 Asset 数据、提示词模板、模型能力 |
 
-State/Timeline 层（已落库，2026-08-04 迁移 `20260804000000_creator_layer_world`）在 PostgreSQL 中存储 `EntityRevision`、`ChangeEvent`、`ProjectSequence`、`ProjectTimeline`、`TimelineTrack`、`TimelineItem`、`WorldEvent`、`Relationship`，以及 Creator Chat 的 `CreatorChatThread` / `CreatorChatMessage`。记忆层（ADR-0014）另存 `MemoryAtom`、`MemoryCore`、`MemoryPipelineState`、`ThreadContextState`；每项目一份可重建的本地 sqlite 向量文件（`apps/api/data/memory-vectors/<projectId>.sqlite`）。小说导入存 `NovelImport` / `NovelImportChapter`；扮演存 `RoleplayThread`（旁表，`threadId` 指向 `CreatorChatThread`）。专用业务表仍是当前状态权威；修订是状态历史权威。Timeline 行需要 Presentation 放置，并可选择携带不透明的项目自定义 World Time 绑定。大型快照使用对象存储引用加规范哈希，而不是把二进制或提供商载荷复制进 PostgreSQL。
+State/Timeline 层（已落库，2026-08-04 迁移 `20260804000000_creator_layer_world`）在 PostgreSQL 中存储 `EntityRevision`、`ChangeEvent`、`ProjectSequence`、`ProjectTimeline`、`TimelineTrack`、`TimelineItem`、`WorldEvent`、`Relationship`，以及 Creator Chat 的 `CreatorChatThread` / `CreatorChatMessage`。记忆层（ADR-0014）另存 `MemoryAtom`、`MemoryCore`、`MemoryPipelineState`、`ThreadContextState`；每项目一份可重建的本地 sqlite 向量文件（`apps/api/data/memory-vectors/<projectId>.sqlite`）。小说导入存 `NovelImport` / `NovelImportChapter`；扮演存 `RoleplayThread`（旁表，`threadId` 指向 `CreatorChatThread`，可选 `userCharacterAssetId`）。专用业务表仍是当前状态权威；修订是状态历史权威。Timeline 行需要 Presentation 放置，并可选择携带不透明的项目自定义 World Time 绑定。大型快照使用对象存储引用加规范哈希，而不是把二进制或提供商载荷复制进 PostgreSQL。
 
 ## 5.2 主数据库 — 实体关系总览
 ```

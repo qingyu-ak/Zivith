@@ -123,7 +123,7 @@ User provides world lore → asset stage structures Knowledge → User reviews
 
 | 方面 | 详情 |
 |---|---|
-| 输入 | Studio 角色卡（Asset 名称/简介/个性/别名）+ MemoryCore 档案补充、锚点 T 之前该角色亲历 WorldEvent、关系快照、用户对白 |
+| 输入 | Studio 角色卡（Asset 名称/简介/个性/别名）+ 用户身份（默认读者，或另一张角色卡）+ MemoryCore 档案补充、锚点 T 之前该角色亲历 WorldEvent、关系快照、用户对白 |
 | 输出 | 扮演回复（SSE）；可选 episodic `MemoryAtom`（链接该角色） |
 | 执行阶段 | 无 — 不在 Story→Video DAG 中 |
 | 硬约束 | **不创建或修改** `Asset` / `WorldEvent` / `Relationship` / `Project.worldview`。反写世界层必须走 World Builder 提案确认（ADR-0010）。Studio「在对话中继续」不得打开扮演线程 |

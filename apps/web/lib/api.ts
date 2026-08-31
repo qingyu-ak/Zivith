@@ -206,6 +206,8 @@ export interface RoleplayThreadDTO {
   thread_id: string;
   character_asset_id: string;
   character_name: string;
+  user_character_asset_id?: string | null;
+  user_character_name?: string | null;
   anchored_world_event_id: string | null;
   anchor_title: string | null;
   updated_at: string;
@@ -215,6 +217,7 @@ export async function createRoleplayThread(
   projectId: string,
   characterAssetId: string,
   anchoredWorldEventId?: string | null,
+  userCharacterAssetId?: string | null,
 ): Promise<{ id: string; thread_id: string; reused: boolean }> {
   return api<{ id: string; thread_id: string; reused: boolean }>('/roleplay/threads', {
     method: 'POST',
@@ -222,6 +225,7 @@ export async function createRoleplayThread(
       project_id: projectId,
       character_asset_id: characterAssetId,
       ...(anchoredWorldEventId ? { anchored_world_event_id: anchoredWorldEventId } : {}),
+      ...(userCharacterAssetId ? { user_character_asset_id: userCharacterAssetId } : {}),
     },
   });
 }

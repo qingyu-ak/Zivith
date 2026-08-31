@@ -7,6 +7,7 @@ import { estimateTokens } from '../memory/context-window.js';
 import {
   composeCharacterPersona,
   formatCharacterCard,
+  formatUserSpeakerPrompt,
   personalityFromAssetData,
 } from '../world/character-card.js';
 
@@ -23,6 +24,8 @@ export interface CharacterState {
   relations: string[];
   anchorLabel: string;
   traits: string[];
+  userLabel: string;
+  userSection: string;
 }
 
 export async function buildCharacterState(
@@ -30,6 +33,7 @@ export async function buildCharacterState(
   projectId: string,
   characterAssetId: string,
   anchoredWorldEventId: string | null,
+  userCharacterAssetId?: string | null,
 ): Promise<CharacterState | null> {
   const asset = await db.asset.findFirst({
     where: { id: characterAssetId, projectId, type: 'character', deletedAt: null },
@@ -105,6 +109,7 @@ export async function buildCharacterState(
     personality: personalityFromAssetData(asset.data),
     aliases: asset.aliases,
   });
+  const userSpeaker = await loadUserSpeaker(db, projectId, userCharacterAssetId ?? null);
   return {
     name: asset.name,
     description: asset.description,
@@ -113,14 +118,43 @@ export async function buildCharacterState(
     relations,
     anchorLabel: anchor ? `《${anchor.title}》之后` : '全书读完（知晓全部亲历剧情）',
     traits: atoms.map((atom) => atom.content).slice(0, 8),
+    userLabel: userSpeaker.label,
+    userSection: userSpeaker.section,
   };
+}
+
+async function loadUserSpeaker(
+  db: PrismaClient,
+  projectId: string,
+  userCharacterAssetId: string | null,
+) {
+  if (!userCharacterAssetId) return formatUserSpeakerPrompt(null);
+  const userAsset = await db.asset.findFirst({
+    where: { id: userCharacterAssetId, projectId, type: 'character', deletedAt: null },
+  });
+  if (!userAsset) return formatUserSpeakerPrompt(null);
+  const userCore = await db.memoryCore.findFirst({
+    where: { projectId, kind: 'persona', topic: userAsset.name },
+    orderBy: { version: 'desc' },
+  });
+  const userCard = formatCharacterCard({
+    name: userAsset.name,
+    description: userAsset.description,
+    personality: personalityFromAssetData(userAsset.data),
+    aliases: userAsset.aliases,
+  });
+  return formatUserSpeakerPrompt({
+    name: userAsset.name,
+    card: composeCharacterPersona(userCard, userCore?.content),
+  });
 }
 
 function buildRoleplaySystemPrompt(state: CharacterState, memoryDigest: string | null): string {
   const sections = [
-    `你正在扮演小说角色「${state.name}」，与用户（扮演故事中的另一位人物或读者）对话。`,
+    `你正在扮演小说角色「${state.name}」，与「${state.userLabel}」对话。`,
     '\n## 角色档案',
     state.persona,
+    `\n${state.userSection}`,
     state.traits.length > 0
       ? `\n## 关于你的已知细节\n${state.traits.map((t) => `· ${t}`).join('\n')}`
       : '',
@@ -134,7 +168,8 @@ function buildRoleplaySystemPrompt(state: CharacterState, memoryDigest: string |
     `1. 始终以「${state.name}」的第一人称视角回应，模仿角色的语气、口癖与性格。`,
     '2. 你只知道上面「你亲历过的事」。绝不知道未来，也绝不知道你未曾亲历的事件——用户问起时，以角色身份自然地表示不知道或疑惑。',
     '3. 不跳出角色，不以 AI 或助手身份说话，不输出旁白解说（除非用户要求）。',
-    '4. 回复长度适中（1-4 句），保持对话感。',
+    `4. 把用户当成「${state.userLabel}」来应答；不要替用户说话或改写用户身份。`,
+    '5. 回复长度适中（1-4 句），保持对话感。',
   ];
   return sections.filter(Boolean).join('\n');
 }
@@ -180,7 +215,8 @@ export class RoleplayAgent {
     const historyText = input.history
       .slice(-16)
       .map(
-        (message) => `${message.role === 'user' ? '用户' : input.state.name}：${message.content}`,
+        (message) =>
+          `${message.role === 'user' ? input.state.userLabel : input.state.name}：${message.content}`,
       )
       .join('\n');
 
@@ -188,7 +224,7 @@ export class RoleplayAgent {
       request_id: `roleplay:${Date.now()}`,
       model: this.model,
       system_prompt: systemPrompt,
-      user_prompt: `${historyText ? `${historyText}\n\n` : ''}用户：${input.text}`,
+      user_prompt: `${historyText ? `${historyText}\n\n` : ''}${input.state.userLabel}：${input.text}`,
       temperature: 0.8,
       max_tokens: 1_500,
     });

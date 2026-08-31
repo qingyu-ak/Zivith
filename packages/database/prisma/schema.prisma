@@ -862,14 +862,16 @@ model NovelImportChapter {
 
 // M3 角色扮演线程（设计 §6.3）：复用 CreatorChatThread 存消息与 SSE；锚点 null = 全书读完。
 model RoleplayThread {
-  id                  String   @id @default(uuid())
-  projectId           String   @map("project_id")
-  characterAssetId    String   @map("character_asset_id")
-  threadId            String   @map("thread_id")
-  anchoredWorldEventId String? @map("anchored_world_event_id")
-  status              String   @default("active")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default(uuid())
+  projectId            String   @map("project_id")
+  characterAssetId     String   @map("character_asset_id")
+  /// 用户扮演谁；null = 读者（默认）。与 AI 角色卡同一套 Asset。
+  userCharacterAssetId String?  @map("user_character_asset_id")
+  threadId             String   @map("thread_id")
+  anchoredWorldEventId String?  @map("anchored_world_event_id")
+  status               String   @default("active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@index([projectId, characterAssetId])
   @@index([threadId])

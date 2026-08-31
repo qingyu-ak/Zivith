@@ -4,9 +4,9 @@
 >
 > Status: Active
 >
-> Synced: 2026-08-30
+> Synced: 2026-08-31
 >
-> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。下一步：I3 `Organization`（需真实项目晋级证据，不随计划启动）；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
+> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。M1–M3 已落地。当前下一刀：用导入世界验收时间锚定扮演（锚点 + 读者/角色身份）。I3 `Organization` 仍需真实项目晋级证据，不插队；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
 >
 > Related: [Product-Positioning.md](../product/Product-Positioning.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [IP World Model Repositioning RFC](../architecture/rfc/IP-World-Model-Repositioning-RFC.md)
 
@@ -251,9 +251,11 @@
 |----|------|-------|--------|
 | M1 | 分层记忆 + 上下文窗口 | L0 原文 / L1 原子 / L2 核心；同步规则归档 + 队列深加工；三路 RRF 检索；ThreadContextState 压缩；世界工作区记忆面板 | **已完成 2026-08-23**（ADR-0014） |
 | M2 | 小说导入 | 上传 txt → 切章 → 规则抽取 → Asset/WorldEvent/Relationship + 记忆卡；UTF-8/GB18030；人名停用词；整体撤销。按章 retry / 轻量升级路由未做 | **已完成 v1 2026-08-23**（ADR-0015）；解码与停用词 **2026-08-30** |
-| M3 | 时间锚定扮演 | `RoleplayThread` 旁表复用消息层；侧栏「角色」Tab；不反写世界实体。认知边界 / 锚点过滤 v1。**2026-08-30** 扮演与世界构建对话读 Studio 角色卡（名称/简介/个性），MemoryCore 档案作补充 | **已完成 v1 2026-08-23**；侧栏分 Tab **2026-08-30**；角色卡回灌 **2026-08-30** |
+| M3 | 时间锚定扮演 | `RoleplayThread` 旁表复用消息层；侧栏「角色」Tab；不反写世界实体。认知边界 / 锚点过滤 v1。扮演与世界构建对话读 Studio 角色卡。用户默认读者，可选已有卡或新建自己；Inspector 与对话顶栏均可切换 | **已完成 v1 2026-08-23**；侧栏分 Tab / 角色卡回灌 / 用户身份 **2026-08-30**；对话顶栏切换身份 **2026-08-31** |
 
 **退出标准：** 无密钥时规则记忆 + 导入 + 扮演全链路可跑；导入可整体撤销；扮演不经提案写入世界层。
+
+**当前下一刀（2026-08-31）：** 用已导入的世界验收 M3 — 选时间轴事件为锚点（不要默认「全书读完」），读者与「你是某角色」各开一条扮演，问锚点之后的事，角色应不知情。按章 retry / 轻量升级仍未做。
 
 **不属于本轨道：** 独立 `/roleplay` 产品路由；完整记忆中心页面；SiliconFlow 真实 embedding（仍 mock / bigram）。
 

@@ -731,7 +731,7 @@ type ChatThreadRecord = {
   updatedAt: Date;
 };
 
-type RoleplayMeta = { characterName: string };
+type RoleplayMeta = { characterName: string; userCharacterName: string | null };
 
 async function loadRoleplayMeta(
   db: PrismaClient,
@@ -741,10 +741,18 @@ async function loadRoleplayMeta(
   if (threadIds.length === 0) return meta;
   const roleplays = await db.roleplayThread.findMany({
     where: { threadId: { in: threadIds }, status: 'active' },
-    select: { threadId: true, characterAssetId: true },
+    select: { threadId: true, characterAssetId: true, userCharacterAssetId: true },
   });
   if (roleplays.length === 0) return meta;
-  const assetIds = [...new Set(roleplays.map((item) => item.characterAssetId))];
+  const assetIds = [
+    ...new Set(
+      roleplays.flatMap((item) =>
+        item.userCharacterAssetId
+          ? [item.characterAssetId, item.userCharacterAssetId]
+          : [item.characterAssetId],
+      ),
+    ),
+  ];
   const assets =
     assetIds.length > 0
       ? await db.asset.findMany({
@@ -756,6 +764,9 @@ async function loadRoleplayMeta(
   for (const roleplay of roleplays) {
     meta.set(roleplay.threadId, {
       characterName: nameById.get(roleplay.characterAssetId) ?? '',
+      userCharacterName: roleplay.userCharacterAssetId
+        ? (nameById.get(roleplay.userCharacterAssetId) ?? null)
+        : null,
     });
   }
   return meta;
@@ -774,6 +785,7 @@ function chatThreadDto(
     state: thread.state,
     kind: roleplay ? ('roleplay' as const) : ('world' as const),
     character_name: roleplay?.characterName ? roleplay.characterName : null,
+    user_character_name: roleplay?.userCharacterName ?? null,
     created_at: thread.createdAt.toISOString(),
     updated_at: thread.updatedAt.toISOString(),
   };

@@ -227,6 +227,7 @@ export interface CreatorChatThreadDTO {
   /** Derived from RoleplayThread sidecar; omitted/unknown payloads default to world. */
   kind?: CreatorChatKind;
   character_name?: string | null;
+  user_character_name?: string | null;
   created_at: string;
   updated_at: string;
 }

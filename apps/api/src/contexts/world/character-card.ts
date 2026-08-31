@@ -33,3 +33,24 @@ export function composeCharacterPersona(card: string, archive: string | null | u
   if (trimmedArchive === card || trimmedArchive.includes(card)) return trimmedArchive;
   return `${card}\n\n档案（补充；与上文冲突时以角色卡为准）：\n${trimmedArchive}`;
 }
+
+export const READER_SPEAKER_LABEL = '读者';
+
+/** 扮演时用户是谁：默认读者，或一张 Studio 角色卡。 */
+export function formatUserSpeakerPrompt(input: { name: string; card: string } | null): {
+  label: string;
+  section: string;
+} {
+  if (!input) {
+    return {
+      label: READER_SPEAKER_LABEL,
+      section:
+        '## 用户身份\n用户是读者，没有固定角色。不要替用户决定扮演谁，也不要用某个小说角色的口吻代替用户说话。',
+    };
+  }
+  const name = input.name.trim() || '用户角色';
+  return {
+    label: name,
+    section: `## 用户身份\n用户正在扮演「${name}」。把用户的每句话当成这个人在说。\n${input.card}`,
+  };
+}

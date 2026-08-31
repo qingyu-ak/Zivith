@@ -67,6 +67,7 @@ export function registerRoleplayRoutes(
       .object({
         project_id: idSchema,
         character_asset_id: idSchema,
+        user_character_asset_id: idSchema.nullish(),
         anchored_world_event_id: idSchema.nullish(),
       })
       .strict()
@@ -81,11 +82,31 @@ export function registerRoleplayRoutes(
     });
     if (!asset) throw new ApiError(404, 'CHARACTER_NOT_FOUND', '角色不存在');
 
+    const userCharacterAssetId = body.user_character_asset_id ?? null;
+    if (userCharacterAssetId === asset.id) {
+      throw new ApiError(400, 'USER_IS_AI_CHARACTER', '不能同时扮演对话双方');
+    }
+    let userName: string | null = null;
+    if (userCharacterAssetId) {
+      const userAsset = await db.asset.findFirst({
+        where: {
+          id: userCharacterAssetId,
+          projectId: body.project_id,
+          type: 'character',
+          deletedAt: null,
+        },
+        select: { id: true, name: true },
+      });
+      if (!userAsset) throw new ApiError(404, 'USER_CHARACTER_NOT_FOUND', '你选择的角色卡不存在');
+      userName = userAsset.name;
+    }
+
     const anchorId = body.anchored_world_event_id ?? null;
     const existing = await db.roleplayThread.findFirst({
       where: {
         projectId: body.project_id,
         characterAssetId: asset.id,
+        userCharacterAssetId,
         anchoredWorldEventId: anchorId,
         status: 'active',
       },
@@ -93,13 +114,17 @@ export function registerRoleplayRoutes(
     if (existing) {
       return { id: existing.id, thread_id: existing.threadId, reused: true };
     }
+    const title = userName
+      ? `与「${asset.name}」对话 · 你是${userName}`
+      : `与「${asset.name}」对话`;
     const thread = await db.creatorChatThread.create({
-      data: { projectId: body.project_id, title: `与「${asset.name}」对话` },
+      data: { projectId: body.project_id, title },
     });
     const roleplay = await db.roleplayThread.create({
       data: {
         projectId: body.project_id,
         characterAssetId: asset.id,
+        userCharacterAssetId,
         threadId: thread.id,
         anchoredWorldEventId: anchorId,
       },
@@ -117,7 +142,15 @@ export function registerRoleplayRoutes(
       orderBy: { updatedAt: 'desc' },
       take: 50,
     });
-    const assetIds = [...new Set(threads.map((t) => t.characterAssetId))];
+    const assetIds = [
+      ...new Set(
+        threads.flatMap((t) =>
+          t.userCharacterAssetId
+            ? [t.characterAssetId, t.userCharacterAssetId]
+            : [t.characterAssetId],
+        ),
+      ),
+    ];
     const assets = assetIds.length
       ? await db.asset.findMany({
           where: { id: { in: assetIds } },
@@ -143,6 +176,10 @@ export function registerRoleplayRoutes(
         character_name: assets.find((a) => a.id === thread.characterAssetId)?.name ?? '未知角色',
         character_description:
           assets.find((a) => a.id === thread.characterAssetId)?.description ?? '',
+        user_character_asset_id: thread.userCharacterAssetId,
+        user_character_name: thread.userCharacterAssetId
+          ? (assets.find((a) => a.id === thread.userCharacterAssetId)?.name ?? null)
+          : null,
         anchored_world_event_id: thread.anchoredWorldEventId,
         anchor_title: anchors.find((a) => a.id === thread.anchoredWorldEventId)?.title ?? null,
         updated_at: thread.updatedAt.toISOString(),
@@ -201,6 +238,7 @@ async function createRoleplayReply(
     id: string;
     projectId: string;
     characterAssetId: string;
+    userCharacterAssetId: string | null;
     threadId: string;
     anchoredWorldEventId: string | null;
   },
@@ -212,6 +250,7 @@ async function createRoleplayReply(
     roleplay.projectId,
     roleplay.characterAssetId,
     roleplay.anchoredWorldEventId,
+    roleplay.userCharacterAssetId,
   );
   if (!state) throw new ApiError(404, 'CHARACTER_NOT_FOUND', '角色不存在');
 
@@ -272,6 +311,7 @@ async function pipeRoleplaySse(
     id: string;
     projectId: string;
     characterAssetId: string;
+    userCharacterAssetId: string | null;
     threadId: string;
     anchoredWorldEventId: string | null;
   },

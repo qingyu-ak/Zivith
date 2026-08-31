@@ -6,7 +6,9 @@ import {
 import {
   composeCharacterPersona,
   formatCharacterCard,
+  formatUserSpeakerPrompt,
   personalityFromAssetData,
+  READER_SPEAKER_LABEL,
 } from '../src/contexts/world/character-card.js';
 
 describe('formatCharacterCard', () => {
@@ -80,5 +82,25 @@ describe('worldContextToPrompt', () => {
     const prompt = worldContextToPrompt(context);
     expect(prompt).toContain('个性：表面废柴');
     expect(prompt).toContain('又称：师弟');
+  });
+});
+
+describe('formatUserSpeakerPrompt', () => {
+  it('defaults the user to a reader with no character card', () => {
+    const speaker = formatUserSpeakerPrompt(null);
+    expect(speaker.label).toBe(READER_SPEAKER_LABEL);
+    expect(speaker.section).toContain('用户是读者');
+  });
+
+  it('injects a chosen Studio card as the user speaker', () => {
+    const card = formatCharacterCard({
+      name: '楚子航',
+      description: '狮心会会长',
+      personality: '冷静克制',
+    });
+    const speaker = formatUserSpeakerPrompt({ name: '楚子航', card });
+    expect(speaker.label).toBe('楚子航');
+    expect(speaker.section).toContain('用户正在扮演「楚子航」');
+    expect(speaker.section).toContain('个性：冷静克制');
   });
 });

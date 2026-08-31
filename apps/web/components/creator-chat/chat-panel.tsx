@@ -43,6 +43,7 @@ const PROPOSAL_KINDS: ProposalKind[] = [
 ];
 
 const STARTERS = ['我想创造一个东方玄幻世界', '先介绍一下主角', '帮我检查设定冲突'];
+const NEW_SELF = '__new_self__';
 
 function parseProposals(message: CreatorChatMessageDTO): {
   proposals: ChatProposal[];
@@ -103,8 +104,13 @@ export function ChatPanel() {
   const [error, setError] = useState('');
   const [focus, setFocus] = useState<ChatFocus | null>(null);
   const [roleplayThreads, setRoleplayThreads] = useState<RoleplayThreadDTO[]>([]);
-  const [characters, setCharacters] = useState<Array<{ id: string; name: string }>>([]);
+  const [characters, setCharacters] = useState<Array<{ id: string; name: string; tags: string[] }>>(
+    [],
+  );
   const [switching, setSwitching] = useState(false);
+  const [creatingSelf, setCreatingSelf] = useState(false);
+  const [selfName, setSelfName] = useState('');
+  const [selfPersonality, setSelfPersonality] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
   const pendingConsumed = useRef(false);
   const focusHandoff = useRef<ChatFocus | null>(null);
@@ -167,19 +173,27 @@ export function ChatPanel() {
       try {
         const [roleplay, resources] = await Promise.all([
           listRoleplayThreads(projectId),
-          api<{ entities?: { characters?: Array<{ id?: unknown; name?: unknown }> } }>(
-            `/world/projects/${projectId}/resources`,
-          ),
+          api<{
+            entities?: {
+              characters?: Array<{ id?: unknown; name?: unknown; tags?: unknown }>;
+            };
+          }>(`/world/projects/${projectId}/resources`),
         ]);
         if (cancelled) return;
         setRoleplayThreads(roleplay);
         setCharacters(
           (resources.entities?.characters ?? [])
             .filter(
-              (character): character is { id: string; name: string } =>
+              (character): character is { id: string; name: string; tags?: unknown } =>
                 typeof character.id === 'string' && typeof character.name === 'string',
             )
-            .map((character) => ({ id: character.id, name: character.name })),
+            .map((character) => ({
+              id: character.id,
+              name: character.name,
+              tags: Array.isArray(character.tags)
+                ? character.tags.filter((tag): tag is string => typeof tag === 'string')
+                : [],
+            })),
         );
       } catch {
         if (!cancelled) {
@@ -301,6 +315,7 @@ export function ChatPanel() {
   async function switchAgent(value: string) {
     const projectId = thread?.project_id;
     if (!projectId || switching) return;
+    setCreatingSelf(false);
     if (value === 'world') {
       const existing = threads.find(
         (item) => item.project_id === projectId && item.kind !== 'roleplay',
@@ -325,18 +340,101 @@ export function ChatPanel() {
       }
       return;
     }
-    setSwitching(true);
+    const keepUserId =
+      activeRoleplay?.user_character_asset_id && activeRoleplay.user_character_asset_id !== value
+        ? activeRoleplay.user_character_asset_id
+        : null;
+    await openRoleplay(projectId, value, keepUserId, activeRoleplay?.anchored_world_event_id);
+  }
+
+  async function openRoleplay(
+    projectId: string,
+    characterAssetId: string,
+    userCharacterAssetId: string | null,
+    anchoredWorldEventId?: string | null,
+    alreadySwitching = false,
+  ) {
+    if (switching && !alreadySwitching) return;
+    if (!alreadySwitching) setSwitching(true);
+    setError('');
     try {
-      const existing = roleplayThreads.find((item) => item.character_asset_id === value);
-      if (existing) {
-        router.push(`/creator-chats/${existing.thread_id}`);
-        return;
-      }
-      const created = await createRoleplayThread(projectId, value);
+      const existing = roleplayThreads.find(
+        (item) =>
+          item.character_asset_id === characterAssetId &&
+          (item.user_character_asset_id ?? null) === (userCharacterAssetId ?? null) &&
+          (item.anchored_world_event_id ?? null) === (anchoredWorldEventId ?? null),
+      );
+      const created = existing
+        ? { thread_id: existing.thread_id }
+        : await createRoleplayThread(
+            projectId,
+            characterAssetId,
+            anchoredWorldEventId,
+            userCharacterAssetId,
+          );
+      const next = await listRoleplayThreads(projectId);
+      setRoleplayThreads(next);
       router.push(`/creator-chats/${created.thread_id}`);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
+      setSwitching(false);
+    }
+  }
+
+  async function switchUserSpeaker(value: string | null) {
+    const projectId = thread?.project_id;
+    if (!projectId || !activeRoleplay || switching) return;
+    setCreatingSelf(false);
+    if (value && value === activeRoleplay.character_asset_id) {
+      setError('不能同时扮演对话双方');
+      return;
+    }
+    await openRoleplay(
+      projectId,
+      activeRoleplay.character_asset_id,
+      value,
+      activeRoleplay.anchored_world_event_id,
+    );
+  }
+
+  async function createSelfAndSwitch() {
+    const projectId = thread?.project_id;
+    const name = selfName.trim();
+    if (!projectId || !activeRoleplay || !name || switching) return;
+    setSwitching(true);
+    setError('');
+    try {
+      const created = await api<{ id?: string }>(`/projects/${projectId}/assets`, {
+        method: 'POST',
+        body: {
+          asset_type: 'character',
+          name,
+          description: selfPersonality.trim()
+            ? `用户角色卡：${selfPersonality.trim()}`
+            : '用户自己的角色卡',
+          personality: selfPersonality.trim() || null,
+          tags: ['user_self'],
+          state: 'active',
+        },
+      });
+      if (!created.id) throw new Error('无法创建角色卡');
+      setCharacters((current) => {
+        if (current.some((item) => item.id === created.id)) return current;
+        return [{ id: created.id, name, tags: ['user_self'] }, ...current];
+      });
+      setCreatingSelf(false);
+      setSelfName('');
+      setSelfPersonality('');
+      await openRoleplay(
+        projectId,
+        activeRoleplay.character_asset_id,
+        created.id,
+        activeRoleplay.anchored_world_event_id,
+        true,
+      );
+    } catch (reason) {
+      setError(errorMessage(reason));
       setSwitching(false);
     }
   }
@@ -415,6 +513,18 @@ export function ChatPanel() {
   const studioHref = thread?.project_id ? `/projects/${thread.project_id}/world` : '/projects';
   const empty = (!threadId || messages.length === 0) && !sending && !streamText && !loading;
   const canSend = input.trim().length > 0 && !sending && !busy;
+  const speakerOptions = characters
+    .filter((item) => item.id !== activeRoleplay?.character_asset_id)
+    .slice()
+    .sort((a, b) => {
+      const aSelf = a.tags.includes('user_self') ? 0 : 1;
+      const bSelf = b.tags.includes('user_self') ? 0 : 1;
+      if (aSelf !== bSelf) return aSelf - bSelf;
+      return a.name.localeCompare(b.name, 'zh');
+    });
+  const userSpeakerValue = creatingSelf
+    ? NEW_SELF
+    : (activeRoleplay?.user_character_asset_id ?? '');
 
   return (
     <div className="flex h-dvh overflow-hidden bg-white text-zinc-900 [color-scheme:light]">
@@ -431,7 +541,7 @@ export function ChatPanel() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 px-4 lg:px-6">
+        <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 px-4 py-2 lg:px-6">
           {collapsed && (
             <>
               <Link
@@ -459,7 +569,7 @@ export function ChatPanel() {
             </>
           )}
           {threadId ? (
-            <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <h1 className="min-w-0 truncate text-[15px] font-medium text-zinc-800">
                 {activeRoleplay
                   ? `与「${activeRoleplay.character_name}」对话`
@@ -477,16 +587,89 @@ export function ChatPanel() {
                     onChange={(event) => void switchAgent(event.target.value)}
                   >
                     <option value="world">世界构建者</option>
-                    {characters.map((character) => (
-                      <option key={character.id} value={character.id}>
-                        扮演：{character.name}
-                      </option>
-                    ))}
+                    {characters
+                      .filter((character) => !character.tags.includes('user_self'))
+                      .map((character) => (
+                        <option key={character.id} value={character.id}>
+                          扮演：{character.name}
+                        </option>
+                      ))}
                   </select>
                   <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-[9px] text-zinc-400">
                     ▼
                   </span>
                 </label>
+              )}
+              {activeRoleplay && (
+                <label className="relative shrink-0">
+                  <span className="sr-only">你是谁</span>
+                  <select
+                    className="appearance-none rounded-full border border-zinc-200 bg-white py-1 pl-3 pr-7 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900"
+                    value={userSpeakerValue}
+                    disabled={switching || sending}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      if (next === NEW_SELF) {
+                        setCreatingSelf(true);
+                        return;
+                      }
+                      setCreatingSelf(false);
+                      void switchUserSpeaker(next === '' ? null : next);
+                    }}
+                  >
+                    <option value="">你是：读者</option>
+                    {speakerOptions.map((character) => (
+                      <option key={character.id} value={character.id}>
+                        你是：{character.name}
+                      </option>
+                    ))}
+                    <option value={NEW_SELF}>新建我自己…</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-[9px] text-zinc-400">
+                    ▼
+                  </span>
+                </label>
+              )}
+              {creatingSelf && activeRoleplay && (
+                <form
+                  className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void createSelfAndSwitch();
+                  }}
+                >
+                  <input
+                    value={selfName}
+                    onChange={(event) => setSelfName(event.target.value)}
+                    placeholder="你的名字"
+                    className="w-28 rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none focus:border-[#4d6bfe]"
+                    autoFocus
+                  />
+                  <input
+                    value={selfPersonality}
+                    onChange={(event) => setSelfPersonality(event.target.value)}
+                    placeholder="个性（可选）"
+                    className="min-w-[8rem] flex-1 rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none focus:border-[#4d6bfe]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={switching || !selfName.trim()}
+                    className="rounded-md bg-zinc-900 px-2 py-1 text-xs text-white disabled:opacity-40"
+                  >
+                    {switching ? '…' : '确定'}
+                  </button>
+                  <button
+                    type="button"
+                    className="px-1 text-xs text-zinc-400"
+                    onClick={() => {
+                      setCreatingSelf(false);
+                      setSelfName('');
+                      setSelfPersonality('');
+                    }}
+                  >
+                    取消
+                  </button>
+                </form>
               )}
             </div>
           ) : (
@@ -494,7 +677,7 @@ export function ChatPanel() {
           )}
           <Link
             href={studioHref}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
           >
             Studio
             <IconExternal className="size-3.5" />
@@ -545,8 +728,8 @@ export function ChatPanel() {
                       与「{activeRoleplay.character_name}」开启对话
                     </p>
                     <p className="mt-2 text-sm leading-6 text-zinc-500">
-                      以故事中的人物身份与 TA 交流。TA 只记得时间锚点
-                      {activeRoleplay.anchor_title ?? '全书读完'}之前亲历的事。
+                      你现在是{activeRoleplay.user_character_name?.trim() || '读者'}。TA
+                      只记得时间锚点{activeRoleplay.anchor_title ?? '全书读完'}之前亲历的事。
                     </p>
                   </div>
                 )}
@@ -592,8 +775,15 @@ export function ChatPanel() {
                   if (message.role === 'user') {
                     return (
                       <div key={message.id} className="flex justify-end">
-                        <div className="max-w-[80%] rounded-2xl bg-[#eef0f4] px-4 py-2.5 text-sm leading-6 text-zinc-800">
-                          <p className="whitespace-pre-wrap">{message.content}</p>
+                        <div className="max-w-[80%]">
+                          {activeRoleplay && (
+                            <p className="mb-1 text-right text-xs font-medium text-zinc-400">
+                              {activeRoleplay.user_character_name?.trim() || '读者'}
+                            </p>
+                          )}
+                          <div className="rounded-2xl bg-[#eef0f4] px-4 py-2.5 text-sm leading-6 text-zinc-800">
+                            <p className="whitespace-pre-wrap">{message.content}</p>
+                          </div>
                         </div>
                       </div>
                     );
