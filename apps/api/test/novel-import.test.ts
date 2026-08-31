@@ -4,6 +4,7 @@ import {
   extractFromChapter,
   formatEventTitle,
   mergeLocationMentions,
+  normalizeCharacterName,
   normalizeLocationName,
   selectImportEvents,
 } from '../src/contexts/novel-import/novel-extract.js';
@@ -155,6 +156,24 @@ describe('extractFromChapter + aggregateCharacters', () => {
     expect(names).not.toContain('明非轻声');
     expect(names).not.toContain('我跟你');
     expect(names).not.toContain('路明非摇');
+  });
+
+  it('drops rank titles and 先生 fragments', () => {
+    expect(normalizeCharacterName('舰长')).toBeNull();
+    expect(normalizeCharacterName('神官')).toBeNull();
+    expect(normalizeCharacterName('尔特先生')).toBeNull();
+    expect(normalizeCharacterName('芬格尔特先生')).toBe('芬格尔特');
+    const chapter = extractFromChapter(
+      0,
+      '舰长说，开炮。神官问道，为何。尔特先生出现了。芬格尔说了一句话。芬格尔说了第二句话。',
+    );
+    const names = [...chapter.characterMentions.keys()];
+    expect(names).toContain('芬格尔');
+    expect(names).not.toContain('舰长');
+    expect(names).not.toContain('神官');
+    expect(names).not.toContain('先生');
+    expect(names).not.toContain('尔特');
+    expect(names).not.toContain('尔特先生');
   });
 
   it('does not split a longer name into a contained fragment', () => {

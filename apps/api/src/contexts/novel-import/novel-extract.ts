@@ -39,6 +39,8 @@ const NAME_STOPWORDS = new Set(
   老板 师姐 老爹 元老 惊讶 实在 显然 要是 直接 我这 你这 没人 还没 却又
   也就是 却没有 个男人 明非忽然 更别 按理 按道理 理论上 也可以 委实 毫无疑 且不 慢悠悠 我跟你
   也不能 也不是 一觉睡醒 时候他 让人 不如 简直 无声 比如 不再 前方 秘书 老妈 屏幕上
+  舰长 神官 先生 小姐 女士 大人 阁下 神父 修女 骑士 将军 上校 中将 少将 士官 学员
+  尔特 格尔
   `
     .split(/\s+/)
     .filter(Boolean),
@@ -51,6 +53,8 @@ const GLUE_SUFFIX = new Set(
 const ADVERB_SUFFIX = /(?:忽然|突然|终于|立刻|马上|不禁|差点|猛地|赶紧|随口|还是)$/;
 const MANNER_SUFFIX =
   /(?:低声|大声|冷冷|淡淡|微微|轻轻|轻声|沉声|苦笑|微笑|怒|地|缓缓|幽幽|悠悠|慢悠悠)$/;
+/** 「某某先生/小姐」里的称呼不是名字的一部分。 */
+const TITLE_SUFFIX = /(?:先生|小姐|女士|大人|阁下)$/;
 /** 纯虚词拼出来的「人名」（也就是 / 却没有 / 还没）。 */
 const FUNCTION_CHARS = new Set(
   '的了是在和与对从不也就都还没却但又而可这那有人说想把被给让个几吗呢吧啊哦嘛以跟'.split(''),
@@ -188,6 +192,11 @@ export function normalizeCharacterName(raw: string): string | null {
   }
   const stripped = name.replace(ADVERB_SUFFIX, '');
   if (stripped.length >= 2) name = stripped;
+  const untitled = name.replace(TITLE_SUFFIX, '');
+  if (untitled !== name) {
+    if (untitled.length < 2) return null;
+    name = untitled;
+  }
   if (!isLikelyName(name)) return null;
   return name;
 }
