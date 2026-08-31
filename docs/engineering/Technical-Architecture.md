@@ -300,14 +300,15 @@
 
 ### Novel import（小说导入，ADR-0015）
 
-免登录。实现见 [`apps/api/src/routes/novel-imports.ts`](../../apps/api/src/routes/novel-imports.ts)。文本解码 UTF-8 优先，非法则 GB18030。规则抽取：人名/地点停用词、剥动词粘连与语气尾巴、虚词残片不进卡；地点规范化后出现 ≥3 次才入库；轻量卡提及 ≥5 次；事件句按强情节筛选，每章最多 2 条，标题为「谁 · 做了什么」（`formatEventTitle`），不用原句截断。切章保留开篇、允许「第 2 章」与【】标题。轻量角色可通过 `POST /novel-imports/{id}/upgrade` 升为全量卡。按章 retry 尚未提供路由。
+免登录。实现见 [`apps/api/src/routes/novel-imports.ts`](../../apps/api/src/routes/novel-imports.ts)。文本解码 UTF-8 优先，非法则 GB18030。规则抽取：人名/地点停用词、剥动词粘连与语气尾巴、虚词残片不进卡；地点规范化后出现 ≥3 次才入库；轻量卡提及 ≥5 次；事件句按强情节筛选，每章最多 2 条，标题为「谁 · 做了什么」（`formatEventTitle`），不用原句截断。切章保留开篇、允许「第 2 章」与【】标题。轻量角色可通过 `POST /novel-imports/{id}/upgrade` 升为全量卡。章失败后 `POST /novel-imports/{id}/retry` 从首个未完成章继续（原文在 `config.sourceText`，GET/list 不回传；同章最多 3 次）。全部章成功前不写世界层。
 
 | 方法 | 路径 | 说明 |
 |--------|------|-------------|
 | `POST` | `/novel-imports` | multipart 上传 txt + `project_id`；同步抽取并写入世界层 + 记忆层 |
 | `GET` | `/novel-imports?project_id=` | 该项目导入记录列表 |
-| `GET` | `/novel-imports/{id}` | 单条记录与报告 |
+| `GET` | `/novel-imports/{id}` | 单条记录与报告 + 章摘要（index/title/status/attempts/last_error；不含原文） |
 | `POST` | `/novel-imports/{id}/upgrade` | 把该次导入的轻量角色升为全量卡（写 persona，state=active） |
+| `POST` | `/novel-imports/{id}/retry` | 从首个未完成章继续抽取；没有保留原文则 409 `SOURCE_NOT_KEPT` |
 | `DELETE` | `/novel-imports/{id}` | 按报告 ID 级联撤销（软删世界实体、删记忆、关扮演线程） |
 
 ### Roleplay（时间锚定扮演）

@@ -276,14 +276,14 @@ model ThreadContextState {
 ```
 上传 txt/epub（multipart，复用现有上传基础设施）
   → 章节切分（中文「第X章/卷」正则，保留开篇、允许空格与【】；无标题时兜底按字数分块）
-  → NovelImport 落库（总章数、状态机 pending→processing→done/failed）
-  → 逐章入队（断点续传粒度 = 章）
+  → NovelImport 落库（总章数、状态机 pending→processing→done/failed；原文写入 config.sourceText，GET/list 不回传）
+  → 建齐 NovelImportChapter（pending）；逐章 processing→done / failed（attempts 上限 3）
       每章：同步规则抽取（实体名/事件句）→ 有密钥时 LLM 结构化提取
         → 产出：角色卡素材 / 场景 / 事件 / 关系 / 世界观要点（皆带章号溯源）
-  → 跨章实体消歧合并（「路明非」=「路明飞」=「师弟」→ 同一 Asset）
+  → 全部章 done 后再跨章消歧合并（「路明非」=「路明飞」=「师弟」→ 同一 Asset）
   → 重要性分层（D7 规模控制）
   → 归档写入世界层（见 5.3 边界）
-  → 生成导入报告 → 世界工作区展示
+  → 生成导入报告 → 世界工作区展示；失败可 POST /novel-imports/:id/retry 从首个未完成章继续
 ```
 
 ## 5.3 产物对齐世界层（G4 核心）
@@ -415,7 +415,7 @@ DELETE /api/v1/memory/atoms/:id           # 记忆面板：删除（软删→inv
 POST   /api/v1/memory/rebuild             # 向量库重建
 
 POST   /api/v1/novel-imports              # 上传并启动导入（multipart）
-GET    /api/v1/novel-imports/:id          # 进度轮询（或 SSE）
+GET    /api/v1/novel-imports/:id          # 报告 + 章摘要（不含原文）
 POST   /api/v1/novel-imports/:id/retry    # 失败章节重试
 DELETE /api/v1/novel-imports/:id          # 整体撤销导入
 POST   /api/v1/novel-imports/:id/upgrade  # 轻量条目升级为全量卡
@@ -428,7 +428,7 @@ GET    /api/v1/roleplay/threads/:id/messages/stream   # SSE（复用现有流式
 
 1. **对话流内嵌记忆状态**：当轮 SSE 追加 `memory_ops` 摘要（「已归档 3 条事实 · 合并 1 条重复 · 发现 1 个冲突」），冲突项内联确认卡片（复用 H9 冲突 UI 样式）；
 2. **世界工作区记忆面板**：右侧 Inspector 区新增「记忆」标签页——L1 原子列表（按实体过滤）+ L2 核心块（可展开溯源到 sourceAtomIds），支持删除；
-3. **小说导入入口**：世界工作区「导入小说」按钮 → 上传 → 进度条（章/总章）→ 报告页；文本解码优先 UTF-8，非法 UTF-8 回退 GB18030（Windows 记事本 ANSI/GBK）；规则抽取对人名/地点停用词过滤（避免「没有 / 忽然 / 一个 / 没人 / 你这」误判为角色）、剥「说/问」粘连、语气尾巴（轻声/忽然）与「路明非心」类碎片别名；虚词拼词不进卡；地点规范化后出现 ≥3 次才入库；轻量卡提及 ≥5 次；事件标题为「谁 · 做了什么」，每章最多 2 条。切章保留开篇、允许数字两侧空格与【】包裹。源文件若从第 2 章起则没有第 1 章，不是切章器吞章；
+3. **小说导入入口**：世界工作区「导入小说」按钮 → 上传 → 报告页；失败时显示失败章与「重试失败章节」（`POST /novel-imports/:id/retry`，从首个未完成章继续，同章最多 3 次）。本轮仍为同步抽取，不做进度轮询。文本解码优先 UTF-8，非法 UTF-8 回退 GB18030（Windows 记事本 ANSI/GBK）；规则抽取对人名/地点停用词过滤（避免「没有 / 忽然 / 一个 / 没人 / 你这」误判为角色）、剥「说/问」粘连、语气尾巴（轻声/忽然）与「路明非心」类碎片别名；虚词拼词不进卡；地点规范化后出现 ≥3 次才入库；轻量卡提及 ≥5 次；事件标题为「谁 · 做了什么」，每章最多 2 条。切章保留开篇、允许数字两侧空格与【】包裹。源文件若从第 2 章起则没有第 1 章，不是切章器吞章；原文存在 `config.sourceText`，接口不回传。此次导入之前的记录若没有原文则无法 retry，需重新上传。
 4. **扮演入口**：实体浏览器中角色卡片「与此角色对话」+ 时间锚点选择器 + **用户身份**（默认读者 / 选已有角色卡 / 新建一张当自己）。对话顶栏在扮演线程里同样可切换「你是谁」（与「扮演：对面是谁」分开）。扮演线程复用 Creator Chat 消息层，侧栏单独「角色」Tab 列出（按所属世界分组），不与世界构建历史混排。新建「我自己」走 Asset 创建（`tags: ['user_self']`，显式用户动作），不是扮演 Agent 写世界层。复用线程时匹配 AI 角色 + 用户身份 + 锚点。
 
 不新建独立顶级页面（不做完整记忆中心——YAGNI，D5 已确认）。
@@ -440,7 +440,7 @@ GET    /api/v1/roleplay/threads/:id/messages/stream   # SSE（复用现有流式
 | 故障 | 处理 |
 |---|---|
 | LLM 提炼失败（异步路径） | MemoryPipelineState.attempts++，失败 3 次标 `failed`；规则产出已存在，服务不中断 |
-| 导入章节失败 | NovelImportChapter 同款重试计数；断点续传从首个未完成章继续；可手动 retry |
+| 导入章节失败 | NovelImportChapter 同款重试计数（上限 3）；断点续传从首个未完成章继续；可手动 `POST /novel-imports/:id/retry`。全部章成功前不写世界层。世界层写到一半失败仍可能留下孤儿 Asset（未做事务） |
 | 向量库文件损坏 | 检测打开失败 → 提示重建 → 从 MemoryAtom 全量重建 |
 | Embedding 密钥缺失 | 该消息向量跳过（BM25 仍可检索），密钥配置后可补齐（rebuild 覆盖） |
 | SSE 中断 | 现有重连机制不变；记忆管线已落库部分不回滚 |

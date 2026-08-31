@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { api, errorMessage } from '@/lib/api';
+import { api, ApiError, errorMessage } from '@/lib/api';
 
 interface ImportReport {
   characters?: Array<{
@@ -18,7 +18,38 @@ interface ImportReport {
   skipped?: string[];
 }
 
-/** M2 小说导入面板：上传 txt → 规则提取 → 世界层 + 角色卡，支持整体撤销与轻量升级。 */
+interface ImportChapter {
+  index: number;
+  title?: string | null;
+  status: string;
+  attempts: number;
+  last_error?: string | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function importIdFromError(reason: unknown): string | undefined {
+  if (!(reason instanceof ApiError) || !isRecord(reason.details)) return undefined;
+  const nested = isRecord(reason.details.error) ? reason.details.error : reason.details;
+  const details = isRecord(nested.details) ? nested.details : nested;
+  return typeof details.import_id === 'string' ? details.import_id : undefined;
+}
+
+function failedChapterLabel(report: unknown, chapters?: ImportChapter[]): string | undefined {
+  const failed = chapters?.find((chapter) => chapter.status === 'failed');
+  if (failed) {
+    const title = failed.title ? `「${failed.title}」` : '';
+    return `第 ${failed.index + 1} 章${title}${failed.last_error ? `：${failed.last_error}` : ''}`;
+  }
+  if (!isRecord(report) || typeof report.failed_chapter_index !== 'number') return undefined;
+  const title =
+    typeof report.failed_chapter_title === 'string' ? `「${report.failed_chapter_title}」` : '';
+  return `第 ${report.failed_chapter_index + 1} 章${title}`;
+}
+
+/** M2 小说导入面板：上传 txt → 规则提取 → 世界层 + 角色卡，支持整体撤销、轻量升级与按章重试。 */
 export function NovelImportPanel({
   projectId,
   onImported,
@@ -35,6 +66,8 @@ export function NovelImportPanel({
   const [lastImportId, setLastImportId] = useState('');
   const [filename, setFilename] = useState('');
   const [upgradingId, setUpgradingId] = useState('');
+  const [importStatus, setImportStatus] = useState('');
+  const [failedChapter, setFailedChapter] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -43,15 +76,26 @@ export function NovelImportPanel({
         const value = await api<{
           items?: Array<{
             id: string;
+            status?: string;
             source_filename?: string;
-            report?: ImportReport | null;
+            report?: ImportReport | Record<string, unknown> | null;
           }>;
         }>(`/novel-imports?project_id=${encodeURIComponent(projectId)}`);
         const latest = value.items?.[0];
         if (cancelled || !latest) return;
         setLastImportId(latest.id);
         setFilename(latest.source_filename ?? '');
-        if (latest.report) setReport(latest.report);
+        setImportStatus(latest.status ?? '');
+        if (latest.status === 'failed') {
+          setFailedChapter(failedChapterLabel(latest.report) ?? '');
+          if (isRecord(latest.report) && typeof latest.report.error === 'string') {
+            setError(latest.report.error);
+          }
+          return;
+        }
+        if (latest.report && Array.isArray((latest.report as ImportReport).characters)) {
+          setReport(latest.report as ImportReport);
+        }
       } catch {
         /* 列表失败时保持空态，上传仍可用 */
       }
@@ -65,6 +109,7 @@ export function NovelImportPanel({
     setBusy(true);
     setError('');
     setReport(null);
+    setFailedChapter('');
     try {
       const form = new FormData();
       form.append('project_id', projectId);
@@ -76,9 +121,24 @@ export function NovelImportPanel({
       setReport(value.report ?? null);
       setLastImportId(value.import_id);
       setFilename(file.name);
+      setImportStatus('done');
       onImported();
     } catch (reason) {
+      const recoveredId = importIdFromError(reason);
+      if (recoveredId) setLastImportId(recoveredId);
+      setImportStatus('failed');
       setError(errorMessage(reason));
+      if (recoveredId) {
+        try {
+          const detail = await api<{
+            report?: Record<string, unknown> | null;
+            chapters?: ImportChapter[];
+          }>(`/novel-imports/${recoveredId}`);
+          setFailedChapter(failedChapterLabel(detail.report, detail.chapters) ?? '');
+        } catch {
+          /* 仍显示接口报错 */
+        }
+      }
     } finally {
       setBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -92,9 +152,42 @@ export function NovelImportPanel({
       await api(`/novel-imports/${lastImportId}`, { method: 'DELETE' });
       setReport(null);
       setLastImportId('');
+      setImportStatus('');
+      setFailedChapter('');
+      setError('');
       onImported();
     } catch (reason) {
       setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function retry() {
+    if (!lastImportId || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const value = await api<{ import_id: string; report?: ImportReport }>(
+        `/novel-imports/${lastImportId}/retry`,
+        { method: 'POST' },
+      );
+      setReport(value.report ?? null);
+      setImportStatus('done');
+      setFailedChapter('');
+      onImported();
+    } catch (reason) {
+      setImportStatus('failed');
+      setError(errorMessage(reason));
+      try {
+        const detail = await api<{
+          report?: Record<string, unknown> | null;
+          chapters?: ImportChapter[];
+        }>(`/novel-imports/${lastImportId}`);
+        setFailedChapter(failedChapterLabel(detail.report, detail.chapters) ?? '');
+      } catch {
+        /* 仍显示接口报错 */
+      }
     } finally {
       setBusy(false);
     }
@@ -151,11 +244,36 @@ export function NovelImportPanel({
           disabled={busy}
           className="rounded border border-line px-2 py-0.5 text-xs text-zinc-500 hover:border-accent/60 hover:text-accent disabled:opacity-50"
         >
-          {busy ? '解析中…' : '上传 txt'}
+          {busy ? (importStatus === 'failed' ? '重试中…' : '解析中…') : '上传 txt'}
         </button>
       </div>
       {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
-      {!report && !busy && (
+      {importStatus === 'failed' && lastImportId && (
+        <div className="mb-2 space-y-1">
+          {failedChapter ? (
+            <p className="text-xs text-zinc-500">失败章节：{failedChapter}</p>
+          ) : null}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void retry()}
+              disabled={busy}
+              className="rounded border border-line px-2 py-0.5 text-xs text-[#4d6bfe] hover:border-accent/60 disabled:opacity-50"
+            >
+              {busy ? '重试中…' : '重试失败章节'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void undo()}
+              disabled={busy}
+              className="text-[11px] text-zinc-400 hover:text-red-500 disabled:opacity-50"
+            >
+              撤销本次导入
+            </button>
+          </div>
+        </div>
+      )}
+      {!report && !busy && importStatus !== 'failed' && (
         <p className="text-xs text-zinc-400">
           上传 UTF-8 或 Windows 记事本 ANSI/GBK
           编码的小说文本，自动提炼角色卡、场景、事件与关系写入世界层。

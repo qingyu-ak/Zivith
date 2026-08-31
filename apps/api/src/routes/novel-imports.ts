@@ -76,6 +76,30 @@ export function registerNovelImportRoutes(app: FastifyInstance, service: NovelIm
       processed_chapters: record.processedChapters,
       report: record.report,
       created_at: record.createdAt.toISOString(),
+      chapters: record.chapters.map((chapter) => ({
+        index: chapter.chapterIndex,
+        title: chapter.title,
+        status: chapter.status,
+        attempts: chapter.attempts,
+        last_error: chapter.lastError,
+      })),
+    };
+  });
+
+  app.post('/novel-imports/:id/retry', async (request) => {
+    const { id } = z.object({ id: idSchema }).strict().parse(request.params);
+    const { importId, report } = await service.retry(id);
+    return {
+      import_id: importId,
+      status: 'done',
+      report: {
+        characters: report.characters,
+        locations: report.locations,
+        events: report.events,
+        relationships: report.relationships,
+        worldview_highlights: report.worldviewHighlights,
+        skipped: report.skipped,
+      },
     };
   });
 

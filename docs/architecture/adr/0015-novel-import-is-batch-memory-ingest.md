@@ -38,12 +38,12 @@
 | We gained | We gave up | Horizon |
 |-----------|------------|---------|
 | 一次上传得到可用世界与记忆 | 放弃逐条提案确认 | 当导入开始写入已被后续 Shot 引用的实体时，撤销语义必须再议 |
-| 报告 + 整体撤销 | 没有按章 retry / 轻量升级 API（设计有、v1 未做） | 当长篇导入经常中途失败时补路由，不必改本 ADR |
+| 报告 + 整体撤销 | 初版没有按章 retry / 轻量升级 | 已补 `POST /novel-imports/:id/retry` 与 `upgrade`，不必改本 ADR |
 | 编码与停用词启发式 | 规则抽取仍会漏/误实体 | 有密钥 LLM 抽取晋级时再评 D7 上限 |
 
 ## Consequences
 
-- API：`POST/GET/DELETE /api/v1/novel-imports`（无独立 retry/upgrade）。世界工作区提供导入面板。
+- API：`POST/GET/DELETE /api/v1/novel-imports`，以及 `POST /novel-imports/:id/retry`、`POST /novel-imports/:id/upgrade`。世界工作区提供导入面板。原文存在 `NovelImport.config.sourceText`，列表与详情不回传。
 - 数据：`NovelImport` / `NovelImportChapter`；报告 JSON 为撤销的权威 ID 清单。
 - 合规：CI 与本地均须从 `@zivith/database` 进口 Prisma 类型（与实现文件一致）。
 - 再议触发：导入产物被制作层引用后撤销会破坏 Shot；或用户要求导入写入 `approved` 且不可撤销。

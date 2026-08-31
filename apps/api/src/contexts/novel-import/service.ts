@@ -56,6 +56,14 @@ const DEFAULTS: Required<NovelImportConfig> = {
   maxEvents: 60,
 };
 
+const MAX_CHAPTER_ATTEMPTS = 3;
+
+type ExtractChapterFn = (
+  chapterIndex: number,
+  content: string,
+  knownNames?: ReadonlySet<string>,
+) => ChapterExtraction;
+
 export interface NovelImportReport {
   characters: Array<{
     id: string;
@@ -74,7 +82,10 @@ export interface NovelImportReport {
 }
 
 export class NovelImportService {
-  constructor(private readonly db: PrismaClient) {}
+  constructor(
+    private readonly db: PrismaClient,
+    private readonly extractChapter: ExtractChapterFn = extractFromChapter,
+  ) {}
 
   async start(params: {
     projectId: string;
@@ -94,51 +105,201 @@ export class NovelImportService {
         sourceFilename: params.filename,
         totalChapters: chapters.length,
         mode: 'rule',
-        config: jsonValue(config),
+        config: jsonValue({ ...config, sourceText: params.text }),
       },
     });
 
     try {
-      const report = await this.process(record.id, params.projectId, chapters, config);
+      await this.db.novelImportChapter.createMany({
+        data: chapters.map((chapter) => ({
+          importId: record.id,
+          chapterIndex: chapter.index,
+          title: chapter.title,
+          status: 'pending',
+        })),
+      });
+      const extractions = await this.extractChapters(record.id, chapters);
+      const report = await this.process(record.id, params.projectId, extractions, config);
       await this.db.novelImport.update({
         where: { id: record.id },
         data: { status: 'done', processedChapters: chapters.length, report: jsonValue(report) },
       });
       return { importId: record.id, report };
     } catch (error) {
-      await this.db.novelImport.update({
-        where: { id: record.id },
-        data: { status: 'failed', report: jsonValue({ error: String(error) }) },
-      });
+      if (!(error instanceof ApiError && error.code === 'IMPORT_CHAPTER_FAILED')) {
+        await this.db.novelImport.update({
+          where: { id: record.id },
+          data: { status: 'failed', report: jsonValue({ error: String(error) }) },
+        });
+      }
       throw error;
     }
+  }
+
+  /** 从首个未完成章继续提取；需要 config.sourceText（本次上传时写入）。 */
+  async retry(importId: string): Promise<{ importId: string; report: NovelImportReport }> {
+    const record = await this.db.novelImport.findUnique({
+      where: { id: importId },
+      include: { chapters: { orderBy: { chapterIndex: 'asc' } } },
+    });
+    if (!record) throw new ApiError(404, 'IMPORT_NOT_FOUND', '导入记录不存在');
+    if (record.status === 'done') {
+      return { importId, report: asReport(record.report) };
+    }
+    const stored = isRecord(record.config) ? record.config : {};
+    const sourceText = typeof stored.sourceText === 'string' ? stored.sourceText : '';
+    if (!sourceText.trim()) {
+      throw new ApiError(
+        409,
+        'SOURCE_NOT_KEPT',
+        '这次导入没有保留原文，无法按章重试。请重新上传文件。',
+      );
+    }
+    const config = {
+      ...DEFAULTS,
+      maxFullCards:
+        typeof stored.maxFullCards === 'number' ? stored.maxFullCards : DEFAULTS.maxFullCards,
+      maxLocations:
+        typeof stored.maxLocations === 'number' ? stored.maxLocations : DEFAULTS.maxLocations,
+      maxEvents: typeof stored.maxEvents === 'number' ? stored.maxEvents : DEFAULTS.maxEvents,
+    };
+    const chapters = splitChapters(sourceText);
+    if (chapters.length === 0) throw new ApiError(400, 'NOVEL_EMPTY', '文本没有可用章节');
+    if (record.chapters.length === 0) {
+      await this.db.novelImportChapter.createMany({
+        data: chapters.map((chapter) => ({
+          importId,
+          chapterIndex: chapter.index,
+          title: chapter.title,
+          status: 'pending',
+        })),
+      });
+    }
+    await this.db.novelImport.update({
+      where: { id: importId },
+      data: { status: 'processing' },
+    });
+    try {
+      const extractions = await this.extractChapters(importId, chapters);
+      const report = await this.process(importId, record.projectId, extractions, config);
+      await this.db.novelImport.update({
+        where: { id: importId },
+        data: { status: 'done', processedChapters: chapters.length, report: jsonValue(report) },
+      });
+      return { importId, report };
+    } catch (error) {
+      if (!(error instanceof ApiError && error.code === 'IMPORT_CHAPTER_FAILED')) {
+        await this.db.novelImport.update({
+          where: { id: importId },
+          data: { status: 'failed', report: jsonValue({ error: String(error) }) },
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async extractChapters(
+    importId: string,
+    chapters: ChapterText[],
+  ): Promise<ChapterExtraction[]> {
+    const rows = await this.db.novelImportChapter.findMany({
+      where: { importId },
+      orderBy: { chapterIndex: 'asc' },
+    });
+    const rowByIndex = new Map(rows.map((row) => [row.chapterIndex, row]));
+    const known = new Set<string>();
+    const extractions: ChapterExtraction[] = [];
+    for (const chapter of chapters) {
+      const row = rowByIndex.get(chapter.index);
+      const alreadyDone = row?.status === 'done';
+      if (!alreadyDone && (row?.attempts ?? 0) >= MAX_CHAPTER_ATTEMPTS) {
+        await this.db.novelImport.update({
+          where: { id: importId },
+          data: {
+            status: 'failed',
+            processedChapters: extractions.length,
+            report: jsonValue({
+              error: `第 ${chapter.index + 1} 章已重试 ${MAX_CHAPTER_ATTEMPTS} 次`,
+              failed_chapter_index: chapter.index,
+            }),
+          },
+        });
+        throw new ApiError(
+          422,
+          'IMPORT_CHAPTER_FAILED',
+          `第 ${chapter.index + 1} 章已重试 ${MAX_CHAPTER_ATTEMPTS} 次，请检查文本后重新上传`,
+          {
+            import_id: importId,
+            chapter_index: chapter.index,
+            attempts: row?.attempts ?? 0,
+          },
+        );
+      }
+      try {
+        if (!alreadyDone) {
+          await this.db.novelImportChapter.update({
+            where: { importId_chapterIndex: { importId, chapterIndex: chapter.index } },
+            data: { status: 'processing', attempts: { increment: 1 }, lastError: null },
+          });
+        }
+        const extraction = this.extractChapter(chapter.index, chapter.content, known);
+        extractions.push(extraction);
+        for (const name of extraction.characterMentions.keys()) known.add(name);
+        if (!alreadyDone) {
+          await this.db.novelImportChapter.update({
+            where: { importId_chapterIndex: { importId, chapterIndex: chapter.index } },
+            data: {
+              status: 'done',
+              lastError: null,
+              extractedEntityCount:
+                extraction.characterMentions.size + extraction.locationMentions.size,
+            },
+          });
+        }
+        await this.db.novelImport.update({
+          where: { id: importId },
+          data: { processedChapters: extractions.length },
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'IMPORT_CHAPTER_FAILED') throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        await this.db.novelImportChapter.update({
+          where: { importId_chapterIndex: { importId, chapterIndex: chapter.index } },
+          data: { status: 'failed', lastError: message.slice(0, 500) },
+        });
+        await this.db.novelImport.update({
+          where: { id: importId },
+          data: {
+            status: 'failed',
+            processedChapters: extractions.length,
+            report: jsonValue({
+              error: message,
+              failed_chapter_index: chapter.index,
+              failed_chapter_title: chapter.title,
+            }),
+          },
+        });
+        throw new ApiError(
+          422,
+          'IMPORT_CHAPTER_FAILED',
+          `第 ${chapter.index + 1} 章提取失败：${message.slice(0, 80)}`,
+          {
+            import_id: importId,
+            chapter_index: chapter.index,
+            last_error: message,
+          },
+        );
+      }
+    }
+    return extractions;
   }
 
   private async process(
     importId: string,
     projectId: string,
-    chapters: ChapterText[],
+    extractions: ChapterExtraction[],
     config: Required<NovelImportConfig>,
   ): Promise<NovelImportReport> {
-    // ① 逐章规则提取（已知名字累积增强跨章召回）
-    const known = new Set<string>();
-    const extractions: ChapterExtraction[] = [];
-    for (const chapter of chapters) {
-      const extraction = extractFromChapter(chapter.index, chapter.content, known);
-      extractions.push(extraction);
-      for (const name of extraction.characterMentions.keys()) known.add(name);
-      await this.db.novelImportChapter.create({
-        data: {
-          importId,
-          chapterIndex: chapter.index,
-          title: chapter.title,
-          status: 'done',
-          extractedEntityCount:
-            extraction.characterMentions.size + extraction.locationMentions.size,
-        },
-      });
-    }
-
     // ② 跨章消歧聚合 + 重要性分层
     const characters = aggregateCharacters(extractions).sort((a, b) => b.mentions - a.mentions);
     const full = characters.slice(0, config.maxFullCards);
@@ -343,7 +504,21 @@ export class NovelImportService {
   }
 
   async get(importId: string) {
-    return this.db.novelImport.findUnique({ where: { id: importId } });
+    return this.db.novelImport.findUnique({
+      where: { id: importId },
+      include: {
+        chapters: {
+          orderBy: { chapterIndex: 'asc' },
+          select: {
+            chapterIndex: true,
+            title: true,
+            status: true,
+            attempts: true,
+            lastError: true,
+          },
+        },
+      },
+    });
   }
 
   /** 把导入产生的轻量角色升为全量卡（写 persona，state=active）。显式用户动作，可超过 15 张上限。 */
