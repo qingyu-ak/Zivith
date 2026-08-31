@@ -1,6 +1,6 @@
 // M3 角色扮演 Agent（设计 §6）
 // CharacterStateBuilder 组装：Studio 角色卡（Asset）+ MemoryCore 档案补充 + 锚点前亲历事件 + 关系快照
-// + 认知边界（只含角色亲历事件，防剧透）。Mock 降级 = 模板化应答（无密钥全链路可跑）。
+// + 认知边界（锚点前亲历；问句命中锚点后事件则不调用模型）。Mock 降级 = 模板化应答（无密钥全链路可跑）。
 import type { PrismaClient } from '@zivith/database';
 import type { LLMAdapter } from '../../ports/llm.js';
 import { estimateTokens } from '../memory/context-window.js';
@@ -23,9 +23,43 @@ export interface CharacterState {
   experiences: string[];
   relations: string[];
   anchorLabel: string;
+  /** 有时间锚点时为 true；全书读完则为 false。 */
+  hasAnchor: boolean;
+  /** 锚点之后的事件（只用于防剧透检测，不写入提示词）。 */
+  laterPlot: Array<{ title: string; description: string | null }>;
   traits: string[];
   userLabel: string;
   userSection: string;
+}
+
+/** 用户问句与锚点之后事件标题/摘要共享足够连续字时，视为在问尚未发生的事。 */
+export function mentionsLaterPlot(
+  userText: string,
+  laterPlot: Array<{ title: string; description: string | null }>,
+): boolean {
+  const userGrams = cjkNgrams(userText, 4);
+  if (userGrams.size === 0) return false;
+  for (const event of laterPlot) {
+    const blob = `${event.title}\n${event.description ?? ''}`;
+    let hits = 0;
+    for (const gram of cjkNgrams(blob, 4)) {
+      if (userGrams.has(gram)) {
+        hits += 1;
+        if (hits >= 2) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function cjkNgrams(text: string, size: number): Set<string> {
+  const compact = text.replace(/\s+/g, '');
+  const grams = new Set<string>();
+  if (compact.length < size) return grams;
+  for (let i = 0; i <= compact.length - size; i++) {
+    grams.add(compact.slice(i, i + size));
+  }
+  return grams;
 }
 
 export async function buildCharacterState(
@@ -70,6 +104,15 @@ export async function buildCharacterState(
     orderBy: { presentationOrder: 'asc' },
     take: 200,
   });
+  const laterPlot =
+    anchorOrder !== null
+      ? await db.worldEvent.findMany({
+          where: { projectId, deletedAt: null, presentationOrder: { gt: anchorOrder } },
+          orderBy: { presentationOrder: 'asc' },
+          take: 80,
+          select: { title: true, description: true },
+        })
+      : [];
   const experiences = events
     .filter((event) => event.characterIds.includes(asset.id))
     .slice(0, 40)
@@ -117,6 +160,8 @@ export async function buildCharacterState(
     experiences,
     relations,
     anchorLabel: anchor ? `《${anchor.title}》之后` : '全书读完（知晓全部亲历剧情）',
+    hasAnchor: Boolean(anchor),
+    laterPlot,
     traits: atoms.map((atom) => atom.content).slice(0, 8),
     userLabel: userSpeaker.label,
     userSection: userSpeaker.section,
@@ -149,7 +194,17 @@ async function loadUserSpeaker(
   });
 }
 
-function buildRoleplaySystemPrompt(state: CharacterState, memoryDigest: string | null): string {
+export function buildRoleplaySystemPrompt(
+  state: CharacterState,
+  memoryDigest: string | null,
+  spoilerLocked = false,
+): string {
+  const experienceBlock =
+    state.experiences.length > 0
+      ? `\n## 你亲历过的事（当前时间点之前）\n${state.experiences.join('\n')}`
+      : state.hasAnchor
+        ? '\n## 你亲历过的事\n（到目前为止还没有记在你名下的亲历事件。不要因此编造主线，也不要用对该作品的外部知识补全。）'
+        : '\n## 你亲历过的事\n（暂无记录——以角色身份自然应对）';
   const sections = [
     `你正在扮演小说角色「${state.name}」，与「${state.userLabel}」对话。`,
     '\n## 角色档案',
@@ -159,22 +214,27 @@ function buildRoleplaySystemPrompt(state: CharacterState, memoryDigest: string |
       ? `\n## 关于你的已知细节\n${state.traits.map((t) => `· ${t}`).join('\n')}`
       : '',
     state.relations.length > 0 ? `\n## 你认识的人\n${state.relations.join('\n')}` : '',
-    state.experiences.length > 0
-      ? `\n## 你亲历过的事（当前时间点之前）\n${state.experiences.join('\n')}`
-      : '\n## 你亲历过的事\n（暂无记录——以角色身份自然应对）',
+    experienceBlock,
     `\n## 当前时间点\n${state.anchorLabel}`,
     memoryDigest ? `\n## 与这位用户的过往交流记忆\n${memoryDigest}` : '',
+    spoilerLocked
+      ? '\n## 此轮硬约束\n用户问起的事不在你的亲历里，属于当前时间点之后。你必须表示不知情或听不懂，禁止确认、禁止描述任何细节。'
+      : '',
     '\n## 行为准则',
     `1. 始终以「${state.name}」的第一人称视角回应，模仿角色的语气、口癖与性格。`,
     '2. 你只知道上面「你亲历过的事」。绝不知道未来，也绝不知道你未曾亲历的事件——用户问起时，以角色身份自然地表示不知道或疑惑。',
-    '3. 不跳出角色，不以 AI 或助手身份说话，不输出旁白解说（除非用户要求）。',
-    `4. 把用户当成「${state.userLabel}」来应答；不要替用户说话或改写用户身份。`,
-    '5. 回复长度适中（1-4 句），保持对话感。',
+    '3. 禁止使用训练数据或对该作品的外部剧情知识。没写进「亲历过的事」的情节，一律当不知道。',
+    '4. 不跳出角色，不以 AI 或助手身份说话，不输出旁白解说（除非用户要求）。',
+    `5. 把用户当成「${state.userLabel}」来应答；不要替用户说话或改写用户身份。`,
+    '6. 回复长度适中（1-4 句），保持对话感。',
   ];
   return sections.filter(Boolean).join('\n');
 }
 
-function mockRoleplayReply(state: CharacterState, text: string): string {
+function mockRoleplayReply(state: CharacterState, text: string, spoilerLocked: boolean): string {
+  if (spoilerLocked) {
+    return `（${state.name}）……？你说的这事我没印象。这会儿我还不知道你在说什么。`;
+  }
   const trimmed = text.trim().slice(0, 60) || '……';
   const trait = state.traits[0] ?? state.persona.split('\n')[0] ?? '';
   const experience = state.experiences[Math.min(1, state.experiences.length - 1)];
@@ -202,14 +262,20 @@ export class RoleplayAgent {
   ) {}
 
   async respond(input: RoleplayInput): Promise<{ reply: string; promptTokens: number }> {
-    const systemPrompt = buildRoleplaySystemPrompt(input.state, input.memoryDigest ?? null);
+    const spoilerLocked =
+      input.state.hasAnchor && mentionsLaterPlot(input.text, input.state.laterPlot);
+    const systemPrompt = buildRoleplaySystemPrompt(
+      input.state,
+      input.memoryDigest ?? null,
+      spoilerLocked,
+    );
     const promptTokens =
       estimateTokens(systemPrompt) +
       input.history.reduce((sum, message) => sum + estimateTokens(message.content), 0) +
       estimateTokens(input.text);
 
-    if (this.llm.provider === 'mock') {
-      return { reply: mockRoleplayReply(input.state, input.text), promptTokens };
+    if (spoilerLocked || this.llm.provider === 'mock') {
+      return { reply: mockRoleplayReply(input.state, input.text, spoilerLocked), promptTokens };
     }
 
     const historyText = input.history
@@ -229,7 +295,7 @@ export class RoleplayAgent {
       max_tokens: 1_500,
     });
     return {
-      reply: completion.text.trim() || mockRoleplayReply(input.state, input.text),
+      reply: completion.text.trim() || mockRoleplayReply(input.state, input.text, spoilerLocked),
       promptTokens,
     };
   }

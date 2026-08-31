@@ -1,0 +1,64 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildRoleplaySystemPrompt,
+  mentionsLaterPlot,
+  type CharacterState,
+} from '../src/contexts/roleplay/roleplay-agent.js';
+
+function state(partial: Partial<CharacterState> = {}): CharacterState {
+  return {
+    name: '路明非',
+    description: '',
+    persona: '卡面：路明非',
+    experiences: [],
+    relations: [],
+    anchorLabel: '《恺撒 · 毕业于卡塞尔》之后',
+    hasAnchor: true,
+    laterPlot: [],
+    traits: [],
+    userLabel: '读者',
+    userSection: '用户是读者。',
+    ...partial,
+  };
+}
+
+describe('mentionsLaterPlot', () => {
+  const later = [
+    {
+      title: '路明非、路麟城 · 抵达冰湖边缘',
+      description: '路明非与路麟城抵达冰湖边缘。',
+    },
+    {
+      title: '楚子航 · 杀死他的父亲',
+      description: '奥丁在高速公路上杀死了他的父亲。',
+    },
+  ];
+
+  it('flags a question that overlaps a later title', () => {
+    expect(mentionsLaterPlot('你们已经抵达冰湖边缘了吗？路麟城在不在？', later)).toBe(true);
+  });
+
+  it('flags a question that overlaps a later description', () => {
+    expect(mentionsLaterPlot('明非，奥丁在高速公路上杀了我父亲这件事，你知道多少？', later)).toBe(
+      true,
+    );
+  });
+
+  it('does not flag small talk that only shares a name', () => {
+    expect(mentionsLaterPlot('师兄，今天学院食堂吃什么？', later)).toBe(false);
+  });
+});
+
+describe('buildRoleplaySystemPrompt', () => {
+  it('forbids external plot knowledge and empty-experience invention when anchored', () => {
+    const prompt = buildRoleplaySystemPrompt(state(), null);
+    expect(prompt).toContain('禁止使用训练数据或对该作品的外部剧情知识');
+    expect(prompt).toContain('不要因此编造主线');
+  });
+
+  it('adds a hard lock when the user asks about later plot', () => {
+    const prompt = buildRoleplaySystemPrompt(state(), null, true);
+    expect(prompt).toContain('此轮硬约束');
+    expect(prompt).toContain('禁止确认、禁止描述任何细节');
+  });
+});

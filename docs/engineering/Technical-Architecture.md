@@ -4,7 +4,7 @@
 >
 > Version: 1.2
 >
-> Status: Active — 已于 2026-08-30 同步（创造层 v1 + 分层记忆 / 小说导入 / 角色扮演）
+> Status: Active — 已于 2026-08-31 同步（创造层 v1 + 分层记忆 / 小说导入抽取质量 / 角色扮演用户身份）
 >
 > Related: [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md), [Shot-Specification.md](../domain/Shot-Specification.md), [Asset-Model.md](../domain/Asset-Model.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0014](../architecture/adr/0014-layered-memory-system.md), [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md)
 
@@ -300,7 +300,7 @@
 
 ### Novel import（小说导入，ADR-0015）
 
-免登录。实现见 [`apps/api/src/routes/novel-imports.ts`](../../apps/api/src/routes/novel-imports.ts)。文本解码 UTF-8 优先，非法则 GB18030。设计中的按章 retry / 轻量升级尚未提供路由。
+免登录。实现见 [`apps/api/src/routes/novel-imports.ts`](../../apps/api/src/routes/novel-imports.ts)。文本解码 UTF-8 优先，非法则 GB18030。规则抽取：人名/地点停用词、剥动词粘连、禁止「路明非心」类碎片别名；地点规范化后出现 ≥3 次才入库；事件句按强情节筛选，每章最多 2 条，标题为「谁 · 做了什么」（`formatEventTitle`），不用原句截断。切章保留开篇、允许「第 2 章」与【】标题。设计中的按章 retry / 轻量升级尚未提供路由。
 
 | 方法 | 路径 | 说明 |
 |--------|------|-------------|
@@ -311,7 +311,7 @@
 
 ### Roleplay（时间锚定扮演）
 
-免登录。实现见 [`apps/api/src/routes/roleplay.ts`](../../apps/api/src/routes/roleplay.ts)。消息落在 `CreatorChatMessage`；`RoleplayThread` 旁表指向同一线程。`userCharacterAssetId` 为空表示用户是读者；非空则用户以该角色卡发言，且不得与 AI 角色相同。不反写 Asset / WorldEvent / Relationship。对话顶栏与 Inspector 均可切换「你是谁」。
+免登录。实现见 [`apps/api/src/routes/roleplay.ts`](../../apps/api/src/routes/roleplay.ts)。消息落在 `CreatorChatMessage`；`RoleplayThread` 旁表指向同一线程。`userCharacterAssetId` 为空表示用户是读者；非空则用户以该角色卡发言，且不得与 AI 角色相同。不反写 Asset / WorldEvent / Relationship。对话顶栏与 Inspector 均可切换「你是谁」。有时间锚点时，用户问句若与锚点之后事件的标题/摘要重叠，此轮不调用生成模型，直接以角色口吻表示不知情（不把未来事件列表写入提示词）。
 
 | 方法 | 路径 | 说明 |
 |--------|------|-------------|
