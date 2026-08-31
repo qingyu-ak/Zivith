@@ -12,6 +12,17 @@
 
 ---
 
+## 2026-08-31 · fa2bdfe · feat(api,web) · 导入轻量条目可升级为全量角色卡
+
+次要角色只有 draft 轻量条目、没有 persona，扮演与世界构建都偏弱。本轮按设计 §5.6 提供升级：写 persona、Asset 置为 active，可超过 15 张全量上限。
+
+- **feat(api)** `POST /novel-imports/:id/upgrade`；幂等；只能升级该次导入的角色
+- **feat(web)** 导入面板列出轻量条目并升级；Inspector「升级为角色卡」；Explorer 标注轻量
+- **test** `novel-import-upgrade`：升级写卡、已是全量则跳过、非导入角色拒绝
+- **docs** Track M2、API 地图、导入报告 §5.6；下一刀改为按章 retry
+- 验证：单元测试；本机对「龙族y」轻量卡升级返回 `tier=full`
+- 模块：`service.ts`、`novel-imports.ts`、`novel-import-panel.tsx`、`inspector-panel.tsx`
+
 ## 2026-08-31 · 8002008 · fix(api) · 导入人名去掉虚词残片
 
 重导后轻量卡仍是「没人 / 你这 / 明非忽然」。根因是「知道/发现」当成人名引导，以及 4 次提及的碎片占满 25 个轻量槽。
