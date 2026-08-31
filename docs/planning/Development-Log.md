@@ -12,6 +12,17 @@
 
 ---
 
+## 2026-08-31 · 23182b2 · fix(api,web) · 世界层写入失败时报告保留已落库 ID
+
+章抽完后写 Asset 中途失败会把报告抹成 `{ error }`，撤销对不上，重试还会再写一张卡。本轮失败时保留部分清单，retry 按名字复用，撤销按 `importId` 扫孤儿。
+
+- **fix(api)** `WORLD_WRITE_FAILED` 不覆盖已写入 ID；process 幂等续写；undo 扫描 `Asset.data.importId`
+- **feat(web)** 失败且已有部分角色时显示「写入未完成」并仍可重试/撤销
+- **test** `novel-import-world-write`：失败保留林澈、重试不重复创建、无报告 ID 也能撤孤儿
+- **docs** Track M2、错误处理 §9、API 地图；下一刀改为收紧抽取噪声
+- 验证：`vitest` world-write 3 项 + retry 5 项
+- 模块：`service.ts`、`novel-import-panel.tsx`
+
 ## 2026-08-31 · e8f311d · feat(api,web) · 导入按章失败后可从断点重试
 
 整本一锅煮时一章出错就整单失败，无法续跑。本轮按章记状态，原文留在 config.sourceText（接口不回传），全部章成功前不写世界层。
