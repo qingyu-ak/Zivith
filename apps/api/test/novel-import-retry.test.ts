@@ -171,9 +171,9 @@ describe('NovelImportService chapter retry', () => {
         update: importUpdate,
       },
       novelImportChapter: chapterDb(rows),
-      asset: { create: vi.fn() },
-      memoryCore: { create: vi.fn() },
-      memoryAtom: { create: vi.fn() },
+      asset: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
+      memoryCore: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
+      memoryAtom: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       worldEvent: { create: vi.fn() },
       relationship: { create: vi.fn() },
     } as unknown as PrismaClient;

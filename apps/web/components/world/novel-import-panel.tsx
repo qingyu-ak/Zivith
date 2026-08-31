@@ -91,6 +91,9 @@ export function NovelImportPanel({
           if (isRecord(latest.report) && typeof latest.report.error === 'string') {
             setError(latest.report.error);
           }
+          if (latest.report && Array.isArray((latest.report as ImportReport).characters)) {
+            setReport(latest.report as ImportReport);
+          }
           return;
         }
         if (latest.report && Array.isArray((latest.report as ImportReport).characters)) {
@@ -135,6 +138,9 @@ export function NovelImportPanel({
             chapters?: ImportChapter[];
           }>(`/novel-imports/${recoveredId}`);
           setFailedChapter(failedChapterLabel(detail.report, detail.chapters) ?? '');
+          if (detail.report && Array.isArray((detail.report as ImportReport).characters)) {
+            setReport(detail.report as ImportReport);
+          }
         } catch {
           /* 仍显示接口报错 */
         }
@@ -282,7 +288,8 @@ export function NovelImportPanel({
       {report && (
         <div className="space-y-1.5 text-xs">
           <p className="text-zinc-600">
-            已导入「{filename}」：主要角色 {fullCards} 张全量卡
+            {importStatus === 'failed' ? '写入未完成' : '已导入'}「{filename}」：主要角色 {fullCards}{' '}
+            张全量卡
             {characterCount - fullCards > 0 ? `、轻量条目 ${characterCount - fullCards} 个` : ''}
             ，场景 {report.locations?.length ?? 0} 个，事件 {report.events?.length ?? 0} 个，关系{' '}
             {report.relationships?.length ?? 0} 条。

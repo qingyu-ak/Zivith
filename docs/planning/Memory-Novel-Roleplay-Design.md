@@ -344,7 +344,7 @@ model NovelImportChapter {
 
 ## 5.6 导入报告（D7 事后审阅）
 
-报告内容：提取了什么（各类型计数+清单）、跳过了什么（降级/忽略项及原因）、置信度分布、消歧合并记录。世界工作区提供：升级轻量条目为全量卡（`POST /novel-imports/:id/upgrade`，写 persona 并将 Asset 置为 `active`，可超过 15 张全量上限）、整体撤销导入。单条删除走 Inspector 常规删除。
+报告内容：提取了什么（各类型计数+清单）、跳过了什么（降级/忽略项及原因）、置信度分布、消歧合并记录。世界工作区提供：升级轻量条目为全量卡（`POST /novel-imports/:id/upgrade`，写 persona 并将 Asset 置为 `active`，可超过 15 张全量上限）、整体撤销导入（报告 ID + `Asset.data.importId` 孤儿扫描）。世界层写到一半失败时报告仍保留已落库 ID，可 retry 幂等续写。单条删除走 Inspector 常规删除。
 
 ---
 
@@ -440,7 +440,7 @@ GET    /api/v1/roleplay/threads/:id/messages/stream   # SSE（复用现有流式
 | 故障 | 处理 |
 |---|---|
 | LLM 提炼失败（异步路径） | MemoryPipelineState.attempts++，失败 3 次标 `failed`；规则产出已存在，服务不中断 |
-| 导入章节失败 | NovelImportChapter 同款重试计数（上限 3）；断点续传从首个未完成章继续；可手动 `POST /novel-imports/:id/retry`。全部章成功前不写世界层。世界层写到一半失败仍可能留下孤儿 Asset（未做事务） |
+| 导入章节失败 | NovelImportChapter 同款重试计数（上限 3）；断点续传从首个未完成章继续；可手动 `POST /novel-imports/:id/retry`。全部章成功前不写世界层。世界层写到一半失败时报告保留已落库 ID（`failed_stage=world_write`），retry 幂等续写；撤销按报告 ID + Asset.data.importId 扫孤儿 |
 | 向量库文件损坏 | 检测打开失败 → 提示重建 → 从 MemoryAtom 全量重建 |
 | Embedding 密钥缺失 | 该消息向量跳过（BM25 仍可检索），密钥配置后可补齐（rebuild 覆盖） |
 | SSE 中断 | 现有重连机制不变；记忆管线已落库部分不回滚 |

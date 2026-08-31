@@ -4,7 +4,7 @@
 >
 > Version: 0.1.0-pre
 >
-> Status: 实现中 — 创造层 v1 已闭环；M1 记忆 / M2 小说导入 / M3 角色扮演已落地；当前验收按章 retry，I3 Organization 仍待晋级证据
+> Status: 实现中 — 创造层 v1 已闭环；M1 记忆 / M2 小说导入 / M3 角色扮演已落地；当前收紧导入抽取噪声，I3 Organization 仍待晋级证据
 >
 > Last Progress Sync: 2026-08-31 · 重新定位 2026-07-31（[ADR-0008](architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）
 
@@ -109,7 +109,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 | 文档 | 说明 |
 |----------|-------------|
-| [Next Tasks](planning/Next-Tasks.md) | 当前工程 backlog（创造层 v1 已闭环；M1–M3 已落地；下一刀验收按章 retry；I3 Organization 待晋级证据；Phase 3 稍后） |
+| [Next Tasks](planning/Next-Tasks.md) | 当前工程 backlog（创造层 v1 已闭环；M1–M3 已落地；下一刀收紧导入抽取噪声；I3 Organization 待晋级证据；Phase 3 稍后） |
 | [Implementation Plan](planning/Implementation-Plan.md) | 分阶段路线图与实时进度勾选 |
 | [Development Log](planning/Development-Log.md) | 逐次修改的开发记录（每次提交同步追加） |
 | [Memory / Novel / Roleplay 设计](planning/Memory-Novel-Roleplay-Design.md) | 分层记忆、小说导入、时间锚定扮演 |
@@ -190,7 +190,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 **仓库：** 活跃 monorepo（`apps/web`、`apps/api`、`packages/*`）。  
 **策略：** B-Line — 先 Agent 管线；真 SiliconFlow 路径已在 Track G 验证。自 2026-07-31 起 IP Core 优先；2026-08-04 创造层优先（分支 `feat/creator-layer-first`，2026-08-16 合并进 `main`）。  
-**近期焦点：** [Next Tasks](planning/Next-Tasks.md) — 创造层 v1 与 M1–M3 已闭环（2026-08-30 合进 `main`，PR #1）。按章 retry 已落地。当前下一刀是验收长篇失败后续跑。I3 Organization 仍需晋级证据，不插队。资产表 + 提供商矩阵见 [Asset Model](domain/Asset-Model.md)。后续仍待：用量冻结/限额、BYOK（C7）、Phase 3 生成生产化。
+**近期焦点：** [Next Tasks](planning/Next-Tasks.md) — 创造层 v1 与 M1–M3 已闭环（2026-08-30 合进 `main`，PR #1）。按章 retry 与世界层写入失败续写已落地。当前下一刀是收紧剩余抽取噪声。I3 Organization 仍需晋级证据，不插队。资产表 + 提供商矩阵见 [Asset Model](domain/Asset-Model.md)。后续仍待：用量冻结/限额、BYOK（C7）、Phase 3 生成生产化。
 
 ---
 

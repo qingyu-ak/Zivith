@@ -39,7 +39,7 @@
 | **IP Core world entities（Track I）** | I1 / I2 已落地 | WorldEvent 已落库（[ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md)）；Relationship 已提升为独立实体（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)）；Organization 待偿 |
 | **Creator Chat 持续对话（Track J）** | 已落地 | 世界优先的持续对话创作面；后端（会话运行时 + World Builder Agent + 提案→确认→落库 + 知识上下文 + 冲突检测 v1 + 主动引导 v1）已落地。Web 为浅色独立对话壳（可收起历史侧栏，世界/角色 Tab），世界详情在 Studio。由 ADR-0010 划界 |
 | **World-first UI（Track K）** | K1/K3/K5 已完成；K2/K4 世界视图 v1 | 项目首页已拆分为 World Overview + `/production` + `/settings`（2026-08-05，侧栏新增 制作/设置）；Creator Chat 已为默认页 `/`（2026-08-05）；`/world` 三栏工作区 v1（2026-08-05；**2026-08-30** 分栏可拖、轴标签抽稀）；**世界观 Chat→Studio 核心闭环已落地（2026-08-05）：`Project.worldview Json` + 自动提炼落库 + Explorer「世界观」组 + 副驾驶只读摘要 + chat「进入 Studio」入口**。见 [UI-Information-Architecture.md](../product/UI-Information-Architecture.md) |
-| **Memory / Novel / Roleplay（Track M）** | M1–M3 已落地 | 分层记忆（ADR-0014）；小说导入批量写入 + 撤销 + 轻量升级 + 按章 retry（ADR-0015），规则抽取收紧人名/地点/事件标题；时间锚定扮演，侧栏角色 Tab，不反写世界层。Studio 角色卡回灌扮演与世界构建对话。用户默认读者，可改选角色卡。见 [Memory-Novel-Roleplay-Design.md](Memory-Novel-Roleplay-Design.md) |
+| **Memory / Novel / Roleplay（Track M）** | M1–M3 已落地 | 分层记忆（ADR-0014）；小说导入批量写入 + 撤销 + 轻量升级 + 按章 retry + 世界层写入失败可续写（ADR-0015），规则抽取收紧人名/地点/事件标题；时间锚定扮演，侧栏角色 Tab，不反写世界层。Studio 角色卡回灌扮演与世界构建对话。用户默认读者，可改选角色卡。见 [Memory-Novel-Roleplay-Design.md](Memory-Novel-Roleplay-Design.md) |
 | 3–5 | 0% | 生成生产化现排在 IP Core 之后 |
 
 **近期工程待办：** [Next-Tasks.md](Next-Tasks.md) 创造层 v1 已闭环；H6 可变世界时间绑定已落地。Inspector 可编辑、制作视图 Shot 轨道、Creator Chat 流式 SSE、ADR-0013 免登录 API、H9 冲突检测 v1、**主动引导 v1** 已落地。设定表 / 地点表与 T2I·I2I·T2V·I2V 矩阵见 [Asset-Model.md](../domain/Asset-Model.md)。

@@ -126,11 +126,13 @@ export class NovelImportService {
       });
       return { importId: record.id, report };
     } catch (error) {
-      if (!(error instanceof ApiError && error.code === 'IMPORT_CHAPTER_FAILED')) {
-        await this.db.novelImport.update({
-          where: { id: record.id },
-          data: { status: 'failed', report: jsonValue({ error: String(error) }) },
-        });
+      if (
+        !(
+          error instanceof ApiError &&
+          (error.code === 'IMPORT_CHAPTER_FAILED' || error.code === 'WORLD_WRITE_FAILED')
+        )
+      ) {
+        await this.failWorldWrite(record.id, error);
       }
       throw error;
     }
@@ -188,11 +190,13 @@ export class NovelImportService {
       });
       return { importId, report };
     } catch (error) {
-      if (!(error instanceof ApiError && error.code === 'IMPORT_CHAPTER_FAILED')) {
-        await this.db.novelImport.update({
-          where: { id: importId },
-          data: { status: 'failed', report: jsonValue({ error: String(error) }) },
-        });
+      if (
+        !(
+          error instanceof ApiError &&
+          (error.code === 'IMPORT_CHAPTER_FAILED' || error.code === 'WORLD_WRITE_FAILED')
+        )
+      ) {
+        await this.failWorldWrite(importId, error);
       }
       throw error;
     }
@@ -294,6 +298,64 @@ export class NovelImportService {
     return extractions;
   }
 
+  private importAssetFilter(importId: string): Prisma.JsonFilter {
+    return { path: ['importId'], equals: importId };
+  }
+
+  private async findImportAsset(
+    projectId: string,
+    importId: string,
+    type: 'character' | 'location',
+    name: string,
+  ) {
+    return this.db.asset.findFirst({
+      where: {
+        projectId,
+        type,
+        name,
+        deletedAt: null,
+        data: this.importAssetFilter(importId),
+      },
+    });
+  }
+
+  private async saveReport(
+    importId: string,
+    report: NovelImportReport,
+    extra?: Record<string, unknown>,
+  ) {
+    await this.db.novelImport.update({
+      where: { id: importId },
+      data: { report: jsonValue(extra ? { ...report, ...extra } : report) },
+    });
+  }
+
+  /** 写入失败时保留已落库的 ID，撤销才能对上；不把报告抹成只有 error。 */
+  private async failWorldWrite(importId: string, error: unknown, report?: NovelImportReport) {
+    const message = error instanceof Error ? error.message : String(error);
+    const stored =
+      report ??
+      asReport(
+        (
+          await this.db.novelImport.findUnique({
+            where: { id: importId },
+            select: { report: true },
+          })
+        )?.report,
+      );
+    await this.db.novelImport.update({
+      where: { id: importId },
+      data: {
+        status: 'failed',
+        report: jsonValue({
+          ...stored,
+          error: message.slice(0, 500),
+          failed_stage: 'world_write',
+        }),
+      },
+    });
+  }
+
   private async process(
     importId: string,
     projectId: string,
@@ -319,188 +381,264 @@ export class NovelImportService {
       .sort((a, b) => b[1] - a[1])
       .slice(0, config.maxLocations);
 
-    const report: NovelImportReport = {
-      characters: [],
-      locations: [],
-      events: [],
-      relationships: [],
-      memoryCoreIds: [],
-      memoryAtomIds: [],
-      skipped: [],
-      worldviewHighlights: [],
+    const stored = await this.db.novelImport.findUnique({
+      where: { id: importId },
+      select: { report: true },
+    });
+    const report = asReport(stored?.report);
+    const assetIdByName = new Map<string, string>(
+      report.characters.map((character) => [character.name, character.id]),
+    );
+
+    const rememberId = (list: string[], id: string) => {
+      if (!list.includes(id)) list.push(id);
     };
 
-    // ③ 角色 Asset + persona 记忆卡 + trait 原子
-    const assetIdByName = new Map<string, string>();
-    for (const character of full) {
-      const asset = await this.db.asset.create({
-        data: {
-          projectId,
-          type: 'character',
-          state: 'active',
-          name: character.name,
-          description:
-            character.traits[0]?.slice(0, 120) ??
-            `《${'导入角色'}》出场 ${character.chapters.size} 章`,
-          aliases: character.aliases,
-          data: { source: 'novel_import', importId, mentions: character.mentions },
-        },
-      });
-      assetIdByName.set(character.name, asset.id);
-      report.characters.push({
-        id: asset.id,
-        name: character.name,
-        aliases: character.aliases,
-        mentions: character.mentions,
-        tier: 'full',
-      });
+    try {
+      // ③ 角色 Asset + persona 记忆卡 + trait 原子
+      for (const character of full) {
+        const existingId =
+          assetIdByName.get(character.name) ??
+          (await this.findImportAsset(projectId, importId, 'character', character.name))?.id;
+        const asset = existingId
+          ? { id: existingId }
+          : await this.db.asset.create({
+              data: {
+                projectId,
+                type: 'character',
+                state: 'active',
+                name: character.name,
+                description:
+                  character.traits[0]?.slice(0, 120) ??
+                  `《${'导入角色'}》出场 ${character.chapters.size} 章`,
+                aliases: character.aliases,
+                data: { source: 'novel_import', importId, mentions: character.mentions },
+              },
+            });
+        assetIdByName.set(character.name, asset.id);
+        if (!report.characters.some((entry) => entry.id === asset.id)) {
+          report.characters.push({
+            id: asset.id,
+            name: character.name,
+            aliases: character.aliases,
+            mentions: character.mentions,
+            tier: 'full',
+          });
+        }
 
-      const persona = [
-        `姓名：${character.name}${character.aliases.length > 0 ? `（又称：${character.aliases.join('、')}）` : ''}`,
-        `出场：${character.chapters.size} 章，提及 ${character.mentions} 次`,
-        ...character.traits.slice(0, 6).map((trait, i) => `背景${i + 1}：${trait}`),
-      ].join('\n');
-      const core = await this.db.memoryCore.create({
-        data: {
-          projectId,
-          kind: 'persona',
-          topic: character.name,
-          content: persona,
-          sourceAtomIds: [],
-        },
-      });
-      report.memoryCoreIds.push(core.id);
+        const existingCore = await this.db.memoryCore.findFirst({
+          where: { projectId, kind: 'persona', topic: character.name },
+          orderBy: { version: 'desc' },
+        });
+        if (existingCore) {
+          rememberId(report.memoryCoreIds, existingCore.id);
+        } else {
+          const persona = [
+            `姓名：${character.name}${character.aliases.length > 0 ? `（又称：${character.aliases.join('、')}）` : ''}`,
+            `出场：${character.chapters.size} 章，提及 ${character.mentions} 次`,
+            ...character.traits.slice(0, 6).map((trait, i) => `背景${i + 1}：${trait}`),
+          ].join('\n');
+          const core = await this.db.memoryCore.create({
+            data: {
+              projectId,
+              kind: 'persona',
+              topic: character.name,
+              content: persona,
+              sourceAtomIds: [],
+            },
+          });
+          rememberId(report.memoryCoreIds, core.id);
+        }
 
-      for (const trait of character.traits.slice(0, 8)) {
-        const atom = await this.db.memoryAtom.create({
+        const existingAtoms = await this.db.memoryAtom.findMany({
+          where: { projectId, entityType: 'character', entityId: asset.id, factType: 'trait' },
+          select: { id: true },
+        });
+        if (existingAtoms.length > 0) {
+          for (const atom of existingAtoms) rememberId(report.memoryAtomIds, atom.id);
+        } else {
+          for (const trait of character.traits.slice(0, 8)) {
+            const atom = await this.db.memoryAtom.create({
+              data: {
+                projectId,
+                entityType: 'character',
+                entityId: asset.id,
+                factType: 'trait',
+                content: trait.slice(0, 200),
+                confidence: 0.6,
+                dedupHash: computeDedupHash({
+                  entityType: 'character',
+                  entityId: asset.id,
+                  factType: 'trait',
+                  content: trait,
+                }),
+              },
+            });
+            rememberId(report.memoryAtomIds, atom.id);
+          }
+        }
+        await this.saveReport(importId, report);
+      }
+      for (const character of light) {
+        const existingId =
+          assetIdByName.get(character.name) ??
+          (await this.findImportAsset(projectId, importId, 'character', character.name))?.id;
+        const asset = existingId
+          ? { id: existingId }
+          : await this.db.asset.create({
+              data: {
+                projectId,
+                type: 'character',
+                state: 'draft',
+                name: character.name,
+                description: `次要角色（出场 ${character.chapters.size} 章）`,
+                aliases: character.aliases,
+                data: { source: 'novel_import', importId, tier: 'light' },
+              },
+            });
+        assetIdByName.set(character.name, asset.id);
+        if (!report.characters.some((entry) => entry.id === asset.id)) {
+          report.characters.push({
+            id: asset.id,
+            name: character.name,
+            aliases: character.aliases,
+            mentions: character.mentions,
+            tier: 'light',
+          });
+        }
+        await this.saveReport(importId, report);
+      }
+
+      // ④ 场景 Asset
+      for (const [name] of locations) {
+        const existing =
+          report.locations.find((location) => location.name === name) ??
+          (await this.findImportAsset(projectId, importId, 'location', name));
+        if (existing) {
+          if (!report.locations.some((location) => location.id === existing.id)) {
+            report.locations.push({ id: existing.id, name });
+          }
+          continue;
+        }
+        const asset = await this.db.asset.create({
           data: {
             projectId,
-            entityType: 'character',
-            entityId: asset.id,
-            factType: 'trait',
-            content: trait.slice(0, 200),
-            confidence: 0.6,
-            dedupHash: computeDedupHash({
-              entityType: 'character',
-              entityId: asset.id,
-              factType: 'trait',
-              content: trait,
-            }),
+            type: 'location',
+            state: 'active',
+            name,
+            description: `小说导入场景`,
+            data: { source: 'novel_import', importId },
           },
         });
-        report.memoryAtomIds.push(atom.id);
+        report.locations.push({ id: asset.id, name });
+        await this.saveReport(importId, report);
       }
-    }
-    for (const character of light) {
-      const asset = await this.db.asset.create({
-        data: {
-          projectId,
-          type: 'character',
-          state: 'draft',
-          name: character.name,
-          description: `次要角色（出场 ${character.chapters.size} 章）`,
-          aliases: character.aliases,
-          data: { source: 'novel_import', importId, tier: 'light' },
-        },
-      });
-      report.characters.push({
-        id: asset.id,
-        name: character.name,
-        aliases: character.aliases,
-        mentions: character.mentions,
-        tier: 'light',
-      });
-    }
 
-    // ④ 场景 Asset
-    for (const [name] of locations) {
-      const asset = await this.db.asset.create({
-        data: {
-          projectId,
-          type: 'location',
-          state: 'active',
-          name,
-          description: `小说导入场景`,
-          data: { source: 'novel_import', importId },
-        },
-      });
-      report.locations.push({ id: asset.id, name });
-    }
-
-    // ⑤ 主线事件：每章最多 2 条，优先多名主要角色同场的强情节句。
-    const fullNames = new Set(full.map((c) => c.name));
-    const selectedEvents = selectImportEvents(
-      extractions.flatMap((extraction) => extraction.events),
-      fullNames,
-      config.maxEvents,
-    );
-    let presentationOrder = 0;
-    for (const event of selectedEvents) {
-      const who = event.characters.filter((name) => fullNames.has(name));
-      const worldEvent = await this.db.worldEvent.create({
-        data: {
-          projectId,
-          title: formatEventTitle(event.text, who.length > 0 ? who : event.characters),
-          description: event.text,
-          presentationOrder: presentationOrder++,
-          state: 'approved',
-          characterIds: event.characters
-            .map((name) => assetIdByName.get(name))
-            .filter((id): id is string => Boolean(id)),
-        },
-      });
-      report.events.push({
-        id: worldEvent.id,
-        title: worldEvent.title,
-        chapterIndex: event.chapterIndex,
-      });
-    }
-
-    // ⑥ 共现关系 Relationship（主要角色间共现 ≥3 次）
-    const cooccurrence = new Map<string, number>();
-    for (const extraction of extractions) {
-      for (const [pair, count] of extraction.cooccurrences) {
-        cooccurrence.set(pair, (cooccurrence.get(pair) ?? 0) + count);
+      // ⑤ 主线事件：每章最多 2 条，优先多名主要角色同场的强情节句。
+      const fullNames = new Set(full.map((c) => c.name));
+      const selectedEvents = selectImportEvents(
+        extractions.flatMap((extraction) => extraction.events),
+        fullNames,
+        config.maxEvents,
+      );
+      let presentationOrder = report.events.length;
+      for (const event of selectedEvents) {
+        const who = event.characters.filter((name) => fullNames.has(name));
+        const title = formatEventTitle(event.text, who.length > 0 ? who : event.characters);
+        if (
+          report.events.some(
+            (entry) => entry.chapterIndex === event.chapterIndex && entry.title === title,
+          )
+        ) {
+          continue;
+        }
+        const worldEvent = await this.db.worldEvent.create({
+          data: {
+            projectId,
+            title,
+            description: event.text,
+            presentationOrder: presentationOrder++,
+            state: 'approved',
+            characterIds: event.characters
+              .map((name) => assetIdByName.get(name))
+              .filter((id): id is string => Boolean(id)),
+          },
+        });
+        report.events.push({
+          id: worldEvent.id,
+          title: worldEvent.title,
+          chapterIndex: event.chapterIndex,
+        });
+        await this.saveReport(importId, report);
       }
-    }
-    const relations = [...cooccurrence.entries()]
-      .filter(([pair, count]) => {
+
+      // ⑥ 共现关系 Relationship（主要角色间共现 ≥3 次）
+      const cooccurrence = new Map<string, number>();
+      for (const extraction of extractions) {
+        for (const [pair, count] of extraction.cooccurrences) {
+          cooccurrence.set(pair, (cooccurrence.get(pair) ?? 0) + count);
+        }
+      }
+      const relations = [...cooccurrence.entries()]
+        .filter(([pair, count]) => {
+          const [a, b] = pair.split('|');
+          return count >= 3 && fullNames.has(a ?? '') && fullNames.has(b ?? '');
+        })
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 30);
+      for (const [pair] of relations) {
         const [a, b] = pair.split('|');
-        return count >= 3 && fullNames.has(a ?? '') && fullNames.has(b ?? '');
-      })
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30);
-    for (const [pair] of relations) {
-      const [a, b] = pair.split('|');
-      const sourceId = assetIdByName.get(a ?? '');
-      const targetId = assetIdByName.get(b ?? '');
-      if (!sourceId || !targetId) continue;
-      const relationship = await this.db.relationship.create({
-        data: {
-          projectId,
-          kind: 'companion',
-          sourceType: 'character',
-          sourceId,
-          targetType: 'character',
-          targetId,
-          label: '小说共现关系',
-          description: `在导入文本中共同出场`,
-          state: 'approved',
-        },
-      });
-      report.relationships.push({ id: relationship.id, source: a ?? '', target: b ?? '' });
+        const sourceId = assetIdByName.get(a ?? '');
+        const targetId = assetIdByName.get(b ?? '');
+        if (!sourceId || !targetId) continue;
+        if (
+          report.relationships.some(
+            (entry) =>
+              (entry.source === a && entry.target === b) ||
+              (entry.source === b && entry.target === a),
+          )
+        ) {
+          continue;
+        }
+        const relationship = await this.db.relationship.create({
+          data: {
+            projectId,
+            kind: 'companion',
+            sourceType: 'character',
+            sourceId,
+            targetType: 'character',
+            targetId,
+            label: '小说共现关系',
+            description: `在导入文本中共同出场`,
+            state: 'approved',
+          },
+        });
+        report.relationships.push({ id: relationship.id, source: a ?? '', target: b ?? '' });
+        await this.saveReport(importId, report);
+      }
+
+      // ⑦ 世界观要点：高频 trait 句中的规则类句子进报告（不直接覆盖 Project.worldview）
+      report.worldviewHighlights = extractions
+        .flatMap((extraction) => extraction.traits.map((t) => t.text))
+        .slice(0, 8);
+
+      report.skipped = characters
+        .slice(config.maxFullCards + 25)
+        .map((c) => `${c.name}（提及 ${c.mentions} 次，超出规模上限）`);
+
+      await this.saveReport(importId, report);
+      return report;
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'WORLD_WRITE_FAILED') throw error;
+      await this.failWorldWrite(importId, error, report);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ApiError(
+        422,
+        'WORLD_WRITE_FAILED',
+        `写入世界层失败：${message.slice(0, 80)}`,
+        { import_id: importId },
+      );
     }
-
-    // ⑦ 世界观要点：高频 trait 句中的规则类句子进报告（不直接覆盖 Project.worldview）
-    report.worldviewHighlights = extractions
-      .flatMap((extraction) => extraction.traits.map((t) => t.text))
-      .slice(0, 8);
-
-    report.skipped = characters
-      .slice(config.maxFullCards + 25)
-      .map((c) => `${c.name}（提及 ${c.mentions} 次，超出规模上限）`);
-
-    return report;
   }
 
   async get(importId: string) {
@@ -602,44 +740,84 @@ export class NovelImportService {
     });
   }
 
-  /** 整体撤销：按报告记录的 ID 级联软删世界层 + 删除记忆层。 */
+  /** 整体撤销：报告 ID + 按 importId 扫到的孤儿 Asset / 其记忆，一并清掉。 */
   async undo(importId: string): Promise<boolean> {
     const record = await this.db.novelImport.findUnique({ where: { id: importId } });
     if (!record) return false;
-    const report = (record.report ?? {}) as Partial<NovelImportReport>;
+    const report = asReport(record.report);
     const now = new Date();
-    const assetIds = (report.characters ?? [])
-      .map((c) => c.id)
-      .concat((report.locations ?? []).map((l) => l.id));
+    const tagged = await this.db.asset.findMany({
+      where: {
+        projectId: record.projectId,
+        deletedAt: null,
+        data: this.importAssetFilter(importId),
+      },
+      select: { id: true, name: true, type: true },
+    });
+    const assetIds = [
+      ...new Set(
+        report.characters
+          .map((character) => character.id)
+          .concat(report.locations.map((location) => location.id))
+          .concat(tagged.map((asset) => asset.id)),
+      ),
+    ];
+    const characterNames = [
+      ...new Set(
+        report.characters
+          .map((character) => character.name)
+          .concat(tagged.filter((asset) => asset.type === 'character').map((asset) => asset.name)),
+      ),
+    ];
     if (assetIds.length > 0) {
       await this.db.asset.updateMany({ where: { id: { in: assetIds } }, data: { deletedAt: now } });
     }
-    const eventIds = (report.events ?? []).map((e) => e.id);
+    const eventIds = report.events.map((event) => event.id);
     if (eventIds.length > 0) {
       await this.db.worldEvent.updateMany({
         where: { id: { in: eventIds } },
         data: { deletedAt: now },
       });
     }
-    const relationshipIds = (report.relationships ?? []).map((r) => r.id);
+    const relationshipIds = report.relationships.map((rel) => rel.id);
     if (relationshipIds.length > 0) {
       await this.db.relationship.updateMany({
         where: { id: { in: relationshipIds } },
         data: { deletedAt: now },
       });
     }
-    const coreIds = report.memoryCoreIds ?? [];
+    const coreIds = [...report.memoryCoreIds];
+    if (characterNames.length > 0) {
+      const extraCores = await this.db.memoryCore.findMany({
+        where: { projectId: record.projectId, kind: 'persona', topic: { in: characterNames } },
+        select: { id: true },
+      });
+      for (const core of extraCores) {
+        if (!coreIds.includes(core.id)) coreIds.push(core.id);
+      }
+    }
     if (coreIds.length > 0) {
       await this.db.memoryCore.deleteMany({ where: { id: { in: coreIds } } });
     }
-    const atomIds = report.memoryAtomIds ?? [];
+    const atomIds = [...report.memoryAtomIds];
+    if (assetIds.length > 0) {
+      const extraAtoms = await this.db.memoryAtom.findMany({
+        where: { projectId: record.projectId, entityId: { in: assetIds } },
+        select: { id: true },
+      });
+      for (const atom of extraAtoms) {
+        if (!atomIds.includes(atom.id)) atomIds.push(atom.id);
+      }
+    }
     if (atomIds.length > 0) {
       await this.db.memoryAtom.deleteMany({ where: { id: { in: atomIds } } });
     }
-    await this.db.roleplayThread.updateMany({
-      where: { characterAssetId: { in: assetIds } },
-      data: { status: 'closed' },
-    });
+    if (assetIds.length > 0) {
+      await this.db.roleplayThread.updateMany({
+        where: { characterAssetId: { in: assetIds } },
+        data: { status: 'closed' },
+      });
+    }
     await this.db.novelImport.delete({ where: { id: importId } });
     return true;
   }
