@@ -12,6 +12,17 @@
 
 ---
 
+## 2026-08-31 · e8f311d · feat(api,web) · 导入按章失败后可从断点重试
+
+整本一锅煮时一章出错就整单失败，无法续跑。本轮按章记状态，原文留在 config.sourceText（接口不回传），全部章成功前不写世界层。
+
+- **feat(api)** `POST /novel-imports/:id/retry`；章行 pending→processing→done/failed；同章最多 3 次；无原文则 409
+- **feat(web)** 失败时显示失败章并提供「重试失败章节」
+- **test** `novel-import-retry`：失败不写世界层、从失败章续抽、无原文拒绝、已完成直接返回、三次耗尽
+- **docs** Track M2、API 地图、设计 §5.2/§8/§9；下一刀改为验收长篇失败后续跑，不插队 I3
+- 验证：`vitest` `novel-import-retry` 5 项；导入面板未在浏览器里点过失败重试
+- 模块：`service.ts`、`novel-imports.ts`、`novel-import-panel.tsx`
+
 ## 2026-08-31 · fa2bdfe · feat(api,web) · 导入轻量条目可升级为全量角色卡
 
 次要角色只有 draft 轻量条目、没有 persona，扮演与世界构建都偏弱。本轮按设计 §5.6 提供升级：写 persona、Asset 置为 active，可超过 15 张全量上限。
