@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-02 · feat(desktop,api,web) · Electron 工作区路径
+## 2026-09-02 · 4be67b9 · feat(desktop,api,web) · Electron 工作区路径
 
 本地创作面改为 Electron 窗口，用系统对话框拿到绝对路径。`Project.workspacePath` 标识世界；Chat 侧栏恢复「选择文件夹 / 项目内新聊天 / 改名 / 删聊天」。不把实体写成磁盘文件（阶段 F）。
 
@@ -22,7 +22,7 @@
 - **docs** ADR-0016；UI-IA；Next-Tasks Track D 完成、Track W（工作区文件）后做
 - 模块：`apps/desktop`、`workspace.ts`、`world.ts`、`chat-sidebar.tsx`、`chat-panel.tsx`
 
-## 2026-09-02 · feat(web) · Chat 只聊天，项目文件夹在 Studio
+## 2026-09-02 · 4be67b9 · feat(web) · Chat 只聊天，项目文件夹在 Studio
 
 一个项目文件夹装着 IP Core、实体和聊天。Chat 页面只保留对话列表与消息流；选文件夹、改项目名、看实体都在 Studio。打开工作区默认选中 IP Core，Inspector 可改世界观与实体属性。
 
@@ -31,7 +31,7 @@
 - **docs** UI-IA v1.3：Chat 只聊天，Studio 管项目文件夹
 - 模块：`chat-panel.tsx`、`chat-sidebar.tsx`、`entity-explorer.tsx`、`world-workspace.tsx`、`inspector-panel.tsx`、`projects/page.tsx`
 
-## 2026-09-02 · feat(api,web) · 选择文件夹作为世界项目
+## 2026-09-02 · 4be67b9 · feat(api,web) · 选择文件夹作为世界项目
 
 对话侧栏不再新建空文件夹。顶栏「+」选择本地目录或已有项目作为世界；项目里可新建聊天、重命名项目/聊天、删除聊天。
 
@@ -40,7 +40,7 @@
 - **docs** UI-IA：选择文件夹，不从 Chat 新建空项目
 - 模块：`workspace.ts`、`world.ts`、`chat-sidebar.tsx`、`chat-panel.tsx`
 
-## 2026-09-01 · feat(api,web) · Chat 侧栏按 Cursor 项目树操作
+## 2026-09-01 · 4be67b9 · feat(api,web) · Chat 侧栏按 Cursor 项目树操作
 
 对话历史改成项目文件夹：顶栏「+」新建项目，项目行聊天气泡「+」在该项目新建聊天，右键删除项目或对话。去掉顶栏大按钮和行内垃圾桶。
 
@@ -49,7 +49,7 @@
 - **docs** UI-IA：侧栏加号语义与右键删除
 - 模块：`workspace.ts`、`world.ts`、`chat-sidebar.tsx`、`chat-panel.tsx`、`chat-history.ts`
 
-## 2026-09-01 · feat(api,web) · 对话侧栏可删除世界项目
+## 2026-09-01 · 4be67b9 · feat(api,web) · 对话侧栏可删除世界项目
 
 Chat 历史栏项目分组原先只能「+ 新开对话」，无法删掉整个世界文件夹。删除走既有 `DELETE /projects/:id` 软删，并归档该项目下全部对话，避免幽灵会话。
 
@@ -58,7 +58,7 @@ Chat 历史栏项目分组原先只能「+ 新开对话」，无法删掉整个�
 - **docs** UI-IA：侧栏可删除整个世界工作区
 - 模块：`workspace.ts`、`resources.ts`、`world.ts`、`chat-sidebar.tsx`、`chat-panel.tsx`
 
-## 2026-09-01 · feat(api,web) · 世界聊天即建项目文件夹
+## 2026-09-01 · 4be67b9 · feat(api,web) · 世界聊天即建项目文件夹
 
 开世界聊天立刻创建一个空 `Project`（IP Core 工作区），像 Cursor 打开代码文件夹。确认「创建世界」只给这个文件夹改名，不另建项目。同一项目可多条对话；Studio Explorer 改成文件树（对话 / 角色 / 地点 / 事件 / 故事）。
 
@@ -68,7 +68,7 @@ Chat 历史栏项目分组原先只能「+ 新开对话」，无法删掉整个�
 - **docs** UI-IA：一个世界 = 一个项目 = 一个 IP Core
 - 模块：`workspace.ts`、`world.ts`、`proposal-applier.ts`、`chat-sidebar.tsx`、`entity-explorer.tsx`、`app-shell.tsx`
 
-## 2026-09-01 · feat(web) · Studio 收成图标活动栏（IDE 壳）
+## 2026-09-01 · 4be67b9 · feat(web) · Studio 收成图标活动栏（IDE 壳）
 
 Studio 非 Chat 路由不再展开 248px 文字菜单。活动栏只留图标：对话 / 项目 / 世界 / 实体 / 故事 / 制作，设置在底部齿轮。切项目落到 `/world`，与 Chat「Studio」一致。项目主页、production、settings 去掉 `ProjectSubNav`。世界工作区顶栏「制作」改称「创作线」，避免和活动栏「制作」（`/production`）撞名。
 
