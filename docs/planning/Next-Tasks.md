@@ -4,9 +4,9 @@
 >
 > Status: Active
 >
-> Synced: 2026-08-31
+> Synced: 2026-09-02
 >
-> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。M1–M3 已落地。当前下一刀：验收长篇导入质量，不插队 I3。I3 `Organization` 仍需真实项目晋级证据；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
+> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。M1–M3 已落地。长篇导入验收已通过（2026-09-01）。当前无默认编码任务，不插队 I3。I3 `Organization` 仍需真实项目晋级证据；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
 >
 > Related: [Product-Positioning.md](../product/Product-Positioning.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [IP World Model Repositioning RFC](../architecture/rfc/IP-World-Model-Repositioning-RFC.md)
 
@@ -17,7 +17,7 @@
 创造层 v1 已闭环（2026-08-16 合并进 `main`）：
 
 - Backend：世界线 / WorldEvent / Relationship / Creator Chat 路由（[`apps/api/src/routes/world.ts`](../../apps/api/src/routes/world.ts)）；World Builder Agent + 冲突检测（H9 v1，只报告不修复）+ 提案应用（`apply-intent`，全部 `draft` + 幂等键）；`entity_revisions` / `change_events` / `project_sequences` 表 + 双写助手（per-Entity 开关默认关）
-- Frontend：`/` Creator Chat 默认页（无登录，浅色独立对话壳 + 可收起历史侧栏，世界/角色 Tab）；`/projects/:id/world` 三栏世界工作区（Explorer / 世界线 / Inspector 可编辑 + 冲突列表 + 「在对话中继续」；栏宽与时间线高度可拖）；Inspector 可编辑世界时间绑定与时间维度；`/production` 与 `/settings` 承接原工作流与提供商面板
+- Frontend：`/` Creator Chat 默认页（无登录；**Electron 桌面窗口**为本地创作面，[ADR-0016](../architecture/adr/0016-local-creative-surface-is-electron.md)）。侧栏按工作区分组：选择已有文件夹（真实绝对路径）、项目内新聊天、改项目名/聊天名、删聊天。Studio 为 IDE 壳（主画布 `/projects/:id/world`）；`pnpm desktop` 启 Electron + Web + API
 - Domain：[`packages/domain/src/history/*`](../../packages/domain/src/history/) 快照与 ChangeEvent schema；WorldEvent / Relationship / Timeline Track/Item schema；H6 `TemporalDimension` + `WorldTimeBinding` 信封
 - Database：`20260804000000_creator_layer_world` 迁移（world_events / relationships / project_timelines / timeline_tracks / timeline_items / creator_chat_threads / creator_chat_messages）；`20260816000000_h6_world_time_binding`（`temporal_dimensions` / `world_time_bindings`）；`Project.worldview` Json（K5 世界观单点表示）
 
@@ -232,11 +232,12 @@
 
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
-| K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | **已完成 2026-08-05**（World Overview：项目名 + 「本地创作」徽标 + 「去创作对话」入口 + 分区导航；`/production` `/settings` 承接原面板只搬不移；侧栏新增 制作/设置；浏览器回归 5 页全过） |
-| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector；**2026-08-14** 左右栏可收起；**2026-08-14 世界线细化**：地点轨 + 事件刻度标题 + 角色/地点锚定 + 世界时间偏离标记；**2026-08-05 v1 只读已落地**；**2026-08-13 Inspector 内联编辑**；**2026-08-13 副驾驶展示 `resources.conflicts`（H9 v1）**；**2026-08-30** 左右栏与时间线/下坞可拖拽改尺寸；轴标签抽稀 | 已完成 v1 + Inspector 可编辑 + 冲突列表 + 左右栏可收起 + 世界线细化 + 可调分栏 |
-| K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；Chat 为独立浅色壳，Studio 左栏「创作聊天」可达 | **已完成 2026-08-05**；**2026-08-13 ADR-0013 API 闭环**；**2026-08-14** 可收起历史侧栏；**2026-08-30** 世界/角色 Tab |
-| K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），**2026-08-06 Production 视图 v1**（世界/制作 tab；故事 + 场景轨道），**2026-08-13 Shot 轨道**：镜头嵌在所属场景刻度区间，Inspector 只读 + 跳转镜头编辑器 | **已完成 v1 + Shot 轨道（2026-08-13）** |
+| K1 | 项目首页变为 World Overview | 将 `ProviderPanel` + `UsageSummaryCard` → `/settings`，`WorkflowPanel` + `GenerationQueuePanel` → `/production`；重命名并扩展侧栏导航 | **已完成 2026-08-05**（运维面板只搬不移；**2026-09-01** 项目根收束为故事列表，分区改由活动栏承担，去掉 `ProjectSubNav`） |
+| K2 | `/world` 工作区，IDE RFC Slice A | **左中右三栏（2026-08-04 设计）**：左实体 Explorer（世界观/角色/场景/事件）、中时间线主体 + 副驾驶 agent 面板、右 Inspector；**2026-08-14** 左右栏可收起；**2026-08-14 世界线细化**：地点轨 + 事件刻度标题 + 角色/地点锚定 + 世界时间偏离标记；**2026-08-05 v1 只读已落地**；**2026-08-13 Inspector 内联编辑**；**2026-08-13 副驾驶展示 `resources.conflicts`（H9 v1）**；**2026-08-30** 左右栏与时间线/下坞可拖拽改尺寸；轴标签抽稀；**2026-09-01** 作为 Studio 主画布，外壳改为图标活动栏 | 已完成 v1 + Inspector 可编辑 + 冲突列表 + 左右栏可收起 + 世界线细化 + 可调分栏 + IDE 壳 |
+| K3 | Creator Chat 为应用默认页 `/` | 无登录门禁；对话产出 `draft` 实体；Chat 为独立浅色壳。**2026-09-02** Electron 选文件夹当工作区（ADR-0016）；侧栏恢复按项目分组 | **已完成 2026-08-05**；**2026-08-13 ADR-0013 API 闭环**；**2026-08-14** 可收起历史侧栏；**2026-08-30** 世界/角色 Tab；**2026-09-02** 桌面工作区路径 |
+| K4 | World View 先行 | **一条** Timeline 的两种视图；**2026-08-05 世界视图 v1 已落地**（非均匀刻度 + 轨道化 + 关系连线），**2026-08-06 Production 视图 v1**（世界/制作 tab；故事 + 场景轨道），**2026-08-13 Shot 轨道**：镜头嵌在所属场景刻度区间，Inspector 只读 + 跳转镜头编辑器；**2026-09-01** 工作区顶栏改称「世界 / 创作线」，活动栏「制作」专指 `/production` | **已完成 v1 + Shot 轨道（2026-08-13）** |
 | K5 | 世界观 Chat→Studio 核心闭环 | 世界观自动识别 → 落库 → Studio 展示：`Project.worldview Json`（genre/premise/rules/notes，additive 迁移）+ mock/LLM 自动提炼（`update_entity` type='project'）+ resources 返回 worldview/stage + chat header 常驻「进入 Studio」入口 | **已完成 2026-08-05**（愿景核对报告：Chat 引导/Studio 三栏/实体列表/timeline/Inspector 均已对齐；补齐世界观单点表示与识别、副驾驶摘要） |
+| K6 | Studio IDE 壳 | 非 Chat 路由始终 ~56px 图标活动栏；切项目落到 `/world`；去掉宽文字菜单与 `ProjectSubNav` | **已完成 2026-09-01** |
 
 **Timeline 决策（2026-07-31）：** World View 与 Production View 是单一 `ProjectTimeline` 的两种投影，不是两条持久化时间线。独立世界轴需要全局可排序的世界年表 — 这正是 [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md) 放弃的，因为虚构历法、模糊时段与平行世界无法合并为一条序列。ADR-0007 保持不变；无需新 ADR。工作流运行与生成任务完全不在 Timeline 上 — 执行时间是第三种时间，位于 `/production`。
 
@@ -250,12 +251,32 @@
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
 | M1 | 分层记忆 + 上下文窗口 | L0 原文 / L1 原子 / L2 核心；同步规则归档 + 队列深加工；三路 RRF 检索；ThreadContextState 压缩；世界工作区记忆面板 | **已完成 2026-08-23**（ADR-0014） |
-| M2 | 小说导入 | 上传 txt → 切章 → 规则抽取 → Asset/WorldEvent/Relationship + 记忆卡；UTF-8/GB18030；人名/地点停用词；剥粘连与语气尾巴；虚词残片不进卡；头衔/先生残片不进卡；地点 ≥3 次才入库；轻量卡提及 ≥5；事件标题「谁 · 做了什么」，每章最多 2 条；整体撤销；轻量升级为全量卡；按章 retry；世界层写入失败保留部分报告并可幂等续写，撤销按 importId 扫孤儿 Asset | **已完成 v1 2026-08-23**（ADR-0015）；解码与停用词 **2026-08-30**；抽取质量 **2026-08-31**；虚词残片 **2026-08-31**；轻量升级 **2026-08-31**；按章 retry **2026-08-31**；世界层写入失败可续/可撤 **2026-08-31**；头衔残片 **2026-08-31** |
+| M2 | 小说导入 | 上传 txt → 切章 → 规则抽取 → Asset/WorldEvent/Relationship + 记忆卡；UTF-8/GB18030；人名/地点停用词；剥粘连与语气尾巴；虚词残片不进卡；头衔/先生残片不进卡；地点 ≥3 次才入库；轻量卡提及 ≥5；事件标题「谁 · 做了什么」，每章最多 2 条；整体撤销；轻量升级为全量卡；按章 retry；世界层写入失败保留部分报告并可幂等续写，撤销按 importId 扫孤儿 Asset | **已完成 v1 2026-08-23**（ADR-0015）；解码与停用词 **2026-08-30**；抽取质量 **2026-08-31**；虚词残片 **2026-08-31**；轻量升级 **2026-08-31**；按章 retry **2026-08-31**；世界层写入失败可续/可撤 **2026-08-31**；头衔残片 **2026-08-31**；长篇验收 **2026-09-01** |
 | M3 | 时间锚定扮演 | `RoleplayThread` 旁表复用消息层；侧栏「角色」Tab；不反写世界实体。认知边界：锚点前亲历 + 问句命中锚点后事件时此轮强制不知情。扮演与世界构建对话读 Studio 角色卡。用户默认读者，可选已有卡或新建自己；Inspector 与对话顶栏均可切换 | **已完成 v1 2026-08-23**；侧栏分 Tab / 角色卡回灌 / 用户身份 **2026-08-30**；对话顶栏切换身份 **2026-08-31**；防剧透硬约束 **2026-08-31** |
 
 **退出标准：** 无密钥时规则记忆 + 导入 + 扮演全链路可跑；导入可整体撤销；扮演不经提案写入世界层。
 
-**当前下一刀（2026-08-31）：** IP 核导入收尾（retry / 写入失败可撤 / 头衔残片）已落地。请验收长篇导入名单；时间轴按章序，早章回叙提及仍会靠前。I3 Organization 仍需晋级证据，不插队。
+**当前下一刀（2026-09-02）：** 阶段 D（Electron + `workspacePath`）已落地。**Track W（工作区文件）未做**：不要把 IP Core / 实体 / 聊天写成工作区目录里的文件。那是单独计划（`.zivith/workspace.json` 标记、目录布局、库 vs 文件权威）。不插队 I3。
+
+---
+## Track D — Electron 本地工作区（ADR-0016）
+
+| ID | 任务 | 备注 | 状态 |
+|----|------|-------|--------|
+| D1 | Electron 壳 | `apps/desktop` 加载 3100；IPC 系统选文件夹返回绝对路径；`pnpm desktop` | **已完成 2026-09-02** |
+| D2 | 路径身份 | `Project.workspacePath`；`POST /world/folders/open { path }`；同一路径复用项目 | **已完成 2026-09-02** |
+| D3 | Chat 侧栏 | 选择文件夹、项目内新聊天、改项目名/聊天名、删聊天；浏览器提示用桌面应用 | **已完成 2026-09-02** |
+
+## Track W — 工作区文件（后做，另开计划）
+
+目标：在阶段 D 稳定「打开 `D:\Stories\雾城` = 这个世界」之后，再把世界落到该目录。不与上方建议工作顺序里的历史 Track F（V0.4）混名。
+
+| ID | 任务 | 备注 | 状态 |
+|----|------|-------|--------|
+| W1 | `.zivith/workspace.json` 标记 | 移动文件夹时靠 id 重绑路径 | **未开始** — 须另开计划 |
+| W2 | IP Core / 实体 / 聊天目录布局 | 先拍板「库为权威 vs 文件为权威」；比 Cursor 多一层同步 | **未开始** — 须另开计划 |
+
+---
 
 **不属于本轨道：** 独立 `/roleplay` 产品路由；完整记忆中心页面；SiliconFlow 真实 embedding（仍 mock / bigram）。
 
@@ -290,10 +311,12 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓          ╱
          Track M (memory / novel / roleplay): M1 ✓ → M2 ✓ v1 → M3 ✓ v1
               ↓
+         Track D (Electron workspace path) D1–D3 ✓ 2026-09-02 → Track W (workspace files) later
+              ↓
          Phase 3 (generation productionize) — continues to defer, per ADR-0008
 
    Track K (world-first UI) runs alongside, each step gated on its supply:
-         K1 ✓ 2026-08-05 → K2 ✓ (world workspace v1, after H4 world-line first) → K3 ✓ 2026-08-05 (default page `/`, after Track J) → K4 ✓ (World View first, after Track I) → K5 ✓ 2026-08-05 (世界观 Chat→Studio 核心闭环)
+         K1 ✓ 2026-08-05 → K2 ✓ (world workspace v1, after H4 world-line first) → K3 ✓ 2026-08-05 (default page `/`, after Track J) → K4 ✓ (World View first, after Track I) → K5 ✓ 2026-08-05 (世界观 Chat→Studio 核心闭环) → K6 ✓ 2026-09-01 (Studio IDE 壳)
 ```
 
 创造层优先计划（2026-08-04）已把 H4/H5、Track I、Track J（重写为持续对话）、Track K 串入同一分支 `feat/creator-layer-first`：先 IP 核心数据库 + Creator Chat，再世界线视图。2026-08-16 创造层 v1 闭环并合并进 `main`。生产制作功能（Story→Shot、Provider、usage）只搬不移、保持可用。

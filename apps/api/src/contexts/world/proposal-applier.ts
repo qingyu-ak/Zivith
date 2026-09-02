@@ -8,7 +8,7 @@ import {
   relationshipCreateSchema,
 } from '@zivith/domain';
 import { ApiError } from '../../errors.js';
-import { resolveLocalOwner } from './local-user.js';
+import { claimWorkspaceSeed, createWorldProject, isWorkspaceSeed } from './workspace.js';
 
 /**
  * ADR-0010 fence: the agent NEVER writes to the world directly.
@@ -49,7 +49,7 @@ export async function applyProposal(
 ): Promise<ApplyProposalResult> {
   switch (proposal.kind) {
     case 'create_project':
-      return applyCreateProject(db, proposal, memberUserId);
+      return applyCreateProject(db, proposal, memberUserId, fallbackProjectId);
     case 'create_world_event':
       return applyCreateWorldEvent(db, proposal, fallbackProjectId);
     case 'create_character':
@@ -70,6 +70,7 @@ async function applyCreateProject(
   db: Prisma.TransactionClient,
   proposal: Proposal,
   memberUserId?: string | null,
+  fallbackProjectId?: string | null,
 ): Promise<ApplyProposalResult> {
   const payload = proposal.payload;
   const name = requireString(payload, 'name', '项目名称');
@@ -77,29 +78,37 @@ async function applyCreateProject(
     typeof payload.description === 'string' && payload.description.trim()
       ? payload.description.trim()
       : null;
-
-  const ownerId = await resolveLocalOwner(db);
   const worldview =
     payload.worldview && typeof payload.worldview === 'object'
       ? mergeWorldview({}, payload.worldview)
       : undefined;
-  const project = await db.project.create({
-    data: {
-      ownerId,
-      name,
-      description,
-      ...(worldview ? { worldview } : {}),
-      defaults: { language: 'zh-CN' },
-      settings: { creator_layer: true },
-      // 与手动创建项目一致：建项目同时写入 owner 成员记录。优先写当前登录用户
-      // （world 路由无 auth，但前端会带 Bearer token 进来），无则回退 local owner，
-      // 否则按成员过滤的项目列表（/projects）看不到 Creator Chat 建的项目。
-      members: { create: { userId: memberUserId ?? ownerId, role: 'owner' } },
-    },
-  });
-  // A fresh world always owns a presentation timeline (world line).
-  await db.projectTimeline.create({
-    data: { projectId: project.id, name: 'World Line' },
+
+  if (fallbackProjectId) {
+    const existing = await db.project.findFirst({
+      where: { id: fallbackProjectId, deletedAt: null },
+    });
+    if (existing && isWorkspaceSeed(existing)) {
+      await claimWorkspaceSeed(db, existing.id, {
+        name,
+        description,
+        ...(worldview ? { worldview: worldview as Prisma.InputJsonValue } : {}),
+      });
+      return {
+        kind: proposal.kind,
+        projectId: existing.id,
+        entityType: 'project',
+        entityId: existing.id,
+        title: name,
+      };
+    }
+  }
+
+  const project = await createWorldProject(db, {
+    name,
+    description,
+    memberUserId: memberUserId ?? null,
+    seed: false,
+    ...(worldview ? { worldview: worldview as Prisma.InputJsonValue } : {}),
   });
   return {
     kind: proposal.kind,

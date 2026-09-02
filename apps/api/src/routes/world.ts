@@ -22,6 +22,12 @@ import {
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { applyProposal } from '../contexts/world/proposal-applier.js';
+import {
+  archiveCreatorChat,
+  createWorldWorkspace,
+  isWorkspaceSeed,
+  openWorldFolder,
+} from '../contexts/world/workspace.js';
 import { assetDto, sceneDto } from './resources.js';
 import {
   WorldBuilderAgent,
@@ -51,10 +57,33 @@ const worldEventPatchBody = worldEventPatchSchema
 async function requireProject(db: PrismaClient, projectId: string) {
   const project = await db.project.findFirst({
     where: { id: projectId, deletedAt: null },
-    select: { id: true, name: true, description: true, worldview: true },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      worldview: true,
+      settings: true,
+      workspacePath: true,
+    },
   });
   if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', '项目不存在');
   return project;
+}
+
+async function requireOpenThread(db: PrismaClient, threadId: string) {
+  const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
+  if (!thread || thread.state !== 'active') {
+    throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
+  }
+  if (!thread.projectId) {
+    return { thread, projectName: null as string | null, workspacePath: null as string | null };
+  }
+  const project = await db.project.findFirst({
+    where: { id: thread.projectId, deletedAt: null },
+    select: { name: true, workspacePath: true },
+  });
+  if (!project) throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
+  return { thread, projectName: project.name, workspacePath: project.workspacePath };
 }
 
 async function requireTimeline(db: PrismaClient, projectId: string) {
@@ -216,6 +245,7 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
     const world = assembleWorldContext({
       projectId: project.id,
       projectName: project.name,
+      workspaceSeed: isWorkspaceSeed(project),
       worldview: project.worldview,
       stories: stories.map((story) => ({
         id: story.id,
@@ -255,6 +285,7 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
         name: project.name,
         description: project.description,
         worldview: parseWorldview(project.worldview),
+        workspace_path: project.workspacePath,
       },
       stage,
       conflicts: detectWorldConflicts(world),
@@ -695,6 +726,18 @@ const createThreadBody = z
   })
   .strict();
 
+const openFolderBody = z
+  .object({
+    path: z.string().trim().min(1).max(4096),
+  })
+  .strict();
+
+const patchThreadBody = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+  })
+  .strict();
+
 const sendMessageBody = z
   .object({
     role: z.enum(['user', 'assistant', 'system']),
@@ -774,13 +817,18 @@ async function loadRoleplayMeta(
 
 function chatThreadDto(
   thread: ChatThreadRecord,
-  extras?: { projectName?: string | null; roleplay?: RoleplayMeta | null },
+  extras?: {
+    projectName?: string | null;
+    workspacePath?: string | null;
+    roleplay?: RoleplayMeta | null;
+  },
 ) {
   const roleplay = extras?.roleplay ?? null;
   return {
     id: thread.id,
     project_id: thread.projectId,
     project_name: extras?.projectName ?? null,
+    workspace_path: extras?.workspacePath ?? null,
     title: thread.title,
     state: thread.state,
     kind: roleplay ? ('roleplay' as const) : ('world' as const),
@@ -794,7 +842,10 @@ function chatThreadDto(
 async function chatThreadDtos(
   db: PrismaClient,
   threads: ChatThreadRecord[],
-  projectNameOf: (thread: ChatThreadRecord) => string | null,
+  extrasOf: (thread: ChatThreadRecord) => {
+    projectName: string | null;
+    workspacePath: string | null;
+  },
 ) {
   const meta = await loadRoleplayMeta(
     db,
@@ -802,7 +853,7 @@ async function chatThreadDtos(
   );
   return threads.map((thread) =>
     chatThreadDto(thread, {
-      projectName: projectNameOf(thread),
+      ...extrasOf(thread),
       roleplay: meta.get(thread.id) ?? null,
     }),
   );
@@ -1030,15 +1081,63 @@ function registerCreatorChatRoutes(
 
   app.post('/creator-chats', async (request, reply) => {
     const body = createThreadBody.parse(request.body ?? {});
-    if (body.project_id) await requireProject(db, body.project_id);
-    const created = await db.creatorChatThread.create({
-      data: {
-        projectId: body.project_id ?? null,
-        title: body.title ?? null,
-        state: 'active',
-      },
+    let memberUserId: string | null = null;
+    try {
+      await request.jwtVerify();
+      memberUserId = (request.user as { sub?: string } | undefined)?.sub ?? null;
+    } catch {
+      memberUserId = null;
+    }
+
+    if (body.project_id) {
+      await requireProject(db, body.project_id);
+      const created = await db.creatorChatThread.create({
+        data: {
+          projectId: body.project_id,
+          title: body.title ?? null,
+          state: 'active',
+        },
+      });
+      const project = await db.project.findFirst({
+        where: { id: body.project_id, deletedAt: null },
+        select: { name: true, workspacePath: true },
+      });
+      return reply.status(201).send(
+        chatThreadDto(created, {
+          projectName: project?.name ?? null,
+          workspacePath: project?.workspacePath ?? null,
+        }),
+      );
+    }
+
+    const { project, thread } = await createWorldWorkspace(db, {
+      title: body.title ?? null,
+      memberUserId,
     });
-    return reply.status(201).send(chatThreadDto(created));
+    return reply.status(201).send(
+      chatThreadDto(thread, {
+        projectName: project.name,
+        workspacePath: project.workspacePath,
+      }),
+    );
+  });
+
+  app.post('/folders/open', async (request, reply) => {
+    const body = openFolderBody.parse(request.body ?? {});
+    let memberUserId: string | null = null;
+    try {
+      await request.jwtVerify();
+      memberUserId = (request.user as { sub?: string } | undefined)?.sub ?? null;
+    } catch {
+      memberUserId = null;
+    }
+    const { project, thread } = await openWorldFolder(db, body.path, memberUserId);
+    return reply.status(200).send(
+      chatThreadDto(thread, {
+        projectName: project.name,
+        workspacePath: project.workspacePath,
+      }),
+    );
   });
 
   app.get('/projects/:projectId/creator-chats', async (request) => {
@@ -1048,7 +1147,10 @@ function registerCreatorChatRoutes(
       where: { projectId, state: 'active' },
       orderBy: { updatedAt: 'desc' },
     });
-    return chatThreadDtos(db, threads, () => project.name);
+    return chatThreadDtos(db, threads, () => ({
+      projectName: project.name,
+      workspacePath: project.workspacePath,
+    }));
   });
 
   // Local single user (ADR-0013): list every active thread with its project name.
@@ -1067,45 +1169,60 @@ function registerCreatorChatRoutes(
       projectIds.length > 0
         ? await db.project.findMany({
             where: { id: { in: projectIds }, deletedAt: null },
-            select: { id: true, name: true },
+            select: { id: true, name: true, workspacePath: true },
           })
         : [];
-    const nameById = new Map(projects.map((project) => [project.id, project.name]));
-    return chatThreadDtos(db, threads, (thread) =>
-      thread.projectId ? (nameById.get(thread.projectId) ?? null) : null,
+    const projectById = new Map(projects.map((project) => [project.id, project]));
+    const visible = threads.filter(
+      (thread) => !thread.projectId || projectById.has(thread.projectId),
     );
+    return chatThreadDtos(db, visible, (thread) => {
+      const project = thread.projectId ? projectById.get(thread.projectId) : undefined;
+      return {
+        projectName: project?.name ?? null,
+        workspacePath: project?.workspacePath ?? null,
+      };
+    });
   });
 
   app.get('/creator-chats/:threadId', async (request) => {
     const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
-    const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
-    if (!thread) throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
+    const { thread, projectName, workspacePath } = await requireOpenThread(db, threadId);
     const messages = await db.creatorChatMessage.findMany({
       where: { threadId },
       orderBy: { createdAt: 'asc' },
     });
-    const projectName = thread.projectId
-      ? ((
-          await db.project.findFirst({
-            where: { id: thread.projectId, deletedAt: null },
-            select: { name: true },
-          })
-        )?.name ?? null)
-      : null;
     const roleplayMeta = await loadRoleplayMeta(db, [thread.id]);
     return {
       thread: chatThreadDto(thread, {
         projectName,
+        workspacePath,
         roleplay: roleplayMeta.get(thread.id) ?? null,
       }),
       messages: messages.map(chatMessageDto),
     };
   });
 
+  app.delete('/creator-chats/:threadId', async (request, reply) => {
+    const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
+    await archiveCreatorChat(db, threadId);
+    return reply.status(204).send();
+  });
+
+  app.patch('/creator-chats/:threadId', async (request) => {
+    const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
+    const { thread, projectName, workspacePath } = await requireOpenThread(db, threadId);
+    const body = patchThreadBody.parse(request.body ?? {});
+    const updated = await db.creatorChatThread.update({
+      where: { id: thread.id },
+      data: { title: body.title },
+    });
+    return chatThreadDto(updated, { projectName, workspacePath });
+  });
+
   app.post('/creator-chats/:threadId/messages', async (request, reply) => {
     const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
-    const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
-    if (!thread) throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
+    const { thread } = await requireOpenThread(db, threadId);
     const body = sendMessageBody.parse(request.body ?? {});
 
     // ADR-0010 fence: only the agent (assistant) carries proposals to the world.
@@ -1171,8 +1288,7 @@ function registerCreatorChatRoutes(
 
   app.post('/creator-chats/:threadId/messages/stream', async (request, reply) => {
     const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
-    const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
-    if (!thread) throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
+    const { thread } = await requireOpenThread(db, threadId);
     const body = sendMessageBody.parse(request.body ?? {});
     if (body.role !== 'user') {
       throw new ApiError(400, 'STREAM_USER_ONLY', '流式发送仅支持用户消息');
@@ -1210,8 +1326,7 @@ function registerCreatorChatRoutes(
       memberUserId = null;
     }
 
-    const thread = await db.creatorChatThread.findFirst({ where: { id: threadId } });
-    if (!thread) throw new ApiError(404, 'THREAD_NOT_FOUND', '对话不存在');
+    const { thread } = await requireOpenThread(db, threadId);
 
     const message = await db.creatorChatMessage.findFirst({
       where: { id: messageId, threadId },
@@ -1251,11 +1366,14 @@ function registerCreatorChatRoutes(
       let currentProjectId = thread.projectId;
       for (const proposal of proposals) {
         if (proposal.kind === 'create_project' && currentProjectId) {
-          // 已有关联项目时，LLM 偶尔会误产出 create_project（创作者意图是向已有
-          // 项目添加实体，而非重复建项目）。跳过该提案而不阻断整批实体提案；
-          // 全部提案均被跳过时才报错（保留「纯重复建项目」的原语义）。
-          skipped.push({ kind: proposal.kind, reason: 'PROJECT_ALREADY_EXISTS' });
-          continue;
+          const existing = await tx.project.findFirst({
+            where: { id: currentProjectId, deletedAt: null },
+            select: { settings: true },
+          });
+          if (existing && !isWorkspaceSeed(existing)) {
+            skipped.push({ kind: proposal.kind, reason: 'PROJECT_ALREADY_EXISTS' });
+            continue;
+          }
         }
         const result = await applyProposal(tx, proposal, currentProjectId, memberUserId);
         results.push({

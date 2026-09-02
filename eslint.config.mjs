@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       '**/generated/**',
+      'apps/desktop/**',
       'apps/api/scripts/**',
       'apps/api/vitest.config.ts',
       'apps/web/vitest.config.ts',

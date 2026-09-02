@@ -61,6 +61,7 @@ export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
     id: record.id,
     project_id: asString(record.project_id) ?? asString(record.projectId),
     project_name: asString(record.project_name) ?? asString(record.projectName),
+    workspace_path: asString(record.workspace_path) ?? asString(record.workspacePath),
     title: asString(record.title),
     state: asString(record.state) ?? 'active',
     kind: asChatKind(record.kind),

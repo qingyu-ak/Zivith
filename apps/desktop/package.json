@@ -1,0 +1,16 @@
+{
+  "name": "@zivith/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zivith local Electron shell (native folder dialog)",
+  "main": "src/main.cjs",
+  "scripts": {
+    "dev": "wait-on http-get://127.0.0.1:3100 && electron .",
+    "start": "electron .",
+    "typecheck": "node -e \"process.exit(0)\""
+  },
+  "devDependencies": {
+    "electron": "^37.4.0",
+    "wait-on": "^8.0.5"
+  }
+}

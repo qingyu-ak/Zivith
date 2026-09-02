@@ -30,6 +30,7 @@ Linux and macOS development use a POSIX shell.
 apps/
   web/                 Web frontend
   api/                 REST API and background workers
+  desktop/             Electron shell (native open-folder)
 packages/
   domain/              Shared domain types and rules
   database/            Schema, migrations, and seed data
@@ -66,8 +67,15 @@ secret. Values in the example files are development-only placeholders.
 pnpm dev
 ```
 
+要用系统对话框打开真实工作区路径（[ADR-0016](docs/architecture/adr/0016-local-creative-surface-is-electron.md)）：
+
+```sh
+pnpm desktop
+```
+
 Default local services:
 
+- Desktop: `pnpm desktop`（Electron 窗口加载 Web；系统对话框选择文件夹）
 - Web: <http://127.0.0.1:3100>
 - API: <http://127.0.0.1:4000/api/v1>
 - PostgreSQL: `localhost:5432`

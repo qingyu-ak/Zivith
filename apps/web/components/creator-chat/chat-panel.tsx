@@ -27,7 +27,8 @@ import {
   type ChatFocus,
 } from '@/lib/creator-chat-nav';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
-import type { CreatorChatMessageDTO, CreatorChatThreadDTO, ProposalKind } from '@/lib/types';
+import type { CreatorChatMessageDTO, CreatorChatThreadDTO, ProjectDTO, ProposalKind } from '@/lib/types';
+import { isDesktopApp, pickWorkspaceDirectory, asWorkspacePath } from '@/lib/desktop';
 import { IconExternal, IconSearch, IconSend, IconSidebar } from '@/components/nav-icons';
 import { ChatSidebar, ChatSidebarRail } from './chat-sidebar';
 import { ProposalCard, type ChatProposal } from './proposal-card';
@@ -95,6 +96,8 @@ export function ChatPanel() {
   const [thread, setThread] = useState<CreatorChatThreadDTO | null>(null);
   const [messages, setMessages] = useState<CreatorChatMessageDTO[]>([]);
   const [threads, setThreads] = useState<CreatorChatThreadDTO[]>([]);
+  const [projects, setProjects] = useState<Pick<ProjectDTO, 'id' | 'name' | 'workspace_path'>[]>([]);
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(Boolean(threadId));
   const [sending, setSending] = useState(false);
@@ -150,6 +153,24 @@ export function ChatPanel() {
         ),
       )
       .catch(() => setThreads([]));
+    api<unknown[] | { data?: unknown[]; items?: unknown[] }>('/projects')
+      .then((value) => {
+        setProjects(
+          unwrapList(value).flatMap((item) => {
+            if (typeof item !== 'object' || item === null) return [];
+            const record = item as Record<string, unknown>;
+            if (typeof record.id !== 'string' || typeof record.name !== 'string') return [];
+            return [
+              {
+                id: record.id,
+                name: record.name,
+                workspace_path: asWorkspacePath(record),
+              },
+            ];
+          }),
+        );
+      })
+      .catch(() => setProjects([]));
   }, []);
 
   useEffect(() => {
@@ -419,9 +440,10 @@ export function ChatPanel() {
         },
       });
       if (!created.id) throw new Error('无法创建角色卡');
+      const createdId = created.id;
       setCharacters((current) => {
-        if (current.some((item) => item.id === created.id)) return current;
-        return [{ id: created.id, name, tags: ['user_self'] }, ...current];
+        if (current.some((item) => item.id === createdId)) return current;
+        return [{ id: createdId, name, tags: ['user_self'] }, ...current];
       });
       setCreatingSelf(false);
       setSelfName('');
@@ -471,7 +493,17 @@ export function ChatPanel() {
     await sendContent(content);
   }
 
-  async function startThread(firstMessage?: string) {
+  async function startThread(firstMessage?: string, projectId?: string) {
+    const targetProjectId = projectId?.trim() || thread?.project_id || undefined;
+    if (!targetProjectId) {
+      setFolderPickerOpen(true);
+      setError(
+        isDesktopApp()
+          ? '请先选择一个文件夹作为世界项目'
+          : '请用桌面应用选择文件夹，或从侧栏点选已有项目',
+      );
+      return;
+    }
     setError('');
     setBusy(true);
     try {
@@ -480,7 +512,7 @@ export function ChatPanel() {
       }
       const created = await api<unknown>('/world/creator-chats', {
         method: 'POST',
-        body: { project_id: null, title: null },
+        body: { project_id: targetProjectId, title: null },
       });
       const createdThread = normalizeThread(created);
       if (!createdThread?.id) throw new Error('无法创建对话');
@@ -488,6 +520,91 @@ export function ChatPanel() {
     } catch (reason) {
       setError(errorMessage(reason));
       if (firstMessage) sessionStorage.removeItem(PENDING_CHAT_TURN_KEY);
+      setBusy(false);
+    }
+  }
+
+  async function openWorkspacePath(folderPath: string) {
+    setError('');
+    setBusy(true);
+    try {
+      const created = await api<unknown>('/world/folders/open', {
+        method: 'POST',
+        body: { path: folderPath },
+      });
+      const createdThread = normalizeThread(created);
+      if (!createdThread?.id) throw new Error('无法打开文件夹');
+      setFolderPickerOpen(false);
+      loadThreads();
+      router.push(`/creator-chats/${createdThread.id}`);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pickFolder() {
+    try {
+      const folderPath = await pickWorkspaceDirectory();
+      if (!folderPath) return;
+      await openWorkspacePath(folderPath);
+    } catch (reason) {
+      setFolderPickerOpen(true);
+      setError(errorMessage(reason));
+    }
+  }
+
+  function selectProject(projectId: string) {
+    const latest = threads.find((item) => item.project_id === projectId);
+    if (latest) {
+      router.push(`/creator-chats/${latest.id}`);
+      return;
+    }
+    void startThread(undefined, projectId);
+  }
+
+  async function renameProject(projectId: string, name: string) {
+    setError('');
+    try {
+      await api(`/projects/${projectId}`, { method: 'PATCH', body: { name } });
+      loadThreads();
+      if (thread?.project_id === projectId) void load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  async function renameThread(id: string, name: string) {
+    setError('');
+    try {
+      await api(`/world/creator-chats/${id}`, { method: 'PATCH', body: { title: name } });
+      loadThreads();
+      if (threadId === id) void load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  async function deleteThread(id: string, name: string) {
+    if (!window.confirm(`确定删除对话「${name}」吗？`)) {
+      return;
+    }
+    setError('');
+    setBusy(true);
+    try {
+      await api(`/world/creator-chats/${id}`, { method: 'DELETE' });
+      const leaving = threadId === id;
+      loadThreads();
+      if (leaving) {
+        setThread(null);
+        setMessages([]);
+        setFocus(null);
+        router.push('/creator-chats');
+      }
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
       setBusy(false);
     }
   }
@@ -529,14 +646,22 @@ export function ChatPanel() {
   return (
     <div className="flex h-dvh overflow-hidden bg-white text-zinc-900 [color-scheme:light]">
       {collapsed ? (
-        <ChatSidebarRail onToggle={toggleCollapsed} onNewChat={() => void startThread()} />
+        <ChatSidebarRail onToggle={toggleCollapsed} onOpenFolder={() => void pickFolder()} />
       ) : (
         <ChatSidebar
           threads={threads}
+          projects={projects}
           threadId={threadId}
           busy={busy}
+          pickerOpen={folderPickerOpen}
           onToggle={toggleCollapsed}
-          onNewChat={() => void startThread()}
+          onPickerOpenChange={setFolderPickerOpen}
+          onSelectProject={selectProject}
+          onOpenFolder={() => void pickFolder()}
+          onNewInProject={(projectId) => void startThread(undefined, projectId)}
+          onRenameProject={(projectId, name) => void renameProject(projectId, name)}
+          onRenameThread={(id, name) => void renameThread(id, name)}
+          onDeleteThread={(id, name) => void deleteThread(id, name)}
         />
       )}
 
@@ -740,27 +865,39 @@ export function ChatPanel() {
                     </div>
                     <p className="text-lg font-medium text-zinc-900">开始构建你的世界</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-500">
-                      用一句话说设定。确认后的提案会写入草稿，细节在 Studio 里改。
+                      {thread?.project_id
+                        ? '这个对话属于当前工作区。确认后的设定会写成草稿，可在 Studio 里改 IP Core 和实体。'
+                        : '侧栏「选择文件夹」打开一个已有目录作为世界。项目里可以新开聊天、改名、删除对话。'}
                     </p>
-                    <div className="mt-6 flex flex-wrap justify-center gap-2">
-                      {STARTERS.map((starter) => (
-                        <button
-                          key={starter}
-                          type="button"
-                          disabled={sending || busy}
-                          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900 disabled:opacity-40"
-                          onClick={() => {
-                            if (!threadId) {
-                              void startThread(starter);
-                              return;
-                            }
-                            void sendContent(starter);
-                          }}
-                        >
-                          {starter}
-                        </button>
-                      ))}
-                    </div>
+                    {thread?.project_id ? (
+                      <div className="mt-6 flex flex-wrap justify-center gap-2">
+                        {STARTERS.map((starter) => (
+                          <button
+                            key={starter}
+                            type="button"
+                            disabled={sending || busy}
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900 disabled:opacity-40"
+                            onClick={() => {
+                              if (!threadId) {
+                                void startThread(starter);
+                                return;
+                              }
+                              void sendContent(starter);
+                            }}
+                          >
+                            {starter}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="mt-6 inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
+                        onClick={() => void pickFolder()}
+                      >
+                        选择文件夹
+                      </button>
+                    )}
                   </div>
                 )}
                 {messages.map((message) => {

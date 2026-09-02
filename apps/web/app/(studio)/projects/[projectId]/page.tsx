@@ -9,7 +9,6 @@ import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormText } from '@/lib/form-data';
 import type { ProjectDTO, StoryDTO } from '@/lib/types';
 import { ContinueInChatButton } from '@/components/world/continue-in-chat';
-import { ProjectSubNav } from '@/components/project-sub-nav';
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -105,7 +104,6 @@ export default function ProjectPage() {
           </Button>
         </div>
       </header>
-      <ProjectSubNav projectId={projectId} />
       {error && (
         <p className="mb-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-600" role="alert">
           {error}

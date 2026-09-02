@@ -3,7 +3,6 @@
 import { useParams } from 'next/navigation';
 import { ProviderPanel } from '@/components/provider-panel';
 import { UsageSummaryCard } from '@/components/usage-summary-card';
-import { ProjectSubNav } from '@/components/project-sub-nav';
 
 /** 设置（/settings）：提供商配置 + 用量统计，承接原项目页面板（只搬不移逻辑） */
 export default function SettingsPage() {
@@ -14,7 +13,6 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-semibold">设置</h1>
         <p className="mt-2 text-zinc-400">提供商配置与用量统计。</p>
       </header>
-      <ProjectSubNav projectId={projectId} />
       <div className="grid gap-6">
         <ProviderPanel />
         <UsageSummaryCard projectId={projectId} />

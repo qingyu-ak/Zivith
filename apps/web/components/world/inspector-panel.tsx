@@ -56,7 +56,7 @@ const KIND_LABEL: Record<string, string> = {
   scene: '场景',
   world_event: '世界事件',
   story: '故事',
-  project: '项目',
+  project: 'IP Core',
   dimension: '时间维度',
   relationship: '关系',
   shot: '镜头',
@@ -626,7 +626,7 @@ export function InspectorPanel({
         ) : view === 'production' ? (
           <div className="px-4 pb-6">
             <p className="text-sm leading-6 text-zinc-600">
-              这是制作视图。中间按呈现顺序排：故事 → 场景 → 镜头，下面四条是镜头的只读投影（机位 /
+              这是创作线视图。中间按呈现顺序排：故事 → 场景 → 镜头，下面四条是镜头的只读投影（机位 /
               风格 / 提示词 / 模型）。
             </p>
             <p className="mt-3 text-xs leading-5 text-zinc-500">
@@ -636,7 +636,7 @@ export function InspectorPanel({
         ) : (
           <div className="px-4 pb-6">
             <p className="text-sm leading-6 text-zinc-600">
-              世界时间默认跟随呈现顺序。点时间维度芯片或左侧「世界观」可增改梦境、历法、平行世界。
+              世界时间默认跟随呈现顺序。点左侧「IP Core」可改世界观与规则；点时间维度芯片可增改梦境、历法、平行世界。
             </p>
             <ul className="mt-3 space-y-1.5">
               {defaultDimensions(resources).map((dimension) => (
@@ -669,7 +669,7 @@ export function InspectorPanel({
           <p className="text-sm leading-relaxed text-zinc-600">
             {view === 'production'
               ? '机位、风格、提示词、模型已经在中间时间线投影，不另存一份。选中条目后属性显示在上方。'
-              : '点右上角「制作」可看到机位 / 风格 / 提示词 / 模型派生轨。它们跟随镜头状态，不另存 TimelineItem。'}
+              : '点右上角「创作线」可看到机位 / 风格 / 提示词 / 模型派生轨。它们跟随镜头状态，不另存 TimelineItem。'}
           </p>
         </div>
       </section>
@@ -689,6 +689,7 @@ function ImportUpgradeButton({
   const [error, setError] = useState('');
   const importId = asset?.import_id;
   if (!asset || asset.tier !== 'light' || !importId) return null;
+  const assetId = asset.id;
 
   async function upgrade() {
     setBusy(true);
@@ -696,7 +697,7 @@ function ImportUpgradeButton({
     try {
       await api(`/novel-imports/${importId}/upgrade`, {
         method: 'POST',
-        body: { asset_id: asset.id },
+        body: { asset_id: assetId },
       });
       onUpgraded?.();
     } catch (reason) {
@@ -1470,7 +1471,7 @@ function renderReadonly(
       return (
         <EntityDetail
           kind="project"
-          label="项目"
+          label="IP Core"
           fields={[
             { label: '名称', value: resources.project.name },
             { label: '描述', value: resources.project.description },

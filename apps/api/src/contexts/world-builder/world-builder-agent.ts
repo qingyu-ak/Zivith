@@ -323,8 +323,8 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
   const conflicts: string[] = [];
   const proposals: Proposal[] = [];
 
-  // No project yet — always propose creating one.
-  if (!world) {
+  // Empty folder / placeholder workspace — still propose naming the world.
+  if (!world || world.workspaceSeed) {
     proposals.push(
       mockProposal('create_project', null, {
         name: '新 IP 世界',

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@zivith/database';
 import { type Worldview, parseWorldview } from '@zivith/domain';
 import { formatCharacterCard, personalityFromAssetData } from '../world/character-card.js';
+import { isWorkspaceSeed } from '../world/workspace.js';
 
 /**
  * World context for the World Builder agent.
@@ -12,6 +13,7 @@ import { formatCharacterCard, personalityFromAssetData } from '../world/characte
 export interface WorldContext {
   projectId: string;
   projectName: string;
+  workspaceSeed?: boolean;
   worldview: Worldview;
   stories: Array<{ id: string; title: string; genre: string | null; logline: string | null }>;
   characters: Array<{
@@ -48,7 +50,7 @@ export async function buildWorldContext(
 ): Promise<WorldContext | null> {
   const project = await db.project.findFirst({
     where: { id: projectId, deletedAt: null },
-    select: { id: true, name: true, worldview: true },
+    select: { id: true, name: true, worldview: true, settings: true },
   });
   if (!project) return null;
 
@@ -97,6 +99,7 @@ export async function buildWorldContext(
   return assembleWorldContext({
     projectId: project.id,
     projectName: project.name,
+    workspaceSeed: isWorkspaceSeed(project),
     worldview: project.worldview,
     stories,
     characters,
@@ -120,6 +123,7 @@ function stringTags(value: unknown): string[] {
 export function assembleWorldContext(input: {
   projectId: string;
   projectName: string;
+  workspaceSeed?: boolean;
   worldview: unknown;
   stories: WorldContext['stories'];
   characters: Array<{
@@ -139,6 +143,7 @@ export function assembleWorldContext(input: {
   return {
     projectId: input.projectId,
     projectName: input.projectName,
+    workspaceSeed: Boolean(input.workspaceSeed),
     worldview: parseWorldview(input.worldview),
     stories: input.stories,
     characters: input.characters.map((character) => ({
@@ -182,6 +187,9 @@ function entityLabel(context: WorldContext, type: string, id: string): string {
 /** Compact markdown-style text of the world, injected into the agent prompt. */
 export function worldContextToPrompt(context: WorldContext | null): string {
   if (!context) return '（还没有项目。需要先创建 IP 项目。）';
+  if (context.workspaceSeed) {
+    return `（工作区已打开，项目名称仍是占位「${context.projectName}」。请用 create_project 写入真实名称；系统会改名，不会新建第二个项目。）`;
+  }
   const lines: string[] = [`项目名称：${context.projectName}`, ''];
   const { worldview } = context;
   const hasWorldview =
@@ -221,8 +229,8 @@ export function worldContextToPrompt(context: WorldContext | null): string {
       const card = formatCharacterCard({
         name: c.name,
         description: c.description,
-        personality: c.personality,
-        aliases: c.aliases,
+        personality: c.personality ?? null,
+        aliases: c.aliases ?? [],
       }).replaceAll('\n', ' · ');
       lines.push(`- [character:${c.id}] ${card}${tags}`);
     }

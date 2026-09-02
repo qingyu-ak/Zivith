@@ -131,6 +131,8 @@ model Project {
   worldview   Json            @default("{}")
   defaults    Json            @default("{}")
   settings    Json            @default("{}")
+  /// Absolute folder path that identifies this world workspace (Electron open-folder).
+  workspacePath String?       @map("workspace_path")
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
   deletedAt   DateTime?       @map("deleted_at")
@@ -151,6 +153,7 @@ model Project {
   creatorThreads  CreatorChatThread[]
 
   @@index([ownerId, deletedAt])
+  @@index([ownerId, workspacePath])
   @@map("projects")
 }
 

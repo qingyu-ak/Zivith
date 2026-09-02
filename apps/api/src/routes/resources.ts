@@ -22,6 +22,7 @@ import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
 import { ApiError } from '../errors.js';
 import { ensureProjectMember } from '../contexts/world/local-user.js';
+import { archiveWorldWorkspace } from '../contexts/world/workspace.js';
 import type { StoragePort } from '../ports/index.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 import { maybeRecordEntityChange } from '../contexts/history/index.js';
@@ -471,7 +472,7 @@ export function registerResourceRoutes(
     const member = await requireMember(db, request.user.sub, id, true);
     if (member.role !== 'owner')
       throw new ApiError(403, 'OWNER_REQUIRED', '仅项目所有者可删除项目');
-    await db.project.update({ where: { id }, data: { deletedAt: new Date() } });
+    await archiveWorldWorkspace(db, id);
     return reply.status(204).send();
   });
   app.get('/projects/:id/settings', async (request) => {

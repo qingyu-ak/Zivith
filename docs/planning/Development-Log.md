@@ -12,6 +12,85 @@
 
 ---
 
+## 2026-09-02 · feat(desktop,api,web) · Electron 工作区路径
+
+本地创作面改为 Electron 窗口，用系统对话框拿到绝对路径。`Project.workspacePath` 标识世界；Chat 侧栏恢复「选择文件夹 / 项目内新聊天 / 改名 / 删聊天」。不把实体写成磁盘文件（阶段 F）。
+
+- **feat(desktop)** `apps/desktop`；根脚本 `pnpm desktop`
+- **feat(api)** `workspace_path` 列；`POST /world/folders/open { path }`
+- **feat(web)** 侧栏按工作区分组；无桌面壳时提示用 `pnpm desktop`
+- **docs** ADR-0016；UI-IA；Next-Tasks Track D 完成、Track W（工作区文件）后做
+- 模块：`apps/desktop`、`workspace.ts`、`world.ts`、`chat-sidebar.tsx`、`chat-panel.tsx`
+
+## 2026-09-02 · feat(web) · Chat 只聊天，项目文件夹在 Studio
+
+一个项目文件夹装着 IP Core、实体和聊天。Chat 页面只保留对话列表与消息流；选文件夹、改项目名、看实体都在 Studio。打开工作区默认选中 IP Core，Inspector 可改世界观与实体属性。
+
+- **feat(web)** Chat 侧栏收成当前项目对话列表；无项目时引导去 `/projects`
+- **feat(web)** Studio Explorer 增加 IP Core 节点；工作区默认选中项目；`/projects` 打开本地文件夹进 `/world`
+- **docs** UI-IA v1.3：Chat 只聊天，Studio 管项目文件夹
+- 模块：`chat-panel.tsx`、`chat-sidebar.tsx`、`entity-explorer.tsx`、`world-workspace.tsx`、`inspector-panel.tsx`、`projects/page.tsx`
+
+## 2026-09-02 · feat(api,web) · 选择文件夹作为世界项目
+
+对话侧栏不再新建空文件夹。顶栏「+」选择本地目录或已有项目作为世界；项目里可新建聊天、重命名项目/聊天、删除聊天。
+
+- **feat(api)** `POST /world/folders/open` 按文件夹名打开或绑定项目；`PATCH /world/creator-chats/:id` 改聊天标题
+- **feat(web)** 选择文件夹面板；双击/右键重命名；右键删除对话
+- **docs** UI-IA：选择文件夹，不从 Chat 新建空项目
+- 模块：`workspace.ts`、`world.ts`、`chat-sidebar.tsx`、`chat-panel.tsx`
+
+## 2026-09-01 · feat(api,web) · Chat 侧栏按 Cursor 项目树操作
+
+对话历史改成项目文件夹：顶栏「+」新建项目，项目行聊天气泡「+」在该项目新建聊天，右键删除项目或对话。去掉顶栏大按钮和行内垃圾桶。
+
+- **feat(api)** `DELETE /world/creator-chats/:id` 归档单条对话
+- **feat(web)** 侧栏「项目」分组、空项目仍显示、右键菜单
+- **docs** UI-IA：侧栏加号语义与右键删除
+- 模块：`workspace.ts`、`world.ts`、`chat-sidebar.tsx`、`chat-panel.tsx`、`chat-history.ts`
+
+## 2026-09-01 · feat(api,web) · 对话侧栏可删除世界项目
+
+Chat 历史栏项目分组原先只能「+ 新开对话」，无法删掉整个世界文件夹。删除走既有 `DELETE /projects/:id` 软删，并归档该项目下全部对话，避免幽灵会话。
+
+- **feat(api)** `archiveWorldWorkspace`：软删项目 + 线程 `state=archived`；列表/打开已删对话不再返回
+- **feat(web)** 侧栏分组旁垃圾桶；删当前世界后回到 `/creator-chats`
+- **docs** UI-IA：侧栏可删除整个世界工作区
+- 模块：`workspace.ts`、`resources.ts`、`world.ts`、`chat-sidebar.tsx`、`chat-panel.tsx`
+
+## 2026-09-01 · feat(api,web) · 世界聊天即建项目文件夹
+
+开世界聊天立刻创建一个空 `Project`（IP Core 工作区），像 Cursor 打开代码文件夹。确认「创建世界」只给这个文件夹改名，不另建项目。同一项目可多条对话；Studio Explorer 改成文件树（对话 / 角色 / 地点 / 事件 / 故事）。
+
+- **feat(api)** `POST /creator-chats` 无 `project_id` 时创建 seed 工作区 + 线程；`create_project` 认领 seed
+- **feat(web)** 侧栏按项目分组；「在此世界新开对话」/「新世界」；活动栏「对话」打开当前项目聊天
+- **feat(web)** 世界工作区 Explorer 为可折叠文件树，对话条目跳回 Chat
+- **docs** UI-IA：一个世界 = 一个项目 = 一个 IP Core
+- 模块：`workspace.ts`、`world.ts`、`proposal-applier.ts`、`chat-sidebar.tsx`、`entity-explorer.tsx`、`app-shell.tsx`
+
+## 2026-09-01 · feat(web) · Studio 收成图标活动栏（IDE 壳）
+
+Studio 非 Chat 路由不再展开 248px 文字菜单。活动栏只留图标：对话 / 项目 / 世界 / 实体 / 故事 / 制作，设置在底部齿轮。切项目落到 `/world`，与 Chat「Studio」一致。项目主页、production、settings 去掉 `ProjectSubNav`。世界工作区顶栏「制作」改称「创作线」，避免和活动栏「制作」（`/production`）撞名。
+
+- **feat(web)** `AppShell` 始终 ~56px 活动栏；顶部紧凑项目切换进 `/world`
+- **feat(web)** `/projects` 卡片打开 `/world`；活动栏「故事」仍进项目根故事列表
+- **feat(web)** 删除 `project-sub-nav.tsx`；工作区顶栏与 Inspector 文案改为「创作线」
+- **docs** UI-IA v1.2：Studio = IDE 壳，主画布 `/world`，Chat 仍是独立壳；Next-Tasks K6
+- 模块：`app-shell.tsx`、`projects/page.tsx`、`projects/[projectId]/{page,production,settings}`、`world-workspace.tsx`、`inspector-panel.tsx`、`docs/product/UI-Information-Architecture.md`
+
+## 2026-09-01 · docs · 验收《龙族Ⅴ》导入：撤销重导通过
+
+对「龙族V」项目撤销旧导入后重导《龙族Ⅴ·悼亡者归来》（236 章 / 约 44 秒）。名单与时间轴达到验收标准，不改抽取代码。
+
+- **验收** 章失败后续跑：第 2 章强制失败时不写世界层；retry 后续抽并写入；撤销后 Asset/事件/导入记录均为 0
+- **验收** 旧世界撤销干净（stage 回到 bootstrap）；重导 40 角色 / 8 地点 / 60 事件 / 30 关系
+- **验收** 舰长 / 神官 / 尔特先生不在名单与 skipped；图灵先生收成图灵；芬格尔仍在全量卡
+- **验收** 60 条事件按 `chapter_index` 升序，`presentation_order` 0–59；第 4/11 章回叙提及仍靠前（预期）
+- **docs** Track M2 记长篇验收；下一刀改为无默认编码任务，不插队 I3
+- 验证：`vitest` novel-import 25 项；本机 API 撤销 + 重导；世界工作区路由 200
+- 已知限制未当作失败：轻量卡仍有「整个 / 姐姐 / 站起身」等规则噪声；「路明非 · 毕业」标题重复
+- 模块：`Next-Tasks.md`、`docs/README.md`
+
 ## 2026-08-31 · 4d477e4 · fix(api) · 导入人名去掉舰长/神官/先生残片
 
 规则抽取把头衔和「某某先生」切出来的碎片当成角色。本轮把头衔列入停用词，剥先生/小姐等称呼，并丢掉尔特这类音译尾巴。

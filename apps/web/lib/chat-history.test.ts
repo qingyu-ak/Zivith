@@ -1,6 +1,9 @@
 /// <reference types="vitest/globals" />
 import {
+  compactRelativeTime,
+  filterProjectGroups,
   filterThreadsByQuery,
+  groupProjectsWithThreads,
   groupRoleplayByProject,
   groupThreadsByRecency,
   partitionThreadsByKind,
@@ -119,5 +122,40 @@ describe('threadDisplayTitle', () => {
     expect(threadDisplayTitle({ title: '草稿会话', project_name: '凡人修仙' })).toBe('草稿会话');
     expect(threadDisplayTitle({ title: null, project_name: '凡人修仙' })).toBe('凡人修仙');
     expect(threadDisplayTitle({ title: '  ', project_name: null })).toBe('未命名对话');
+  });
+});
+
+describe('groupProjectsWithThreads', () => {
+  it('keeps empty projects and nests chats under the folder', () => {
+    const now = new Date();
+    const groups = groupProjectsWithThreads(
+      [
+        { id: 'p-empty', name: '学年论文x' },
+        { id: 'p1', name: '新世界' },
+      ],
+      [thread('t1', now, { project_id: 'p1', project_name: '新世界', title: '文档树第二对话' })],
+    );
+    expect(groups.map((group) => group.id)).toEqual(['p1', 'p-empty']);
+    expect(groups[0]?.threads.map((item) => item.id)).toEqual(['t1']);
+    expect(groups[1]?.threads).toEqual([]);
+  });
+});
+
+describe('filterProjectGroups', () => {
+  it('keeps a project when its name matches even if chats do not', () => {
+    const now = new Date();
+    const groups = groupProjectsWithThreads(
+      [{ id: 'p1', name: '学年论文x' }],
+      [thread('t1', now, { project_id: 'p1', title: '开题报告' })],
+    );
+    expect(filterProjectGroups(groups, '学年').map((group) => group.id)).toEqual(['p1']);
+    expect(filterProjectGroups(groups, '没有').map((group) => group.id)).toEqual([]);
+  });
+});
+
+describe('compactRelativeTime', () => {
+  it('uses a short sidebar label', () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    expect(compactRelativeTime(twoDaysAgo)).toBe('2天');
   });
 });

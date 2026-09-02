@@ -3,15 +3,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button, Card, EmptyState, Field, Input, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
+import { pickWorkspaceDirectory } from '@/lib/desktop';
+import { normalizeThread } from '@/lib/creator-chat-nav';
 import { getFormText } from '@/lib/form-data';
 import type { ProjectDTO } from '@/lib/types';
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -19,7 +24,15 @@ export default function ProjectsPage() {
       const value = await api<ProjectDTO[] | { data?: ProjectDTO[]; items?: ProjectDTO[] }>(
         '/projects',
       );
-      setProjects(unwrapList(value));
+      setProjects(
+        unwrapList(value).map((item) => {
+          const record = item as ProjectDTO & { workspacePath?: string | null };
+          return {
+            ...record,
+            workspace_path: record.workspace_path ?? record.workspacePath ?? null,
+          };
+        }),
+      );
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -52,6 +65,27 @@ export default function ProjectsPage() {
     }
   }
 
+  async function openLocalFolder() {
+    try {
+      const folderPath = await pickWorkspaceDirectory();
+      if (!folderPath) return;
+      setError('');
+      setOpening(true);
+      const created = await api<unknown>('/world/folders/open', {
+        method: 'POST',
+        body: { path: folderPath },
+      });
+      const thread = normalizeThread(created);
+      const projectId = thread?.project_id;
+      if (!projectId) throw new Error('无法打开项目文件夹');
+      router.push(`/projects/${projectId}/world`);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setOpening(false);
+    }
+  }
+
   async function remove(project: ProjectDTO) {
     if (!window.confirm(`确定删除项目“${project.name}”吗？此操作无法撤销。`)) return;
     try {
@@ -68,11 +102,23 @@ export default function ProjectsPage() {
         <div>
           <p className="text-sm text-accent">创作中心</p>
           <h1 className="mt-1 text-3xl font-semibold">你的项目</h1>
-          <p className="mt-2 text-zinc-400">每个项目都是一个独立的故事宇宙。</p>
+          <p className="mt-2 text-zinc-400">
+            一个文件夹是一个世界工作区。用桌面应用选择真实路径；Chat 里可新建聊天、改名、删除对话。
+          </p>
         </div>
-        <Button onClick={() => setCreating((value) => !value)}>
-          {creating ? '取消' : '新建项目'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={opening}
+            onClick={() => {
+              void openLocalFolder();
+            }}
+          >
+            {opening ? '正在打开…' : '打开文件夹'}
+          </Button>
+          <Button variant="secondary" onClick={() => setCreating((value) => !value)}>
+            {creating ? '取消' : '新建项目'}
+          </Button>
+        </div>
       </header>
 
       {error && (
@@ -110,17 +156,34 @@ export default function ProjectsPage() {
         <Spinner label="正在加载项目…" />
       ) : projects.length === 0 ? (
         <EmptyState
-          title="还没有项目"
-          description="创建第一个项目，开始组织故事、场景、镜头与可复用资产。"
-          action={<Button onClick={() => setCreating(true)}>创建第一个项目</Button>}
+          title="还没有项目文件夹"
+          description="用桌面应用（pnpm desktop）选择一个已有文件夹作为世界工作区。"
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Button
+                disabled={opening}
+                onClick={() => {
+                  void openLocalFolder();
+                }}
+              >
+                {opening ? '正在打开…' : '打开文件夹'}
+              </Button>
+              <Button variant="secondary" onClick={() => setCreating(true)}>
+                新建项目
+              </Button>
+            </div>
+          }
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <Card key={project.id} className="group relative overflow-hidden">
-              <Link href={`/projects/${project.id}`} className="block">
+              <Link href={`/projects/${project.id}/world`} className="block">
                 <div className="mb-5 aspect-[16/8] rounded-lg bg-gradient-to-br from-zinc-100 via-zinc-50 to-accent/10" />
                 <h2 className="text-lg font-semibold group-hover:text-accent">{project.name}</h2>
+                <p className="mt-1 truncate text-xs text-zinc-500">
+                  {project.workspace_path || '未绑定文件夹'}
+                </p>
                 <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-zinc-400">
                   {project.description || '暂无项目简介'}
                 </p>

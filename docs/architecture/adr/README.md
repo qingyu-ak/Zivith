@@ -21,6 +21,7 @@
 | [0013](0013-local-single-user-mode-no-login.md) | 本地单用户模式：无登录 | 已接受 | 2026-08-04 |
 | [0014](0014-layered-memory-system.md) | 分层记忆系统 | 已接受 | 2026-08-23 |
 | [0015](0015-novel-import-is-batch-memory-ingest.md) | 小说导入即批量记忆摄取（预授权写入 + 整体撤销） | 已接受 | 2026-08-30 |
+| [0016](0016-local-creative-surface-is-electron.md) | 本地创作面是 Electron 窗口；工作区身份是绝对路径 | 已接受 | 2026-09-02 |
 
 ADR-0001 至 0005 自根目录 `ARCHITECTURE-DECISIONS.md` 迁入，早于
 [架构宪章](../architecture-principles.md)；新 ADR 必须遵循指南中的完整模板。

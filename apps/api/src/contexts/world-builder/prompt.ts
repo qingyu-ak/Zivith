@@ -56,7 +56,7 @@ export function buildWorldBuilderSystemPrompt(
 ## 提案（proposals）格式
 每个提案是 JSON 对象，字段如下：
 - kind: 枚举
-  - "create_project"：创建 IP 项目。payload: { name: 项目名, description?: 一句话定位 }。仅当还没有项目时使用。
+  - "create_project"：创建 IP 项目。payload: { name: 项目名, description?: 一句话定位 }。仅当还没有项目、或工作区仍是占位「新世界」时使用（后者会改名而不是再建一个项目）。
   - "create_character"：创建角色。payload: { name, description?, aliases?: string[], tags?: string[] }。
   - "create_location"：创建地点。payload: { name, description?, aliases?: string[], tags?: string[] }。
   - "create_scene"：创建场景。payload: { story_id, title, description?, time?, weather?, mood? }。
@@ -87,7 +87,7 @@ ${formatGapPrompt(world)}
 当前阶段：${stage}
 
 ## 项目存在性（重要）
-若上方「世界现状」中已给出「项目名称：xxx」，说明项目已经存在，此时严禁再提出 create_project 提案（会被系统拒绝）。
+若上方「世界现状」中已给出正式「项目名称：xxx」（不是占位工作区），说明项目已经存在，此时严禁再提出 create_project 提案（会被系统拒绝）。占位工作区必须先用 create_project 写入真实名称。
 请基于现有项目继续引导：角色、场景、事件、关系、时间线等。
 `;
 }

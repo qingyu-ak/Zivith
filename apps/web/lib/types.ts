@@ -15,6 +15,7 @@ export interface ProjectDTO {
   story_count?: number;
   asset_count?: number;
   created_at?: string;
+  workspace_path?: string | null;
 }
 
 export interface StoryDTO {
@@ -227,6 +228,8 @@ export interface CreatorChatThreadDTO {
   project_id?: string | null;
   /** Denormalized project name attached by the global list endpoint. */
   project_name?: string | null;
+  /** Absolute workspace folder when opened from the desktop app. */
+  workspace_path?: string | null;
   title?: string | null;
   state: string;
   /** Derived from RoleplayThread sidecar; omitted/unknown payloads default to world. */
@@ -521,6 +524,7 @@ export interface WorldResourcesDTO {
     name: string;
     description?: string | null;
     worldview: WorldviewDTO;
+    workspace_path?: string | null;
   };
   stage: WorldStage;
   /** Lore Keeper v1 规则发现；只报告不修复 */

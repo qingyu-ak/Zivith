@@ -280,7 +280,13 @@ function main(): Promise<number> {
       console.log('\n== 1. 创建会话 + 首条世界观消息 ==');
       const thread = await request(base, 'POST', '/world/creator-chats', { title: '验证对话流' });
       threadId = thread.json?.id as string | null;
+      const seededProjectId = asString(thread.json?.project_id);
       check('创建会话返回 201 且含 id', thread.status === 201 && Boolean(threadId));
+      check(
+        '创建会话即打开世界项目（空工作区）',
+        Boolean(seededProjectId),
+        seededProjectId,
+      );
       if (!threadId) return 1;
 
       const m1 = await expectKinds(
@@ -288,7 +294,7 @@ function main(): Promise<number> {
         threadId,
         '我想做一个玄幻世界，主角叫韩立，一个资质平庸的凡人修士',
         ['create_project'],
-        '消息1：无项目时产出 create_project',
+        '消息1：空工作区仍产出 create_project（改名而不是再建项目）',
       );
       if (!m1) return cleanupOk ? 1 : 1;
 
@@ -303,6 +309,11 @@ function main(): Promise<number> {
       projectId = applied1[0]?.project_id as string | null;
       appliedMessageId = m1;
       if (!projectId) return 1;
+      check(
+        '确认提案改名同一工作区，不另建项目',
+        Boolean(seededProjectId) && projectId === seededProjectId,
+        `${seededProjectId} → ${projectId}`,
+      );
 
       // DB 层：项目字段完整性（apply 直接查库验证）
       const dbProject = projectId

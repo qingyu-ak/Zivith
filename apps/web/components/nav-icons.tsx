@@ -29,6 +29,31 @@ export function IconSidebar(props: IconProps) {
   );
 }
 
+export function IconPlus(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 6v12M6 12h12" />
+    </svg>
+  );
+}
+
+export function IconFolder(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 8a1.5 1.5 0 0 1 1.5-1.5h4.1L11 8h7.5A1.5 1.5 0 0 1 20 9.5v7A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5z" />
+    </svg>
+  );
+}
+
+export function IconChatPlus(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M5.2 16.2A7.2 7.2 0 1 1 18.8 12 7.2 7.2 0 0 1 8.4 18.4L5 19.2z" />
+      <path d="M12 9.2v5.2M9.4 11.8h5.2" />
+    </svg>
+  );
+}
+
 export function IconPlusCircle(props: IconProps) {
   return (
     <svg {...base} {...props}>
@@ -80,6 +105,17 @@ export function IconLogout(props: IconProps) {
     <svg {...base} {...props}>
       <path d="M10 7V5.5A1.5 1.5 0 0 1 11.5 4h6A1.5 1.5 0 0 1 19 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 10 18.5V17" />
       <path d="M4 12h10M11 8.5 14.5 12 11 15.5" />
+    </svg>
+  );
+}
+
+export function IconTrash(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M5 7h14" />
+      <path d="M9.5 7V5.5A1.5 1.5 0 0 1 11 4h2a1.5 1.5 0 0 1 1.5 1.5V7" />
+      <path d="M8 7l.6 11.2A1.5 1.5 0 0 0 10.1 19.5h3.8a1.5 1.5 0 0 0 1.5-1.3L16 7" />
+      <path d="M10.5 10.5v6M13.5 10.5v6" />
     </svg>
   );
 }
