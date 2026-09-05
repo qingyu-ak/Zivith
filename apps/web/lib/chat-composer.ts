@@ -63,6 +63,11 @@ export function formatTokenCount(count: number): string {
 
 export function llmChoices(catalog: ProviderCatalogDTO | null): LlmChoice[] {
   if (!catalog) return [];
+  // 设置页可隐藏模型；当前正在用的那条即使被隐藏也先留着，直到用户另选。
+  const hidden = new Set(
+    (catalog.hidden_models ?? []).map((item) => `${item.provider}\n${item.model}`),
+  );
+  const currentKey = `${catalog.selection.llm}\n${catalog.models.llm}`;
   return catalog.providers
     .filter((provider) => provider.modalities.includes('llm'))
     .flatMap((provider) => {
@@ -70,14 +75,19 @@ export function llmChoices(catalog: ProviderCatalogDTO | null): LlmChoice[] {
         provider.llm_models && provider.llm_models.length > 0
           ? provider.llm_models
           : [];
-      return models.map((item) => ({
-        provider: provider.id,
-        providerLabel: provider.label,
-        model: item.id,
-        label: item.label || item.id,
-        configured: provider.configured,
-        tag: provider.configured ? undefined : '未配置',
-      }));
+      return models
+        .filter((item) => {
+          const key = `${provider.id}\n${item.id}`;
+          return !hidden.has(key) || key === currentKey;
+        })
+        .map((item) => ({
+          provider: provider.id,
+          providerLabel: provider.label,
+          model: item.id,
+          label: item.label || item.id,
+          configured: provider.configured,
+          tag: provider.configured ? undefined : '未配置',
+        }));
     });
 }
 

@@ -94,4 +94,29 @@ describe('chat composer helpers', () => {
       true,
     );
   });
+
+  it('drops hidden models from the picker but keeps the current selection', () => {
+    const hidden = {
+      ...catalog,
+      hidden_models: [
+        { provider: 'deepseek' as const, model: 'deepseek-v4-pro' },
+        { provider: 'mock' as const, model: 'mock-text-v1' },
+      ],
+    };
+    expect(
+      llmChoices(hidden).map((item) => `${item.provider}:${item.model}`),
+    ).toEqual(['deepseek:deepseek-v4-flash']);
+    // 当前在用的 deepseek-v4-flash 即使被隐藏也保留；mock 未被隐藏照常出现。
+    const currentHidden = {
+      ...catalog,
+      hidden_models: [{ provider: 'deepseek' as const, model: 'deepseek-v4-flash' }],
+    };
+    const choices = llmChoices(currentHidden);
+    expect(choices.map((item) => item.model)).toEqual([
+      'mock-text-v1',
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
+    ]);
+    expect(selectedLlmLabel(currentHidden)).toBe('deepseek-v4-flash');
+  });
 });

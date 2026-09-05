@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-09-05 · pending · feat(web,api) · 系统设置重组：三组五页 + 模型选择器开关
+
+设置页从「供应商+用量拼盘」改为真设置：左栏基础设置（常规/外观/模型设置）、Agent 能力（记忆）、数据统计（使用统计），只放有真实能力的页。
+
+- **feat(api)** `PUT /providers/model-visibility`（进程内持久化）+ `GET /providers` 回传 `hidden_models`；删供应商/删模型时同步清理
+- **feat(web)** 模型选择器搜索 + 每条开关；`llmChoices` 过滤隐藏模型，当前在用的保留直到另选；composer「管理模型/管理提供商」深链到模型分区
+- **feat(web)** 常规（变更前确认锁定开启 + 默认努力程度）、外观（真实固定项说明）、记忆（能力说明 + 世界工作区入口）、使用统计（`UsageSummaryCard` 从本页挪入，年度热力图不做）
+- 模块：`routes/providers.ts`、`settings/page.tsx`、`model-visibility.tsx`、`chat-composer.tsx`、`lib/chat-composer.ts`、`lib/types.ts`
+
 ## 2026-09-05 · da14981 · fix(api) · 清掉最后两处 typecheck 既有错误
 
 api 侧 `tsc --noEmit` 归零；行为不变，纯类型收紧。

@@ -410,6 +410,8 @@ export interface ProviderCatalogDTO {
     audio: ProviderId;
   };
   models: ProviderModelsDTO;
+  /** 模型选择器里被隐藏的模型（设置页开关；当前在用的由 llmChoices 保留）。 */
+  hidden_models?: Array<{ provider: ProviderId; model: string }>;
   providers: Array<{
     id: ProviderId;
     label: string;
