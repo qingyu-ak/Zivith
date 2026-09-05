@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ModelSettings } from '@/components/model-settings';
 import { ModelVisibilityList } from '@/components/model-visibility';
 import { UsageSummaryCard } from '@/components/usage-summary-card';
@@ -16,6 +16,28 @@ import {
 } from '@/lib/chat-composer';
 
 type SettingsSection = 'general' | 'appearance' | 'models' | 'memory' | 'usage';
+
+function parseSection(raw: string | null | undefined): SettingsSection | null {
+  if (
+    raw === 'general' ||
+    raw === 'appearance' ||
+    raw === 'models' ||
+    raw === 'memory' ||
+    raw === 'usage'
+  ) {
+    return raw;
+  }
+  return null;
+}
+
+function sectionFromUrl(): SettingsSection {
+  if (typeof window === 'undefined') return 'general';
+  return (
+    parseSection(new URLSearchParams(window.location.search).get('section')) ??
+    parseSection(window.location.hash.replace(/^#/, '')) ??
+    'general'
+  );
+}
 
 const NAV: Array<{ group: string; items: Array<{ id: SettingsSection; label: string }> }> = [
   {
@@ -38,15 +60,25 @@ const NAV: Array<{ group: string; items: Array<{ id: SettingsSection; label: str
 
 export default function SettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const router = useRouter();
   const [section, setSection] = useState<SettingsSection>('general');
 
-  // 允许 #models 等深链；活动栏/账号菜单无 hash 时落在常规。
+  // 深链：?section=models 或 #models。账号菜单无参数时落在常规。
   useEffect(() => {
-    const hash = window.location.hash.slice(1) as SettingsSection;
-    if (NAV.some((group) => group.items.some((item) => item.id === hash))) {
-      setSection(hash);
-    }
+    const apply = () => setSection(sectionFromUrl());
+    apply();
+    window.addEventListener('hashchange', apply);
+    window.addEventListener('popstate', apply);
+    return () => {
+      window.removeEventListener('hashchange', apply);
+      window.removeEventListener('popstate', apply);
+    };
   }, []);
+
+  function selectSection(id: SettingsSection) {
+    setSection(id);
+    router.replace(`/projects/${projectId}/settings?section=${id}`, { scroll: false });
+  }
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 p-5 sm:flex-row sm:p-8">
@@ -69,7 +101,7 @@ export default function SettingsPage() {
                           ? 'bg-zinc-100 font-medium text-zinc-900'
                           : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
                       }`}
-                      onClick={() => setSection(item.id)}
+                      onClick={() => selectSection(item.id)}
                     >
                       {item.label}
                     </button>

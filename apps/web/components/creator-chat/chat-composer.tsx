@@ -164,7 +164,9 @@ export function ChatComposer({
   const choices = llmChoices(catalog);
   const visibleChoices = filterLlmChoices(choices, modelQuery);
   const modelLabel = selectedLlmLabel(catalog);
-  const settingsHref = projectId ? `/projects/${projectId}/settings#models` : '/projects';
+  const settingsHref = projectId
+    ? `/projects/${projectId}/settings?section=models`
+    : '/projects';
   const account = catalog?.siliconflow_account;
   const llmProvider = catalog?.providers.find((item) => item.id === catalog.selection.llm);
 

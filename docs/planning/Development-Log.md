@@ -12,6 +12,13 @@
 
 ---
 
+## 2026-09-05 · pending · fix(web) · 设置分区改走查询参数深链
+
+「管理模型」用 `?section=models` 打开模型设置；左栏切换写入 URL。兼容旧的 `#models`。避免只改 hash 时客户端导航仍停在常规页。
+
+- **fix(web)** `settings/page.tsx` 从 search/hash 恢复分区；`chat-composer` 深链改查询参数
+- 模块：`settings/page.tsx`、`chat-composer.tsx`
+
 ## 2026-09-05 · e501867 · feat(web,api) · 系统设置重组：三组五页 + 模型选择器开关
 
 设置页从「供应商+用量拼盘」改为真设置：左栏基础设置（常规/外观/模型设置）、Agent 能力（记忆）、数据统计（使用统计），只放有真实能力的页。
