@@ -78,12 +78,13 @@ export function createCustomProvider(input: {
 
 export function updateCustomProvider(
   id: string,
+  // zod 解析产物在 exactOptionalPropertyTypes 下键值可为 undefined；下方逐字段守卫。
   patch: {
-    name?: string;
-    base_url?: string;
-    api_key?: string;
-    api_format?: ApiFormat;
-    models?: string[];
+    name?: string | undefined;
+    base_url?: string | undefined;
+    api_key?: string | undefined;
+    api_format?: ApiFormat | undefined;
+    models?: string[] | undefined;
   },
 ): CustomProviderPublic | null {
   const current = getCustomProvider(id);
