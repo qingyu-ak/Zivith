@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Badge, Spinner } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
-import type { CreatorChatThreadDTO, WorldResourcesDTO, WorldSelection } from '@/lib/types';
+import type {
+  CreatorChatThreadDTO,
+  WorldLineItem,
+  WorldResourcesDTO,
+  WorldSelection,
+} from '@/lib/types';
 import { normalizeThread } from '@/lib/creator-chat-nav';
 import {
   buildWorldLineModel,
@@ -40,6 +45,7 @@ export function WorldWorkspace() {
   const [view, setView] = useState<'world' | 'production'>('world');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [clipNotice, setClipNotice] = useState('');
   const [leftCollapsed, toggleLeft] = useCollapsedSidebar('worldLeft');
   const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
   const [leftWidth, setLeftWidth] = usePersistedPx(WORKSPACE_LAYOUT_KEYS.leftWidth, 248, 180, 440);
@@ -69,9 +75,11 @@ export function WorldWorkspace() {
     );
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const [value, listed] = await Promise.all([
         api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`),
@@ -86,11 +94,34 @@ export function WorldWorkspace() {
           .filter((thread): thread is CreatorChatThreadDTO => Boolean(thread?.id)),
       );
     } catch (reason) {
+      if (options?.silent) throw reason;
       setError(errorMessage(reason));
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [projectId]);
+
+  async function commitClip(item: WorldLineItem, start: number, end: number) {
+    setClipNotice('');
+    try {
+      if (item.entityType === 'world_event') {
+        await api(`/world/world-events/${item.id}`, {
+          method: 'PATCH',
+          body: { presentation_order: Math.max(1, Math.round((start + end) / 2)) },
+        });
+      } else if (item.entityType === 'scene') {
+        await api(`/scenes/${item.id}`, {
+          method: 'PATCH',
+          body: { order: Math.max(1, Math.round(start)) },
+        });
+      } else {
+        return;
+      }
+      await load({ silent: true });
+    } catch (reason) {
+      setClipNotice(errorMessage(reason));
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -195,6 +226,11 @@ export function WorldWorkspace() {
                 }`
               : `${resources.entities.stories.length} 个故事 · ${resources.entities.scenes.length} 个场景 · ${(resources.entities.shots ?? []).length} 个镜头 · 派生机位/风格/提示词/模型轨`}
           </p>
+          {clipNotice ? (
+            <p className="mt-1 text-xs text-red-600" role="alert">
+              轨道未能保存：{clipNotice}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -376,6 +412,7 @@ export function WorldWorkspace() {
                 focusedDimensionId={focusedDimension?.id ?? null}
                 focusedDimensionLabel={focusedDimension?.label ?? null}
                 focusedIsPrimary={focusedDimension ? isPrimaryWorldline(focusedDimension) : true}
+                onClipCommit={commitClip}
               />
             ) : (
               <div className="grid h-full place-items-center">

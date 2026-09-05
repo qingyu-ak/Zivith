@@ -67,7 +67,12 @@ secret. Values in the example files are development-only placeholders.
 pnpm dev
 ```
 
-要用系统对话框打开真实工作区路径（[ADR-0016](docs/architecture/adr/0016-local-creative-surface-is-electron.md)）：
+要用系统对话框打开真实工作区路径（[ADR-0016](docs/architecture/adr/0016-local-creative-surface-is-electron.md)），在已经跑过 `scripts/setup.ps1` 之后：
+
+Windows 一键启动（仍需要本机 Node / pnpm / Docker，不是免安装包）：
+
+- 双击仓库根目录 `Zivith.vbs`，或运行 `pnpm desktop`
+- 打包带 logo 的 exe：`pnpm desktop:pack`，产物在 `apps/desktop/dist/win-unpacked/Zivith.exe`；可再执行 `pnpm --filter @zivith/desktop shortcut` 在仓库根目录生成 `Zivith.lnk`
 
 ```sh
 pnpm desktop
@@ -75,7 +80,7 @@ pnpm desktop
 
 Default local services:
 
-- Desktop: `pnpm desktop`（Electron 窗口加载 Web；系统对话框选择文件夹）
+- Desktop: `pnpm desktop` / `Zivith.vbs`（Electron 启动屏会拉起 Docker 与 Web/API）
 - Web: <http://127.0.0.1:3100>
 - API: <http://127.0.0.1:4000/api/v1>
 - PostgreSQL: `localhost:5432`

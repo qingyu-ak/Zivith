@@ -407,11 +407,16 @@ export class MemoryService {
     return this.deps.store.buildWorldContext(projectId);
   }
 
+  async threadContext(threadId: string) {
+    return this.deps.store.findContextState(threadId);
+  }
+
   /** 预算窗口：滚动摘要(system) + 最近原文；返回 evicted 供落摘要。 */
   async getContextWindow(
     threadId: string,
     history: Array<{ id: string; role: string; content: string }>,
-  ): Promise<{ window: ContextMessage[]; evicted: ContextMessage[] }> {
+    options: { tokenBudget?: number; keepRecentMessages?: number } = {},
+  ): Promise<{ window: ContextMessage[]; evicted: ContextMessage[]; tokenEstimate: number }> {
     const state = await this.deps.store.findContextState(threadId);
     const summary = state?.rollingSummary ?? '';
     const messages: ContextMessage[] = history.map((message) => ({
@@ -422,8 +427,8 @@ export class MemoryService {
     const built = buildBudgetedHistory({
       history: messages,
       previousSummary: summary,
-      tokenBudget: contextTokenBudget(),
-      keepRecentMessages: 8,
+      tokenBudget: options.tokenBudget ?? contextTokenBudget(),
+      keepRecentMessages: options.keepRecentMessages ?? 8,
     });
     const window = summary
       ? [
@@ -431,7 +436,7 @@ export class MemoryService {
           ...built.window,
         ]
       : built.window;
-    return { window, evicted: built.evicted };
+    return { window, evicted: built.evicted, tokenEstimate: built.tokenEstimate };
   }
 
   /** 回合结束后压缩淘汰消息并持久化滚动摘要。 */

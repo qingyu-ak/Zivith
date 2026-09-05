@@ -56,6 +56,8 @@ export function ProviderPanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const llmModels =
+    catalog?.providers.find((provider) => provider.id === selection.llm)?.llm_models ?? [];
 
   const load = useCallback(async () => {
     try {
@@ -214,12 +216,46 @@ export function ProviderPanel() {
                   </Select>
                 </Field>
 
-                {modality === 'llm' || modality === 'audio' ? (
+                {modality === 'llm' ? (
+                  <Field label="对话模型">
+                    {llmModels.length > 0 ? (
+                      <Select
+                        value={
+                          llmModels.some((item) => item.id === models.llm)
+                            ? models.llm
+                            : (llmModels[0]?.id ?? models.llm)
+                        }
+                        onChange={(event) =>
+                          setModels((current) => ({ ...current, llm: event.target.value }))
+                        }
+                      >
+                        {llmModels.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.id}
+                          </option>
+                        ))}
+                        {models.llm && !llmModels.some((item) => item.id === models.llm) ? (
+                          <option value={models.llm}>{models.llm}</option>
+                        ) : null}
+                      </Select>
+                    ) : (
+                      <Input
+                        value={models.llm}
+                        onChange={(event) =>
+                          setModels((current) => ({ ...current, llm: event.target.value }))
+                        }
+                        placeholder="留空则使用环境默认"
+                      />
+                    )}
+                  </Field>
+                ) : null}
+
+                {modality === 'audio' ? (
                   <Field label="模型 ID（可自定义）">
                     <Input
-                      value={models[modality]}
+                      value={models.audio}
                       onChange={(event) =>
-                        setModels((current) => ({ ...current, [modality]: event.target.value }))
+                        setModels((current) => ({ ...current, audio: event.target.value }))
                       }
                       placeholder="留空则使用环境默认"
                     />

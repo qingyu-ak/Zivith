@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { WorldLineItem, WorldLineModel, WorldSelection } from '@/lib/types';
 import { createOrderScale, integerTicks, thinByMinGap } from '@/lib/world-scale';
 import {
@@ -8,14 +8,18 @@ import {
   isTimelineItemActive,
   derivedSourceShotId,
   isDerivedTrackKind,
+  clipSpan,
+  canEditClip,
 } from '@/lib/world-line';
 
-const TRACK_LABEL_WIDTH = 76;
-const TRACK_HEIGHT = 64;
-const TRACK_GAP = 12;
-const PADDING = { top: 10, right: 18, bottom: 16 };
-const ITEM_HEIGHT = 30;
-const ITEM_INSET = 8;
+const TRACK_LABEL_WIDTH = 92;
+const TRACK_HEIGHT = 72;
+const TRACK_GAP = 10;
+const PADDING = { top: 10, right: 28, bottom: 16 };
+const ITEM_HEIGHT = 48;
+const EDGE = 18;
+const MIN_UNIT_PX = 56;
+const MIN_EDIT_CLIP_PX = 88;
 const CHAR_LANE_GAP = 6;
 const CHAR_LANE_PAD = 8;
 
@@ -90,6 +94,99 @@ function itemOverlay(item: WorldLineItem): boolean {
   return relation != null && relation !== 'follow';
 }
 
+function spanCaption(start: number, end: number): string {
+  const from = Math.round(start);
+  const to = Math.round(end);
+  if (from === to) return `#${from}`;
+  return `#${from}–#${to}`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function persistWrites(kind: string): boolean {
+  return kind === 'world_event' || kind === 'scene';
+}
+
+function HorizontalNav({
+  canvasWidth,
+  viewportWidth,
+  scrollLeft,
+  unitPx,
+  onJump,
+}: {
+  canvasWidth: number;
+  viewportWidth: number;
+  scrollLeft: number;
+  unitPx: number;
+  onJump: (left: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const maxScroll = Math.max(0, canvasWidth - viewportWidth);
+  const viewRatio = canvasWidth <= 0 ? 1 : Math.min(1, viewportWidth / canvasWidth);
+  const thumbPct = Math.max(8, viewRatio * 100);
+  const leftPct = maxScroll <= 0 ? 0 : (scrollLeft / maxScroll) * (100 - thumbPct);
+
+  function clientToScroll(clientX: number): number {
+    const track = trackRef.current;
+    if (!track || maxScroll <= 0) return 0;
+    const rect = track.getBoundingClientRect();
+    const usable = rect.width * (1 - viewRatio);
+    if (usable <= 0) return 0;
+    const x = clientX - rect.left - (rect.width * viewRatio) / 2;
+    return Math.min(maxScroll, Math.max(0, (x / usable) * maxScroll));
+  }
+
+  return (
+    <div className="flex h-9 shrink-0 items-center gap-2 border-t border-line bg-zinc-50 px-2">
+      <button
+        type="button"
+        className="grid size-7 place-items-center rounded-md text-lg leading-none text-zinc-600 hover:bg-zinc-200"
+        aria-label="向左滚动"
+        onClick={() => onJump(scrollLeft - Math.max(160, viewportWidth * 0.55))}
+      >
+        ‹
+      </button>
+      <div
+        ref={trackRef}
+        className="relative h-3.5 flex-1 cursor-pointer rounded-full bg-zinc-200"
+        role="scrollbar"
+        aria-label="时间线横向位置"
+        aria-orientation="horizontal"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(maxScroll)}
+        aria-valuenow={Math.round(scrollLeft)}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          onJump(clientToScroll(event.clientX));
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+          onJump(clientToScroll(event.clientX));
+        }}
+      >
+        <div
+          className="absolute top-0 h-full rounded-full bg-zinc-500"
+          style={{ left: `${leftPct}%`, width: `${thumbPct}%` }}
+        />
+      </div>
+      <button
+        type="button"
+        className="grid size-7 place-items-center rounded-md text-lg leading-none text-zinc-600 hover:bg-zinc-200"
+        aria-label="向右滚动"
+        onClick={() => onJump(scrollLeft + Math.max(160, viewportWidth * 0.55))}
+      >
+        ›
+      </button>
+      <span className="w-[4.5rem] shrink-0 text-right text-[10px] tabular-nums text-zinc-500">
+        {Math.round(unitPx)}px/序
+      </span>
+    </div>
+  );
+}
+
 interface HoverInfo {
   x: number;
   y: number;
@@ -108,6 +205,7 @@ export function WorldTimeline({
   focusedDimensionId = null,
   focusedDimensionLabel = null,
   focusedIsPrimary = true,
+  onClipCommit,
 }: {
   model: WorldLineModel;
   selection: WorldSelection;
@@ -115,13 +213,42 @@ export function WorldTimeline({
   focusedDimensionId?: string | null;
   focusedDimensionLabel?: string | null;
   focusedIsPrimary?: boolean;
+  onClipCommit?: (item: WorldLineItem, start: number, end: number) => Promise<void> | void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const skipSelectRef = useRef(false);
   const [width, setWidth] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [zoomX, setZoomX] = useState(1);
+  const [zoomY, setZoomY] = useState(1);
+  const panRef = useRef<{
+    originX: number;
+    originY: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  const [playheadX, setPlayheadX] = useState<number | null>(null);
+  const [draftSpans, setDraftSpans] = useState<Record<string, { start: number; end: number }>>({});
+  const [trackOrder, setTrackOrder] = useState<string[]>([]);
+  const dragRef = useRef<
+    | {
+        mode: 'move' | 'start' | 'end' | 'track';
+        id: string;
+        start: number;
+        end: number;
+        originX: number;
+        originY: number;
+        moved: boolean;
+        latest?: { start: number; end: number };
+      }
+    | null
+  >(null);
 
   useEffect(() => {
-    const element = containerRef.current;
+    const element = scrollRef.current;
     if (!element) return;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -131,12 +258,69 @@ export function WorldTimeline({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const key = `zivith.worldTrackOrder.${model.projectId}`;
+    const stored = typeof window === 'undefined' ? null : window.localStorage.getItem(key);
+    const ids = model.tracks.map((track) => track.id);
+    if (!stored) {
+      setTrackOrder(ids);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored) as unknown;
+      if (!Array.isArray(parsed)) {
+        setTrackOrder(ids);
+        return;
+      }
+      const known = parsed.filter((id): id is string => typeof id === 'string' && ids.includes(id));
+      setTrackOrder([...known, ...ids.filter((id) => !known.includes(id))]);
+    } catch {
+      setTrackOrder(ids);
+    }
+  }, [model.projectId, model.tracks]);
+
+  useEffect(() => {
+    const spanKey = `zivith.worldClipSpans.${model.projectId}`;
+    const zoomKey = `zivith.worldZoom.${model.projectId}`;
+    try {
+      const spans = window.localStorage.getItem(spanKey);
+      if (spans) {
+        const parsed = JSON.parse(spans) as Record<string, { start: number; end: number }>;
+        if (parsed && typeof parsed === 'object') setDraftSpans(parsed);
+      }
+      const zoom = window.localStorage.getItem(zoomKey);
+      if (zoom) {
+        const parsed = JSON.parse(zoom) as { x?: number; y?: number };
+        if (typeof parsed.x === 'number') setZoomX(clamp(parsed.x, 0.5, 3));
+        if (typeof parsed.y === 'number') setZoomY(clamp(parsed.y, 0.6, 2.2));
+      }
+    } catch {
+      /* keep defaults */
+    }
+  }, [model.projectId]);
+
+  const orderedTracks = useMemo(() => {
+    const byId = new Map(model.tracks.map((track) => [track.id, track]));
+    const ordered = trackOrder.map((id) => byId.get(id)).filter(Boolean) as typeof model.tracks;
+    for (const track of model.tracks) {
+      if (!ordered.some((item) => item.id === track.id)) ordered.push(track);
+    }
+    return ordered;
+  }, [model.tracks, trackOrder]);
+
   const namedAxis = model.axisMarks.length > 0;
   const axisHeight = namedAxis ? 56 : 32;
   const plotLeft = TRACK_LABEL_WIDTH + 8;
-  const plotRight = Math.max(width - PADDING.right, plotLeft + 120);
   const domainSpan = Math.max(1, model.scaleDomain.max - model.scaleDomain.min);
-  const unitPx = (plotRight - plotLeft) / domainSpan;
+  const available = Math.max(160, width - plotLeft - PADDING.right);
+  const unitMin = MIN_UNIT_PX * zoomX;
+  const plotWidth = Math.max(available, domainSpan * unitMin);
+  const unitPx = plotWidth / domainSpan;
+  const plotRight = plotLeft + plotWidth;
+  const itemH = ITEM_HEIGHT * zoomY;
+  const trackH = TRACK_HEIGHT * zoomY;
+  const laneGap = CHAR_LANE_GAP * zoomY;
+  const lanePad = CHAR_LANE_PAD * zoomY;
 
   const scale = useMemo(() => {
     const { min, max } = model.scaleDomain;
@@ -184,47 +368,59 @@ export function WorldTimeline({
       { x: number; y: number; cx: number; cy: number; itemWidth: number; kind: string }
     >();
 
-    for (const track of model.tracks) {
+    for (const track of orderedTracks) {
       const stacked = stackedTrack(track.kind, track.items.length);
       const height = stacked
         ? Math.max(
-            TRACK_HEIGHT,
-            CHAR_LANE_PAD * 2 +
-              track.items.length * ITEM_HEIGHT +
-              Math.max(0, track.items.length - 1) * CHAR_LANE_GAP,
+            trackH,
+            lanePad * 2 +
+              track.items.length * itemH +
+              Math.max(0, track.items.length - 1) * laneGap,
           )
-        : TRACK_HEIGHT;
+        : trackH;
       const trackY = y;
       tracks.push({ id: track.id, title: track.title, kind: track.kind, trackY, height });
 
       track.items.forEach((item, itemIndex) => {
-        const naturalWidth = Math.min(Math.max(estimateTextWidth(item.title) + 24, 84), 190);
-        const compactWidth =
-          unitPx < 72 ? Math.max(18, Math.min(naturalWidth, unitPx * 0.82)) : naturalWidth;
-        const itemWidth = stacked ? naturalWidth : compactWidth;
-        const maxLeft = Math.max(plotLeft + ITEM_INSET, plotRight - itemWidth - ITEM_INSET);
-        const x = Math.min(
-          Math.max(scale(item.anchorOrder) - itemWidth / 2, plotLeft + ITEM_INSET),
-          maxLeft,
+        const span = draftSpans[item.id] ?? clipSpan(item);
+        const startX = plotLeft + (span.start - model.scaleDomain.min) * unitPx;
+        const endX = plotLeft + (span.end - model.scaleDomain.min) * unitPx;
+        const itemWidth = Math.max(
+          canEditClip(item.entityType) ? MIN_EDIT_CLIP_PX * zoomX : 48 * zoomX,
+          endX - startX,
         );
+        const x = startX;
         const itemY = stacked
-          ? trackY + CHAR_LANE_PAD + itemIndex * (ITEM_HEIGHT + CHAR_LANE_GAP)
-          : trackY + (height - ITEM_HEIGHT) / 2;
+          ? trackY + lanePad + itemIndex * (itemH + laneGap)
+          : trackY + (height - itemH) / 2;
         positions.set(item.id, {
           x,
           y: itemY,
           cx: x + itemWidth / 2,
-          cy: itemY + ITEM_HEIGHT / 2,
+          cy: itemY + itemH / 2,
           itemWidth,
           kind: track.kind,
         });
       });
 
-      y += height + TRACK_GAP;
+      y += height + TRACK_GAP * zoomY;
     }
 
-    return { tracks, positions, totalHeight: y - TRACK_GAP + PADDING.bottom };
-  }, [model.tracks, plotLeft, plotRight, scale, axisHeight, unitPx]);
+    return { tracks, positions, totalHeight: y - TRACK_GAP * zoomY + PADDING.bottom };
+  }, [
+    orderedTracks,
+    plotLeft,
+    unitPx,
+    model.scaleDomain.min,
+    axisHeight,
+    draftSpans,
+    itemH,
+    trackH,
+    laneGap,
+    lanePad,
+    zoomX,
+    zoomY,
+  ]);
 
   const links = useMemo(
     () =>
@@ -259,13 +455,158 @@ export function WorldTimeline({
     (mark) => mark.worldTimeRelation && mark.worldTimeRelation !== 'follow',
   );
 
+  const unitPxRef = useRef(unitPx);
+  unitPxRef.current = unitPx;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const trackOrderRef = useRef(trackOrder);
+  trackOrderRef.current = trackOrder;
+  const orderedTracksRef = useRef(orderedTracks);
+  orderedTracksRef.current = orderedTracks;
+  const onClipCommitRef = useRef(onClipCommit);
+  onClipCommitRef.current = onClipCommit;
+  const projectIdRef = useRef(model.projectId);
+  projectIdRef.current = model.projectId;
+
+  function findItem(id: string): WorldLineItem | undefined {
+    for (const track of orderedTracksRef.current) {
+      const found = track.items.find((item) => item.id === id);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  function clientToSvgY(clientY: number): number | null {
+    const svg = svgRef.current;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return null;
+    const point = svg.createSVGPoint();
+    point.x = 0;
+    point.y = clientY;
+    return point.matrixTransform(ctm.inverse()).y;
+  }
+
+  function applyPointer(event: { clientX: number; clientY: number }) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const scroller = scrollRef.current;
+    if (scroller && drag.mode !== 'track') {
+      const rect = scroller.getBoundingClientRect();
+      if (event.clientX > rect.right - 56) scroller.scrollLeft += 28;
+      else if (event.clientX < rect.left + TRACK_LABEL_WIDTH + 48) scroller.scrollLeft -= 28;
+    }
+    if (drag.mode === 'track') {
+      if (Math.abs(event.clientY - drag.originY) > 4) drag.moved = true;
+      const localY = clientToSvgY(event.clientY);
+      if (localY == null) return;
+      const over = layoutRef.current.tracks.find(
+        (track) => localY >= track.trackY && localY <= track.trackY + track.height,
+      );
+      if (!over || over.id === drag.id) return;
+      const current = trackOrderRef.current;
+      const from = current.indexOf(drag.id);
+      const to = current.indexOf(over.id);
+      if (from < 0 || to < 0 || from === to) return;
+      const next = current.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, drag.id);
+      trackOrderRef.current = next;
+      setTrackOrder(next);
+      return;
+    }
+    const delta = (event.clientX - drag.originX) / Math.max(unitPxRef.current, 1);
+    if (Math.abs(event.clientX - drag.originX) > 3) drag.moved = true;
+    let start = drag.start;
+    let end = drag.end;
+    if (drag.mode === 'move') {
+      start = drag.start + delta;
+      end = drag.end + delta;
+    } else if (drag.mode === 'start') {
+      start = Math.min(drag.start + delta, drag.end - 0.2);
+    } else {
+      end = Math.max(drag.end + delta, drag.start + 0.2);
+    }
+    drag.latest = { start, end };
+    setDraftSpans((current) => ({ ...current, [drag.id]: { start, end } }));
+  }
+
+  function finishPointer(event: { clientY: number }) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (drag.mode === 'track') {
+      if (drag.moved) {
+        window.localStorage.setItem(
+          `zivith.worldTrackOrder.${projectIdRef.current}`,
+          JSON.stringify(trackOrderRef.current),
+        );
+      }
+      if (drag.moved) skipSelectRef.current = true;
+      dragRef.current = null;
+      return;
+    }
+    const span = drag.latest;
+    const item = findItem(drag.id);
+    const moved = drag.moved;
+    if (moved) skipSelectRef.current = true;
+    dragRef.current = null;
+    if (!moved || !span || !item) return;
+    if (!persistWrites(item.entityType)) {
+      try {
+        const key = `zivith.worldClipSpans.${projectIdRef.current}`;
+        const raw = window.localStorage.getItem(key);
+        const stored = raw ? (JSON.parse(raw) as Record<string, { start: number; end: number }>) : {};
+        stored[item.id] = span;
+        window.localStorage.setItem(key, JSON.stringify(stored));
+      } catch {
+        /* ignore quota */
+      }
+      return;
+    }
+    void Promise.resolve(onClipCommitRef.current?.(item, span.start, span.end)).finally(() => {
+      setDraftSpans((current) => {
+        const next = { ...current };
+        delete next[drag.id];
+        return next;
+      });
+    });
+  }
+
+  useEffect(() => {
+    function onMove(event: globalThis.PointerEvent) {
+      const pan = panRef.current;
+      if (pan) {
+        const scroller = scrollRef.current;
+        if (!scroller) return;
+        scroller.scrollLeft = pan.scrollLeft - (event.clientX - pan.originX);
+        scroller.scrollTop = pan.scrollTop - (event.clientY - pan.originY);
+        return;
+      }
+      if (!dragRef.current) return;
+      applyPointer(event);
+    }
+    function onUp() {
+      panRef.current = null;
+      if (scrollRef.current) scrollRef.current.style.cursor = '';
+      if (!dragRef.current) return;
+      finishPointer({ clientY: 0 });
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
+
   function showItemHover(event: MouseEvent, item: WorldLineItem, kind: string) {
     const host = containerRef.current;
     if (!host) return;
     const rect = host.getBoundingClientRect();
     setHover({
-      x: event.clientX - rect.left + host.scrollLeft + 12,
-      y: event.clientY - rect.top + host.scrollTop + 12,
+      x: event.clientX - rect.left + 12,
+      y: event.clientY - rect.top + 12,
       title: item.title,
       kind: KIND_LABEL[kind] ?? kind,
       description: item.description,
@@ -275,20 +616,70 @@ export function WorldTimeline({
     });
   }
 
-  if (width === 0) {
-    return (
-      <div ref={containerRef} className="h-full min-h-64 w-full">
-        <div className="grid h-full min-h-64 place-items-center text-sm text-zinc-600">
-          世界线渲染中…
-        </div>
-      </div>
+  const canvasWidth = plotRight + PADDING.right;
+
+  function jumpScroll(left: number) {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const next = Math.min(max, Math.max(0, left));
+    scroller.scrollLeft = next;
+    setScrollLeft(next);
+  }
+
+  function beginTrackDrag(trackId: string, event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragRef.current = {
+      mode: 'track',
+      id: trackId,
+      start: 0,
+      end: 0,
+      originX: event.clientX,
+      originY: event.clientY,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function beginClipDrag(
+    mode: 'move' | 'start' | 'end',
+    item: WorldLineItem,
+    event: ReactPointerEvent<HTMLElement>,
+  ) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const spanNow = draftSpans[item.id] ?? clipSpan(item);
+    dragRef.current = {
+      mode,
+      id: item.id,
+      start: spanNow.start,
+      end: spanNow.end,
+      originX: event.clientX,
+      originY: event.clientY,
+      moved: false,
+      latest: spanNow,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function changeZoom(nextX: number, nextY: number) {
+    const x = clamp(nextX, 0.5, 3);
+    const y = clamp(nextY, 0.6, 2.2);
+    setZoomX(x);
+    setZoomY(y);
+    window.localStorage.setItem(
+      `zivith.worldZoom.${model.projectId}`,
+      JSON.stringify({ x, y }),
     );
   }
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-auto">
-      <div className="sticky top-0 z-10 mb-1 flex flex-wrap items-center gap-x-4 gap-y-1 bg-white/90 px-1 py-1 text-[11px] text-zinc-500 backdrop-blur">
-        <span>刻度按呈现顺序</span>
+    <div ref={containerRef} className="relative flex h-full min-h-64 w-full flex-col">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-white px-1 py-1 text-[11px] text-zinc-500">
+        <span>左键拖块移动 · 边缘左右拉长短 · 右键拖动画布 · 拖轨名换上下</span>
         <span className="inline-flex items-center gap-1.5 text-violet-700">
           <span className="inline-block size-2 rounded-full bg-violet-500" />
           {focusedDimensionLabel && !focusedIsPrimary
@@ -311,14 +702,80 @@ export function WorldTimeline({
             紫色表示显式世界时间绑定（区间 / 相对 / 平行）
           </span>
         )}
+        <label className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-500">
+          横
+          <input
+            type="range"
+            min={0.5}
+            max={3}
+            step={0.1}
+            value={zoomX}
+            aria-label="横向缩放"
+            className="w-20 accent-zinc-600"
+            onChange={(event) => changeZoom(Number(event.target.value), zoomY)}
+          />
+        </label>
+        <label className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+          纵
+          <input
+            type="range"
+            min={0.6}
+            max={2.2}
+            step={0.1}
+            value={zoomY}
+            aria-label="纵向缩放"
+            className="w-20 accent-zinc-600"
+            onChange={(event) => changeZoom(zoomX, Number(event.target.value))}
+          />
+        </label>
       </div>
-      <svg
-        width={plotRight + PADDING.right}
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-300"
+        onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}
+        onContextMenu={(event) => event.preventDefault()}
+        onPointerDownCapture={(event) => {
+          if (event.button !== 2) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const scroller = scrollRef.current;
+          if (!scroller) return;
+          panRef.current = {
+            originX: event.clientX,
+            originY: event.clientY,
+            scrollLeft: scroller.scrollLeft,
+            scrollTop: scroller.scrollTop,
+          };
+          scroller.style.cursor = 'grabbing';
+          scroller.setPointerCapture(event.pointerId);
+        }}
+      >
+        <div
+          className="relative"
+          style={{ width: canvasWidth, height: svgHeight }}
+          onMouseMove={(event) => {
+            const svg = svgRef.current;
+            const ctm = svg?.getScreenCTM();
+            if (!svg || !ctm) return;
+            const point = svg.createSVGPoint();
+            point.x = event.clientX;
+            point.y = event.clientY;
+            setPlayheadX(point.matrixTransform(ctm.inverse()).x);
+          }}
+          onMouseLeave={() => {
+            if (dragRef.current || panRef.current) return;
+            setHover(null);
+            setPlayheadX(null);
+          }}
+        >
+          <svg
+        ref={svgRef}
+        width={canvasWidth}
         height={svgHeight}
-        className="block min-w-full"
+        className="block select-none"
+        style={{ touchAction: 'none', pointerEvents: 'none' }}
         role="img"
         aria-label="世界线时间轴"
-        onMouseLeave={() => setHover(null)}
       >
         <defs>
           <filter id="selected-glow" x="-40%" y="-60%" width="180%" height="220%">
@@ -353,9 +810,20 @@ export function WorldTimeline({
               ) : null,
           )}
         </g>
+        {playheadX != null && playheadX > plotLeft && playheadX < plotRight ? (
+          <line
+            x1={playheadX}
+            y1={axisY}
+            x2={playheadX}
+            y2={svgHeight - PADDING.bottom}
+            stroke="rgba(24,24,27,0.55)"
+            strokeWidth="1.5"
+            pointerEvents="none"
+          />
+        ) : null}
 
         {/* 关系连线层（条目之下） */}
-        <g>
+        <g style={{ pointerEvents: 'auto' }}>
           {links.map((link) => {
             const active = selection?.kind === 'relationship' && selection.id === link.id;
             return (
@@ -479,32 +947,20 @@ export function WorldTimeline({
         {/* 轨道行 + 条目 */}
         {layout.tracks.map((track, index) => {
           const color = TRACK_COLORS[track.kind] ?? TRACK_COLORS.world_event;
-          const source = model.tracks[index];
+          const source = orderedTracks[index];
           const trackItems = source?.items ?? [];
-          const label = track.title || KIND_LABEL[track.kind] || track.kind;
           return (
             <g key={track.id}>
               <rect
-                x={plotLeft}
+                x={TRACK_LABEL_WIDTH}
                 y={track.trackY}
-                width={plotRight - plotLeft}
+                width={Math.max(0, plotRight - TRACK_LABEL_WIDTH)}
                 height={track.height}
                 rx="10"
                 fill="rgba(24,24,27,0.03)"
                 stroke="#e5e7eb"
                 strokeWidth="1"
               />
-              <text
-                x={TRACK_LABEL_WIDTH - 8}
-                y={track.trackY + track.height / 2}
-                fill="#71717a"
-                fontSize="12"
-                fontWeight="600"
-                textAnchor="end"
-                dominantBaseline="middle"
-              >
-                {label}
-              </text>
               {trackItems.length === 0 && track.kind === 'world_event' ? (
                 <text
                   x={plotLeft + 12}
@@ -604,57 +1060,75 @@ export function WorldTimeline({
                 const crossing = itemRelation(item) === 'crossing';
                 const focus = overlayFocusOfItem(item, focusedDimensionId, focusedIsPrimary);
                 const stroke = active
-                  ? color.stroke
+                  ? '#ffffff'
                   : diverges
                     ? '#d97706'
                     : crossing
                       ? '#7c3aed'
                       : overlay
                         ? '#8b5cf6'
-                        : 'transparent';
+                        : 'rgba(255,255,255,0.85)';
+                const span = draftSpans[item.id] ?? clipSpan(item);
+                const spanLabel = spanCaption(span.start, span.end);
+                const pillWidth = Math.max(36, estimateTextWidth(spanLabel) + 12);
                 return (
                   <g
                     key={item.id}
-                    className="cursor-pointer"
+                    className="pointer-events-none"
                     opacity={focus === 'other' ? 0.35 : 1}
-                    onClick={() => {
-                      const shotId = derivedSourceShotId(item);
-                      if (shotId && isDerivedTrackKind(item.entityType)) {
-                        onSelect({ kind: item.entityType, id: shotId });
-                        return;
-                      }
-                      onSelect({ kind: item.entityType, id: item.id });
-                    }}
-                    onMouseEnter={(event) => showItemHover(event, item, track.kind)}
-                    onMouseMove={(event) => showItemHover(event, item, track.kind)}
-                    onMouseLeave={() => setHover(null)}
                   >
                     <rect
                       x={pos.x}
                       y={pos.y}
                       width={pos.itemWidth}
-                      height={ITEM_HEIGHT}
-                      rx="8"
+                      height={itemH}
+                      rx="10"
                       fill={color.fill}
                       stroke={stroke}
-                      strokeWidth={active || diverges || overlay ? 1.75 : 1}
-                      className={active ? '' : 'hover:stroke-zinc-400'}
+                      strokeWidth={active ? 2.5 : 1.5}
                       filter={active ? 'url(#selected-glow)' : undefined}
                     />
+                    {pos.itemWidth > pillWidth + 16 ? (
+                      <rect
+                        x={pos.x + 8}
+                        y={pos.y + 6}
+                        width={pillWidth}
+                        height={14}
+                        rx="7"
+                        fill="rgba(24,24,27,0.55)"
+                      />
+                    ) : null}
+                    {pos.itemWidth > pillWidth + 16 ? (
+                      <text
+                        x={pos.x + 8 + pillWidth / 2}
+                        y={pos.y + 14}
+                        fill="#fff"
+                        fontSize="9"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        {spanLabel}
+                      </text>
+                    ) : null}
                     <text
-                      x={pos.x + 10}
-                      y={pos.y + ITEM_HEIGHT / 2}
+                      x={pos.x + pos.itemWidth / 2}
+                      y={pos.y + itemH / 2 + 6}
                       fill={color.text}
                       fontSize="12"
+                      fontWeight="700"
+                      textAnchor="middle"
                       dominantBaseline="middle"
                       style={{ pointerEvents: 'none' }}
                     >
-                      {pos.itemWidth < 36 ? '' : clipLabel(item.title, pos.itemWidth < 72 ? 4 : 14)}
+                      {pos.itemWidth < 44
+                        ? ''
+                        : clipLabel(item.title, pos.itemWidth < 88 ? 4 : 12)}
                     </text>
                     {(diverges || overlay) && (
                       <circle
-                        cx={pos.x + pos.itemWidth - 8}
-                        cy={pos.y + 8}
+                        cx={pos.x + pos.itemWidth - 16}
+                        cy={pos.y + 10}
                         r="3"
                         fill={diverges ? '#d97706' : '#7c3aed'}
                       />
@@ -666,9 +1140,97 @@ export function WorldTimeline({
           );
         })}
       </svg>
+          <div className="pointer-events-none absolute inset-0 z-10">
+            {orderedTracks.flatMap((track) =>
+              track.items.map((item) => {
+                const pos = layout.positions.get(item.id);
+                if (!pos) return null;
+                const editable = canEditClip(item.entityType);
+                return (
+                  <div
+                    key={`hit-${item.id}`}
+                    className="pointer-events-auto absolute"
+                    style={{
+                      left: pos.x,
+                      top: pos.y,
+                      width: pos.itemWidth,
+                      height: itemH,
+                      cursor: editable ? 'grab' : 'pointer',
+                      touchAction: 'none',
+                    }}
+                    onClick={() => {
+                      if (skipSelectRef.current) {
+                        skipSelectRef.current = false;
+                        return;
+                      }
+                      const shotId = derivedSourceShotId(item);
+                      if (shotId && isDerivedTrackKind(item.entityType)) {
+                        onSelect({ kind: item.entityType, id: shotId });
+                        return;
+                      }
+                      onSelect({ kind: item.entityType, id: item.id });
+                    }}
+                    onPointerDown={(event) => {
+                      if (!editable) return;
+                      beginClipDrag('move', item, event);
+                    }}
+                    onMouseEnter={(event) => showItemHover(event, item, track.kind)}
+                    onMouseMove={(event) => showItemHover(event, item, track.kind)}
+                    onMouseLeave={() => setHover(null)}
+                  >
+                    {editable ? (
+                      <>
+                        <div
+                          className="absolute inset-y-0 left-0 z-10"
+                          style={{ width: EDGE, cursor: 'ew-resize' }}
+                          onPointerDown={(event) => beginClipDrag('start', item, event)}
+                        />
+                        <div
+                          className="absolute inset-y-0 right-0 z-10"
+                          style={{ width: EDGE, cursor: 'ew-resize' }}
+                          onPointerDown={(event) => beginClipDrag('end', item, event)}
+                        />
+                      </>
+                    ) : null}
+                  </div>
+                );
+              }),
+            )}
+          </div>
+          <div
+            className="pointer-events-auto absolute top-0 z-20 border-r border-line bg-white/95"
+            style={{ left: scrollLeft, width: TRACK_LABEL_WIDTH, height: svgHeight }}
+          >
+            {layout.tracks.map((track) => {
+              const label = track.title || KIND_LABEL[track.kind] || track.kind;
+              const dragging = dragRef.current?.mode === 'track' && dragRef.current.id === track.id;
+              return (
+                <button
+                  key={track.id}
+                  type="button"
+                  className={`absolute left-0 right-0 flex cursor-ns-resize items-center justify-end px-2 text-xs font-semibold ${
+                    dragging ? 'bg-zinc-100 text-zinc-800' : 'text-zinc-500 hover:bg-zinc-50'
+                  }`}
+                  style={{ top: track.trackY, height: track.height, touchAction: 'none' }}
+                  onPointerDown={(event) => beginTrackDrag(track.id, event)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <HorizontalNav
+        canvasWidth={canvasWidth}
+        viewportWidth={Math.max(1, width)}
+        scrollLeft={scrollLeft}
+        unitPx={unitPx}
+        onJump={jumpScroll}
+      />
       {hover && (
         <div
-          className="pointer-events-none absolute z-20 max-w-xs rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-md"
+          className="pointer-events-none absolute z-30 max-w-xs rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-md"
           style={{ left: hover.x, top: hover.y }}
           role="tooltip"
         >

@@ -14,6 +14,8 @@ import {
 import { formatSseEvent } from '../lib/sse.js';
 import { chunkReply } from '../contexts/world-builder/world-builder-agent.js';
 import type { LLMAdapter } from '../ports/llm.js';
+import { effortDto, resolveAgentEffort, type EffectiveAgentEffort } from '../contexts/agent-effort.js';
+import { resolveRuntimeLlm } from '../contexts/llm-runtime.js';
 
 const idSchema = z.string().min(1).max(128);
 
@@ -45,22 +47,15 @@ export function registerRoleplayRoutes(
   llmModel?: string,
   memory?: MemoryService | null,
 ) {
-  const agent = new RoleplayAgent(
-    llm ?? {
-      provider: 'mock',
-      supportedModels: [],
-      complete: () =>
-        Promise.resolve({
-          text: '',
-          model: 'mock',
-          input_tokens: 0,
-          output_tokens: 0,
-          metadata: {},
-        }),
-      completeStructured: () => Promise.reject(new Error('mock structured not supported')),
-    },
-    llmModel,
-  );
+  const injectedAgent = llm
+    ? new RoleplayAgent(llm, llmModel)
+    : null;
+
+  function currentAgent(): RoleplayAgent {
+    if (injectedAgent) return injectedAgent;
+    const live = resolveRuntimeLlm(db);
+    return new RoleplayAgent(live.llm, live.model);
+  }
 
   app.post('/roleplay/threads', async (request) => {
     const body = z
@@ -202,7 +197,15 @@ export function registerRoleplayRoutes(
   app.post('/roleplay/threads/:id/messages', async (request, reply) => {
     const { id } = z.object({ id: idSchema }).strict().parse(request.params);
     const body = z
-      .object({ content: z.string().trim().min(1).max(8_000) })
+      .object({
+        content: z.string().trim().min(1).max(8_000),
+        effort: z
+          .union([
+            z.enum(['fast', 'balanced', 'deep']),
+            z.object({ level: z.enum(['fast', 'balanced', 'deep']) }).strict(),
+          ])
+          .optional(),
+      })
       .strict()
       .parse(request.body ?? {});
     const roleplay = await db.roleplayThread.findUnique({ where: { id } });
@@ -213,12 +216,15 @@ export function registerRoleplayRoutes(
       data: { threadId: roleplay.threadId, role: 'user', content: body.content },
     });
 
+    const effort = resolveAgentEffort(body.effort);
+    const agent = currentAgent();
+
     if (wantsEventStream(request)) {
-      await pipeRoleplaySse(request, reply, db, agent, roleplay, userMessage, memory);
+      await pipeRoleplaySse(request, reply, db, agent, roleplay, userMessage, memory, effort);
       return;
     }
 
-    const result = await createRoleplayReply(db, agent, roleplay, userMessage, memory);
+    const result = await createRoleplayReply(db, agent, roleplay, userMessage, memory, effort);
     await db.creatorChatThread.update({
       where: { id: roleplay.threadId },
       data: { updatedAt: new Date() },
@@ -227,6 +233,7 @@ export function registerRoleplayRoutes(
       user_message: messageDto(userMessage),
       assistant_message: messageDto(result.assistantMessage),
       memory_ops: result.memoryOps,
+      effort: effortDto(effort),
     });
   });
 }
@@ -244,7 +251,9 @@ async function createRoleplayReply(
   },
   userMessage: { id: string; content: string },
   memory?: MemoryService | null,
+  effort?: EffectiveAgentEffort,
 ) {
+  const resolved = effort ?? resolveAgentEffort();
   const state = await buildCharacterState(
     db,
     roleplay.projectId,
@@ -276,6 +285,7 @@ async function createRoleplayReply(
       projectId: roleplay.projectId,
       text: userMessage.content,
       world,
+      topK: resolved.schedule.retrieve_top_k,
     });
     memoryDigest = formatMemoryDigest(retrieved) || null;
   }
@@ -285,16 +295,26 @@ async function createRoleplayReply(
     const window = await memory.getContextWindow(
       roleplay.threadId,
       historyRows.map((row) => ({ id: row.id, role: row.role, content: row.content })),
+      {
+        tokenBudget: resolved.limits.max_context_tokens,
+        keepRecentMessages: resolved.schedule.keep_recent_messages,
+      },
     );
     history = window.window.map((message) => ({ role: message.role, content: message.content }));
   } else {
-    history = historyRows.slice(-40).map((row) => ({
+    history = historyRows.slice(-resolved.schedule.history_turns).map((row) => ({
       role: row.role === 'user' || row.role === 'assistant' ? row.role : 'system',
       content: row.content,
     }));
   }
 
-  const response = await agent.respond({ text: userMessage.content, history, state, memoryDigest });
+  const response = await agent.respond({
+    text: userMessage.content,
+    history,
+    state,
+    memoryDigest,
+    effort: resolved,
+  });
   const assistantMessage = await db.creatorChatMessage.create({
     data: { threadId: roleplay.threadId, role: 'assistant', content: response.reply },
   });
@@ -317,6 +337,7 @@ async function pipeRoleplaySse(
   },
   userMessage: { id: string; threadId: string; role: string; content: string; createdAt: Date },
   memory?: MemoryService | null,
+  effort?: EffectiveAgentEffort,
 ): Promise<void> {
   const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
   reply.hijack();
@@ -354,6 +375,7 @@ async function pipeRoleplaySse(
       roleplay,
       { id: userMessage.id, content: userMessage.content },
       memory,
+      effort,
     );
     if (memoryOps) {
       writeEvent('memory', { ops: memoryOps });
@@ -362,7 +384,10 @@ async function pipeRoleplaySse(
       writeEvent('delta', { text: chunk });
       if (!closed) await new Promise((resolve) => setTimeout(resolve, 16));
     }
-    writeEvent('done', { assistant_message: messageDto(assistantMessage) });
+    writeEvent('done', {
+      assistant_message: messageDto(assistantMessage),
+      effort: effort ? effortDto(effort) : effortDto(resolveAgentEffort()),
+    });
   } catch (error) {
     writeEvent('error', {
       message: error instanceof Error ? error.message : '角色扮演回复失败',

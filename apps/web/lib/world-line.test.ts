@@ -12,6 +12,8 @@ import {
   countEventsBoundToDimension,
   overlayFocusOfItem,
   isTimelineItemActive,
+  clipSpan,
+  canEditClip,
 } from './world-line';
 
 function resources(overrides?: Partial<WorldResourcesDTO['entities']>): WorldResourcesDTO {
@@ -400,6 +402,8 @@ describe('buildWorldLineModel location track and anchoring', () => {
     const nan = characterTrack?.items.find((item) => item.id === 'c2');
     expect(han?.anchorOrder).toBe(3);
     expect(han?.extra?.anchor_event_id).toBe('e1');
+    expect(han?.startOrder).toBeCloseTo(2.88);
+    expect(han?.endOrder).toBeCloseTo(5.12);
     expect(nan?.anchorOrder).toBe(5);
     expect(nan?.extra?.anchor_event_id).toBe('e2');
   });
@@ -497,5 +501,37 @@ describe('buildWorldLineModel location track and anchoring', () => {
     const model = buildWorldLineModel(resources({ world_events: [], shots: [] }));
     expect(model.axisMarks.map((mark) => mark.label)).toEqual(['开场', '夜谈']);
     expect(model.axisMarks.map((mark) => mark.order)).toEqual([1, 2]);
+  });
+
+  it('stretches scene clips from this scene order to the next', () => {
+    const model = buildWorldLineModel(resources({ world_events: [], shots: [] }));
+    const sceneTrack = model.tracks.find((track) => track.kind === 'scene');
+    const opening = sceneTrack?.items.find((item) => item.id === 'sc1');
+    const night = sceneTrack?.items.find((item) => item.id === 'sc2');
+    expect(opening?.startOrder).toBe(1);
+    expect(opening?.endOrder).toBeCloseTo(1.94);
+    expect(night?.startOrder).toBe(2);
+    expect(night?.endOrder).toBeCloseTo(2.9);
+  });
+});
+
+describe('clipSpan and canEditClip', () => {
+  it('falls back to a padded point around the anchor', () => {
+    expect(clipSpan({ anchorOrder: 4 })).toEqual({ start: 3.65, end: 4.35 });
+  });
+
+  it('uses explicit start and end when present', () => {
+    expect(clipSpan({ anchorOrder: 4, startOrder: 3, endOrder: 6 })).toEqual({
+      start: 3,
+      end: 6,
+    });
+  });
+
+  it('allows editing events, scenes, characters and locations', () => {
+    expect(canEditClip('world_event')).toBe(true);
+    expect(canEditClip('scene')).toBe(true);
+    expect(canEditClip('character')).toBe(true);
+    expect(canEditClip('location')).toBe(true);
+    expect(canEditClip('camera')).toBe(false);
   });
 });

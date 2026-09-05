@@ -45,6 +45,8 @@ import { formatMemoryDigest } from '../contexts/memory/retrieval.js';
 import type { MemoryService } from '../contexts/memory/service.js';
 import { formatSseEvent } from '../lib/sse.js';
 import type { LLMAdapter } from '../ports/llm.js';
+import { effortDto, resolveAgentEffort, type EffectiveAgentEffort } from '../contexts/agent-effort.js';
+import { resolveRuntimeLlm } from '../contexts/llm-runtime.js';
 
 const idSchema = z.string().min(1).max(128);
 const projectParams = z.object({ projectId: idSchema }).strict();
@@ -760,6 +762,12 @@ const sendMessageBody = z
       })
       .strict()
       .optional(),
+    effort: z
+      .union([
+        z.enum(['fast', 'balanced', 'deep']),
+        z.object({ level: z.enum(['fast', 'balanced', 'deep']) }).strict(),
+      ])
+      .optional(),
   })
   .strict();
 
@@ -888,7 +896,9 @@ async function createAssistantReply(
   userMessage: { id: string; content: string },
   focus?: z.infer<typeof sendMessageBody>['focus'],
   memory?: MemoryService | null,
+  effort?: EffectiveAgentEffort,
 ) {
+  const resolved = effort ?? resolveAgentEffort();
   const rows = await db.creatorChatMessage.findMany({
     where: { threadId: thread.id },
     orderBy: { createdAt: 'asc' },
@@ -912,17 +922,22 @@ async function createAssistantReply(
       projectId: thread.projectId,
       text: userMessage.content,
       world,
+      topK: resolved.schedule.retrieve_top_k,
     });
     memoryDigest = formatMemoryDigest(retrieved) || null;
   }
 
-  // M1 上下文窗口：滚动摘要 + 预算内最近原文（无 memory 时回退最近 40 条）
+  // M1 上下文窗口：滚动摘要 + 预算内最近原文（无 memory 时回退最近 N 条）
   let history: WorldBuilderChatMessage[];
   let evicted: Array<{ id: string; role: string; content: string }> = [];
   if (memory) {
     const window = await memory.getContextWindow(
       thread.id,
       historyRows.map((row) => ({ id: row.id, role: row.role, content: row.content })),
+      {
+        tokenBudget: resolved.limits.max_context_tokens,
+        keepRecentMessages: resolved.schedule.keep_recent_messages,
+      },
     );
     history = window.window.map((message) => ({
       role: message.role,
@@ -930,7 +945,7 @@ async function createAssistantReply(
     }));
     evicted = window.evicted;
   } else {
-    history = historyRows.slice(-40).map((row) => ({
+    history = historyRows.slice(-resolved.schedule.history_turns).map((row) => ({
       role:
         row.role === 'user' || row.role === 'assistant' || row.role === 'system'
           ? row.role
@@ -946,6 +961,7 @@ async function createAssistantReply(
     stage: inferWorldStage(world),
     focus: focus ?? null,
     memoryDigest,
+    effort: resolved,
   });
   const proposalKey =
     response.proposals.length > 0
@@ -994,6 +1010,7 @@ async function pipeCreatorChatSse(
   },
   focus?: z.infer<typeof sendMessageBody>['focus'],
   memory?: MemoryService | null,
+  effort?: EffectiveAgentEffort,
 ): Promise<void> {
   const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
   reply.hijack();
@@ -1032,6 +1049,7 @@ async function pipeCreatorChatSse(
       { id: userMessage.id, content: userMessage.content },
       focus,
       memory,
+      effort,
     );
     if (memoryOps) {
       writeEvent('memory', { ops: memoryOps });
@@ -1047,7 +1065,10 @@ async function pipeCreatorChatSse(
       },
       { delayMs: closed ? 0 : 16 },
     );
-    writeEvent('done', { assistant_message: chatMessageDto(assistantMessage) });
+    writeEvent('done', {
+      assistant_message: chatMessageDto(assistantMessage),
+      effort: effort ? effortDto(effort) : effortDto(resolveAgentEffort()),
+    });
   } catch (error) {
     writeEvent('error', {
       message: worldBuilderPublicError(error),
@@ -1064,20 +1085,15 @@ function registerCreatorChatRoutes(
   llmModel?: string,
   memory?: MemoryService | null,
 ) {
-  const builder = new WorldBuilderAgent(
-    llm ??
-      ({
-        provider: 'mock',
-        supportedModels: [],
-        complete: () => {
-          throw new ApiError(503, 'LLM_UNAVAILABLE', 'LLM 不可用');
-        },
-        completeStructured: () => {
-          throw new ApiError(503, 'LLM_UNAVAILABLE', 'LLM 不可用');
-        },
-      } as LLMAdapter),
-    llmModel ?? 'mock-text-v1',
-  );
+  const injectedBuilder = llm
+    ? new WorldBuilderAgent(llm, llmModel ?? 'mock-text-v1')
+    : null;
+
+  function currentBuilder(): WorldBuilderAgent {
+    if (injectedBuilder) return injectedBuilder;
+    const live = resolveRuntimeLlm(db);
+    return new WorldBuilderAgent(live.llm, live.model);
+  }
 
   app.post('/creator-chats', async (request, reply) => {
     const body = createThreadBody.parse(request.body ?? {});
@@ -1203,6 +1219,51 @@ function registerCreatorChatRoutes(
     };
   });
 
+  app.get('/creator-chats/:threadId/context', async (request) => {
+    const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
+    const query = z
+      .object({
+        effort: z.enum(['fast', 'balanced', 'deep']).optional(),
+      })
+      .parse(request.query ?? {});
+    const { thread } = await requireOpenThread(db, threadId);
+    const effort = resolveAgentEffort(query.effort);
+    const messages = await db.creatorChatMessage.findMany({
+      where: { threadId },
+      orderBy: { createdAt: 'asc' },
+    });
+    let tokenEstimate = messages.reduce(
+      (sum, message) => sum + Math.max(0, Math.round(message.content.length / 2)),
+      0,
+    );
+    let summaryVersion: number | null = null;
+    let rollingSummaryPresent = false;
+    if (memory) {
+      const window = await memory.getContextWindow(
+        threadId,
+        messages.map((row) => ({ id: row.id, role: row.role, content: row.content })),
+        {
+          tokenBudget: effort.limits.max_context_tokens,
+          keepRecentMessages: effort.schedule.keep_recent_messages,
+        },
+      );
+      tokenEstimate = window.tokenEstimate;
+      const state = await memory.threadContext(threadId);
+      summaryVersion = state?.summaryVersion ?? null;
+      rollingSummaryPresent = Boolean(state?.rollingSummary);
+    }
+    return {
+      thread_id: thread.id,
+      project_id: thread.projectId,
+      token_estimate: tokenEstimate,
+      token_cap: effort.limits.max_context_tokens,
+      message_count: messages.length,
+      summary_version: summaryVersion,
+      rolling_summary_present: rollingSummaryPresent,
+      effort: effortDto(effort),
+    };
+  });
+
   app.delete('/creator-chats/:threadId', async (request, reply) => {
     const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
     await archiveCreatorChat(db, threadId);
@@ -1245,6 +1306,9 @@ function registerCreatorChatRoutes(
       },
     });
 
+    const effort = resolveAgentEffort(body.effort);
+    const builder = currentBuilder();
+
     if (body.role === 'user' && wantsEventStream(request)) {
       await pipeCreatorChatSse(
         request,
@@ -1255,6 +1319,7 @@ function registerCreatorChatRoutes(
         userMessage,
         body.focus,
         memory,
+        effort,
       );
       return;
     }
@@ -1270,6 +1335,7 @@ function registerCreatorChatRoutes(
         { id: userMessage.id, content: userMessage.content },
         body.focus,
         memory,
+        effort,
       );
       assistantMessage = created.assistantMessage;
       memoryOps = created.memoryOps;
@@ -1283,6 +1349,7 @@ function registerCreatorChatRoutes(
       user_message: chatMessageDto(userMessage),
       assistant_message: assistantMessage ? chatMessageDto(assistantMessage) : null,
       memory_ops: memoryOps,
+      effort: effortDto(effort),
     });
   });
 
@@ -1304,7 +1371,17 @@ function registerCreatorChatRoutes(
         content: body.content,
       },
     });
-    await pipeCreatorChatSse(request, reply, db, builder, thread, userMessage, body.focus, memory);
+    await pipeCreatorChatSse(
+      request,
+      reply,
+      db,
+      currentBuilder(),
+      thread,
+      userMessage,
+      body.focus,
+      memory,
+      resolveAgentEffort(body.effort),
+    );
   });
 
   app.post('/creator-chats/:threadId/proposals/:messageId/apply', async (request) => {

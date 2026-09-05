@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
+import { resolveAgentEffort } from '../src/contexts/agent-effort.js';
 import {
   WorldBuilderAgent,
   chunkReply,
@@ -122,6 +123,42 @@ describe('world builder conflict surfacing', () => {
     });
     expect(response.proposals).toEqual([]);
     expect(response.reply).toContain('已经在世界档案里');
+  });
+
+  it('fast effort skips automatic conflict appendix unless asked', () => {
+    const world = {
+      projectId: 'p1',
+      projectName: '测试',
+      worldview: { rules: [] },
+      stories: [],
+      characters: [
+        { id: 'c1', name: '艾拉', description: null, tags: [] },
+        { id: 'c2', name: '艾拉', description: null, tags: [] },
+      ],
+      locations: [],
+      scenes: [],
+      worldEvents: [],
+      relationships: [],
+    };
+    const input = {
+      text: '记录地点：雾港',
+      history: [{ role: 'user' as const, content: '记录地点：雾港' }],
+      world,
+      stage: 'growing' as const,
+    };
+    const balanced = mockWorldBuilderResponse(input);
+    const fast = mockWorldBuilderResponse({ ...input, effort: resolveAgentEffort('fast') });
+    const asked = mockWorldBuilderResponse({
+      ...input,
+      text: '帮我检查一下设定冲突',
+      history: [{ role: 'user', content: '帮我检查一下设定冲突' }],
+      effort: resolveAgentEffort('fast'),
+    });
+    expect(balanced.world_state.conflicts.length).toBeGreaterThan(0);
+    expect(balanced.reply).toContain('设定冲突');
+    expect(fast.reply).not.toContain('设定冲突');
+    expect(asked.world_state.conflicts.length).toBeGreaterThan(0);
+    expect(asked.reply).toContain('不会自动修改');
   });
 });
 

@@ -25,8 +25,14 @@ export class DeepSeekLLMAdapter implements LLMAdapter {
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? 'https://api.deepseek.com').replace(/\/$/, '');
     this.fetchImpl = options.fetchImpl ?? fetch;
-    const model = options.defaultModel ?? 'deepseek-chat';
-    this.supportedModels = [{ id: model, name: 'DeepSeek Chat', version: '1' }];
+    const model = options.defaultModel ?? 'deepseek-v4-flash';
+    this.supportedModels = [
+      { id: 'deepseek-v4-flash', name: 'DeepSeek Flash', version: '4' },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek Pro', version: '4' },
+      ...(model === 'deepseek-v4-flash' || model === 'deepseek-v4-pro'
+        ? []
+        : [{ id: model, name: model, version: '1' }]),
+    ];
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResult> {

@@ -9,6 +9,7 @@ import { SiliconFlowVideoAdapter } from '../adapters/siliconflow-video.js';
 import type { VideoGenerationAdapter } from '../ports/generation.js';
 import type { LLMAdapter } from '../ports/llm.js';
 import type { AudioSpeechAdapter, ImageGenerationAdapter } from '../ports/media.js';
+import { getCustomProvider } from './custom-providers.js';
 import {
   loadProviderCredentials,
   loadProviderModels,
@@ -43,22 +44,28 @@ export function createProviderBundle(
   const credentials = loadProviderCredentials();
   const models = { ...loadProviderModels(), ...modelsOverride };
   const selection = loadProviderSelection(selectionOverride);
+  const custom = getCustomProvider(selection.llm);
 
   const llm =
-    selection.llm === 'deepseek' && credentials.deepseekApiKey
+    custom?.api_key && custom.api_format === 'openai_chat'
       ? new DeepSeekLLMAdapter({
-          apiKey: credentials.deepseekApiKey,
-          baseUrl: credentials.deepseekBaseUrl,
-          defaultModel: models.llm,
+          apiKey: custom.api_key,
+          baseUrl: custom.base_url,
+          defaultModel: models.llm || custom.models[0] || 'unknown',
         })
-      : selection.llm === 'siliconflow' && credentials.siliconflowApiKey
+      : selection.llm === 'deepseek' && credentials.deepseekApiKey
         ? new DeepSeekLLMAdapter({
-            // SiliconFlow chat is OpenAI-compatible; reuse the same adapter surface.
-            apiKey: credentials.siliconflowApiKey,
-            baseUrl: credentials.siliconflowBaseUrl,
+            apiKey: credentials.deepseekApiKey,
+            baseUrl: credentials.deepseekBaseUrl,
             defaultModel: models.llm,
           })
-        : new MockLLMAdapter({ responder: mockAgentResponder });
+        : selection.llm === 'siliconflow' && credentials.siliconflowApiKey
+          ? new DeepSeekLLMAdapter({
+              apiKey: credentials.siliconflowApiKey,
+              baseUrl: credentials.siliconflowBaseUrl,
+              defaultModel: models.llm,
+            })
+          : new MockLLMAdapter({ responder: mockAgentResponder });
 
   const realImage = selection.image === 'siliconflow' && credentials.siliconflowApiKey;
   const realVideo = selection.video === 'siliconflow' && credentials.siliconflowApiKey;
@@ -94,10 +101,12 @@ export function createProviderBundle(
     models,
     llm,
     llmModel:
-      (selection.llm === 'deepseek' && credentials.deepseekApiKey) ||
-      (selection.llm === 'siliconflow' && credentials.siliconflowApiKey)
-        ? models.llm
-        : 'mock-text-v1',
+      custom?.api_key && custom.api_format === 'openai_chat'
+        ? models.llm || custom.models[0] || 'unknown'
+        : (selection.llm === 'deepseek' && credentials.deepseekApiKey) ||
+            (selection.llm === 'siliconflow' && credentials.siliconflowApiKey)
+          ? models.llm
+          : 'mock-text-v1',
     image,
     imageModel: realImage ? models.image : 'mock-image-v1',
     imageI2iModel: realImage ? models.image_i2i : 'mock-image-i2i-v1',

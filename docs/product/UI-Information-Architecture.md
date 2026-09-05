@@ -203,7 +203,7 @@ flowchart TD
 
 **路由：`/`，应用默认页。** 打开即用，无登录（本地单用户模式，[ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md)）。Creator Chat 为独立浅色对话面（可收起的左侧**对话列表** + 居中消息流 + 底部输入），不再套 Studio 导航，也不嵌进 Studio 右侧栏。历史栏分 **世界 / 角色** 两个 Tab：世界构建线程与扮演线程共用 `/creator-chats/[threadId]` 与消息表，列表 DTO 用 `kind`（join `RoleplayThread`）区分；不新建 `/roleplay` 路由。世界观摘要、实体表、冲突列表与 Inspector **在 Studio 世界工作区**。Studio 使用窄图标活动栏；世界工作区左项目文件夹 / 右 Inspector 可收起，亦可拖拽改宽度，中栏时间线与下方副驾驶/记忆/导入坞可拖拽改高度。功能按能力爬坡逐步实现（v1：会话运行时 + 世界构建 agent；提案 → 确认 → 落库；世界知识上下文；冲突检测规则 v1）。
 
-**对话与项目的关系。** 一个世界 = 一个项目 = 磁盘上的一个工作区路径（[ADR-0016](../architecture/adr/0016-local-creative-surface-is-electron.md)）。Chat 侧栏「+」是**选择已有文件夹**（Electron 系统对话框拿到绝对路径），不从对话区新建空文件夹。同一路径再次打开是同一个项目。选中后可在该项目里新建聊天；项目显示名、聊天名可重命名，聊天可删除。改项目名不改磁盘目录名。确认「创建世界」提案只给这个工作区写入设定。从其中任意一条对话跳转 Studio，都进入该项目的 `/world`。实体仍须提案确认后落 `draft`（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 围栏：AI 永不自主写实体）。IP Core / 实体 / 聊天写成该目录里的文件属阶段 F，尚未做。
+**对话与项目的关系。** 一个世界 = 一个项目 = 磁盘上的一个工作区路径（[ADR-0016](../architecture/adr/0016-local-creative-surface-is-electron.md)）。Chat 侧栏「+」是**选择已有文件夹**（Electron 系统对话框拿到绝对路径），不从对话区新建空文件夹。同一路径再次打开是同一个项目。侧栏按 **项目文件夹树** 列出工作区：文件夹图标 + 项目名，对话缩进在下面，右侧相对时间；空项目显示「暂无对话」。侧栏底是本机账号条。输入框工具条接到真实对话链路：变更前确认（强制，不能关）、用量/上下文（当前 effort 的 token 预算 + 项目用量）、文本模型（`PUT /providers/selection` 立即作用于下一轮）、努力程度（随每轮请求提交，收窄或加深上下文与冲突扫描，不绕过确认门禁）。「管理模型」进项目设置。Chat 仍是浅色壳。确认后的设定写成 `draft`（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)）。IP Core / 实体 / 聊天写成该目录里的文件属 Track W，尚未做。
 
 **对话记录是会话工作底稿。** 不进领域模型，不作为创作产物展示或导出（宪法 §9.2，2026-08-04 修订）。
 
@@ -230,7 +230,7 @@ flowchart TD
 | 阶段 | 内容 | 依赖 / 状态 |
 |------|------|------|
 | **K1** | 项目主页重构为世界总览；`ProviderPanel` / `UsageSummaryCard` 迁至 `/settings`，`WorkflowPanel` / `GenerationQueuePanel` 迁至 `/production`；侧栏导航更名与扩充 | **已完成 2026-08-05**（「只搬不移」；浏览器回归 5 页全过） |
-| **K2** | `/world` 工作区（2026-08-04 三栏）：左 Entity Explorer / 中 Timeline + 副驾驶 agent / 右 Inspector（右上世界线属性、右下创作线属性置灰）；世界线抽象刻度、轨道化实体、关系连线 | **已完成 v1 2026-08-05**；2026-08-13 Inspector 内联编辑 + 冲突列表 + 副驾驶摘要；2026-08-14 左右栏可收起 + 地点轨 / 事件刻度 / 锚定 / 偏离标记；**2026-08-30** 左右栏与时间线/下坞可拖拽改尺寸（localStorage）；轴标签按像素间距抽稀，避免事件标题重叠 |
+| **K2** | `/world` 工作区（2026-08-04 三栏）：左 Entity Explorer / 中 Timeline + 副驾驶 agent / 右 Inspector（右上世界线属性、右下创作线属性置灰）；世界线抽象刻度、轨道化实体、关系连线 | **已完成 v1 2026-08-05**；2026-08-13 Inspector 内联编辑 + 冲突列表 + 副驾驶摘要；2026-08-14 左右栏可收起 + 地点轨 / 事件刻度 / 锚定 / 偏离标记；**2026-08-30** 左右栏与时间线/下坞可拖拽改尺寸（localStorage）；轴标签按像素间距抽稀，避免事件标题重叠；**2026-09-03** 剪辑块可左右拖、拉长短、拖轨名换上下（跨度用呈现序，不是秒） |
 | **K3** | Creator Chat 为应用默认页 `/`，无登录；对话产出 `draft` 实体；与 `/world` 双向切换 | **已完成 2026-08-05**；2026-08-13 ADR-0013 API 闭环 + 流式 SSE；2026-08-14 可收起历史侧栏 + 浅色独立对话壳；**2026-08-30** 历史栏分世界/角色 Tab，列表标 `kind`；**2026-09-02** Chat 收成纯对话面，项目文件夹改在 Studio 打开 |
 | **K4** | 创作线视图（v1 置灰标「后续」）：从世界线经 Production Skill 转换，15 秒镜头提示词 / 风格固定词 / 镜头参数 | 后续迭代 |
 | **K6** | Studio 收成 IDE 壳：非 Chat 路由始终图标活动栏；主画布 `/world`；`/projects/[id]` 仍是故事列表；去掉 `ProjectSubNav`；工作区顶栏「制作」改「创作线」以免与活动栏「制作」撞名 | **已完成 2026-09-01** |

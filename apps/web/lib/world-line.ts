@@ -4,7 +4,8 @@
 // 每条轨道一类实体（character / location / scene / world_event），
 // 条目按 anchorOrder 在非均匀呈现刻度上定位。
 // 世界时间信封保持 opaque：只展示 label / mode，不用 envelope 值改写主轴。
-// v1 为只读派生视图（TimelineTrack/TimelineItem 表留作未来持久化轨道结构）。
+// v1 视图仍由 WorldResources 派生（TimelineTrack/TimelineItem 表未当权威）。
+// 事件/场景剪辑块可写回 presentation_order / scene.order；角色/地点跨度由参与关系派生。
 // H6：显式 WorldTimeBinding（point/range/relative/crossing）叠在呈现主轴上。
 
 import type {
@@ -156,6 +157,33 @@ export function overlayFocusOfItem(
   return dimensionId === focusedDimensionId ? 'match' : 'other';
 }
 
+function numericOrderHint(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const order = (value as Record<string, unknown>).order;
+    if (typeof order === 'number' && Number.isFinite(order)) return order;
+  }
+  return null;
+}
+
+export function clipSpan(item: Pick<WorldLineItem, 'anchorOrder' | 'startOrder' | 'endOrder'>): {
+  start: number;
+  end: number;
+} {
+  const start = item.startOrder ?? item.anchorOrder - 0.35;
+  const end = item.endOrder ?? item.anchorOrder + 0.35;
+  if (end <= start) return { start, end: start + 0.25 };
+  return { start, end };
+}
+
+export function canEditClip(kind: string): boolean {
+  return kind === 'world_event' || kind === 'scene' || kind === 'character' || kind === 'location';
+}
+
+function paddedPoint(order: number, pad = 0.42): { startOrder: number; endOrder: number } {
+  return { startOrder: order - pad, endOrder: order + pad };
+}
+
 function eventPresentationOrder(event: WorldEventDTO): number {
   return event.presentation_order ?? 0;
 }
@@ -170,12 +198,25 @@ function eventItem(event: WorldEventDTO): WorldLineItem {
   const diverges = eventDiverges(event);
   const relation = worldTimeRelation(event.world_time_envelope);
   const mode = worldTimeMode(event.world_time_envelope);
+  const order = eventPresentationOrder(event);
+  const envelope = event.world_time_envelope;
+  const rangeStart = numericOrderHint(envelope && typeof envelope === 'object' ? envelope.start : null);
+  const rangeEnd = numericOrderHint(envelope && typeof envelope === 'object' ? envelope.end : null);
+  const span =
+    mode === 'range' && (rangeStart != null || rangeEnd != null)
+      ? {
+          startOrder: rangeStart ?? order - 0.45,
+          endOrder: rangeEnd ?? order + 0.45,
+        }
+      : paddedPoint(order);
   return {
     id: event.id,
     entityType: 'world_event',
     title: event.title,
     description: event.description,
-    anchorOrder: eventPresentationOrder(event),
+    anchorOrder: order,
+    startOrder: span.startOrder,
+    endOrder: span.endOrder,
     createdAt: event.created_at,
     extra: {
       state: event.state,
@@ -200,13 +241,17 @@ function sceneTime(scene: SceneDTO): string | null {
   return scene.time_of_day ?? scene.time ?? null;
 }
 
-function sceneItem(scene: SceneDTO): WorldLineItem {
+function sceneItem(scene: SceneDTO, startOrder?: number, endOrder?: number): WorldLineItem {
+  const order = scene.order ?? 0;
+  const span = paddedPoint(order, 0.45);
   return {
     id: scene.id,
     entityType: 'scene',
     title: scene.title,
     description: sceneSummary(scene),
-    anchorOrder: scene.order ?? 0,
+    anchorOrder: order,
+    startOrder: startOrder ?? span.startOrder,
+    endOrder: endOrder ?? span.endOrder,
     createdAt: scene.created_at ?? '',
     extra: {
       story_id: scene.story_id,
@@ -224,7 +269,9 @@ function assetItem(
   entityType: 'character' | 'location',
   anchorOrder: number,
   extra: Record<string, unknown> = {},
+  span?: { startOrder: number; endOrder: number },
 ): WorldLineItem {
+  const pad = span ?? paddedPoint(anchorOrder);
   return {
     id: asset.id,
     entityType,
@@ -232,6 +279,8 @@ function assetItem(
     description: asset.description,
     tags: asset.tags,
     anchorOrder,
+    startOrder: pad.startOrder,
+    endOrder: pad.endOrder,
     createdAt: asset.created_at ?? '',
     extra: {
       type: asset.type ?? asset.asset_type ?? null,
@@ -279,6 +328,14 @@ function firstEventForCharacter(
   const hits = events.filter((event) => (event.character_ids ?? []).includes(characterId));
   if (hits.length === 0) return null;
   return [...hits].sort((a, b) => eventPresentationOrder(a) - eventPresentationOrder(b))[0] ?? null;
+}
+
+function spanForOrders(orders: number[]): { startOrder: number; endOrder: number } | null {
+  if (orders.length === 0) return null;
+  const min = Math.min(...orders);
+  const max = Math.max(...orders);
+  if (min === max) return paddedPoint(min, 0.45);
+  return { startOrder: min - 0.12, endOrder: max + 0.12 };
 }
 
 function firstSceneForLocation(locationId: string, scenes: SceneDTO[]): SceneDTO | null {
@@ -356,7 +413,16 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
       title: '角色',
       items: sortedCharacters.map((character) => {
         const anchor = characterAnchors.get(character.id);
-        return assetItem(character, 'character', anchor?.order ?? baseMax, anchor?.extra);
+        const related = world_events
+          .filter((event) => (event.character_ids ?? []).includes(character.id))
+          .map(eventPresentationOrder);
+        return assetItem(
+          character,
+          'character',
+          anchor?.order ?? baseMax,
+          anchor?.extra,
+          spanForOrders(related) ?? paddedPoint(anchor?.order ?? baseMax),
+        );
       }),
     },
     {
@@ -365,14 +431,31 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
       title: '地点',
       items: sortedLocations.map((location) => {
         const anchor = locationAnchors.get(location.id);
-        return assetItem(location, 'location', anchor?.order ?? baseMax, anchor?.extra);
+        const related = scenes
+          .filter((scene) => scene.location_id === location.id)
+          .map((scene) => scene.order ?? 0);
+        return assetItem(
+          location,
+          'location',
+          anchor?.order ?? baseMax,
+          anchor?.extra,
+          spanForOrders(related) ?? paddedPoint(anchor?.order ?? baseMax),
+        );
       }),
     },
     {
       id: 'scene',
       kind: 'scene',
       title: '场景',
-      items: [...scenes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(sceneItem),
+      items: (() => {
+        const sortedScenes = [...scenes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        return sortedScenes.map((scene, index) => {
+          const order = scene.order ?? 0;
+          const next = sortedScenes[index + 1];
+          const end = next ? (next.order ?? order + 1) - 0.06 : order + 0.9;
+          return sceneItem(scene, order, Math.max(end, order + 0.35));
+        });
+      })(),
     },
     {
       id: 'world_event',
@@ -548,6 +631,11 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
     const denom = sceneShots.length + 1;
     sceneShots.forEach((shot, index) => {
       const anchorOrder = sceneOrder + (index + 1) / denom;
+      const nextOrder = sceneShots[index + 1]
+        ? sceneOrder + (index + 2) / denom
+        : sceneOrder + 0.96;
+      const startOrder = index === 0 ? sceneOrder + 0.05 : anchorOrder - 0.45 / denom;
+      const endOrder = Math.max(nextOrder - 0.02, startOrder + 0.12);
       const createdAt = shot.created_at ?? '';
       const shotLabel = shot.label?.trim() || `镜头 ${shot.order ?? index + 1}`;
       const extra = {
@@ -565,6 +653,8 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
         title: shotLabel,
         description: shot.mood ?? null,
         anchorOrder,
+        startOrder,
+        endOrder,
         createdAt,
         extra: {
           scene_id: shot.scene_id,
@@ -580,6 +670,8 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
         title: projectCameraCaption(shot),
         description: shotLabel,
         anchorOrder,
+        startOrder,
+        endOrder,
         createdAt,
         extra,
       });
@@ -589,6 +681,8 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
         title: projectStyleCaption(shot),
         description: shotLabel,
         anchorOrder,
+        startOrder,
+        endOrder,
         createdAt,
         extra,
       });
@@ -598,6 +692,8 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
         title: projectPromptCaption(shot),
         description: shotLabel,
         anchorOrder,
+        startOrder,
+        endOrder,
         createdAt,
         extra: {
           ...extra,
@@ -610,6 +706,8 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
         title: projectModelCaption(shot),
         description: shotLabel,
         anchorOrder,
+        startOrder,
+        endOrder,
         createdAt,
         extra: {
           ...extra,
@@ -625,36 +723,51 @@ export function buildProductionLineModel(resources: WorldResourcesDTO): WorldLin
       id: 'story',
       kind: 'story',
       title: '故事',
-      items: sortedStories.map((story) => ({
-        id: story.id,
-        entityType: 'story',
-        title: story.title,
-        description: story.logline ?? story.synopsis ?? null,
-        anchorOrder: storyOrder.get(story.id) ?? 0,
-        createdAt: '',
-        extra: {
-          status: story.status ?? 'draft',
-          scene_count: story.scene_count ?? 0,
-        },
-      })),
+      items: sortedStories.map((story) => {
+        const order = storyOrder.get(story.id) ?? 0;
+        const related = sortedScenes
+          .filter((entry) => entry.scene.story_id === story.id)
+          .map((entry) => entry.order);
+        const span = spanForOrders(related) ?? paddedPoint(order, 0.45);
+        return {
+          id: story.id,
+          entityType: 'story' as const,
+          title: story.title,
+          description: story.logline ?? story.synopsis ?? null,
+          anchorOrder: order,
+          startOrder: span.startOrder,
+          endOrder: span.endOrder,
+          createdAt: '',
+          extra: {
+            status: story.status ?? 'draft',
+            scene_count: story.scene_count ?? 0,
+          },
+        };
+      }),
     },
     {
       id: 'scene',
       kind: 'scene',
       title: '场景',
-      items: sortedScenes.map(({ scene, order }) => ({
-        id: scene.id,
-        entityType: 'scene',
-        title: scene.title,
-        description: sceneSummary(scene),
-        anchorOrder: order,
-        createdAt: scene.created_at ?? '',
-        extra: {
-          story_id: scene.story_id,
-          order: scene.order ?? 0,
-          state: scene.state ?? 'draft',
-        },
-      })),
+      items: sortedScenes.map(({ scene, order }, index) => {
+        const next = sortedScenes[index + 1];
+        const end = next ? next.order - 0.05 : order + 0.9;
+        return {
+          id: scene.id,
+          entityType: 'scene' as const,
+          title: scene.title,
+          description: sceneSummary(scene),
+          anchorOrder: order,
+          startOrder: order,
+          endOrder: Math.max(end, order + 0.35),
+          createdAt: scene.created_at ?? '',
+          extra: {
+            story_id: scene.story_id,
+            order: scene.order ?? 0,
+            state: scene.state ?? 'draft',
+          },
+        };
+      }),
     },
     {
       id: 'shot',

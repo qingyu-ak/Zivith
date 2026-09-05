@@ -10,6 +10,8 @@ build/
 coverage/
 dist/
 *.tsbuildinfo
+*.tgz
+Zivith.lnk
 
 # Environment files (examples remain tracked)
 .env

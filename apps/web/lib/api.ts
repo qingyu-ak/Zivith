@@ -142,6 +142,7 @@ export async function sendCreatorChatTurn(
   content: string,
   onEvent: (event: string, data: unknown) => void,
   focus?: { kind: string; id: string; name: string } | null,
+  effort?: 'fast' | 'balanced' | 'deep',
 ): Promise<void> {
   await postChatTurn(
     `/world/creator-chats/${threadId}/messages`,
@@ -149,6 +150,7 @@ export async function sendCreatorChatTurn(
       role: 'user',
       content,
       ...(focus ? { focus } : {}),
+      ...(effort ? { effort } : {}),
     },
     onEvent,
   );
@@ -159,8 +161,13 @@ export async function sendRoleplayTurn(
   roleplayThreadId: string,
   content: string,
   onEvent: (event: string, data: unknown) => void,
+  effort?: 'fast' | 'balanced' | 'deep',
 ): Promise<void> {
-  await postChatTurn(`/roleplay/threads/${roleplayThreadId}/messages`, { content }, onEvent);
+  await postChatTurn(
+    `/roleplay/threads/${roleplayThreadId}/messages`,
+    { content, ...(effort ? { effort } : {}) },
+    onEvent,
+  );
 }
 
 async function postChatTurn(

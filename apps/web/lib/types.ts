@@ -386,7 +386,9 @@ export interface GenerationTaskDTO {
   error_code?: string | null;
 }
 
-export type ProviderId = 'mock' | 'deepseek' | 'siliconflow';
+export type ProviderId = string;
+export type BuiltinProviderId = 'mock' | 'deepseek' | 'siliconflow';
+export type ApiFormat = 'openai_chat' | 'anthropic_messages';
 export interface ProviderModelsDTO {
   llm: string;
   /** 文生图 T2I */
@@ -411,10 +413,13 @@ export interface ProviderCatalogDTO {
   providers: Array<{
     id: ProviderId;
     label: string;
+    kind?: 'builtin' | 'custom';
+    api_format?: ApiFormat;
     modalities: Array<'llm' | 'image' | 'video' | 'audio'>;
     configured: boolean;
     default_model?: string;
     default_models?: Partial<ProviderModelsDTO>;
+    llm_models?: Array<{ id: string; label: string }>;
     base_url?: string;
   }>;
   runtime_override?: {
@@ -563,6 +568,10 @@ export interface WorldLineItem {
   tags?: string[];
   /** 刻度位置：事件=presentation_order，场景=order，角色/地点=事件/场景锚点或插值 */
   anchorOrder: number;
+  /** 剪辑块左缘（呈现序）。缺省则围住 anchorOrder。 */
+  startOrder?: number;
+  /** 剪辑块右缘（呈现序）。 */
+  endOrder?: number;
   createdAt: string;
   /** 实体特有属性（Inspector / 时间线提示用） */
   extra?: Record<string, unknown>;

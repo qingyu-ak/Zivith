@@ -13,7 +13,7 @@ import {
 import { isDesktopApp } from '@/lib/desktop';
 import type { CreatorChatKind, CreatorChatThreadDTO, ProjectDTO } from '@/lib/types';
 import { AccountMenu } from '@/components/account-menu';
-import { IconChatPlus, IconPlusCircle, IconSearch, IconSidebar } from '@/components/nav-icons';
+import { IconChatPlus, IconFolder, IconPlusCircle, IconSearch, IconSidebar } from '@/components/nav-icons';
 
 type MenuState =
   | { kind: 'project'; id: string; name: string; x: number; y: number }
@@ -213,7 +213,8 @@ export function ChatSidebar({
                 : '用桌面应用打开一个文件夹，或从已有项目继续。'}
           </p>
         ) : (
-          <ul className="grid gap-2">
+          <ul className="grid gap-1">
+            <li className="px-2 pb-1 pt-1 text-[11px] text-zinc-400">项目</li>
             {groups.map((group) => {
               const { world, roleplay } = partitionThreadsByKind(group.threads);
               const tabThreads = tab === 'roleplay' ? roleplay : world;
@@ -223,9 +224,9 @@ export function ChatSidebar({
               const renamingProject = rename?.kind === 'project' && rename.id === group.id;
               return (
                 <li key={group.id}>
-                  <div className="flex items-center gap-0.5 px-1">
+                  <div className="flex items-center gap-0.5">
                     {renamingProject ? (
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 px-1">
                         <InlineName
                           value={group.label}
                           label="项目名称"
@@ -239,7 +240,8 @@ export function ChatSidebar({
                     ) : (
                       <button
                         type="button"
-                        className="min-w-0 flex-1 rounded-md px-1 py-1 text-left hover:bg-zinc-200/70"
+                        title={group.workspacePath || '未绑定文件夹'}
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-zinc-200/70"
                         onClick={() => {
                           if (group.id !== '__unbound__') onSelectProject(group.id);
                         }}
@@ -251,11 +253,9 @@ export function ChatSidebar({
                           openMenu(event, { kind: 'project', id: group.id, name: group.label });
                         }}
                       >
-                        <span className="block truncate text-[13px] font-medium text-zinc-800">
+                        <IconFolder className="size-4 shrink-0 text-zinc-500" />
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-zinc-800">
                           {group.label}
-                        </span>
-                        <span className="block truncate text-[10px] text-zinc-400">
-                          {group.workspacePath || '未绑定文件夹'}
                         </span>
                       </button>
                     )}
@@ -272,9 +272,9 @@ export function ChatSidebar({
                     ) : null}
                   </div>
                   {tabThreads.length === 0 ? (
-                    <p className="px-3 py-1 text-[11px] text-zinc-400">还没有对话</p>
+                    <p className="py-1 pl-8 pr-2 text-[12px] text-zinc-400">暂无对话</p>
                   ) : (
-                    <ul className="mt-0.5 grid gap-0.5">
+                    <ul className="grid gap-0.5 pl-6">
                       {tabThreads.map((item) => {
                         const active = item.id === threadId;
                         const renaming = rename?.kind === 'thread' && rename.id === item.id;
@@ -302,10 +302,10 @@ export function ChatSidebar({
                                     name: threadDisplayTitle(item),
                                   })
                                 }
-                                className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm transition ${
+                                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] transition ${
                                   active
-                                    ? 'bg-[#e8f0fe] text-zinc-900'
-                                    : 'text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900'
+                                    ? 'bg-zinc-200/90 text-zinc-900'
+                                    : 'text-zinc-600 hover:bg-zinc-200/60 hover:text-zinc-900'
                                 }`}
                               >
                                 <span className="min-w-0 flex-1 truncate">
@@ -314,7 +314,7 @@ export function ChatSidebar({
                                     <span className="ml-1 text-[10px] text-zinc-400">扮演</span>
                                   ) : null}
                                 </span>
-                                <span className="shrink-0 text-[10px] text-zinc-400">
+                                <span className="shrink-0 text-[11px] text-zinc-400">
                                   {compactRelativeTime(item.updated_at)}
                                 </span>
                               </Link>
@@ -367,7 +367,7 @@ export function ChatSidebar({
         </div>
       ) : null}
 
-      <div className="px-2 pb-3">
+      <div className="border-t border-zinc-200/80 px-1 pb-3 pt-2">
         <AccountMenu settingsHref="/projects" tone="light" />
       </div>
     </aside>

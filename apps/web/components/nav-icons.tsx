@@ -146,3 +146,57 @@ export function IconPanelRight(props: IconProps) {
     </svg>
   );
 }
+
+export function IconChevron(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m7 10 5 5 5-5" />
+    </svg>
+  );
+}
+
+export function IconBrain(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M9 8.2A2.6 2.6 0 1 0 6.2 12 2.4 2.4 0 0 0 8 16.2V18h8v-1.8A2.4 2.4 0 0 0 17.8 12 2.6 2.6 0 1 0 15 8.2" />
+      <path d="M12 8.5V18M9.5 12h5" />
+    </svg>
+  );
+}
+
+export function IconHand(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M8 11.5V7.8a1.3 1.3 0 0 1 2.6 0V11" />
+      <path d="M10.6 10.8V7.2a1.3 1.3 0 1 1 2.6 0v4" />
+      <path d="M13.2 11V8.2a1.3 1.3 0 1 1 2.6 0V12" />
+      <path d="M15.8 12.2v-1.4a1.3 1.3 0 1 1 2.6 0v4.4a5 5 0 0 1-5 5H13a5.8 5.8 0 0 1-5.2-3.2L6.2 13.5a1.4 1.4 0 0 1 2.4-1.4L10 14" />
+    </svg>
+  );
+}
+
+export function IconDevice(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="7.5" y="3.5" width="9" height="17" rx="2" />
+      <path d="M11 17.5h2" />
+    </svg>
+  );
+}
+
+export function IconCheck(props: IconProps) {
+  return (
+    <svg {...base} strokeWidth={2} {...props}>
+      <path d="m6 12 4 4 8-8" />
+    </svg>
+  );
+}
+
+export function IconStatus(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="7.5" />
+      <circle cx="12" cy="12" r="3.2" />
+    </svg>
+  );
+}

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, session } from '@/lib/api';
-import { IconDots, IconGear, IconHelp, IconLogout } from './nav-icons';
+import { IconDevice, IconGear, IconHelp, IconLogout } from './nav-icons';
 
 export function AccountMenu({
   settingsHref,
@@ -119,17 +119,18 @@ export function AccountMenu({
       >
         <span
           className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold ${
-            light ? 'bg-[#e8f0fe] text-[#4d6bfe]' : 'bg-zinc-100 text-accent'
+            light ? 'bg-zinc-200 text-zinc-600' : 'bg-zinc-100 text-accent'
           }`}
         >
-          Z
+          <span className="text-[11px]">我</span>
         </span>
         <span
           className={`min-w-0 flex-1 truncate text-sm ${light ? 'text-zinc-800' : 'text-zinc-700'}`}
         >
           {name}
         </span>
-        <IconDots className={`size-4 ${light ? 'text-zinc-400' : 'text-zinc-500'}`} />
+        <IconDevice className={`size-4 ${light ? 'text-zinc-400' : 'text-zinc-500'}`} />
+        <IconGear className={`size-4 ${light ? 'text-zinc-400' : 'text-zinc-500'}`} />
       </button>
     </div>
   );

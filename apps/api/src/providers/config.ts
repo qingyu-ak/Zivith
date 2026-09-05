@@ -1,3 +1,6 @@
+import { getCredentialOverrides } from './custom-providers.js';
+import { listLlmModelsForProvider } from './llm-models.js';
+
 /** Strip inline `# comments` and surrounding quotes from env values. */
 export function envValue(name: string, fallback = ''): string {
   const raw = process.env[name];
@@ -9,7 +12,7 @@ export function envValue(name: string, fallback = ''): string {
 export type ProviderId = 'mock' | 'deepseek' | 'siliconflow';
 
 export interface ProviderSelection {
-  llm: ProviderId;
+  llm: string;
   image: ProviderId;
   video: ProviderId;
   audio: ProviderId;
@@ -51,11 +54,15 @@ function asProvider(value: string, fallback: ProviderId): ProviderId {
 }
 
 export function loadProviderCredentials(): ProviderCredentials {
+  const overrides = getCredentialOverrides();
   return {
-    deepseekApiKey: envValue('DEEPSEEK_API_KEY'),
-    deepseekBaseUrl: envValue('DEEPSEEK_BASE_URL', 'https://api.deepseek.com'),
-    siliconflowApiKey: envValue('SILICONFLOW_API_KEY'),
-    siliconflowBaseUrl: envValue('SILICONFLOW_BASE_URL', 'https://api.siliconflow.cn/v1'),
+    deepseekApiKey: overrides.deepseekApiKey || envValue('DEEPSEEK_API_KEY'),
+    deepseekBaseUrl:
+      overrides.deepseekBaseUrl || envValue('DEEPSEEK_BASE_URL', 'https://api.deepseek.com'),
+    siliconflowApiKey: overrides.siliconflowApiKey || envValue('SILICONFLOW_API_KEY'),
+    siliconflowBaseUrl:
+      overrides.siliconflowBaseUrl ||
+      envValue('SILICONFLOW_BASE_URL', 'https://api.siliconflow.cn/v1'),
   };
 }
 
@@ -63,7 +70,7 @@ export function loadProviderModels(): ProviderModels {
   const imageT2i = envValue('SILICONFLOW_IMAGE_MODEL', 'Qwen/Qwen-Image');
   const videoT2v = envValue('SILICONFLOW_VIDEO_MODEL', 'Wan-AI/Wan2.2-T2V-A14B');
   return {
-    llm: envValue('DEEPSEEK_MODEL', 'deepseek-chat'),
+    llm: envValue('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
     image: imageT2i,
     // Prefer explicit I2I env; else fall back to a known img2img-capable id.
     image_i2i: envValue('SILICONFLOW_IMAGE_I2I_MODEL', 'Qwen/Qwen-Image-Edit'),
@@ -83,8 +90,9 @@ export function loadProviderSelection(override?: Partial<ProviderSelection>): Pr
     video: credentials.siliconflowApiKey ? 'siliconflow' : 'mock',
     audio: credentials.siliconflowApiKey ? 'siliconflow' : 'mock',
   };
+  const envLlm = envValue('LLM_PROVIDER', defaults.llm);
   return {
-    llm: asProvider(envValue('LLM_PROVIDER', defaults.llm), defaults.llm),
+    llm: asProvider(envLlm, defaults.llm as ProviderId) as string,
     image: asProvider(envValue('IMAGE_PROVIDER', defaults.image), defaults.image),
     video: asProvider(envValue('VIDEO_PROVIDER', defaults.video), defaults.video),
     audio: asProvider(envValue('AUDIO_PROVIDER', defaults.audio), defaults.audio),
@@ -96,31 +104,52 @@ export function listProviderCatalog() {
   const credentials = loadProviderCredentials();
   const models = loadProviderModels();
   const selection = loadProviderSelection();
+  const siliconflowLlm = envValue('SILICONFLOW_LLM_MODEL', '');
   return {
     selection,
     models,
     providers: [
       {
-        id: 'mock',
+        id: 'mock' as const,
         label: 'Mock（本地占位）',
-        modalities: ['llm', 'image', 'video', 'audio'],
+        modalities: ['llm', 'image', 'video', 'audio'] as Array<
+          'llm' | 'image' | 'video' | 'audio'
+        >,
+        kind: 'builtin' as const,
+        api_format: 'openai_chat' as const,
         configured: true,
+        llm_models: listLlmModelsForProvider(
+          'mock',
+          [],
+          selection.llm === 'mock' ? models.llm : undefined,
+        ),
       },
       {
-        id: 'deepseek',
+        id: 'deepseek' as const,
         label: 'DeepSeek',
-        modalities: ['llm'],
+        modalities: ['llm'] as Array<'llm' | 'image' | 'video' | 'audio'>,
+        kind: 'builtin' as const,
+        api_format: 'openai_chat' as const,
         configured: Boolean(credentials.deepseekApiKey),
         default_model: models.llm,
         base_url: credentials.deepseekBaseUrl,
+        llm_models: listLlmModelsForProvider(
+          'deepseek',
+          [],
+          selection.llm === 'deepseek' ? models.llm : undefined,
+        ),
       },
       {
-        id: 'siliconflow',
+        id: 'siliconflow' as const,
         label: 'SiliconFlow（硅基流动）',
-        modalities: ['llm', 'image', 'video', 'audio'],
+        modalities: ['llm', 'image', 'video', 'audio'] as Array<
+          'llm' | 'image' | 'video' | 'audio'
+        >,
+        kind: 'builtin' as const,
+        api_format: 'openai_chat' as const,
         configured: Boolean(credentials.siliconflowApiKey),
         default_models: {
-          llm: models.llm,
+          llm: siliconflowLlm,
           image: models.image,
           image_i2i: models.image_i2i,
           video: models.video,
@@ -128,6 +157,11 @@ export function listProviderCatalog() {
           audio: models.audio,
         },
         base_url: credentials.siliconflowBaseUrl,
+        llm_models: listLlmModelsForProvider(
+          'siliconflow',
+          [],
+          selection.llm === 'siliconflow' ? models.llm : siliconflowLlm || undefined,
+        ),
       },
     ],
   };

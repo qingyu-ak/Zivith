@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Spinner } from '@zivith/ui';
@@ -15,7 +14,13 @@ import {
   unwrapList,
   type RoleplayThreadDTO,
 } from '@/lib/api';
+import { ChatComposer } from '@/components/creator-chat/chat-composer';
 import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
+import {
+  readStoredEffort,
+  writeStoredEffort,
+  type ChatEffort,
+} from '@/lib/chat-composer';
 import {
   CHAT_FOCUS_LABEL,
   clearPendingFocus,
@@ -29,7 +34,7 @@ import {
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import type { CreatorChatMessageDTO, CreatorChatThreadDTO, ProjectDTO, ProposalKind } from '@/lib/types';
 import { isDesktopApp, pickWorkspaceDirectory, asWorkspacePath } from '@/lib/desktop';
-import { IconExternal, IconSearch, IconSend, IconSidebar } from '@/components/nav-icons';
+import { IconExternal, IconSearch, IconSidebar } from '@/components/nav-icons';
 import { ChatSidebar, ChatSidebarRail } from './chat-sidebar';
 import { ProposalCard, type ChatProposal } from './proposal-card';
 
@@ -114,11 +119,19 @@ export function ChatPanel() {
   const [creatingSelf, setCreatingSelf] = useState(false);
   const [selfName, setSelfName] = useState('');
   const [selfPersonality, setSelfPersonality] = useState('');
+  const [effort, setEffort] = useState<ChatEffort>('balanced');
   const endRef = useRef<HTMLDivElement | null>(null);
   const pendingConsumed = useRef(false);
   const focusHandoff = useRef<ChatFocus | null>(null);
   const focusRef = useRef<ChatFocus | null>(null);
   focusRef.current = focus;
+  const effortRef = useRef<ChatEffort>(effort);
+  effortRef.current = effort;
+
+  useEffect(() => {
+    const stored = readStoredEffort();
+    setEffort(stored);
+  }, []);
 
   const load = useCallback(async () => {
     if (!threadId) {
@@ -307,9 +320,15 @@ export function ChatPanel() {
         };
         const roleplay = activeRoleplayRef.current;
         if (roleplay) {
-          await sendRoleplayTurn(roleplay.id, content, onEvent);
+          await sendRoleplayTurn(roleplay.id, content, onEvent, effortRef.current);
         } else {
-          await sendCreatorChatTurn(threadId, content, onEvent, focusRef.current);
+          await sendCreatorChatTurn(
+            threadId,
+            content,
+            onEvent,
+            focusRef.current,
+            effortRef.current,
+          );
         }
         if (sawError) throw new Error(sawError);
         setThreads((current) => {
@@ -481,8 +500,7 @@ export function ChatPanel() {
     void sendContent(studioFocusHandoffMessage(handoff));
   }, [loading, sendContent, sending, threadId]);
 
-  async function send(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function send() {
     const content = input.trim();
     if (!content || sending || busy) return;
     if (!threadId) {
@@ -520,6 +538,7 @@ export function ChatPanel() {
     } catch (reason) {
       setError(errorMessage(reason));
       if (firstMessage) sessionStorage.removeItem(PENDING_CHAT_TURN_KEY);
+    } finally {
       setBusy(false);
     }
   }
@@ -618,13 +637,6 @@ export function ChatPanel() {
     setFocus(null);
     clearPendingFocus();
     if (threadId) router.replace(`/creator-chats/${threadId}`);
-  }
-
-  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      event.currentTarget.closest('form')?.requestSubmit();
-    }
   }
 
   const studioHref = thread?.project_id ? `/projects/${thread.project_id}/world` : '/projects';
@@ -961,55 +973,51 @@ export function ChatPanel() {
             </div>
 
             <div className="px-4 pb-3 pt-1 lg:px-6">
-              <form
-                className="mx-auto max-w-2xl rounded-[28px] border border-zinc-200 bg-white px-4 py-3 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
-                onSubmit={(event) => void send(event)}
-              >
-                {error && (
-                  <p className="px-1 pb-2 text-xs text-red-500" role="alert">
-                    {error}
-                  </p>
-                )}
-                {focus && (
-                  <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl bg-[#eef2ff] px-3 py-1.5 text-xs text-[#1e3a8a]">
-                    <span>
-                      正在讨论{CHAT_FOCUS_LABEL[focus.kind]}「{focus.name}」
-                    </span>
-                    <button
-                      type="button"
-                      className="shrink-0 text-[11px] text-zinc-500 hover:text-zinc-800"
-                      onClick={dismissFocus}
-                    >
-                      取消
-                    </button>
-                  </div>
-                )}
-                <textarea
-                  className="min-h-[52px] w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 text-zinc-800 outline-none placeholder:text-zinc-400"
-                  placeholder={
-                    focus
-                      ? `继续完善「${focus.name}」…`
-                      : activeRoleplay
-                        ? `对「${activeRoleplay.character_name}」说…`
-                        : '发给世界构建者…'
-                  }
-                  value={input}
-                  disabled={sending || busy}
-                  rows={1}
-                  onChange={(event) => setInput(event.target.value)}
-                  onKeyDown={handleComposerKeyDown}
-                />
-                <div className="flex items-center justify-end gap-2 px-1 pt-1">
+              {error && (
+                <p className="mx-auto mb-2 max-w-2xl px-1 text-xs text-red-500" role="alert">
+                  {error}
+                </p>
+              )}
+              {focus && (
+                <div className="mx-auto mb-2 flex max-w-2xl items-center justify-between gap-2 rounded-2xl bg-[#eef2ff] px-3 py-1.5 text-xs text-[#1e3a8a]">
+                  <span>
+                    正在讨论{CHAT_FOCUS_LABEL[focus.kind]}「{focus.name}」
+                  </span>
                   <button
-                    type="submit"
-                    disabled={!canSend}
-                    className="grid size-8 place-items-center rounded-full bg-[#4d6bfe] text-white transition hover:bg-[#3d5aee] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
-                    aria-label="发送"
+                    type="button"
+                    className="shrink-0 text-[11px] text-zinc-500 hover:text-zinc-800"
+                    onClick={dismissFocus}
                   >
-                    <IconSend className="size-4" />
+                    取消
                   </button>
                 </div>
-              </form>
+              )}
+              <ChatComposer
+                value={input}
+                placeholder={
+                  focus
+                    ? `继续完善「${focus.name}」…`
+                    : activeRoleplay
+                      ? `对「${activeRoleplay.character_name}」说…`
+                      : '发给世界构建者…'
+                }
+                sending={sending}
+                canSend={canSend}
+                projectId={thread?.project_id}
+                threadId={threadId}
+                messageTexts={messages.map((item) => item.content)}
+                effort={effort}
+                onEffortChange={(next) => {
+                  setEffort(next);
+                  writeStoredEffort(next);
+                }}
+                onChange={setInput}
+                onSubmit={() => void send()}
+                onNewChat={() => {
+                  if (thread?.project_id) void startThread(undefined, thread.project_id);
+                  else void pickFolder();
+                }}
+              />
               <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-zinc-400">
                 内容由 AI 生成，请仔细甄别
               </p>

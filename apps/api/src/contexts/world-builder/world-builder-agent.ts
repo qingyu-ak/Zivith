@@ -20,6 +20,7 @@ import {
   wantsGuidanceTurn,
   wantsStudioHandoff,
 } from './guidance.js';
+import type { EffectiveAgentEffort } from '../agent-effort.js';
 
 export type WorldStage = 'bootstrap' | 'growing' | 'mature';
 
@@ -38,6 +39,8 @@ export interface WorldBuilderInput {
   focus?: WorldBuilderFocus | null;
   /** 长期记忆召回摘要（M1 记忆系统注入；null/空串表示无）。 */
   memoryDigest?: string | null;
+  /** Agent Effort（RFC）：只影响本轮上下文与检查范围，不进领域 State。 */
+  effort?: EffectiveAgentEffort | null;
 }
 
 /** LLM often emits a single string where the schema wants a string array. */
@@ -293,9 +296,12 @@ function applyDetectedConflicts(
   response: WorldBuilderResponse,
   input: WorldBuilderInput,
 ): WorldBuilderResponse {
+  const checking = wantsConflictCheck(input.text);
+  if (!checking && input.effort?.schedule.scan_conflicts === false) {
+    return response;
+  }
   const detected = detectWorldConflicts(input.world, { text: input.text });
   const summaries = mergeConflictSummaries(response.world_state.conflicts, detected);
-  const checking = wantsConflictCheck(input.text);
   let { reply, proposals } = response;
   if (checking) {
     proposals = [];
@@ -311,8 +317,20 @@ function applyDetectedConflicts(
   };
 }
 
+function capProposals(
+  response: WorldBuilderResponse,
+  input: WorldBuilderInput,
+): WorldBuilderResponse {
+  const maxProposals = input.effort?.schedule.max_proposals ?? 2;
+  if (response.proposals.length <= maxProposals) return response;
+  return { ...response, proposals: response.proposals.slice(0, maxProposals) };
+}
+
 export function mockWorldBuilderResponse(input: WorldBuilderInput): WorldBuilderResponse {
-  return applyGuidance(applyDetectedConflicts(mockWorldBuilderDraft(input), input), input);
+  return capProposals(
+    applyGuidance(applyDetectedConflicts(mockWorldBuilderDraft(input), input), input),
+    input,
+  );
 }
 
 function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
@@ -579,12 +597,14 @@ export class WorldBuilderAgent {
       return mockWorldBuilderResponse(input);
     }
 
+    const historyTurns = input.effort?.schedule.history_turns ?? 24;
+    const maxProposals = input.effort?.schedule.max_proposals ?? 2;
     const historyText = input.history
       .map(
         (m) =>
           `${m.role === 'user' ? '创作者' : m.role === 'assistant' ? '世界构建者' : '系统'}：${m.content}`,
       )
-      .slice(-24)
+      .slice(-historyTurns)
       .join('\n');
 
     const completion = await this.llm.completeStructured(
@@ -602,7 +622,7 @@ export class WorldBuilderAgent {
           focus: input.focus ?? null,
           required_schema: {
             reply: '给创作者的自然语言回复（与创作者同语言）',
-            proposals: '需要创作者确认的提案数组（最多 2 个，无则 []）',
+            proposals: `需要创作者确认的提案数组（最多 ${maxProposals} 个，无则 []）`,
             world_state: {
               stage: 'bootstrap|growing|mature',
               open_questions: ['下一步引导问题（字符串数组，无则 []）'],
@@ -611,7 +631,7 @@ export class WorldBuilderAgent {
           },
         }),
         temperature: 0.7,
-        max_tokens: 2_000,
+        max_tokens: input.effort?.schedule.max_output_tokens ?? 2_000,
       },
       worldBuilderResponseSchema,
     );
@@ -630,7 +650,7 @@ export class WorldBuilderAgent {
       }
     }
 
-    return applyGuidance(applyDetectedConflicts(parsed, input), input);
+    return capProposals(applyGuidance(applyDetectedConflicts(parsed, input), input), input);
   }
 
   /**

@@ -11,7 +11,8 @@
   "scripts": {
     "postinstall": "pnpm --filter @zivith/database prisma:generate",
     "dev": "pnpm --filter @zivith/api --filter @zivith/web --parallel run dev",
-    "desktop": "pnpm --filter @zivith/api --filter @zivith/web --filter @zivith/desktop --parallel run dev",
+    "desktop": "pnpm --config.engine-strict=false --filter @zivith/desktop start",
+    "desktop:pack": "pnpm --config.engine-strict=false --filter @zivith/desktop run dist",
     "build": "turbo run build",
     "lint": "eslint .",
     "typecheck": "turbo run typecheck",

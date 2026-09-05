@@ -155,19 +155,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       });
       registerStubRoutes(api);
       // Creator layer (ADR-0013): local single user, no auth on world routes.
-      const worldProviders = instrumentProviderBundle(
-        db,
-        createProviderBundle(getRuntimeProviderOverride(), getRuntimeModelOverride()),
-      );
+      // LLM 每轮按当前 PUT /providers/selection 重建，不闭包启动时的提供商。
       api.register(
         (worldApi, _worldOptions, worldDone) => {
-          registerWorldRoutes(
-            worldApi,
-            db,
-            worldProviders.llm,
-            worldProviders.llmModel,
-            options.memory,
-          );
+          registerWorldRoutes(worldApi, db, undefined, undefined, options.memory);
           worldDone();
         },
         { prefix: '/world' },
@@ -182,13 +173,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         );
       }
       api.register((roleplayApi, _roleplayOptions, roleplayDone) => {
-        registerRoleplayRoutes(
-          roleplayApi,
-          db,
-          worldProviders.llm,
-          worldProviders.llmModel,
-          options.memory,
-        );
+        registerRoleplayRoutes(roleplayApi, db, undefined, undefined, options.memory);
         roleplayDone();
       });
       if (options.novelImport) {

@@ -12,6 +12,38 @@
 
 ---
 
+## 2026-09-03 · pending · feat(web) · Studio 轨道剪辑块
+
+世界线用剪辑块表达呈现序与关系：左右拖改位置、拉两端改跨度、拖轨名换上下。轴仍是呈现顺序，不是秒/帧。
+
+- **feat(web)** 事件/场景块可拖拽；松手写回 `presentation_order` / `scene.order`
+- **feat(web)** 角色跨其参与事件、地点跨所属场景，用重叠体现联系；轨序记在 localStorage
+- **fix(web)** 时间线只保留底栏一条横向导航（藏起原生横条）；HTML 热区可左右拉长短；右键拖动画布；横/纵缩放
+- 模块：`apps/web/components/world`、`apps/web/lib/world-line.ts`
+
+## 2026-09-03 · pending · feat(desktop) · Windows 一键启动
+
+双击启动本机创作面，启动屏使用 ZIVITH logo。Electron 负责拉起 Docker 与 Web/API，并打出带图标的 `Zivith.exe`。不是免 Docker 安装包。
+
+- **feat(desktop)** 启动屏 + 自动 `docker compose` / `pnpm dev`；任务栏与 exe 使用三道杠图标
+- **fix(desktop)** 启动窗圆角；logo/图标抠成透明底，避免 JPEG 灰黑方框；图标外沿圆角
+- **fix(web)** 对话模型菜单限高可滚动，可搜索；长 id 只显示 `/` 后的短名
+- **feat(desktop)** `pnpm desktop:pack` → `apps/desktop/dist/win-unpacked/Zivith.exe`；仓库根目录 `Zivith.vbs`
+- **fix(desktop)** 启动探测改走 3100 端口是否在听，不再用会编译 8–10 秒的 `GET /`；避免误报超时并叠起第二套编译进程
+- 模块：`apps/desktop`、`Zivith.vbs`、`package.json`
+
+## 2026-09-02 · pending · feat(web,api) · Chat 输入条接到对话链路
+
+输入框被 `busy` 卡住无法打字。侧栏改成文件夹树；输入区补上标红的模型 / 用量 / 确认 / 努力程度控件，并接到真实对话。仍是浅色壳。确认围栏不变。
+
+- **fix(web)** 创建对话后释放 busy；输入框发送中只只读，不再因打开文件夹禁用
+- **feat(web)** 侧栏「项目」文件夹 + 缩进对话 + 相对时间；底栏本机账号
+- **feat(web)** 输入工具条：变更前确认、上下文容量、LLM 选择、Fast/Balanced/Deep
+- **feat(api)** 每轮提交 effort；按级别收窄上下文、召回与冲突扫描；`PUT /providers/selection` 立即作用于下一轮 World Builder / Roleplay
+- **feat(api)** `GET /world/creator-chats/:id/context` 返回当前预算窗口；用量弹层读项目 `/usage`
+- **feat(web)** 设置页改成 Cursor 式：左供应商、右密钥/模型列表；可添加 OpenAI 兼容自定义端点
+- 模块：`model-settings.tsx`、`custom-providers.ts`、`chat-composer.tsx`、`chat-sidebar.tsx`、`chat-panel.tsx`、`account-menu.tsx`、`agent-effort.ts`、`world.ts`、`roleplay.ts`
+
 ## 2026-09-02 · 4be67b9 · feat(desktop,api,web) · Electron 工作区路径
 
 本地创作面改为 Electron 窗口，用系统对话框拿到绝对路径。`Project.workspacePath` 标识世界；Chat 侧栏恢复「选择文件夹 / 项目内新聊天 / 改名 / 删聊天」。不把实体写成磁盘文件（阶段 F）。

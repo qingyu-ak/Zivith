@@ -1,20 +1,21 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { ProviderPanel } from '@/components/provider-panel';
+import { ModelSettings } from '@/components/model-settings';
 import { UsageSummaryCard } from '@/components/usage-summary-card';
 
-/** 设置（/settings）：提供商配置 + 用量统计，承接原项目页面板（只搬不移逻辑） */
 export default function SettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   return (
-    <div className="mx-auto max-w-7xl p-5 sm:p-8">
+    <div className="mx-auto max-w-6xl p-5 sm:p-8">
       <header className="mb-6">
-        <h1 className="text-3xl font-semibold">设置</h1>
-        <p className="mt-2 text-zinc-400">提供商配置与用量统计。</p>
+        <h1 className="text-2xl font-semibold text-zinc-900">模型设置</h1>
+        <p className="mt-2 text-sm text-zinc-500">
+          左侧选供应商，右侧填密钥和调用时的 model 名。自定义端点只在当前 API 进程内保存。
+        </p>
       </header>
-      <div className="grid gap-6">
-        <ProviderPanel />
+      <ModelSettings />
+      <div className="mt-8">
         <UsageSummaryCard projectId={projectId} />
       </div>
     </div>

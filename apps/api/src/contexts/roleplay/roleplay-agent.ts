@@ -4,6 +4,7 @@
 import type { PrismaClient } from '@zivith/database';
 import type { LLMAdapter } from '../../ports/llm.js';
 import { estimateTokens } from '../memory/context-window.js';
+import type { EffectiveAgentEffort } from '../agent-effort.js';
 import {
   composeCharacterPersona,
   formatCharacterCard,
@@ -253,6 +254,7 @@ export interface RoleplayInput {
   history: RoleplayChatMessage[];
   state: CharacterState;
   memoryDigest?: string | null;
+  effort?: EffectiveAgentEffort | null;
 }
 
 export class RoleplayAgent {
@@ -278,8 +280,9 @@ export class RoleplayAgent {
       return { reply: mockRoleplayReply(input.state, input.text, spoilerLocked), promptTokens };
     }
 
+    const historyTurns = input.effort?.schedule.history_turns ?? 16;
     const historyText = input.history
-      .slice(-16)
+      .slice(-historyTurns)
       .map(
         (message) =>
           `${message.role === 'user' ? input.state.userLabel : input.state.name}：${message.content}`,
@@ -292,7 +295,7 @@ export class RoleplayAgent {
       system_prompt: systemPrompt,
       user_prompt: `${historyText ? `${historyText}\n\n` : ''}${input.state.userLabel}：${input.text}`,
       temperature: 0.8,
-      max_tokens: 1_500,
+      max_tokens: input.effort?.schedule.max_output_tokens ?? 1_500,
     });
     return {
       reply: completion.text.trim() || mockRoleplayReply(input.state, input.text, spoilerLocked),
