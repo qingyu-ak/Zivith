@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-03 · pending · feat(web) · Studio 轨道剪辑块
+## 2026-09-03 · 91530bd · feat(web) · Studio 轨道剪辑块
 
 世界线用剪辑块表达呈现序与关系：左右拖改位置、拉两端改跨度、拖轨名换上下。轴仍是呈现顺序，不是秒/帧。
 
@@ -21,7 +21,7 @@
 - **fix(web)** 时间线只保留底栏一条横向导航（藏起原生横条）；HTML 热区可左右拉长短；右键拖动画布；横/纵缩放
 - 模块：`apps/web/components/world`、`apps/web/lib/world-line.ts`
 
-## 2026-09-03 · pending · feat(desktop) · Windows 一键启动
+## 2026-09-03 · 91530bd · feat(desktop) · Windows 一键启动
 
 双击启动本机创作面，启动屏使用 ZIVITH logo。Electron 负责拉起 Docker 与 Web/API，并打出带图标的 `Zivith.exe`。不是免 Docker 安装包。
 
@@ -32,7 +32,7 @@
 - **fix(desktop)** 启动探测改走 3100 端口是否在听，不再用会编译 8–10 秒的 `GET /`；避免误报超时并叠起第二套编译进程
 - 模块：`apps/desktop`、`Zivith.vbs`、`package.json`
 
-## 2026-09-02 · pending · feat(web,api) · Chat 输入条接到对话链路
+## 2026-09-02 · 91530bd · feat(web,api) · Chat 输入条接到对话链路
 
 输入框被 `busy` 卡住无法打字。侧栏改成文件夹树；输入区补上标红的模型 / 用量 / 确认 / 努力程度控件，并接到真实对话。仍是浅色壳。确认围栏不变。
 
