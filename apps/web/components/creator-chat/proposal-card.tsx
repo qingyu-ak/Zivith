@@ -51,19 +51,24 @@ export function ProposalCard({
   messageId,
   proposals,
   applied,
+  rejected,
   onApplied,
+  onRejected,
 }: {
   threadId: string;
   messageId: string;
   proposals: ChatProposal[];
   applied?: boolean;
+  rejected?: boolean;
   onApplied?: (results: ApplyProposalResultDTO[]) => void;
+  onRejected?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [results, setResults] = useState<ApplyProposalResultDTO[]>([]);
   const [skipped, setSkipped] = useState<Array<{ kind: string; reason: string }>>([]);
+  const [dismissed, setDismissed] = useState(Boolean(rejected));
 
   const summary = useMemo(
     () => proposals.map((proposal) => lineFor(proposal.kind, proposal.payload)).join(' · '),
@@ -91,24 +96,53 @@ export function ProposalCard({
     }
   }
 
+  async function reject() {
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/world/creator-chats/${threadId}/proposals/${messageId}/reject`, {
+        method: 'POST',
+        body: {},
+      });
+      setDismissed(true);
+      onRejected?.();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const done = results.length > 0 || Boolean(applied);
+  const skippedProposal = dismissed || Boolean(rejected);
   const studioId = results[0]?.project_id;
 
   return (
     <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
       <div className="flex items-center gap-2">
         <p className="min-w-0 flex-1 truncate text-sm text-zinc-700">{summary}</p>
-        {!done && (
-          <button
-            type="button"
-            className="min-h-8 rounded-full bg-[#4d6bfe] px-3 text-xs font-medium text-white disabled:opacity-50"
-            disabled={busy}
-            onClick={() => void apply()}
-          >
-            {busy ? '写入…' : '确认'}
-          </button>
+        {!done && !skippedProposal && (
+          <>
+            <button
+              type="button"
+              className="min-h-8 rounded-full bg-[#4d6bfe] px-3 text-xs font-medium text-white disabled:opacity-50"
+              disabled={busy}
+              onClick={() => void apply()}
+            >
+              {busy ? '写入…' : '确认'}
+            </button>
+            <button
+              type="button"
+              className="min-h-8 rounded-full px-3 text-xs font-medium text-zinc-500 hover:bg-zinc-200 disabled:opacity-50"
+              disabled={busy}
+              onClick={() => void reject()}
+            >
+              拒绝
+            </button>
+          </>
         )}
         {done && <Badge tone="success">已写入</Badge>}
+        {skippedProposal && !done && <Badge>已拒绝</Badge>}
         <button
           type="button"
           className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700"

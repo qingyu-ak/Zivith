@@ -14,7 +14,7 @@ import {
   Spinner,
   Textarea,
 } from '@zivith/ui';
-import { api, errorMessage, unwrapList } from '@/lib/api';
+import { api, createRoleplayThread, errorMessage, unwrapList } from '@/lib/api';
 import { getFormList, getFormText, getOptionalFormText } from '@/lib/form-data';
 import type { AssetDTO, AssetType, MediaDTO } from '@/lib/types';
 
@@ -260,15 +260,30 @@ export default function AssetsPage() {
                 <p className="mt-2 line-clamp-2 text-sm text-zinc-400">{asset.description}</p>
                 <p className="mt-3 text-xs text-accent">点击进入详情页 →</p>
               </button>
-              <Button
-                className="mt-4"
-                variant="danger"
-                onClick={() => {
-                  void remove(asset);
-                }}
-              >
-                删除
-              </Button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {type === 'character' ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      void createRoleplayThread(projectId, asset.id)
+                        .then((created) => {
+                          router.push(`/creator-chats/${created.thread_id}`);
+                        })
+                        .catch((reason) => setError(errorMessage(reason)));
+                    }}
+                  >
+                    与此角色对话
+                  </Button>
+                ) : null}
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    void remove(asset);
+                  }}
+                >
+                  删除
+                </Button>
+              </div>
             </Card>
           ))}
         </div>

@@ -71,6 +71,14 @@ export function IconSend(props: IconProps) {
   );
 }
 
+export function IconStop(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IconDots(props: IconProps) {
   return (
     <svg {...base} fill="currentColor" stroke="none" {...props}>

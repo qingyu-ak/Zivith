@@ -12,6 +12,24 @@
 
 ---
 
+## 2026-09-05 · pending · feat(web,api) · Creator Chat 与扮演 UI 补齐
+
+对话壳能拒绝提案、停止生成；扮演可从侧栏/实体树/资产页启动，并可在顶栏改时间锚点。降级模式可见。不写工作区文件，不插队 I3。
+
+- **feat(api)** `POST .../proposals/:messageId/reject` 将提案标为 rejected
+- **feat(web)** Composer 发送中改为停止；SSE 可 Abort
+- **feat(web)** 侧栏角色 Tab 空态/加号打开扮演选择；Explorer 与资产页「与此角色对话」
+- **feat(web)** 扮演顶栏改锚点（新线程复用三元组）；Mock/未配置密钥显示降级模式
+- 模块：`proposal-card.tsx`、`chat-panel.tsx`、`chat-sidebar.tsx`、`roleplay-launch.tsx`、`entity-explorer.tsx`、`assets`、`world.ts`
+
+## 2026-09-05 · pending · feat(api) · W1 工作区标记
+
+打开文件夹时写入 `.zivith/workspace.json`；搬家后靠 id 重绑 `workspacePath`。库仍是权威。
+
+- **feat(api)** `openWorldFolder` 优先读标记 id，再回退路径匹配
+- **feat(api)** 改项目显示名同步标记 `name`，不重命名磁盘目录
+- 模块：`workspace.ts`、`resources.ts`、`workspace.test.ts`
+
 ## 2026-09-03 · 91530bd · feat(web) · Studio 轨道剪辑块
 
 世界线用剪辑块表达呈现序与关系：左右拖改位置、拉两端改跨度、拖轨名换上下。轴仍是呈现顺序，不是秒/帧。

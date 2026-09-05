@@ -12,6 +12,7 @@ import type {
   WorldSelection,
 } from '@/lib/types';
 import { threadDisplayTitle } from '@/lib/chat-history';
+import { createRoleplayThread } from '@/lib/api';
 import { DIMENSION_KIND_LABEL, resolveDisplayDimensions, worldTimeCaption } from '@/lib/world-line';
 import { useState, type ReactNode } from 'react';
 
@@ -62,24 +63,40 @@ function TreeFile({
   active,
   title,
   subtitle,
+  actionLabel,
   onClick,
+  onAction,
 }: {
   active: boolean;
   title: string;
   subtitle?: string;
+  actionLabel?: string;
   onClick: () => void;
+  onAction?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full flex-col rounded-md px-2 py-1 text-left ${
+    <div
+      className={`flex w-full items-center gap-1 rounded-md ${
         active ? 'bg-[#e8f0fe] text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
       }`}
     >
-      <span className="truncate text-[13px] leading-5">{title}</span>
-      {subtitle ? <span className="truncate text-[11px] text-zinc-400">{subtitle}</span> : null}
-    </button>
+      <button type="button" onClick={onClick} className="min-w-0 flex-1 flex flex-col px-2 py-1 text-left">
+        <span className="truncate text-[13px] leading-5">{title}</span>
+        {subtitle ? <span className="truncate text-[11px] text-zinc-400">{subtitle}</span> : null}
+      </button>
+      {onAction && actionLabel ? (
+        <button
+          type="button"
+          className="mr-1 shrink-0 rounded px-1.5 py-0.5 text-[10px] text-[#1e3a8a] hover:bg-white"
+          onClick={(event) => {
+            event.stopPropagation();
+            onAction();
+          }}
+        >
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -213,7 +230,15 @@ export function EntityExplorer({
                 active={selection?.kind === 'character' && selection.id === item.id}
                 title={item.title}
                 subtitle={item.subtitle}
+                actionLabel="对话"
                 onClick={() => onSelect({ kind: 'character', id: item.id })}
+                onAction={() => {
+                  void createRoleplayThread(resources.project.id, item.id)
+                    .then((created) => {
+                      router.push(`/creator-chats/${created.thread_id}`);
+                    })
+                    .catch(() => undefined);
+                }}
               />
             ))
           )}

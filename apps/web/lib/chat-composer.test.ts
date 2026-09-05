@@ -6,6 +6,7 @@ import {
   estimateMessageTokens,
   filterLlmChoices,
   formatTokenCount,
+  isLlmDegraded,
   llmChoices,
   selectedLlmLabel,
 } from './chat-composer';
@@ -85,5 +86,12 @@ describe('chat composer helpers', () => {
     const choices = llmChoices(catalog);
     expect(filterLlmChoices(choices, 'pro').map((item) => item.model)).toEqual(['deepseek-v4-pro']);
     expect(filterLlmChoices(choices, 'DeepSeek')).toHaveLength(2);
+  });
+
+  it('flags mock or unconfigured chat providers as degraded', () => {
+    expect(isLlmDegraded(catalog)).toBe(false);
+    expect(isLlmDegraded({ ...catalog, selection: { ...catalog.selection, llm: 'mock' } })).toBe(
+      true,
+    );
   });
 });

@@ -143,6 +143,7 @@ export async function sendCreatorChatTurn(
   onEvent: (event: string, data: unknown) => void,
   focus?: { kind: string; id: string; name: string } | null,
   effort?: 'fast' | 'balanced' | 'deep',
+  signal?: AbortSignal,
 ): Promise<void> {
   await postChatTurn(
     `/world/creator-chats/${threadId}/messages`,
@@ -153,6 +154,7 @@ export async function sendCreatorChatTurn(
       ...(effort ? { effort } : {}),
     },
     onEvent,
+    signal,
   );
 }
 
@@ -162,11 +164,13 @@ export async function sendRoleplayTurn(
   content: string,
   onEvent: (event: string, data: unknown) => void,
   effort?: 'fast' | 'balanced' | 'deep',
+  signal?: AbortSignal,
 ): Promise<void> {
   await postChatTurn(
     `/roleplay/threads/${roleplayThreadId}/messages`,
     { content, ...(effort ? { effort } : {}) },
     onEvent,
+    signal,
   );
 }
 
@@ -174,11 +178,13 @@ async function postChatTurn(
   path: string,
   body: Record<string, unknown>,
   onEvent: (event: string, data: unknown) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const response = await request(path, {
     method: 'POST',
     headers: { Accept: 'text/event-stream' },
     body,
+    signal,
   });
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('text/event-stream')) {

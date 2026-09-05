@@ -25,6 +25,7 @@ import {
   IconPlus,
   IconSend,
   IconStatus,
+  IconStop,
 } from '@/components/nav-icons';
 
 type MenuKind = 'confirm' | 'usage' | 'model' | 'effort' | null;
@@ -60,6 +61,7 @@ export function ChatComposer({
   onEffortChange,
   onChange,
   onSubmit,
+  onStop,
   onNewChat,
 }: {
   value: string;
@@ -73,6 +75,7 @@ export function ChatComposer({
   onEffortChange: (effort: ChatEffort) => void;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  onStop?: () => void;
   onNewChat: () => void;
 }) {
   const rootRef = useRef<HTMLFormElement | null>(null);
@@ -432,14 +435,25 @@ export function ChatComposer({
             </div>
           ) : null}
         </div>
-        <button
-          type="submit"
-          disabled={!canSend}
-          className="grid size-8 place-items-center rounded-lg bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
-          aria-label="发送"
-        >
-          <IconSend className="size-4" />
-        </button>
+        {sending && onStop ? (
+          <button
+            type="button"
+            className="grid size-8 place-items-center rounded-lg bg-zinc-900 text-white transition hover:bg-zinc-800"
+            aria-label="停止生成"
+            onClick={onStop}
+          >
+            <IconStop className="size-3.5" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!canSend}
+            className="grid size-8 place-items-center rounded-lg bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
+            aria-label="发送"
+          >
+            <IconSend className="size-4" />
+          </button>
+        )}
       </div>
     </form>
   );

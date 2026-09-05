@@ -27,11 +27,13 @@ export function ChatSidebar({
   threadId,
   busy,
   pickerOpen,
+  settingsHref = '/projects',
   onToggle,
   onPickerOpenChange,
   onSelectProject,
   onOpenFolder,
   onNewInProject,
+  onNewRoleplay,
   onRenameProject,
   onRenameThread,
   onDeleteThread,
@@ -41,11 +43,13 @@ export function ChatSidebar({
   threadId?: string;
   busy: boolean;
   pickerOpen: boolean;
+  settingsHref?: string;
   onToggle: () => void;
   onPickerOpenChange: (open: boolean) => void;
   onSelectProject: (projectId: string) => void;
   onOpenFolder: () => void;
   onNewInProject: (projectId: string) => void;
+  onNewRoleplay?: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => void;
   onRenameThread: (threadId: string, name: string) => void;
   onDeleteThread: (threadId: string, name: string) => void;
@@ -218,9 +222,6 @@ export function ChatSidebar({
             {groups.map((group) => {
               const { world, roleplay } = partitionThreadsByKind(group.threads);
               const tabThreads = tab === 'roleplay' ? roleplay : world;
-              if (tab === 'roleplay' && tabThreads.length === 0 && group.id !== '__unbound__') {
-                return null;
-              }
               const renamingProject = rename?.kind === 'project' && rename.id === group.id;
               return (
                 <li key={group.id}>
@@ -264,15 +265,35 @@ export function ChatSidebar({
                         type="button"
                         disabled={busy}
                         className="grid size-7 shrink-0 place-items-center rounded-md text-zinc-400 hover:bg-zinc-200 hover:text-zinc-800 disabled:opacity-40"
-                        aria-label={`在「${group.label}」新建聊天`}
-                        onClick={() => onNewInProject(group.id)}
+                        aria-label={
+                          tab === 'roleplay'
+                            ? `在「${group.label}」开始扮演`
+                            : `在「${group.label}」新建聊天`
+                        }
+                        onClick={() => {
+                          if (tab === 'roleplay' && onNewRoleplay) onNewRoleplay(group.id);
+                          else onNewInProject(group.id);
+                        }}
                       >
                         <IconChatPlus className="size-3.5" />
                       </button>
                     ) : null}
                   </div>
                   {tabThreads.length === 0 ? (
-                    <p className="py-1 pl-8 pr-2 text-[12px] text-zinc-400">暂无对话</p>
+                    <div className="py-1 pl-8 pr-2">
+                      <p className="text-[12px] text-zinc-400">
+                        {tab === 'roleplay' ? '还没有扮演对话' : '暂无对话'}
+                      </p>
+                      {tab === 'roleplay' && group.id !== '__unbound__' && onNewRoleplay ? (
+                        <button
+                          type="button"
+                          className="mt-1 text-[12px] text-[#4d6bfe] hover:underline"
+                          onClick={() => onNewRoleplay(group.id)}
+                        >
+                          选择角色开始扮演
+                        </button>
+                      ) : null}
+                    </div>
                   ) : (
                     <ul className="grid gap-0.5 pl-6">
                       {tabThreads.map((item) => {
@@ -368,7 +389,7 @@ export function ChatSidebar({
       ) : null}
 
       <div className="border-t border-zinc-200/80 px-1 pb-3 pt-2">
-        <AccountMenu settingsHref="/projects" tone="light" />
+        <AccountMenu settingsHref={settingsHref} tone="light" />
       </div>
     </aside>
   );

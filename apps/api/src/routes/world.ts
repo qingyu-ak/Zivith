@@ -1482,4 +1482,30 @@ function registerCreatorChatRoutes(
     });
     return { applied: results, skipped };
   });
+
+  app.post('/creator-chats/:threadId/proposals/:messageId/reject', async (request) => {
+    const { threadId, messageId } = z
+      .object({ threadId: idSchema, messageId: idSchema })
+      .strict()
+      .parse(request.params);
+
+    await requireOpenThread(db, threadId);
+
+    const message = await db.creatorChatMessage.findFirst({
+      where: { id: messageId, threadId },
+    });
+    if (!message) throw new ApiError(404, 'MESSAGE_NOT_FOUND', '消息不存在');
+    if (!message.proposal || !message.proposalKey) {
+      throw new ApiError(400, 'NO_PROPOSAL', '该消息没有待确认的提案');
+    }
+    if (message.proposalState && message.proposalState !== 'pending') {
+      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能再拒绝');
+    }
+
+    await db.creatorChatMessage.update({
+      where: { id: messageId },
+      data: { proposalState: 'rejected' },
+    });
+    return { rejected: true };
+  });
 }

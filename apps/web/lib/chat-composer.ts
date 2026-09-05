@@ -105,3 +105,12 @@ export function selectedLlmLabel(catalog: ProviderCatalogDTO | null): string {
   const id = current?.model || catalog.models.llm;
   return id ? displayModelId(id) : current?.providerLabel || '选择模型';
 }
+
+/** Mock or unconfigured chat provider — roleplay should show 降级模式. */
+export function isLlmDegraded(catalog: ProviderCatalogDTO | null): boolean {
+  if (!catalog) return false;
+  const id = catalog.selection.llm;
+  if (id === 'mock') return true;
+  const provider = catalog.providers.find((item) => item.id === id);
+  return !provider?.configured;
+}
