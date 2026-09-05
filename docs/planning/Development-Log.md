@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-09-05 · da14981 · fix(api) · 清掉最后两处 typecheck 既有错误
+
+api 侧 `tsc --noEmit` 归零；行为不变，纯类型收紧。
+
+- **fix(api)** `updateCustomProvider` patch 类型放宽 `| undefined`（exactOptionalPropertyTypes 下 zod 解析产物如此；函数内逐字段守卫，无行为变化）
+- **fix(test)** `lightReport` 的 tier 放宽为 `'light' | 'full'`，幂等用例可改写
+- 模块：`apps/api/src/providers/custom-providers.ts`、`apps/api/test/novel-import-upgrade.test.ts`
+
 ## 2026-09-05 · c041df5 · feat(api,web) · 记忆冲突确认卡 + L2 核心块面板
 
 冲突不再只报不记：矛盾落库成清单，对话流内联确认（保留新卡 / 保留已有卡），记忆面板可看 L2 核心块并溯源到原子。只写记忆层，不静默改世界实体。
@@ -21,7 +29,7 @@
 - **feat(web)** Creator Chat 内联冲突卡（内容对比 + 确认/丢弃，刷新后按线程补拉未裁决项）；记忆面板补 L2 列表、展开溯源、按实体过滤
 - 模块：`schema.prisma`、`contexts/memory/*`、`routes/memory.ts`、`chat-panel.tsx`、`memory-panel.tsx`、`lib/memory-conflicts.ts`
 
-## 2026-09-05 · pending · feat(web,api) · Creator Chat 与扮演 UI 补齐
+## 2026-09-05 · 7f3f28a · feat(web,api) · Creator Chat 与扮演 UI 补齐
 
 对话壳能拒绝提案、停止生成；扮演可从侧栏/实体树/资产页启动，并可在顶栏改时间锚点。降级模式可见。不写工作区文件，不插队 I3。
 
@@ -31,7 +39,7 @@
 - **feat(web)** 扮演顶栏改锚点（新线程复用三元组）；Mock/未配置密钥显示降级模式
 - 模块：`proposal-card.tsx`、`chat-panel.tsx`、`chat-sidebar.tsx`、`roleplay-launch.tsx`、`entity-explorer.tsx`、`assets`、`world.ts`
 
-## 2026-09-05 · pending · feat(api) · W1 工作区标记
+## 2026-09-05 · 7f3f28a · feat(api) · W1 工作区标记
 
 打开文件夹时写入 `.zivith/workspace.json`；搬家后靠 id 重绑 `workspacePath`。库仍是权威。
 
