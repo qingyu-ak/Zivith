@@ -214,6 +214,32 @@ async function postChatTurn(
   }
 }
 
+/** 列出项目的记忆冲突（D4 清单；status 缺省为后端默认全量）。 */
+export async function listMemoryConflicts(
+  projectId: string,
+  options: { status?: 'pending' | 'resolved' | 'discarded'; threadId?: string } = {},
+): Promise<Array<Record<string, unknown>>> {
+  const query = new URLSearchParams();
+  if (options.status) query.set('status', options.status);
+  if (options.threadId) query.set('thread_id', options.threadId);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const payload = await api<{ items?: Array<Record<string, unknown>> }>(
+    `/memory/projects/${projectId}/conflicts${suffix}`,
+  );
+  return Array.isArray(payload.items) ? payload.items : [];
+}
+
+/** 提交冲突裁决：keep_new = 保留新卡，keep_existing = 保留已有卡。 */
+export async function resolveMemoryConflict(
+  conflictId: string,
+  decision: 'keep_new' | 'keep_existing',
+): Promise<Record<string, unknown>> {
+  return api(`/memory/conflicts/${conflictId}/resolve`, {
+    method: 'POST',
+    body: { decision },
+  });
+}
+
 export interface RoleplayThreadDTO {
   id: string;
   thread_id: string;

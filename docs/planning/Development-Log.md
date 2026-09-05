@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-09-05 · pending · feat(api,web) · 记忆冲突确认卡 + L2 核心块面板
+
+冲突不再只报不记：矛盾落库成清单，对话流内联确认（保留新卡 / 保留已有卡），记忆面板可看 L2 核心块并溯源到原子。只写记忆层，不静默改世界实体。
+
+- **feat(api)** 新增 `memory_conflicts` 表（迁移 `20260905120000`）；ingest 冲突落库，SSE `memory_ops` 带回冲突 id
+- **feat(api)** `POST /memory/conflicts/:id/resolve`（keep_new = 新原子取代旧卡 / keep_existing = 维持旧卡）、`GET /memory/projects/:id/conflicts`、`GET /memory/projects/:id/cores/:coreId` 展开源原子
+- **feat(web)** Creator Chat 内联冲突卡（内容对比 + 确认/丢弃，刷新后按线程补拉未裁决项）；记忆面板补 L2 列表、展开溯源、按实体过滤
+- 模块：`schema.prisma`、`contexts/memory/*`、`routes/memory.ts`、`chat-panel.tsx`、`memory-panel.tsx`、`lib/memory-conflicts.ts`
+
 ## 2026-09-05 · pending · feat(web,api) · Creator Chat 与扮演 UI 补齐
 
 对话壳能拒绝提案、停止生成；扮演可从侧栏/实体树/资产页启动，并可在顶栏改时间锚点。降级模式可见。不写工作区文件，不插队 I3。

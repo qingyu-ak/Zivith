@@ -8,12 +8,21 @@ import {
   api,
   createRoleplayThread,
   errorMessage,
+  listMemoryConflicts,
   listRoleplayThreads,
+  resolveMemoryConflict,
   sendCreatorChatTurn,
   sendRoleplayTurn,
   unwrapList,
   type RoleplayThreadDTO,
 } from '@/lib/api';
+import {
+  extractPendingConflicts,
+  mergeConflictCards,
+  removeConflictCard,
+  type MemoryConflictCard,
+  type MemoryConflictDecision,
+} from '@/lib/memory-conflicts';
 import { ChatComposer } from '@/components/creator-chat/chat-composer';
 import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
 import {
@@ -119,6 +128,8 @@ export function ChatPanel() {
   const [sending, setSending] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [memoryNote, setMemoryNote] = useState('');
+  const [memoryConflicts, setMemoryConflicts] = useState<MemoryConflictCard[]>([]);
+  const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [focus, setFocus] = useState<ChatFocus | null>(null);
@@ -334,6 +345,42 @@ export function ChatPanel() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, streamText, sending]);
 
+  // 切线程时清空旧冲突卡；线程挂上项目后补拉该线程未裁决的冲突（刷新后 SSE 已不可见）。
+  useEffect(() => {
+    setMemoryConflicts([]);
+  }, [threadId]);
+
+  useEffect(() => {
+    const projectId = thread?.project_id;
+    if (!projectId || !threadId) return;
+    let cancelled = false;
+    listMemoryConflicts(projectId, { status: 'pending', threadId })
+      .then((items) => {
+        if (cancelled) return;
+        const cards = extractPendingConflicts({ conflicts: items });
+        if (cards.length > 0) {
+          setMemoryConflicts((current) => mergeConflictCards(current, cards));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [thread?.project_id, threadId]);
+
+  const resolveConflict = useCallback(async (id: string, decision: MemoryConflictDecision) => {
+    setResolvingConflictId(id);
+    try {
+      await resolveMemoryConflict(id, decision);
+      setMemoryConflicts((current) => removeConflictCard(current, id));
+      setError('');
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setResolvingConflictId(null);
+    }
+  }, []);
+
   const sendingRef = useRef(false);
   const activeRoleplay = roleplayThreads.find((item) => item.thread_id === threadId) ?? null;
   const activeRoleplayRef = useRef<RoleplayThreadDTO | null>(null);
@@ -366,7 +413,13 @@ export function ChatPanel() {
           }
           if (event === 'memory') {
             const ops = asRecord(record?.ops);
-            if (ops) setMemoryNote(formatMemoryOps(ops));
+            if (ops) {
+              setMemoryNote(formatMemoryOps(ops));
+              const cards = extractPendingConflicts(ops);
+              if (cards.length > 0) {
+                setMemoryConflicts((current) => mergeConflictCards(current, cards));
+              }
+            }
             return;
           }
           if (event === 'delta' && typeof record?.text === 'string') {
@@ -1096,6 +1149,19 @@ export function ChatPanel() {
                 {memoryNote && !sending && (
                   <p className="px-1 pb-1 text-xs text-zinc-400">{memoryNote}</p>
                 )}
+                {!sending && memoryConflicts.length > 0 && (
+                  <ul className="space-y-2 pb-1">
+                    {memoryConflicts.map((card) => (
+                      <li key={card.id}>
+                        <MemoryConflictNotice
+                          card={card}
+                          busy={resolvingConflictId === card.id}
+                          onResolve={(decision) => void resolveConflict(card.id, decision)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div ref={endRef} />
               </div>
             </div>
@@ -1203,8 +1269,63 @@ export function ChatPanel() {
   );
 }
 
-function formatMemoryOps(ops: Record<string, unknown>): string {
-  const added = Number(ops.added ?? 0);
+/** D4 内联冲突确认卡：内容对比 + 确认（保留新卡）/ 丢弃（保留已有卡）。 */
+function MemoryConflictNotice({
+  card,
+  busy,
+  onResolve,
+}: {
+  card: MemoryConflictCard;
+  busy: boolean;
+  onResolve: (decision: MemoryConflictDecision) => void;
+}) {
+  const [incoming, clash] = card.antonym;
+  return (
+    <div className="mx-1 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-5">
+      <p className="font-medium text-amber-800">
+        记忆冲突待确认
+        {incoming && clash ? `：「${incoming}」vs「${clash}」` : ''}
+      </p>
+      <div className="mt-1.5 grid gap-1 text-zinc-700">
+        <p className="break-words">
+          <span className="mr-1.5 inline-flex rounded border border-amber-500/40 px-1 py-0.5 text-[10px] text-amber-700">
+            新卡
+          </span>
+          {card.content}
+        </p>
+        {card.existing_content.trim() ? (
+          <p className="break-words">
+            <span className="mr-1.5 inline-flex rounded border border-line px-1 py-0.5 text-[10px] text-zinc-500">
+              已有卡
+            </span>
+            {card.existing_content}
+          </p>
+        ) : null}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onResolve('keep_new')}
+          className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-amber-800 transition hover:bg-amber-500/20 disabled:opacity-50"
+        >
+          确认，保留新卡
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onResolve('keep_existing')}
+          className="rounded border border-line px-2 py-0.5 text-zinc-600 transition hover:border-accent/60 hover:text-accent disabled:opacity-50"
+        >
+          丢弃，保留已有卡
+        </button>
+      </div>
+      <p className="mt-1 text-[11px] text-zinc-500">只写记忆卡，不会自动修改世界实体。</p>
+    </div>
+  );
+}
+
+function formatMemoryOps(ops: Record<string, unknown>): string {  const added = Number(ops.added ?? 0);
   const updated = Number(ops.updated ?? 0);
   const noop = Number(ops.noop ?? 0);
   const conflicts = Array.isArray(ops.conflicts) ? ops.conflicts.length : 0;

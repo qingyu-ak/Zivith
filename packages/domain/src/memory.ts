@@ -75,12 +75,22 @@ export type MemoryCoreDTO = z.infer<typeof memoryCoreSchema>;
 
 export const memoryConflictSchema = z
   .object({
+    // 落库后才有 id（SSE 内联确认卡靠它回传 resolve）。
+    id: z.string().min(1).optional(),
     content: z.string(),
     existing_content: z.string(),
     antonym: z.tuple([z.string(), z.string()]),
+    entity_type: z.string().nullable().optional(),
+    entity_id: z.string().nullable().optional(),
+    fact_type: z.string().nullable().optional(),
+    status: z.enum(['pending', 'resolved', 'discarded']).optional(),
   })
   .strict();
 export type MemoryConflict = z.infer<typeof memoryConflictSchema>;
+
+/** 冲突裁决：确认 = 保留新卡（取代旧卡），丢弃 = 保留已有卡。 */
+export const memoryConflictDecisionSchema = z.enum(['keep_new', 'keep_existing']);
+export type MemoryConflictDecision = z.infer<typeof memoryConflictDecisionSchema>;
 
 export const memoryIngestOpsSchema = z
   .object({

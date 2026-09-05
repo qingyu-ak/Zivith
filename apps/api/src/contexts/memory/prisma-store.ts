@@ -2,7 +2,9 @@ import type { PrismaClient } from '@zivith/database';
 import { buildWorldContext } from '../world-builder/world-context.js';
 import type {
   CreateAtomInput,
+  CreateConflictInput,
   MemoryAtomRecord,
+  MemoryConflictRecord,
   MemoryCoreRecord,
   MemoryPipelineStateRecord,
   MemoryStore,
@@ -156,6 +158,43 @@ export class PrismaMemoryStore implements MemoryStore {
 
   async listCores(projectId: string): Promise<MemoryCoreRecord[]> {
     return this.db.memoryCore.findMany({ where: { projectId }, orderBy: { updatedAt: 'desc' } });
+  }
+
+  async findAtomsByIds(ids: string[]): Promise<MemoryAtomRecord[]> {
+    if (ids.length === 0) return [];
+    return this.db.memoryAtom.findMany({ where: { id: { in: ids } }, orderBy: { createdAt: 'asc' } });
+  }
+
+  async createConflict(input: CreateConflictInput): Promise<MemoryConflictRecord> {
+    return this.db.memoryConflict.create({ data: input });
+  }
+
+  async findConflict(id: string): Promise<MemoryConflictRecord | null> {
+    return this.db.memoryConflict.findUnique({ where: { id } });
+  }
+
+  async listConflicts(
+    projectId: string,
+    options?: { status?: string; threadId?: string },
+  ): Promise<MemoryConflictRecord[]> {
+    return this.db.memoryConflict.findMany({
+      where: {
+        projectId,
+        ...(options?.status ? { status: options.status } : {}),
+        ...(options?.threadId ? { threadId: options.threadId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  async updateConflict(
+    id: string,
+    patch: Partial<
+      Pick<MemoryConflictRecord, 'status' | 'decision' | 'resolvedAtomId' | 'resolvedAt'>
+    >,
+  ): Promise<void> {
+    await this.db.memoryConflict.update({ where: { id }, data: patch });
   }
 
   async buildWorldContext(projectId: string) {

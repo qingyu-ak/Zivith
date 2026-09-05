@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryIngestOps } from '@zivith/domain';
 import { MemoryService } from '../src/contexts/memory/service.js';
+import { ApiError } from '../src/errors.js';
 import type {
   CreateAtomInput,
+  CreateConflictInput,
   MemoryAtomRecord,
+  MemoryConflictRecord,
   MemoryCoreRecord,
   MemoryStore,
   ThreadContextStateRecord,
@@ -121,6 +124,43 @@ class FakeStore implements MemoryStore {
   async listCores(projectId: string) {
     return this.cores.filter((core) => core.projectId === projectId);
   }
+  conflicts: MemoryConflictRecord[] = [];
+  async findAtomsByIds(ids: string[]) {
+    return this.atoms.filter((atom) => ids.includes(atom.id));
+  }
+  async createConflict(input: CreateConflictInput) {
+    const conflict: MemoryConflictRecord = {
+      ...input,
+      id: `conflict-${this.conflicts.length + 1}`,
+      status: 'pending',
+      decision: null,
+      resolvedAtomId: null,
+      createdAt: new Date(),
+      resolvedAt: null,
+    };
+    this.conflicts.push(conflict);
+    return conflict;
+  }
+  async findConflict(id: string) {
+    return this.conflicts.find((conflict) => conflict.id === id) ?? null;
+  }
+  async listConflicts(projectId: string, options?: { status?: string; threadId?: string }) {
+    return this.conflicts.filter(
+      (conflict) =>
+        conflict.projectId === projectId &&
+        (!options?.status || conflict.status === options.status) &&
+        (!options?.threadId || conflict.threadId === options.threadId),
+    );
+  }
+  async updateConflict(
+    id: string,
+    patch: Partial<
+      Pick<MemoryConflictRecord, 'status' | 'decision' | 'resolvedAtomId' | 'resolvedAt'>
+    >,
+  ) {
+    const conflict = this.conflicts.find((item) => item.id === id);
+    if (conflict) Object.assign(conflict, patch);
+  }
   async buildWorldContext(projectId: string) {
     void projectId;
     return world;
@@ -225,6 +265,111 @@ describe('MemoryService.ingest（同步快速路径）', () => {
     });
     expect(ops.conflicts).toHaveLength(1);
     expect(store.atoms).toHaveLength(1);
+  });
+});
+
+describe('MemoryService 冲突清单（D4）', () => {
+  async function seedConflict(store: FakeStore) {
+    const { service } = makeService(store);
+    await service.ingest({
+      messageId: 'm1',
+      threadId: 't1',
+      projectId: 'p1',
+      content: '林澈性格阴郁。',
+      world,
+    });
+    const ops = await service.ingest({
+      messageId: 'm2',
+      threadId: 't1',
+      projectId: 'p1',
+      content: '林澈性格开朗。',
+      world,
+    });
+    return { service, ops };
+  }
+
+  it('ingest 落库冲突并带回 id 与实体信息', async () => {
+    const store = new FakeStore();
+    const { service, ops } = await seedConflict(store);
+    expect(ops.conflicts).toHaveLength(1);
+    expect(ops.conflicts[0]).toMatchObject({
+      id: 'conflict-1',
+      content: '林澈性格开朗。',
+      existing_content: '林澈性格阴郁。',
+      entity_type: 'character',
+      entity_id: 'c1',
+      fact_type: 'trait',
+      status: 'pending',
+    });
+    expect(store.conflicts).toHaveLength(1);
+    expect(store.conflicts[0]).toMatchObject({
+      existingAtomId: 'atom-1',
+      threadId: 't1',
+      sourceMessageId: 'm2',
+      factType: 'trait',
+    });
+    expect(store.atoms).toHaveLength(1); // 冲突不写原子
+    expect((await service.listConflicts('p1', { status: 'pending' })).length).toBe(1);
+  });
+
+  it('keep_new：新原子取代旧卡，旧卡 superseded', async () => {
+    const store = new FakeStore();
+    const { service, ops } = await seedConflict(store);
+    const conflictId = ops.conflicts[0]!.id!;
+
+    const resolved = await service.resolveConflict(conflictId, 'keep_new');
+
+    expect(resolved.status).toBe('resolved');
+    expect(resolved.decision).toBe('keep_new');
+    expect(resolved.resolvedAtomId).toBe('atom-2');
+    expect(resolved.resolvedAt).not.toBeNull();
+    const active = store.atoms.filter((atom) => atom.status === 'active');
+    expect(active).toHaveLength(1);
+    expect(active[0]).toMatchObject({ id: 'atom-2', content: '林澈性格开朗。', memoryOp: 'UPDATE' });
+    expect(store.atoms[0]).toMatchObject({
+      id: 'atom-1',
+      status: 'superseded',
+      supersededById: 'atom-2',
+    });
+  });
+
+  it('keep_new 时旧卡已失效则直接新增、不再取代', async () => {
+    const store = new FakeStore();
+    const { service, ops } = await seedConflict(store);
+    await service.invalidateAtom('atom-1');
+
+    const resolved = await service.resolveConflict(ops.conflicts[0]!.id!, 'keep_new');
+
+    expect(resolved.resolvedAtomId).toBe('atom-2');
+    expect(store.atoms.find((atom) => atom.id === 'atom-2')).toMatchObject({
+      memoryOp: 'ADD',
+      status: 'active',
+    });
+    expect(store.atoms[0]!.status).toBe('invalidated');
+  });
+
+  it('keep_existing：不写原子，冲突标 discarded', async () => {
+    const store = new FakeStore();
+    const { service, ops } = await seedConflict(store);
+
+    const resolved = await service.resolveConflict(ops.conflicts[0]!.id!, 'keep_existing');
+
+    expect(resolved.status).toBe('discarded');
+    expect(resolved.decision).toBe('keep_existing');
+    expect(resolved.resolvedAtomId).toBeNull();
+    expect(store.atoms).toHaveLength(1);
+  });
+
+  it('已裁决的冲突不能重复处理；不存在的冲突 404', async () => {
+    const store = new FakeStore();
+    const { service, ops } = await seedConflict(store);
+    const conflictId = ops.conflicts[0]!.id!;
+    await service.resolveConflict(conflictId, 'keep_existing');
+
+    await expect(service.resolveConflict(conflictId, 'keep_new')).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(service.resolveConflict('missing', 'keep_new')).rejects.toBeInstanceOf(ApiError);
   });
 });
 
