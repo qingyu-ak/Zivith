@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-06 · pending · feat(web) · Chat/Studio 分壳跳转 + Studio 侧栏重做（S1+S2）
+## 2026-09-06 · 4ba861a · feat(web) · Chat/Studio 分壳跳转 + Studio 侧栏重做（S1+S2）
 
 跨页只留一对跳转（Chat 顶栏「Studio」、Studio 顶栏「Chat」）；上一步/下一步按壳分栈互不串。Studio 去掉 56px 活动栏：项目切换、制作、设置进顶栏，左侧只剩 EntityExplorer 树，/world 里那列左树删除，选中态提升为壳级共享。
 
