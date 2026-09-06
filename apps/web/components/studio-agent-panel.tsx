@@ -18,6 +18,7 @@ import {
 import { parseProposals } from '@/lib/chat-proposals';
 import { useStudioSelection } from './world/studio-selection';
 import { ProposalCard } from './creator-chat/proposal-card';
+import { ModelPicker } from './model-picker';
 
 /**
  * Studio 壳级 Agent 面板（类 Cursor/Trae）：当前项目的世界构建者对话内嵌在右侧，
@@ -172,23 +173,6 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
       <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
         <p className="text-sm font-medium text-zinc-900">Agent</p>
         <span className="flex-1" />
-        <select
-          className="max-w-28 rounded border border-line bg-transparent px-1 py-0.5 text-[11px] text-zinc-600"
-          value={effort}
-          onChange={(event) => {
-            const next = event.target.value as ChatEffort;
-            setEffort(next);
-            writeStoredEffort(next);
-          }}
-          title={CHAT_EFFORT_HINT[effort]}
-          aria-label="努力程度"
-        >
-          {(['fast', 'balanced', 'deep'] as const).map((item) => (
-            <option key={item} value={item}>
-              {CHAT_EFFORT_LABEL[item]}
-            </option>
-          ))}
-        </select>
       </div>
 
       {focus ? (
@@ -284,7 +268,26 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             }
           }}
         />
-        <div className="mt-1.5 flex items-center justify-end gap-2">
+        <div className="mt-1.5 flex items-center gap-2">
+          <ModelPicker projectId={projectId} />
+          <select
+            className="max-w-24 rounded-full border border-zinc-200 bg-transparent px-2 py-0.5 text-[11px] text-zinc-600"
+            value={effort}
+            title={CHAT_EFFORT_HINT[effort]}
+            aria-label="努力程度"
+            onChange={(event) => {
+              const next = event.target.value as ChatEffort;
+              setEffort(next);
+              writeStoredEffort(next);
+            }}
+          >
+            {(['fast', 'balanced', 'deep'] as const).map((item) => (
+              <option key={item} value={item}>
+                {CHAT_EFFORT_LABEL[item]}
+              </option>
+            ))}
+          </select>
+          <span className="flex-1" />
           {sending ? (
             <button
               type="button"
