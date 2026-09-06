@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-09-06 · pending · feat(web) · Chat 与 Studio 共用顶栏（logo 槽 + 收起 + 前进/后退）
+
+参考 ZCode / Cursor 顶栏节奏：最顶上一条横跨侧栏与主区，28×28 圆角 logo 槽、侧栏收起、应用内上一步/下一步（会话级路径栈，与浏览器历史独立；Chat 线程、Studio 页、设置互跳都进栈）。侧栏里原「ZIVITH 字 + 收起」一行让位给顶栏，搜索留在侧栏。
+
+- **feat(web)** `TopBar` 共用组件接 `app-shell`（Studio 收起按钮作用于活动栏）与 `chat-panel`（接现有 `useCollapsedSidebar('chat')`）
+- **feat(web)** `NavigationHistory` 会话级路径栈：push 幂等、回退后新跳转截断前进栈、到头 disabled
+- **chore(web)** `nav-icons` 增加左右箭头；聊天侧栏头部与收起态主区头部去掉 ZIVITH 字让位 logo 槽
+- 模块：`components/top-bar.tsx`、`lib/navigation-history.ts`、`app-shell.tsx`、`chat-panel.tsx`、`chat-sidebar.tsx`、`nav-icons.tsx`
+
 ## 2026-09-06 · c491a4b · feat(web) · 帮助与反馈页（/help）
 
 账号菜单「帮助与反馈」从占位链接改为独立页面：设置壳风格左栏两模块。帮助 = 与产品实际能力对应的使用文档与注意事项；反馈 = 故障信息一键复制 + 开发者联系方式（群号/账号集中在 `lib/help-feedback.ts`，由开发者填真实值，未填显示「待补充」不放假链接）。

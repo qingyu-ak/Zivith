@@ -53,6 +53,7 @@ import type {
 } from '@/lib/types';
 import { isDesktopApp, pickWorkspaceDirectory, asWorkspacePath } from '@/lib/desktop';
 import { IconExternal, IconSearch, IconSidebar } from '@/components/nav-icons';
+import { TopBar } from '@/components/top-bar';
 import { ChatSidebar, ChatSidebarRail } from './chat-sidebar';
 import { ProposalCard, type ChatProposal } from './proposal-card';
 import { RoleplayLaunchButton } from './roleplay-launch';
@@ -806,7 +807,9 @@ export function ChatPanel() {
     : (activeRoleplay?.user_character_asset_id ?? '');
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-white text-zinc-900 [color-scheme:light]">
+    <div className="flex h-dvh flex-col overflow-hidden bg-white text-zinc-900 [color-scheme:light]">
+      <TopBar onToggleSidebar={toggleCollapsed} />
+      <div className="flex min-h-0 flex-1">
       {collapsed ? (
         <ChatSidebarRail onToggle={toggleCollapsed} onOpenFolder={() => void pickFolder()} />
       ) : (
@@ -833,12 +836,6 @@ export function ChatPanel() {
         <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 px-4 py-2 lg:px-6">
           {collapsed && (
             <>
-              <Link
-                href="/creator-chats"
-                className="text-[17px] font-semibold tracking-tight text-zinc-900"
-              >
-                ZIVITH
-              </Link>
               <button
                 type="button"
                 className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100"
@@ -1219,6 +1216,7 @@ export function ChatPanel() {
             </div>
           </>
         )}
+      </div>
       </div>
       {roleplayPicker ? (
         <div

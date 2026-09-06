@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter } from 'next/navigation';
 import { api, unwrapList } from '@/lib/api';
 import type { ProjectDTO } from '@/lib/types';
 import { IconGear } from '@/components/nav-icons';
+import { TopBar } from '@/components/top-bar';
 
 type NavItem = {
   label: string;
@@ -35,6 +36,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const params = useParams<{ projectId?: string }>();
   const pathname = usePathname();
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
+  // Studio 没有第二侧栏：顶栏收起按钮作用于活动栏本身。
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
 
   useEffect(() => {
     if (pathname.startsWith('/creator-chats')) return;
@@ -77,41 +80,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="sticky top-0 flex h-dvh w-14 shrink-0 flex-col items-center border-r border-line bg-[#f7f8fa] py-3">
-        <ProjectSwitcher projects={projects} currentId={projectId} />
-        <nav className="mt-3 flex min-h-0 flex-1 flex-col" aria-label="主导航">
-          <div className="grid gap-1">
-            {primaryNav.map((item) => {
-              const href = itemHref(item);
-              const active = itemActive(item);
-              return (
-                <Link
-                  key={item.label}
-                  href={href}
-                  title={item.label}
-                  aria-current={active ? 'page' : undefined}
-                  className={navClass(active)}
-                >
-                  <span aria-hidden>{item.icon}</span>
-                  <span className="sr-only">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-          <div className="flex-1" />
-          <Link
-            href={itemHref(settingsItem)}
-            title="设置"
-            aria-current={itemActive(settingsItem) ? 'page' : undefined}
-            className={navClass(itemActive(settingsItem))}
-          >
-            <IconGear className="size-4" aria-hidden />
-            <span className="sr-only">设置</span>
-          </Link>
-        </nav>
-      </aside>
-      <main className="min-w-0 flex-1 bg-white">{children}</main>
+    <div className="flex min-h-screen flex-col">
+      <TopBar onToggleSidebar={() => setActivityCollapsed((value) => !value)} />
+      <div className="flex min-h-[calc(100dvh-2.75rem)]">
+        {!activityCollapsed && (
+          <aside className="sticky top-11 flex h-[calc(100dvh-2.75rem)] w-14 shrink-0 flex-col items-center border-r border-line bg-[#f7f8fa] py-3">
+            <ProjectSwitcher projects={projects} currentId={projectId} />
+            <nav className="mt-3 flex min-h-0 flex-1 flex-col" aria-label="主导航">
+              <div className="grid gap-1">
+                {primaryNav.map((item) => {
+                  const href = itemHref(item);
+                  const active = itemActive(item);
+                  return (
+                    <Link
+                      key={item.label}
+                      href={href}
+                      title={item.label}
+                      aria-current={active ? 'page' : undefined}
+                      className={navClass(active)}
+                    >
+                      <span aria-hidden>{item.icon}</span>
+                      <span className="sr-only">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="flex-1" />
+              <Link
+                href={itemHref(settingsItem)}
+                title="设置"
+                aria-current={itemActive(settingsItem) ? 'page' : undefined}
+                className={navClass(itemActive(settingsItem))}
+              >
+                <IconGear className="size-4" aria-hidden />
+                <span className="sr-only">设置</span>
+              </Link>
+            </nav>
+          </aside>
+        )}
+        <main className="min-w-0 flex-1 bg-white">{children}</main>
+      </div>
     </div>
   );
 }
