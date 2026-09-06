@@ -145,6 +145,16 @@ export function settingsHrefFor(
   return section ? `${path}?section=${section}` : path;
 }
 
+/** Chat 顶栏「Studio」：有项目进世界工作区，没有项目才退回项目列表。 */
+export function studioHrefForChat(projectId: string | null | undefined): string {
+  return projectId ? `/projects/${projectId}/world` : '/projects';
+}
+
+/** Studio 顶栏「Chat」：已知线程直接进线程，否则回对话首页（线程解析在点击时做）。 */
+export function chatHrefForStudio(threadId: string | null | undefined): string {
+  return threadId ? `/creator-chats/${threadId}` : '/creator-chats';
+}
+
 export function chatPathForThread(threadId: string, focus?: ChatFocus | null): string {
   if (!focus) return `/creator-chats/${threadId}`;
   const params = new URLSearchParams({

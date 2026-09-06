@@ -1,30 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { navigationHistory } from '@/lib/navigation-history';
+import { navigationHistoryFor } from '@/lib/navigation-history';
 import { IconArrowLeft, IconArrowRight, IconSidebar } from './nav-icons';
 
-/** Chat 与 Studio 共用顶栏：logo、收起侧栏、应用内上一步/下一步。Electron 里这就是窗口标题栏。 */
-export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
+/**
+ * Chat 与 Studio 共用顶栏（Electron 里就是窗口标题栏）。
+ * 两边各有一套会话级路径栈（surface 分栈）：换壳跳转不把对岸页面推进当前栈。
+ */
+export function TopBar({
+  surface,
+  onToggleSidebar,
+  middle,
+  right,
+}: {
+  surface: 'chat' | 'studio';
+  onToggleSidebar?: () => void;
+  /** 前进/后退右侧、拖动空白之前的区域（Studio：项目切换）。 */
+  middle?: ReactNode;
+  /** 顶栏最右（Chat：Studio 跳转；Studio：制作 / 设置 / Chat）。 */
+  right?: ReactNode;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [canBack, setCanBack] = useState(false);
   const [canForward, setCanForward] = useState(false);
 
   useEffect(() => {
-    navigationHistory.push(pathname);
-    setCanBack(navigationHistory.canBack);
-    setCanForward(navigationHistory.canForward);
-  }, [pathname]);
+    const history = navigationHistoryFor(surface);
+    history.push(pathname);
+    setCanBack(history.canBack);
+    setCanForward(history.canForward);
+  }, [pathname, surface]);
 
   function goBack() {
-    const target = navigationHistory.back();
+    const target = navigationHistoryFor(surface).back();
     if (target) router.push(target);
   }
 
   function goForward() {
-    const target = navigationHistory.forward();
+    const target = navigationHistoryFor(surface).forward();
     if (target) router.push(target);
   }
 
@@ -43,7 +59,7 @@ export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         height={20}
         draggable={false}
         title="Zivith"
-        className="mx-1 size-4 shrink-0 rounded"
+        className="mx-1 size-4 shrink-0 rounded [-webkit-app-region:no-drag]"
       />
       <TopBarButton
         label="上一步"
@@ -64,7 +80,13 @@ export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           <IconSidebar className="size-4" />
         </TopBarButton>
       ) : null}
+      {middle ? (
+        <div className="flex min-w-0 items-center gap-1 [-webkit-app-region:no-drag]">{middle}</div>
+      ) : null}
       <span className="flex-1" />
+      {right ? (
+        <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">{right}</div>
+      ) : null}
     </header>
   );
 }
@@ -78,7 +100,7 @@ function TopBarButton({
   label: string;
   disabled?: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button

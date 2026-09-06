@@ -1,16 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Badge, Spinner } from '@zivith/ui';
-import { api, errorMessage, unwrapList } from '@/lib/api';
-import type {
-  CreatorChatThreadDTO,
-  WorldLineItem,
-  WorldResourcesDTO,
-  WorldSelection,
-} from '@/lib/types';
-import { normalizeThread } from '@/lib/creator-chat-nav';
+import { api, errorMessage } from '@/lib/api';
+import type { WorldLineItem, WorldResourcesDTO } from '@/lib/types';
 import {
   buildWorldLineModel,
   buildProductionLineModel,
@@ -25,8 +19,7 @@ import {
   usePersistedFlag,
   usePersistedPx,
 } from '@/lib/workspace-layout';
-import { IconPanelLeft, IconPanelRight } from '@/components/nav-icons';
-import { EntityExplorer } from './entity-explorer';
+import { IconPanelRight } from '@/components/nav-icons';
 import { WorldTimeline } from './world-timeline';
 import { WorldTimeBar } from './world-time-bar';
 import { InspectorPanel } from './inspector-panel';
@@ -35,20 +28,18 @@ import { MemoryPanel } from './memory-panel';
 import { NovelImportPanel } from './novel-import-panel';
 import { ContinueInChatButton } from './continue-in-chat';
 import { DockSection, ResizeHandle } from './workspace-split';
+import { useStudioSelection } from './studio-selection';
 
 export function WorldWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
-  const router = useRouter();
   const [resources, setResources] = useState<WorldResourcesDTO | null>(null);
-  const [threads, setThreads] = useState<CreatorChatThreadDTO[]>([]);
-  const [selection, setSelection] = useState<WorldSelection>(null);
+  // 选中态在 Studio 壳级（AppShell 的 StudioSelectionProvider）：Explorer 树与时间线/Inspector 共用。
+  const { selection, setSelection } = useStudioSelection();
   const [view, setView] = useState<'world' | 'production'>('world');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [clipNotice, setClipNotice] = useState('');
-  const [leftCollapsed, toggleLeft] = useCollapsedSidebar('worldLeft');
   const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
-  const [leftWidth, setLeftWidth] = usePersistedPx(WORKSPACE_LAYOUT_KEYS.leftWidth, 248, 180, 440);
   const [rightWidth, setRightWidth] = usePersistedPx(
     WORKSPACE_LAYOUT_KEYS.rightWidth,
     320,
@@ -81,18 +72,8 @@ export function WorldWorkspace() {
       setError('');
     }
     try {
-      const [value, listed] = await Promise.all([
-        api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`),
-        api<unknown[] | { data?: unknown[]; items?: unknown[] }>(
-          `/world/projects/${projectId}/creator-chats`,
-        ).catch(() => []),
-      ]);
+      const value = await api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`);
       setResources(value);
-      setThreads(
-        unwrapList(listed)
-          .map(normalizeThread)
-          .filter((thread): thread is CreatorChatThreadDTO => Boolean(thread?.id)),
-      );
     } catch (reason) {
       if (options?.silent) throw reason;
       setError(errorMessage(reason));
@@ -126,10 +107,6 @@ export function WorldWorkspace() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    setSelection(null);
-  }, [projectId]);
 
   useEffect(() => {
     if (!resources || resources.project.id !== projectId) return;
@@ -166,13 +143,9 @@ export function WorldWorkspace() {
     .map((dimension) => dimension.label)
     .join(' / ');
 
-  const sortedStories = resources
-    ? [...resources.entities.stories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    : [];
-
   if (loading) {
     return (
-      <div className="grid h-screen place-items-center">
+      <div className="grid h-[calc(100dvh-2.75rem)] place-items-center">
         <Spinner label="正在加载世界线…" />
       </div>
     );
@@ -180,7 +153,7 @@ export function WorldWorkspace() {
 
   if (error) {
     return (
-      <div className="grid h-screen place-items-center">
+      <div className="grid h-[calc(100dvh-2.75rem)] place-items-center">
         <div className="max-w-md text-center">
           <p className="rounded-lg bg-red-500/10 p-4 text-sm text-red-600" role="alert">
             {error}
@@ -201,7 +174,7 @@ export function WorldWorkspace() {
 
   if (!resources || !model) {
     return (
-      <div className="grid h-screen place-items-center">
+      <div className="grid h-[calc(100dvh-2.75rem)] place-items-center">
         <div className="max-w-md text-center">
           <p className="text-zinc-400">无法加载世界数据。</p>
         </div>
@@ -210,7 +183,7 @@ export function WorldWorkspace() {
   }
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-[calc(100dvh-2.75rem)] flex-col">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
         <div>
           <div className="flex items-center gap-3">
@@ -233,17 +206,6 @@ export function WorldWorkspace() {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className={`grid size-8 place-items-center rounded-lg border border-line transition ${
-              leftCollapsed ? 'text-zinc-400 hover:text-zinc-700' : 'bg-white text-zinc-800'
-            }`}
-            aria-label={leftCollapsed ? '展开左侧栏' : '收起左侧栏'}
-            aria-pressed={!leftCollapsed}
-            onClick={toggleLeft}
-          >
-            <IconPanelLeft className="size-4" />
-          </button>
           <button
             type="button"
             className={`grid size-8 place-items-center rounded-lg border border-line transition ${
@@ -296,74 +258,7 @@ export function WorldWorkspace() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* 左栏：世界视图 = 实体 Explorer；创作线视图 = 故事列表 */}
-        <aside
-          className={`min-h-0 overflow-hidden border-r border-line ${leftCollapsed ? 'pointer-events-none' : view === 'production' ? 'overflow-y-auto' : ''}`}
-          style={{ width: leftCollapsed ? 0 : leftWidth }}
-        >
-          {view === 'production' ? (
-            <>
-              <div className="border-b border-line px-4 py-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-600">故事</p>
-              </div>
-              {sortedStories.length === 0 ? (
-                <p className="px-4 py-4 text-sm text-zinc-600">还没有故事</p>
-              ) : (
-                <ul className="p-2">
-                  {sortedStories.map((story) => {
-                    const active = selection?.kind === 'story' && selection.id === story.id;
-                    return (
-                      <li key={story.id}>
-                        <button
-                          type="button"
-                          onClick={() => setSelection({ kind: 'story', id: story.id })}
-                          className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition ${
-                            active
-                              ? 'bg-zinc-100 text-zinc-900'
-                              : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
-                          }`}
-                        >
-                          <span className="truncate text-sm font-medium">{story.title}</span>
-                          <span className="shrink-0 text-xs text-zinc-600">
-                            {story.scene_count ?? 0} 场景
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </>
-          ) : (
-            <EntityExplorer
-              resources={resources}
-              selection={selection}
-              onSelect={setSelection}
-              threads={threads}
-              onNewChat={() => {
-                void (async () => {
-                  try {
-                    const created = await api<unknown>('/world/creator-chats', {
-                      method: 'POST',
-                      body: { project_id: projectId, title: null },
-                    });
-                    const thread = normalizeThread(created);
-                    if (thread?.id) router.push(`/creator-chats/${thread.id}`);
-                  } catch (reason) {
-                    setError(errorMessage(reason));
-                  }
-                })();
-              }}
-            />
-          )}
-        </aside>
-        {!leftCollapsed && (
-          <ResizeHandle
-            orientation="vertical"
-            label="调整左侧栏宽度"
-            onDrag={(delta) => setLeftWidth((width) => width + delta)}
-          />
-        )}
+        {/* 实体树在 Studio 壳（AppShell）左侧；这里只保留时间线/创作线与右侧面板 */}
 
         {/* 中栏：时间线 + 可拖拽的下方面板 */}
         <section ref={centerRef} className="flex min-h-0 min-w-0 flex-1 flex-col">

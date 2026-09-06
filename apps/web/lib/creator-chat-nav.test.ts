@@ -9,6 +9,8 @@ import {
   normalizeThread,
   parseFocusFromSearch,
   settingsHrefFor,
+  studioHrefForChat,
+  chatHrefForStudio,
 } from './creator-chat-nav';
 import type { WorldResourcesDTO } from './types';
 
@@ -138,5 +140,19 @@ describe('settingsHrefFor', () => {
 
   it('only uses the project list when no project exists', () => {
     expect(settingsHrefFor(undefined, [])).toBe('/projects');
+  });
+});
+
+describe('shell jump hrefs', () => {
+  it('studioHrefForChat: 有项目进 world，没有才回项目列表', () => {
+    expect(studioHrefForChat('p1')).toBe('/projects/p1/world');
+    expect(studioHrefForChat(null)).toBe('/projects');
+    expect(studioHrefForChat(undefined)).toBe('/projects');
+  });
+
+  it('chatHrefForStudio: 已知线程进线程，否则回对话首页', () => {
+    expect(chatHrefForStudio('t1')).toBe('/creator-chats/t1');
+    expect(chatHrefForStudio(null)).toBe('/creator-chats');
+    expect(chatHrefForStudio(undefined)).toBe('/creator-chats');
   });
 });

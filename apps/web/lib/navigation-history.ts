@@ -47,5 +47,17 @@ export class NavigationHistory {
   }
 }
 
-/** 会话级单例：模块在 SPA 生命周期内只加载一次。 */
-export const navigationHistory = new NavigationHistory();
+/** 会话级单例容器：Chat 与 Studio 各一套栈，换壳不串栈。 */
+const surfaces = new Map<string, NavigationHistory>();
+
+export const CHAT_SURFACE = 'chat';
+export const STUDIO_SURFACE = 'studio';
+
+export function navigationHistoryFor(surface: string): NavigationHistory {
+  let instance = surfaces.get(surface);
+  if (!instance) {
+    instance = new NavigationHistory();
+    surfaces.set(surface, instance);
+  }
+  return instance;
+}

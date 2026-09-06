@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NavigationHistory } from './navigation-history';
+import { NavigationHistory, navigationHistoryFor } from './navigation-history';
 
 describe('NavigationHistory', () => {
   it('push 记录路径，同一路径幂等', () => {
@@ -38,5 +38,22 @@ describe('NavigationHistory', () => {
     expect(history.canForward).toBe(false);
     expect(history.back()).toBe('/a');
     expect(history.current).toBe('/a');
+  });
+
+  it('Chat 与 Studio 分栈：在 Chat 走两线程再进 Studio，Chat 的 back 不会落到 Studio 页面', () => {
+    const chat = navigationHistoryFor('chat');
+    const studio = navigationHistoryFor('studio');
+    chat.reset();
+    studio.reset();
+
+    chat.push('/creator-chats/t1');
+    chat.push('/creator-chats/t2');
+    studio.push('/projects/p1/world');
+
+    expect(chat.back()).toBe('/creator-chats/t1');
+    expect(chat.current).not.toBe('/projects/p1/world');
+    expect(studio.back()).toBeNull();
+    // 同一 surface 拿到同一实例
+    expect(navigationHistoryFor('chat')).toBe(chat);
   });
 });

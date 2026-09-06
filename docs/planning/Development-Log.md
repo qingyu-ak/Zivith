@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-09-06 · pending · feat(web) · Chat/Studio 分壳跳转 + Studio 侧栏重做（S1+S2）
+
+跨页只留一对跳转（Chat 顶栏「Studio」、Studio 顶栏「Chat」）；上一步/下一步按壳分栈互不串。Studio 去掉 56px 活动栏：项目切换、制作、设置进顶栏，左侧只剩 EntityExplorer 树，/world 里那列左树删除，选中态提升为壳级共享。
+
+- **feat(web)** `NavigationHistory` 按 surface 分栈（chat/studio），换壳不把对岸页面推进当前栈，回壳恢复各自栈
+- **feat(web)** 顶栏加 `middle`/`right` 插槽：Studio = 项目切换（六边形下拉，切完落 /world）+ 制作/设置/Chat；Chat = 「Studio」（有项目进 world，无项目回 /projects）
+- **feat(web)** `EntityExplorer` 提升到 `AppShell`；`StudioSelectionProvider` 壳级选中态（树点选不在 /world 时先跳 /world 再选中）；工作区自带左栏与左宽拖拽移除，深链 /assets、/stories 保留
+- **feat(web)** Studio「Chat」点击时 `resolveThreadForProject`（排除扮演，无则建）进对应线程；无项目回 /creator-chats；Explorer 空态 = 打开文件夹 / 去选项目
+- 模块：`top-bar.tsx`、`navigation-history.ts`、`creator-chat-nav.ts`、`app-shell.tsx`、`world/studio-selection.tsx`、`world/world-workspace.tsx`、`chat-panel.tsx`
+
 ## 2026-09-06 · e219945 · feat(web) · Chat 与 Studio 共用顶栏（logo 槽 + 收起 + 前进/后退）
 
 参考 ZCode / Cursor 顶栏节奏：最顶上一条横跨侧栏与主区，28×28 圆角 logo 槽、侧栏收起、应用内上一步/下一步（会话级路径栈，与浏览器历史独立；Chat 线程、Studio 页、设置互跳都进栈）。侧栏里原「ZIVITH 字 + 收起」一行让位给顶栏，搜索留在侧栏。

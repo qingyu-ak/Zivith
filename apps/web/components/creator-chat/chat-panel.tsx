@@ -40,6 +40,7 @@ import {
   parseFocusFromSearch,
   readPendingFocus,
   settingsHrefFor,
+  studioHrefForChat,
   type ChatFocus,
 } from '@/lib/creator-chat-nav';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
@@ -791,7 +792,7 @@ export function ChatPanel() {
     if (threadId) router.replace(`/creator-chats/${threadId}`);
   }
 
-  const studioHref = thread?.project_id ? `/projects/${thread.project_id}/world` : '/projects';
+  const studioHref = studioHrefForChat(thread?.project_id);
   const settingsProjectId =
     thread?.project_id ??
     threads.find((item) => item.project_id)?.project_id ??
@@ -814,7 +815,19 @@ export function ChatPanel() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-white text-zinc-900 [color-scheme:light]">
-      <TopBar onToggleSidebar={toggleCollapsed} />
+      <TopBar
+        surface="chat"
+        onToggleSidebar={toggleCollapsed}
+        right={
+          <Link
+            href={studioHref}
+            title="打开 Studio 世界工作区"
+            className="rounded-lg px-2 py-1 text-xs text-zinc-600 transition hover:bg-zinc-200/80 hover:text-zinc-900"
+          >
+            Studio
+          </Link>
+        }
+      />
       <div className="flex min-h-0 flex-1">
       {collapsed ? (
         <ChatSidebarRail onToggle={toggleCollapsed} onOpenFolder={() => void pickFolder()} />
