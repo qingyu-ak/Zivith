@@ -13,6 +13,7 @@ import {
   CHAT_EFFORT_LABEL,
   readStoredEffort,
   writeStoredEffort,
+  formatTokenCount,
   type ChatEffort,
 } from '@/lib/chat-composer';
 import { parseProposals } from '@/lib/chat-proposals';
@@ -20,6 +21,17 @@ import { IconArrowRight } from '@/components/nav-icons';
 import { useStudioSelection } from './world/studio-selection';
 import { ProposalCard } from './creator-chat/proposal-card';
 import { ModelPicker } from './model-picker';
+
+interface ProjectUsageDTO {
+  total_calls: number;
+  total_estimated_cost: number | null;
+  by_task_type: Array<{
+    task_type: string;
+    calls: number;
+    quantity: number;
+    unit: string;
+  }>;
+}
 
 /**
  * Studio 壳级 Agent 面板（类 Cursor/Trae）：当前项目的世界构建者对话内嵌在右侧，
@@ -36,6 +48,7 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [effort, setEffort] = useState<ChatEffort>('balanced');
+  const [usage, setUsage] = useState<ProjectUsageDTO | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -49,6 +62,17 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
   useEffect(() => {
     setEffort(readStoredEffort());
   }, []);
+
+  // 输入框下沿的用量页脚：挂载与每轮对话后刷新。
+  const loadUsage = useCallback(() => {
+    void api<ProjectUsageDTO>(`/projects/${projectId}/usage`)
+      .then(setUsage)
+      .catch(() => setUsage(null));
+  }, [projectId]);
+
+  useEffect(() => {
+    loadUsage();
+  }, [loadUsage]);
 
   const loadHistory = useCallback(
     async (id: string) => {
@@ -164,8 +188,9 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
       setSending(false);
       // 流被中止或异常中断时 done 不会来：补拉一次历史对齐服务端状态。
       if (!sawDone) void loadHistory(threadId).catch(() => {});
+      loadUsage();
     }
-  }, [input, threadId, sending, effort, loadHistory]);
+  }, [input, threadId, sending, effort, loadHistory, loadUsage]);
 
   const busy = sending || loading;
 
@@ -312,6 +337,23 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             )}
           </div>
         </div>
+        {usage ? (
+          <p className="mt-1 px-1 text-[11px] leading-4 text-zinc-400">
+            {(() => {
+              const llmUsage = usage.by_task_type.find((item) =>
+                item.task_type.startsWith('llm'),
+              );
+              const llmText = llmUsage
+                ? `LLM ${llmUsage.calls} 次 · ${formatTokenCount(llmUsage.quantity)} ${llmUsage.unit}`
+                : 'LLM 0 次';
+              const costText =
+                usage.total_estimated_cost !== null && usage.total_estimated_cost !== undefined
+                  ? ` · 估算 ${usage.total_estimated_cost}`
+                  : '';
+              return `${llmText}${costText}`;
+            })()}
+          </p>
+        ) : null}
       </form>
     </div>
   );
