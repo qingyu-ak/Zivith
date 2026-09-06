@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-06 · pending · feat(web,api) · Studio 菜单栏 + L2 档案编辑 + Agent 侧栏（两股工作合并提交）
+## 2026-09-06 · cad776e · feat(web,api) · Studio 菜单栏 + L2 档案编辑 + Agent 侧栏（两股工作合并提交）
 
 app-shell / chat-panel 两股改动交织，合并为一笔。①（Grok-A）Studio 顶部菜单栏（文件/编辑/视图/设置/帮助，无假菜单）、L2 核心块新建与编辑（`saveCore`/`patchCore` 路由 + 记忆面板编辑 + 测试）、资源加载收编壳级 provider、`?select=` 深链、`backLeaving` 覆盖层后退、实体创建流、写入模式说明。②（ZCode-A）Agent 侧栏面板（类 Cursor）：壳级右侧 380px 可收起面板，内嵌当前项目世界构建者对话——`resolveThreadForProject` 解析线程、SSE 流式、提案卡就地确认（`parseProposals` 抽到 `lib/chat-proposals.ts` 共用）、选中实体自动作为 focus、努力程度选择；顶栏星形按钮开关，状态持久化。
 
