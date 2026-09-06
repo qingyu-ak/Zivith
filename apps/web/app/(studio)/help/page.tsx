@@ -148,6 +148,56 @@ function HelpDocs() {
         </ul>
       </DocsCard>
 
+      <DocsCard title="接入 VoiceStudio 本地配音（可选）">
+        <p>
+          <a
+            href="https://github.com/debpalash/VoiceStudio"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#4d6bfe] hover:underline"
+          >
+            VoiceStudio
+          </a>{' '}
+          是全本地运行的开源语音套件（ElevenLabs 替代）：语音克隆、语音设计、配音、转录，内置 16
+          个 TTS 引擎，并暴露 OpenAI 兼容的配音接口。Zivith
+          的配音槽走同款协议，可把制作线的配音从云端 TTS 换成本地引擎，离线、零调用费。
+        </p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li>
+            安装并启动 VoiceStudio（桌面安装包，或 Docker：
+            <code className="mx-0.5 rounded bg-zinc-100 px-1">
+              docker run -d -p 127.0.0.1:3900:3900 palashdeb/omnivoice-studio:stable
+            </code>
+            ），在其设置里选好 TTS 引擎（NVIDIA 8GB+ 建议 OmniVoice / CosyVoice 3；低配用
+            PocketTTS / Moonshine）。
+          </li>
+          <li>
+            查引擎 ID：访问{' '}
+            <code className="mx-0.5 rounded bg-zinc-100 px-1">
+              http://127.0.0.1:3900/v1/audio/voices
+            </code>
+            ，或直接用 VoiceStudio 的模型目录（示例用 <code className="rounded bg-zinc-100 px-1">tts-1</code>）。
+          </li>
+          <li>
+            在 Zivith 的 <b>设置 → 模型设置 → SiliconFlow</b>：Base URL 改为{' '}
+            <code className="mx-0.5 rounded bg-zinc-100 px-1">http://127.0.0.1:3900/v1</code>
+            ，API Key 随意（如 <code className="rounded bg-zinc-100 px-1">local</code>）后保存；再到
+            <b> 语音槽位</b>把模型名改成上面的引擎 ID，保存媒体槽位。
+          </li>
+          <li>
+            在制作线点一次语音生成验证；若报「音色不存在」，在 VoiceStudio
+            里建一个 ID 为 <code className="rounded bg-zinc-100 px-1">alloy</code>{' '}
+            的音色档（Zivith 未指定音色时的默认名）。
+          </li>
+        </ol>
+        <p className="mt-2 text-zinc-500">
+          注意：① SiliconFlow 的配音、图像、视频共用同一 Base
+          URL，指向 VoiceStudio 后图像/视频生成会失效——用完改回即可；干净的方案是给音频单独开供应商槽，已在计划。②
+          权重许可分层：默认 OmniVoice 权重 CC-BY-NC 禁商用，商用请换 Apache/MIT 引擎（如
+          GPT-SoVITS）。③ 克隆声音须获得本人同意；生成语音默认嵌 AudioSeal 水印。
+        </p>
+      </DocsCard>
+
       <DocsCard title="注意事项" accent>
         <ul className="list-disc space-y-1 pl-5">
           <li>
