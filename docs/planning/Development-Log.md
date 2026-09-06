@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-06 · pending · docs(web) · 帮助文档补 WeClone 分身接入
+## 2026-09-06 · ac151fb · docs(web) · 帮助文档补 WeClone 分身接入
 
 帮助页新增「接入 WeClone 数字分身（可选）」卡：WeClone（聊天记录 LoRA 微调数字分身，AGPL-3.0 独立进程）训练后用 `weclone-cli server` 起 OpenAI 兼容服务（默认 127.0.0.1:8005/v1，模型名 gpt-3.5-turbo、Key 任意），在设置 → 模型设置以自定义供应商接入，对话/扮演可直接切换选用。注明 AGPL 边界与 AI 生成提醒。
 
