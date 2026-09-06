@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-06 · pending · docs(web) · 帮助文档补 VoiceStudio 本地配音接入
+## 2026-09-06 · 4f5a017 · docs(web) · 帮助文档补 VoiceStudio 本地配音接入
 
 帮助页新增「接入 VoiceStudio 本地配音（可选）」卡：VoiceStudio（全本地 TTS/ASR 套件，16 TTS 引擎，OpenAI 兼容 /v1/audio/speech，AGPL-3.0 独立进程）安装后把 SiliconFlow Base URL 指到 127.0.0.1:3900/v1、语音槽位填引擎 ID，即可把制作线配音换成本地引擎。注明三点：SiliconFlow 图像/视频与配音共用 Base URL 的临时性、默认 OmniVoice 权重 CC-BY-NC 禁商用、克隆须本人同意与 AudioSeal 水印。
 
