@@ -55,22 +55,16 @@ export function ChatSidebar({
   onDeleteThread: (threadId: string, name: string) => void;
 }) {
   const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
   const [tab, setTab] = useState<CreatorChatKind>('world');
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [rename, setRename] = useState<RenameState | null>(null);
   const syncedThreadId = useRef<string | undefined>(undefined);
-  const searchRef = useRef<HTMLInputElement | null>(null);
   const [desktop, setDesktop] = useState(false);
   const groups = filterProjectGroups(groupProjectsWithThreads(projects, threads), query);
 
   useEffect(() => {
     setDesktop(isDesktopApp());
   }, []);
-
-  useEffect(() => {
-    if (searching) searchRef.current?.focus();
-  }, [searching]);
 
   useEffect(() => {
     if (!threadId || threadId === syncedThreadId.current) return;
@@ -113,18 +107,6 @@ export function ChatSidebar({
 
   return (
     <aside className="flex h-full w-[268px] shrink-0 flex-col bg-[#f7f8fa]">
-      <div className="flex items-center gap-1 px-3 pt-3">
-        <span className="flex-1" />
-        <button
-          type="button"
-          className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-800"
-          aria-label="搜索对话"
-          onClick={() => setSearching((value) => !value)}
-        >
-          <IconSearch className="size-4" />
-        </button>
-      </div>
-
       <div className="px-3 pt-3">
         <button
           type="button"
@@ -181,17 +163,17 @@ export function ChatSidebar({
         />
       </div>
 
-      {searching && (
-        <div className="px-3 pt-3">
+      <div className="px-3 pt-3">
+        <label className="relative block">
+          <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-400" />
           <input
-            ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索项目或对话"
-            className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-[#4d6bfe]"
+            className="h-8 w-full rounded-lg border border-zinc-200 bg-white py-1 pl-8 pr-2 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-[#4d6bfe]"
           />
-        </div>
-      )}
+        </label>
+      </div>
 
       <nav className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="工作区列表">
         {groups.length === 0 ? (

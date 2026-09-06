@@ -45,12 +45,13 @@ export function CoPilotPanel({
       {showTitle ? (
         <div className="flex items-center gap-2">
           <span className="size-2 rounded-full bg-accent/80" aria-hidden />
-          <h3 className="text-sm font-medium text-zinc-700">副驾驶</h3>
+          <h3 className="text-sm font-medium text-zinc-700">{name}</h3>
           <Badge tone={stageMeta.tone}>{stageMeta.label}</Badge>
           <span className="text-xs text-zinc-600">建议性核对</span>
         </div>
       ) : (
         <div className="mb-2 flex items-center gap-2 px-1">
+          <p className="text-sm font-semibold text-zinc-900">{name}</p>
           <Badge tone={stageMeta.tone}>{stageMeta.label}</Badge>
           <span className="text-xs text-zinc-600">建议性核对</span>
         </div>

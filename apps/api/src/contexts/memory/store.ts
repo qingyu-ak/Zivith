@@ -145,6 +145,11 @@ export interface MemoryStore {
     messageId: string,
   ): Promise<{ id: string; content: string; projectId: string | null } | null>;
   upsertCore(input: UpsertCoreInput): Promise<void>;
+  findCore(id: string): Promise<MemoryCoreRecord | null>;
+  updateCore(
+    id: string,
+    patch: { content: string },
+  ): Promise<MemoryCoreRecord | null>;
   listCores(projectId: string): Promise<MemoryCoreRecord[]>;
   findAtomsByIds(ids: string[]): Promise<MemoryAtomRecord[]>;
   createConflict(input: CreateConflictInput): Promise<MemoryConflictRecord>;

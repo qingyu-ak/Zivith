@@ -34,6 +34,18 @@ export class NavigationHistory {
     return this.stack[this.index]!;
   }
 
+  /**
+   * 退出覆盖层（设置 / 帮助）：一直后退，直到落到 overlay 以外的页面。
+   * 栈里只剩覆盖层时返回 null，不把指针移出栈。
+   */
+  backLeaving(isOverlay: (path: string) => boolean): string | null {
+    while (this.canBack) {
+      const target = this.back();
+      if (target && !isOverlay(target)) return target;
+    }
+    return null;
+  }
+
   forward(): string | null {
     if (!this.canForward) return null;
     this.index += 1;

@@ -29,8 +29,19 @@ export function useCollapsedSidebar(key: SidebarKey, defaultCollapsed = false) {
     setCollapsed((current) => {
       const next = !current;
       window.localStorage.setItem(SIDEBAR_KEYS[key], next ? '1' : '0');
+      window.dispatchEvent(new Event('zivith-sidebar'));
       return next;
     });
+  }, [key]);
+
+  useEffect(() => {
+    function sync() {
+      const stored = window.localStorage.getItem(SIDEBAR_KEYS[key]);
+      if (stored === null) return;
+      setCollapsed(collapsedFromStorage(stored));
+    }
+    window.addEventListener('zivith-sidebar', sync);
+    return () => window.removeEventListener('zivith-sidebar', sync);
   }, [key]);
 
   return [collapsed, toggle] as const;

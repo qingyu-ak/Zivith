@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import Link from 'next/link';
 import { api, errorMessage } from '@/lib/api';
 import { settingsHrefFor } from '@/lib/creator-chat-nav';
+import { captureSettingsReturn } from '@/lib/settings-return';
 import {
   CHAT_EFFORT_HINT,
   CHAT_EFFORT_LABEL,
@@ -22,12 +23,22 @@ import {
   IconBrain,
   IconCheck,
   IconChevron,
+  IconClipboard,
   IconHand,
   IconPlus,
   IconSend,
+  IconShieldAlert,
+  IconShieldCheck,
   IconStatus,
   IconStop,
 } from '@/components/nav-icons';
+import {
+  AGENT_WRITE_MODE_HINT,
+  AGENT_WRITE_MODE_LABEL,
+  AGENT_WRITE_MODES,
+  writeStoredWriteMode,
+  type AgentWriteMode,
+} from '@/lib/agent-write-mode';
 
 type MenuKind = 'confirm' | 'usage' | 'model' | 'effort' | null;
 
@@ -61,6 +72,8 @@ export function ChatComposer({
   messageTexts,
   effort,
   onEffortChange,
+  writeMode,
+  onWriteModeChange,
   onChange,
   onSubmit,
   onStop,
@@ -76,6 +89,8 @@ export function ChatComposer({
   messageTexts: string[];
   effort: ChatEffort;
   onEffortChange: (effort: ChatEffort) => void;
+  writeMode: AgentWriteMode;
+  onWriteModeChange: (mode: AgentWriteMode) => void;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onStop?: () => void;
@@ -245,17 +260,42 @@ export function ChatComposer({
         <div className="relative">
           <button
             type="button"
-            className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs text-zinc-600 hover:bg-zinc-100"
+            className={`inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs hover:bg-zinc-100 ${
+              writeMode === 'full' ? 'text-amber-700' : 'text-zinc-600'
+            }`}
             aria-expanded={menu === 'confirm'}
+            aria-label={`写入模式：${AGENT_WRITE_MODE_LABEL[writeMode]}`}
             onClick={() => setMenu(menu === 'confirm' ? null : 'confirm')}
           >
-            <IconHand className="size-3.5" />
-            变更前确认
+            <WriteModeIcon mode={writeMode} />
+            {AGENT_WRITE_MODE_LABEL[writeMode]}
             <IconChevron className="size-3.5 text-zinc-400" />
           </button>
           {menu === 'confirm' ? (
-            <div className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-64 rounded-xl border border-zinc-200 bg-white p-3 text-xs leading-5 text-zinc-600 shadow-lg">
-              写入世界前必须确认提案。这是产品围栏，不能关掉。
+            <div className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-72 overflow-hidden rounded-2xl border border-zinc-200 bg-white py-1 shadow-lg">
+              {AGENT_WRITE_MODES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50"
+                  onClick={() => {
+                    onWriteModeChange(item);
+                    writeStoredWriteMode(item);
+                    setMenu(null);
+                  }}
+                >
+                  <span className={`mt-0.5 ${item === 'full' ? 'text-amber-600' : 'text-zinc-500'}`}>
+                    <WriteModeIcon mode={item} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{AGENT_WRITE_MODE_LABEL[item]}</span>
+                    <span className="mt-0.5 block text-[11px] font-normal text-zinc-400">
+                      {AGENT_WRITE_MODE_HINT[item]}
+                    </span>
+                  </span>
+                  {writeMode === item ? <IconCheck className="mt-0.5 size-4 shrink-0" /> : null}
+                </button>
+              ))}
             </div>
           ) : null}
         </div>
@@ -292,7 +332,14 @@ export function ChatComposer({
               </div>
               <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3">
                 <p className="text-zinc-500">项目用量</p>
-                <Link href={settingsHref} className="text-xs text-[#4d6bfe]" onClick={() => setMenu(null)}>
+                <Link
+                  href={settingsHref}
+                  className="text-xs text-[#4d6bfe]"
+                  onClick={() => {
+                    captureSettingsReturn();
+                    setMenu(null);
+                  }}
+                >
                   管理提供商
                 </Link>
               </div>
@@ -394,7 +441,10 @@ export function ChatComposer({
                 <Link
                   href={settingsHref}
                   className="block px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
-                  onClick={() => setMenu(null)}
+                  onClick={() => {
+                    captureSettingsReturn();
+                    setMenu(null);
+                  }}
                 >
                   管理模型
                 </Link>
@@ -460,6 +510,14 @@ export function ChatComposer({
       </div>
     </form>
   );
+}
+
+function WriteModeIcon({ mode }: { mode: AgentWriteMode }) {
+  const className = 'size-3.5';
+  if (mode === 'semi') return <IconShieldCheck className={className} />;
+  if (mode === 'plan') return <IconClipboard className={className} />;
+  if (mode === 'full') return <IconShieldAlert className={className} />;
+  return <IconHand className={className} />;
 }
 
 function UsageCell({ name, detail, ok }: { name: string; detail: string; ok: boolean }) {

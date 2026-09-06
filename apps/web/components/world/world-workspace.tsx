@@ -1,17 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { Badge, Spinner } from '@zivith/ui';
+import { useParams, useSearchParams } from 'next/navigation';
+import { Spinner } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
-import type { WorldLineItem, WorldResourcesDTO } from '@/lib/types';
+import type { WorldLineItem } from '@/lib/types';
 import {
   buildWorldLineModel,
   buildProductionLineModel,
   resolveDisplayDimensions,
   isPrimaryWorldline,
   countEventsBoundToDimension,
+  applyWorldLineView,
+  asWorldLineViewState,
+  defaultWorldLineView,
+  type WorldLineViewState,
 } from '@/lib/world-line';
+import { parseStudioSelect } from '@/lib/creator-chat-nav';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import {
   WORKSPACE_LAYOUT_KEYS,
@@ -19,27 +24,24 @@ import {
   usePersistedFlag,
   usePersistedPx,
 } from '@/lib/workspace-layout';
-import { IconPanelRight } from '@/components/nav-icons';
 import { WorldTimeline } from './world-timeline';
 import { WorldTimeBar } from './world-time-bar';
+import { WorldLineScopeBar } from './world-line-scope-bar';
 import { InspectorPanel } from './inspector-panel';
 import { CoPilotPanel } from './co-pilot-panel';
 import { MemoryPanel } from './memory-panel';
 import { NovelImportPanel } from './novel-import-panel';
-import { ContinueInChatButton } from './continue-in-chat';
 import { DockSection, ResizeHandle } from './workspace-split';
 import { useStudioSelection } from './studio-selection';
 
 export function WorldWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
-  const [resources, setResources] = useState<WorldResourcesDTO | null>(null);
-  // 选中态在 Studio 壳级（AppShell 的 StudioSelectionProvider）：Explorer 树与时间线/Inspector 共用。
-  const { selection, setSelection } = useStudioSelection();
-  const [view, setView] = useState<'world' | 'production'>('world');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const searchParams = useSearchParams();
+  const view = searchParams.get('line') === 'production' ? 'production' : 'world';
+  const { selection, setSelection, resources, loading, error, reload } = useStudioSelection();
   const [clipNotice, setClipNotice] = useState('');
   const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
+  const expandedForSelect = useRef(false);
   const [rightWidth, setRightWidth] = usePersistedPx(
     WORKSPACE_LAYOUT_KEYS.rightWidth,
     320,
@@ -55,32 +57,21 @@ export function WorldWorkspace() {
   const [copilotOpen, toggleCopilot] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.dockCopilot, true);
   const [memoryOpen, toggleMemory] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.dockMemory, false);
   const [importOpen, toggleImport] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.dockImport, false);
+  const [lineView, setLineView] = useState<WorldLineViewState | null>(null);
   const centerRef = useRef<HTMLElement | null>(null);
 
-  function switchView(next: 'world' | 'production') {
-    setView(next);
-    setSelection(
-      next === 'world' && resources
-        ? { kind: 'project', id: resources.project.id }
-        : null,
-    );
-  }
+  const load = useCallback(
+    async (options?: { silent?: boolean }) => {
+      await reload(options);
+    },
+    [reload],
+  );
 
-  const load = useCallback(async (options?: { silent?: boolean }) => {
-    if (!options?.silent) {
-      setLoading(true);
-      setError('');
-    }
-    try {
-      const value = await api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`);
-      setResources(value);
-    } catch (reason) {
-      if (options?.silent) throw reason;
-      setError(errorMessage(reason));
-    } finally {
-      if (!options?.silent) setLoading(false);
-    }
-  }, [projectId]);
+  useEffect(() => {
+    if (!parseStudioSelect(searchParams) || expandedForSelect.current || !rightCollapsed) return;
+    expandedForSelect.current = true;
+    toggleRight();
+  }, [searchParams, rightCollapsed, toggleRight]);
 
   async function commitClip(item: WorldLineItem, start: number, end: number) {
     setClipNotice('');
@@ -105,10 +96,6 @@ export function WorldWorkspace() {
   }
 
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
     if (!resources || resources.project.id !== projectId) return;
     if (view !== 'world') return;
     setSelection((current) => current ?? { kind: 'project', id: resources.project.id });
@@ -122,14 +109,42 @@ export function WorldWorkspace() {
     () => (resources ? buildProductionLineModel(resources) : null),
     [resources],
   );
-  const model = view === 'world' ? worldModel : productionModel;
 
-  const entityCount = resources
-    ? resources.entities.characters.length +
-      resources.entities.locations.length +
-      resources.entities.scenes.length +
-      resources.entities.world_events.length
-    : 0;
+  useEffect(() => {
+    if (!worldModel || !resources) return;
+    const key = `zivith.worldLineView.${resources.project.id}`;
+    let stored: unknown = null;
+    try {
+      stored = JSON.parse(window.localStorage.getItem(key) ?? 'null');
+    } catch {
+      stored = null;
+    }
+    setLineView(
+      asWorldLineViewState(
+        stored,
+        worldModel.scaleDomain,
+        resources.entities.characters.length,
+      ),
+    );
+  }, [worldModel, resources]);
+
+  function updateLineView(next: WorldLineViewState) {
+    setLineView(next);
+    if (!resources) return;
+    window.localStorage.setItem(
+      `zivith.worldLineView.${resources.project.id}`,
+      JSON.stringify(next),
+    );
+  }
+
+  const filteredWorldModel = useMemo(() => {
+    if (!worldModel || !resources) return null;
+    const view =
+      lineView ??
+      defaultWorldLineView(worldModel.scaleDomain, resources.entities.characters.length);
+    return applyWorldLineView(worldModel, resources, view);
+  }, [worldModel, resources, lineView]);
+  const model = view === 'world' ? filteredWorldModel : productionModel;
 
   const dimensions = resources ? resolveDisplayDimensions(resources) : [];
   const focusedDimension =
@@ -139,9 +154,6 @@ export function WorldWorkspace() {
   const boundEventCount = focusedDimension
     ? countEventsBoundToDimension(resources?.entities.world_events ?? [], focusedDimension.id)
     : 0;
-  const dimensionCaption = (focusedDimension ? [focusedDimension] : dimensions)
-    .map((dimension) => dimension.label)
-    .join(' / ');
 
   if (loading) {
     return (
@@ -184,78 +196,11 @@ export function WorldWorkspace() {
 
   return (
     <div className="flex h-[calc(100dvh-2.75rem)] flex-col">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-zinc-900">{resources.project.name}</h1>
-            <Badge tone="neutral">v1</Badge>
-          </div>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            {view === 'world'
-              ? `${focusedDimension ? `叠层「${dimensionCaption}」` : `世界时间「${dimensionCaption}」`} · 呈现顺序主轴 · ${entityCount} 个实体 · ${model.relationships.length} 条关系${
-                  (resources.conflicts ?? []).length > 0
-                    ? ` · ${resources.conflicts?.length} 处冲突`
-                    : ''
-                }`
-              : `${resources.entities.stories.length} 个故事 · ${resources.entities.scenes.length} 个场景 · ${(resources.entities.shots ?? []).length} 个镜头 · 派生机位/风格/提示词/模型轨`}
-          </p>
-          {clipNotice ? (
-            <p className="mt-1 text-xs text-red-600" role="alert">
-              轨道未能保存：{clipNotice}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className={`grid size-8 place-items-center rounded-lg border border-line transition ${
-              rightCollapsed ? 'text-zinc-400 hover:text-zinc-700' : 'bg-white text-zinc-800'
-            }`}
-            aria-label={rightCollapsed ? '展开右侧栏' : '收起右侧栏'}
-            aria-pressed={!rightCollapsed}
-            onClick={toggleRight}
-          >
-            <IconPanelRight className="size-4" />
-          </button>
-          <div
-            className="flex rounded-lg border border-line bg-zinc-100 p-0.5"
-            role="tablist"
-            aria-label="视图切换"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === 'world'}
-              onClick={() => switchView('world')}
-              className={`rounded-md px-3 py-1 text-xs transition ${
-                view === 'world'
-                  ? 'bg-white text-zinc-900 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-700'
-              }`}
-            >
-              世界
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === 'production'}
-              onClick={() => switchView('production')}
-              className={`rounded-md px-3 py-1 text-xs transition ${
-                view === 'production'
-                  ? 'bg-white text-zinc-900 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-700'
-              }`}
-            >
-              创作线
-            </button>
-          </div>
-          <ContinueInChatButton
-            projectId={resources.project.id}
-            label="← 回到创作聊天"
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50"
-          />
-        </div>
-      </header>
+      {clipNotice ? (
+        <p className="shrink-0 border-b border-red-200 bg-red-50 px-5 py-1.5 text-xs text-red-600" role="alert">
+          轨道未能保存：{clipNotice}
+        </p>
+      ) : null}
 
       <div className="flex min-h-0 flex-1">
         {/* 实体树在 Studio 壳（AppShell）左侧；这里只保留时间线/创作线与右侧面板 */}
@@ -271,6 +216,19 @@ export function WorldWorkspace() {
                   setSelection({ kind: 'dimension', id: dimension.id })
                 }
                 onUpdated={() => void load()}
+              />
+              <WorldLineScopeBar
+                view={
+                  lineView ??
+                  defaultWorldLineView(
+                    worldModel?.scaleDomain ?? { min: 0, max: 1 },
+                    resources.entities.characters.length,
+                  )
+                }
+                domain={worldModel?.scaleDomain ?? { min: 0, max: 1 }}
+                characterCount={resources.entities.characters.length}
+                sceneCount={resources.entities.scenes.length}
+                onChange={updateLineView}
               />
               {focusedDimension ? (
                 <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-4 py-2 text-xs leading-5 text-violet-950">
@@ -309,15 +267,34 @@ export function WorldWorkspace() {
                 focusedIsPrimary={focusedDimension ? isPrimaryWorldline(focusedDimension) : true}
                 onClipCommit={commitClip}
               />
+            ) : worldModel && !worldModel.tracks.every((track) => track.items.length === 0) ? (
+              <div className="grid h-full place-items-center">
+                <div className="max-w-sm text-center">
+                  <p className="text-zinc-400">这一段没有可显示的条目。</p>
+                  <p className="mt-3 text-sm text-zinc-500">放宽章范围，或改回「全部」角色/场景。</p>
+                  <button
+                    type="button"
+                    className="mt-4 rounded-lg border border-line px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
+                    onClick={() =>
+                      updateLineView(
+                        defaultWorldLineView(
+                          worldModel.scaleDomain,
+                          resources.entities.characters.length,
+                        ),
+                      )
+                    }
+                  >
+                    回到总览
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="grid h-full place-items-center">
                 <div className="max-w-sm text-center">
                   <p className="text-zinc-400">这个世界还没有任何世界线条目。</p>
-                  <ContinueInChatButton
-                    projectId={resources.project.id}
-                    label="去创作聊天引导创建角色、场景与事件 →"
-                    className="mt-3 inline-block text-sm text-accent hover:underline disabled:opacity-50"
-                  />
+                  <p className="mt-3 text-sm text-zinc-500">
+                    左侧树点「+ 新建」补角色、场景、事件；也可以用顶栏 Chat 口述创建。
+                  </p>
                 </div>
               </div>
             )}
@@ -338,7 +315,15 @@ export function WorldWorkspace() {
               </DockSection>
             )}
             <DockSection title="长期记忆" open={memoryOpen} onToggle={toggleMemory}>
-              <MemoryPanel projectId={projectId} showTitle={false} />
+              <MemoryPanel
+                projectId={projectId}
+                showTitle={false}
+                focusTopic={
+                  selection?.kind === 'character'
+                    ? resources.entities.characters.find((item) => item.id === selection.id)?.name
+                    : undefined
+                }
+              />
             </DockSection>
             <DockSection title="导入小说" open={importOpen} onToggle={toggleImport}>
               <NovelImportPanel

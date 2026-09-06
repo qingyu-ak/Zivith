@@ -96,6 +96,7 @@ class FakeStore implements MemoryStore {
     return { id: messageId, content: '林澈性格冷静。', projectId: 'p1' };
   }
   async upsertCore(input: {
+    projectId?: string;
     kind: string;
     topic: string;
     content: string;
@@ -120,6 +121,17 @@ class FakeStore implements MemoryStore {
       sourceAtomIds: input.sourceAtomIds,
       updatedAt: new Date(),
     });
+  }
+  async findCore(id: string) {
+    return this.cores.find((core) => core.id === id) ?? null;
+  }
+  async updateCore(id: string, patch: { content: string }) {
+    const core = this.cores.find((item) => item.id === id);
+    if (!core) return null;
+    core.content = patch.content;
+    core.version += 1;
+    core.updatedAt = new Date();
+    return core;
   }
   async listCores(projectId: string) {
     return this.cores.filter((core) => core.projectId === projectId);
@@ -390,6 +402,37 @@ describe('MemoryService.processRefine（深加工）', () => {
     expect(store.cores[0]).toMatchObject({ kind: 'persona', topic: '林澈' });
     expect(store.cores[0]!.content).toContain('冷静');
     expect(store.pipelineStates.get('m1')?.status).toBe('done');
+  });
+
+  it('patches a persona archive by id without changing topic', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    await store.upsertCore({
+      projectId: 'p1',
+      kind: 'persona',
+      topic: '酒德麻衣',
+      content: '出场：34 章，提及 294 次',
+      sourceAtomIds: [],
+    });
+    const updated = await service.patchCore('p1', 'core-1', '酒德麻衣记得自己是混血种。');
+    expect(updated).toMatchObject({
+      id: 'core-1',
+      topic: '酒德麻衣',
+      content: '酒德麻衣记得自己是混血种。',
+      version: 2,
+    });
+  });
+
+  it('creates a persona archive when the character has none', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    const created = await service.saveCore('p1', {
+      kind: 'persona',
+      topic: '路明非',
+      content: '路明非是废柴主角。',
+    });
+    expect(created.topic).toBe('路明非');
+    expect(store.cores).toHaveLength(1);
   });
 
   it('is idempotent (second run is a no-op)', async () => {

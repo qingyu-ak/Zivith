@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { navigationHistoryFor } from '@/lib/navigation-history';
 import { IconArrowLeft, IconArrowRight, IconSidebar } from './nav-icons';
 
@@ -12,27 +12,32 @@ import { IconArrowLeft, IconArrowRight, IconSidebar } from './nav-icons';
 export function TopBar({
   surface,
   onToggleSidebar,
+  menus,
   middle,
   right,
 }: {
   surface: 'chat' | 'studio';
   onToggleSidebar?: () => void;
+  /** logo 右侧菜单（Studio：文件 / 编辑 / 视图 / 设置 / 帮助）。 */
+  menus?: ReactNode;
   /** 前进/后退右侧、拖动空白之前的区域（Studio：项目切换）。 */
   middle?: ReactNode;
-  /** 顶栏最右（Chat：Studio 跳转；Studio：制作 / 设置 / Chat）。 */
+  /** 顶栏最右（Chat：Studio 跳转；Studio：制作 / Chat）。 */
   right?: ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const [canBack, setCanBack] = useState(false);
   const [canForward, setCanForward] = useState(false);
+  const locationKey = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
   useEffect(() => {
     const history = navigationHistoryFor(surface);
-    history.push(pathname);
+    history.push(locationKey);
     setCanBack(history.canBack);
     setCanForward(history.canForward);
-  }, [pathname, surface]);
+  }, [locationKey, surface]);
 
   function goBack() {
     const target = navigationHistoryFor(surface).back();
@@ -49,6 +54,7 @@ export function TopBar({
       className="sticky top-0 z-40 flex h-11 shrink-0 items-center gap-1 border-b border-line bg-[#f7f8fa] px-2 select-none [-webkit-app-region:drag]"
       style={{
         paddingLeft: 'max(0.5rem, env(titlebar-area-x, 0.5rem))',
+        width: 'env(titlebar-area-width, 100%)',
         height: 'env(titlebar-area-height, 2.75rem)',
       }}
     >
@@ -61,6 +67,7 @@ export function TopBar({
         title="Zivith"
         className="mx-1 size-4 shrink-0 rounded [-webkit-app-region:no-drag]"
       />
+      {menus ? <div className="flex min-w-0 items-center [-webkit-app-region:no-drag]">{menus}</div> : null}
       <TopBarButton
         label="上一步"
         disabled={!canBack}

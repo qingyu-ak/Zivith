@@ -40,6 +40,24 @@ describe('NavigationHistory', () => {
     expect(history.current).toBe('/a');
   });
 
+  it('backLeaving 跳过覆盖层，落到进入前的页面', () => {
+    const history = new NavigationHistory();
+    history.push('/projects/p1/world');
+    history.push('/projects/p1/settings');
+    history.push('/projects/p1/settings?section=models');
+    expect(history.backLeaving((path) => path.includes('/settings'))).toBe('/projects/p1/world');
+    expect(history.current).toBe('/projects/p1/world');
+    expect(history.canForward).toBe(true);
+  });
+
+  it('backLeaving 在只有覆盖层时返回 null', () => {
+    const history = new NavigationHistory();
+    history.push('/projects/p1/settings');
+    history.push('/projects/p1/settings?section=models');
+    expect(history.backLeaving((path) => path.includes('/settings'))).toBeNull();
+    expect(history.current).toBe('/projects/p1/settings');
+  });
+
   it('Chat 与 Studio 分栈：在 Chat 走两线程再进 Studio，Chat 的 back 不会落到 Studio 页面', () => {
     const chat = navigationHistoryFor('chat');
     const studio = navigationHistoryFor('studio');

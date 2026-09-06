@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-09-06 · pending · feat(web,api) · Studio 菜单栏 + L2 档案编辑 + Agent 侧栏（两股工作合并提交）
+
+app-shell / chat-panel 两股改动交织，合并为一笔。①（Grok-A）Studio 顶部菜单栏（文件/编辑/视图/设置/帮助，无假菜单）、L2 核心块新建与编辑（`saveCore`/`patchCore` 路由 + 记忆面板编辑 + 测试）、资源加载收编壳级 provider、`?select=` 深链、`backLeaving` 覆盖层后退、实体创建流、写入模式说明。②（ZCode-A）Agent 侧栏面板（类 Cursor）：壳级右侧 380px 可收起面板，内嵌当前项目世界构建者对话——`resolveThreadForProject` 解析线程、SSE 流式、提案卡就地确认（`parseProposals` 抽到 `lib/chat-proposals.ts` 共用）、选中实体自动作为 focus、努力程度选择；顶栏星形按钮开关，状态持久化。
+
+- **feat(web)** `studio-agent-panel.tsx`、`lib/chat-proposals.ts`（+测试）、app-shell 挂载与开关
+- **feat(web,api)** 菜单栏 `studio-menu-bar.tsx`、L2 编辑路由与面板、`agent-write-mode`、`character-archive`、`settings-return` 等
+- 模块：详见提交文件清单（app-shell / chat-panel / memory 链路 / world 组件为两股交织）
+
 ## 2026-09-06 · 4f5a017 · docs(web) · 帮助文档补 VoiceStudio 本地配音接入
 
 帮助页新增「接入 VoiceStudio 本地配音（可选）」卡：VoiceStudio（全本地 TTS/ASR 套件，16 TTS 引擎，OpenAI 兼容 /v1/audio/speech，AGPL-3.0 独立进程）安装后把 SiliconFlow Base URL 指到 127.0.0.1:3900/v1、语音槽位填引擎 ID，即可把制作线配音换成本地引擎。注明三点：SiliconFlow 图像/视频与配音共用 Base URL 的临时性、默认 OmniVoice 权重 CC-BY-NC 禁商用、克隆须本人同意与 AudioSeal 水印。

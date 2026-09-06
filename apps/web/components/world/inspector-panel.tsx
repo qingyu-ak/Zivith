@@ -16,6 +16,8 @@ import type {
 import { api, errorMessage } from '@/lib/api';
 import { RoleplayLaunchButton } from '@/components/creator-chat/roleplay-launch';
 import { focusFromSelection } from '@/lib/creator-chat-nav';
+import { CharacterArchive } from './character-archive';
+import { useStudioSelection } from './studio-selection';
 import {
   canonicalizeWorldTimeMode,
   DIMENSION_KIND_LABEL,
@@ -504,6 +506,7 @@ export function InspectorPanel({
   onSelect?: (selection: Exclude<WorldSelection, null>) => void;
   onUpdated?: () => void;
 }) {
+  const { pendingEditKey, consumeBeginEditing } = useStudioSelection();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -513,6 +516,15 @@ export function InspectorPanel({
     setEditing(false);
     setEditError('');
   }, [selection]);
+
+  useEffect(() => {
+    if (!selection || !pendingEditKey) return;
+    if (pendingEditKey === `${selection.kind}:${selection.id}`) {
+      setEditing(true);
+      return;
+    }
+    consumeBeginEditing();
+  }, [pendingEditKey, selection, consumeBeginEditing]);
 
   useEffect(() => {
     if (!selection) return;
@@ -528,6 +540,7 @@ export function InspectorPanel({
     setEditError('');
     try {
       await persistSelection(resources, selection, draft);
+      consumeBeginEditing();
       setEditing(false);
       onUpdated?.();
     } catch (reason) {
@@ -551,7 +564,10 @@ export function InspectorPanel({
           () => {
             void save();
           },
-          () => setEditing(false),
+          () => {
+            consumeBeginEditing();
+            setEditing(false);
+          },
         )
       : renderReadonly(selection, resources);
     if (!detail) {
@@ -622,6 +638,19 @@ export function InspectorPanel({
               />
             ) : null}
             {detail}
+            {selection.kind === 'character' &&
+            resources.entities.characters.some((item) => item.id === selection.id) ? (
+              <CharacterArchive
+                projectId={resources.project.id}
+                characterId={selection.id}
+                characterName={
+                  resources.entities.characters.find((item) => item.id === selection.id)?.name ??
+                  ''
+                }
+                resources={resources}
+                onSelect={onSelect}
+              />
+            ) : null}
           </>
         ) : view === 'production' ? (
           <div className="px-4 pb-6">

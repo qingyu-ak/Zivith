@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { IconArrowLeft } from '@/components/nav-icons';
+import {
+  STUDIO_SURFACE,
+  navigationHistoryFor,
+} from '@/lib/navigation-history';
+import { clearSettingsReturn, readSettingsReturn } from '@/lib/settings-return';
 import { ModelSettings } from '@/components/model-settings';
 import { ModelVisibilityList } from '@/components/model-visibility';
 import { UsageSummaryCard } from '@/components/usage-summary-card';
@@ -14,8 +20,19 @@ import {
   writeStoredEffort,
   type ChatEffort,
 } from '@/lib/chat-composer';
+import {
+  AGENT_WRITE_MODE_HINT,
+  AGENT_WRITE_MODE_LABEL,
+  AGENT_WRITE_MODES,
+  asAgentWriteMode,
+  readStoredWriteMode,
+  writeStoredWriteMode,
+  type AgentWriteMode,
+} from '@/lib/agent-write-mode';
+import { api } from '@/lib/api';
+import type { WriteLogItemDTO } from '@/lib/types';
 
-type SettingsSection = 'general' | 'appearance' | 'models' | 'memory' | 'usage';
+type SettingsSection = 'general' | 'appearance' | 'models' | 'memory' | 'writes' | 'usage';
 
 function parseSection(raw: string | null | undefined): SettingsSection | null {
   if (
@@ -23,6 +40,7 @@ function parseSection(raw: string | null | undefined): SettingsSection | null {
     raw === 'appearance' ||
     raw === 'models' ||
     raw === 'memory' ||
+    raw === 'writes' ||
     raw === 'usage'
   ) {
     return raw;
@@ -50,7 +68,10 @@ const NAV: Array<{ group: string; items: Array<{ id: SettingsSection; label: str
   },
   {
     group: 'Agent 能力',
-    items: [{ id: 'memory', label: '记忆' }],
+    items: [
+      { id: 'memory', label: '记忆' },
+      { id: 'writes', label: '修改记录' },
+    ],
   },
   {
     group: '数据统计',
@@ -80,9 +101,30 @@ export default function SettingsPage() {
     router.replace(`/projects/${projectId}/settings?section=${id}`, { scroll: false });
   }
 
+  function leaveSettings() {
+    const origin = readSettingsReturn();
+    if (origin) {
+      clearSettingsReturn();
+      router.push(origin);
+      return;
+    }
+    const previous = navigationHistoryFor(STUDIO_SURFACE).backLeaving((path) =>
+      path.includes('/settings'),
+    );
+    router.push(previous ?? `/projects/${projectId}/world`);
+  }
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 p-5 sm:flex-row sm:p-8">
       <aside className="w-full shrink-0 sm:w-48">
+        <button
+          type="button"
+          className="mb-3 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-sm text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
+          onClick={leaveSettings}
+        >
+          <IconArrowLeft className="size-4" />
+          返回
+        </button>
         <h1 className="text-lg font-semibold text-zinc-900">设置</h1>
         <nav className="mt-4 grid gap-4" aria-label="设置分组">
           {NAV.map((group) => (
@@ -130,6 +172,7 @@ export default function SettingsPage() {
           </div>
         ) : null}
         {section === 'memory' ? <MemorySection projectId={projectId} /> : null}
+        {section === 'writes' ? <WritesSection projectId={projectId} /> : null}
         {section === 'usage' ? (
           <div>
             <h2 className="text-base font-semibold text-zinc-900">使用统计</h2>
@@ -144,14 +187,16 @@ export default function SettingsPage() {
   );
 }
 
-/** 常规：真实偏好。变更前确认是产品围栏，锁定开启。 */
+/** 常规：写入策略与默认努力程度。 */
 function GeneralSection() {
   const [effort, setEffort] = useState<ChatEffort>('balanced');
-  const [effortReady, setEffortReady] = useState(false);
+  const [writeMode, setWriteMode] = useState<AgentWriteMode>('confirm');
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     setEffort(readStoredEffort());
-    setEffortReady(true);
+    setWriteMode(readStoredWriteMode());
+    setReady(true);
   }, []);
 
   return (
@@ -159,11 +204,32 @@ function GeneralSection() {
       <h2 className="text-base font-semibold text-zinc-900">常规</h2>
       <div className="mt-4 grid gap-3">
         <SettingRow
-          title="变更前确认"
-          description="写入世界前必须确认提案。这是产品围栏，不能关闭。"
+          title="Agent 写入模式"
+          description="Agent 可以改 IP Core 与 Studio 里的世界实体。写入会留下提案记录；删除项目等高危操作始终询问。"
         >
-          <LockedOnSwitch label="变更前确认（始终开启）" />
+          <select
+            className="w-44 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400"
+            value={writeMode}
+            disabled={!ready}
+            aria-label="Agent 写入模式"
+            onChange={(event) => {
+              const next = asAgentWriteMode(event.target.value);
+              setWriteMode(next);
+              writeStoredWriteMode(next);
+            }}
+          >
+            {AGENT_WRITE_MODES.map((item) => (
+              <option key={item} value={item}>
+                {AGENT_WRITE_MODE_LABEL[item]}
+              </option>
+            ))}
+          </select>
         </SettingRow>
+        <p className="-mt-1 px-1 text-xs leading-5 text-zinc-500">
+          {AGENT_WRITE_MODE_HINT[writeMode]}
+          {' '}
+          记忆冲突仍以内联卡确认，不会随写入模式自动覆盖。
+        </p>
         <SettingRow
           title="默认努力程度"
           description="新对话默认使用的思考深度；对话内可随时切换。"
@@ -171,7 +237,7 @@ function GeneralSection() {
           <select
             className="w-40 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400"
             value={effort}
-            disabled={!effortReady}
+            disabled={!ready}
             aria-label="默认努力程度"
             onChange={(event) => {
               const next = asChatEffort(event.target.value);
@@ -226,7 +292,7 @@ function MemorySection({ projectId }: { projectId: string }) {
         <li className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
           <p className="font-medium">记忆面板（L1 原子 / L2 核心块）</p>
           <p className="mt-1 text-sm text-zinc-500">
-            在世界工作区右侧查看、删除记忆，展开 L2 核心块溯源。
+            选中角色后，右侧「全书档案」可改扮演会读的记忆。下方记忆面板也能编辑 L2。
           </p>
           <Link
             href={`/projects/${projectId}/world`}
@@ -236,6 +302,65 @@ function MemorySection({ projectId }: { projectId: string }) {
           </Link>
         </li>
       </ul>
+    </div>
+  );
+}
+
+function WritesSection({ projectId }: { projectId: string }) {
+  const [items, setItems] = useState<WriteLogItemDTO[] | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<{ items: WriteLogItemDTO[] }>(`/world/projects/${projectId}/write-log`)
+      .then((value) => {
+        if (!cancelled) setItems(value.items ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setItems([]);
+          setError('暂时无法读取修改记录');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  return (
+    <div>
+      <h2 className="text-base font-semibold text-zinc-900">修改记录</h2>
+      <p className="mt-1 text-sm text-zinc-500">
+        已写入世界的提案会留在这里，也可在对应对话里查看。实体修订会写入历史；按修订一键回退尚未做成按钮。删除项目始终确认，且为软删。
+      </p>
+      {error ? (
+        <p className="mt-4 text-sm text-red-500" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {items === null ? (
+        <p className="mt-4 text-sm text-zinc-400">加载中…</p>
+      ) : items.length === 0 ? (
+        <p className="mt-4 text-sm text-zinc-500">还没有写入记录。确认或自动落库后会出现在这里。</p>
+      ) : (
+        <ul className="mt-4 grid gap-2">
+          {items.map((item) => (
+            <li key={item.id} className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+              <p className="text-sm text-zinc-800">{item.summary || '世界写入'}</p>
+              <p className="mt-1 text-xs text-zinc-400">
+                {new Date(item.created_at).toLocaleString('zh-CN')}
+                {item.thread_title ? ` · ${item.thread_title}` : ''}
+              </p>
+              <Link
+                href={`/creator-chats/${item.thread_id}`}
+                className="mt-2 inline-block text-sm text-[#4d6bfe] hover:underline"
+              >
+                在对话中查看 →
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -257,22 +382,5 @@ function SettingRow({
       </div>
       <div className="shrink-0">{children}</div>
     </div>
-  );
-}
-
-/** 锁定开启的开关：展示为强制开启、不可关闭。 */
-function LockedOnSwitch({ label }: { label: string }) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <span
-        role="switch"
-        aria-checked
-        aria-label={label}
-        className="relative inline-flex h-5 w-9 items-center rounded-full bg-emerald-500 opacity-70"
-      >
-        <span className="absolute right-0.5 size-4 rounded-full bg-white shadow" />
-      </span>
-      <span className="text-[11px] text-zinc-400">强制开启</span>
-    </span>
   );
 }

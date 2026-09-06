@@ -867,6 +867,53 @@ async function chatThreadDtos(
   );
 }
 
+const PROPOSAL_KIND_LABEL: Record<string, string> = {
+  create_project: '项目',
+  create_world_event: '事件',
+  create_character: '角色',
+  create_location: '地点',
+  create_scene: '场景',
+  create_relationship: '关系',
+  update_entity: '更新',
+};
+
+function proposalItemName(payload: Record<string, unknown>): string {
+  const fields = payload.fields;
+  const fromFields =
+    typeof fields === 'object' && fields !== null
+      ? (() => {
+          const record = fields as Record<string, unknown>;
+          const name = record.name;
+          const title = record.title;
+          if (typeof name === 'string' && name.trim()) return name.trim();
+          if (typeof title === 'string' && title.trim()) return title.trim();
+          return null;
+        })()
+      : null;
+  for (const key of ['name', 'title', 'label'] as const) {
+    const value = payload[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return fromFields ?? '未命名';
+}
+
+function summarizeProposals(raw: unknown): string {
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const parts: string[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const kind = typeof record.kind === 'string' ? record.kind : '';
+    const payload =
+      record.payload && typeof record.payload === 'object'
+        ? (record.payload as Record<string, unknown>)
+        : {};
+    const label = PROPOSAL_KIND_LABEL[kind] ?? kind ?? '写入';
+    parts.push(`${label}「${proposalItemName(payload)}」`);
+  }
+  return parts.join(' · ');
+}
+
 function chatMessageDto(message: {
   id: string;
   threadId: string;
@@ -1167,6 +1214,29 @@ function registerCreatorChatRoutes(
       projectName: project.name,
       workspacePath: project.workspacePath,
     }));
+  });
+
+  app.get('/projects/:projectId/write-log', async (request) => {
+    const { projectId } = projectParams.parse(request.params);
+    await requireProject(db, projectId);
+    const messages = await db.creatorChatMessage.findMany({
+      where: {
+        proposalState: 'applied',
+        thread: { projectId },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { thread: { select: { id: true, title: true } } },
+    });
+    return {
+      items: messages.map((message) => ({
+        id: message.id,
+        thread_id: message.threadId,
+        thread_title: message.thread.title,
+        created_at: message.createdAt.toISOString(),
+        summary: summarizeProposals(message.proposal),
+      })),
+    };
   });
 
   // Local single user (ADR-0013): list every active thread with its project name.

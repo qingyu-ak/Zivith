@@ -26,8 +26,7 @@ import {
   MEMORY_REFINE_SYSTEM_PROMPT,
   memoryRefineSchema,
 } from './pipeline.js';
-import type { MemoryStore } from './store.js';
-import type { MemoryConflictRecord } from './store.js';
+import type { MemoryConflictRecord, MemoryCoreRecord, MemoryStore } from './store.js';
 
 export interface MemoryServiceDeps {
   store: MemoryStore;
@@ -418,6 +417,41 @@ export class MemoryService {
 
   async listCores(projectId: string) {
     return this.deps.store.listCores(projectId);
+  }
+
+  async saveCore(
+    projectId: string,
+    input: { kind: string; topic: string; content: string },
+  ): Promise<MemoryCoreRecord> {
+    const content = input.content.trim();
+    if (!content) throw new ApiError(400, 'EMPTY_CORE', '档案内容不能为空');
+    const existing = (await this.deps.store.listCores(projectId)).find(
+      (core) => core.kind === input.kind && core.topic === input.topic,
+    );
+    await this.deps.store.upsertCore({
+      projectId,
+      kind: input.kind,
+      topic: input.topic.trim(),
+      content,
+      sourceAtomIds: existing?.sourceAtomIds ?? [],
+    });
+    const saved = (await this.deps.store.listCores(projectId)).find(
+      (core) => core.kind === input.kind && core.topic === input.topic,
+    );
+    if (!saved) throw new ApiError(500, 'CORE_SAVE_FAILED', '档案未能保存');
+    return saved;
+  }
+
+  async patchCore(projectId: string, coreId: string, content: string): Promise<MemoryCoreRecord> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new ApiError(400, 'EMPTY_CORE', '档案内容不能为空');
+    const existing = await this.deps.store.findCore(coreId);
+    if (!existing || existing.projectId !== projectId) {
+      throw new ApiError(404, 'CORE_NOT_FOUND', '核心记忆不存在');
+    }
+    const updated = await this.deps.store.updateCore(coreId, { content: trimmed });
+    if (!updated) throw new ApiError(404, 'CORE_NOT_FOUND', '核心记忆不存在');
+    return updated;
   }
 
   /** 记忆面板 L2 展开溯源：核心块 + 其源原子内容。 */

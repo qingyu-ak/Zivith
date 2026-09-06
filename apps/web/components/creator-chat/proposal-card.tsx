@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { Badge } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
 import type { ApplyProposalResultDTO, ProposalKind } from '@/lib/types';
+import type { ChatProposal } from '@/lib/chat-proposals';
+
+export type { ChatProposal };
 
 const KIND_LABEL: Record<ProposalKind, string> = {
   create_project: '项目',
@@ -15,11 +18,6 @@ const KIND_LABEL: Record<ProposalKind, string> = {
   create_relationship: '关系',
   update_entity: '更新',
 };
-
-export interface ChatProposal {
-  kind: ProposalKind;
-  payload: Record<string, unknown>;
-}
 
 function pick(payload: Record<string, unknown>, key: string): string | null {
   const value = payload[key];
@@ -52,6 +50,8 @@ export function ProposalCard({
   proposals,
   applied,
   rejected,
+  executeLabel = '确认',
+  plan = false,
   onApplied,
   onRejected,
 }: {
@@ -60,6 +60,8 @@ export function ProposalCard({
   proposals: ChatProposal[];
   applied?: boolean;
   rejected?: boolean;
+  executeLabel?: string;
+  plan?: boolean;
   onApplied?: (results: ApplyProposalResultDTO[]) => void;
   onRejected?: () => void;
 }) {
@@ -119,6 +121,9 @@ export function ProposalCard({
 
   return (
     <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+      {plan && !done && !skippedProposal ? (
+        <p className="pb-1 text-[11px] text-zinc-500">计划不会自动写入。确认后再落到世界。</p>
+      ) : null}
       <div className="flex items-center gap-2">
         <p className="min-w-0 flex-1 truncate text-sm text-zinc-700">{summary}</p>
         {!done && !skippedProposal && (
@@ -129,7 +134,7 @@ export function ProposalCard({
               disabled={busy}
               onClick={() => void apply()}
             >
-              {busy ? '写入…' : '确认'}
+              {busy ? '写入…' : executeLabel}
             </button>
             <button
               type="button"

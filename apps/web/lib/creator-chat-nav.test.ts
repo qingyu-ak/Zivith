@@ -10,6 +10,8 @@ import {
   parseFocusFromSearch,
   settingsHrefFor,
   studioHrefForChat,
+  studioHrefForEntity,
+  parseStudioSelect,
   chatHrefForStudio,
 } from './creator-chat-nav';
 import type { WorldResourcesDTO } from './types';
@@ -148,6 +150,18 @@ describe('shell jump hrefs', () => {
     expect(studioHrefForChat('p1')).toBe('/projects/p1/world');
     expect(studioHrefForChat(null)).toBe('/projects');
     expect(studioHrefForChat(undefined)).toBe('/projects');
+  });
+
+  it('studioHrefForEntity / parseStudioSelect 把角色卡带到 Inspector', () => {
+    expect(studioHrefForEntity('p1', { kind: 'character', id: 'c1' })).toBe(
+      '/projects/p1/world?select=character&entity=c1',
+    );
+    expect(parseStudioSelect(new URLSearchParams('select=character&entity=c1'))).toEqual({
+      kind: 'character',
+      id: 'c1',
+    });
+    expect(parseStudioSelect(new URLSearchParams('select=shot&entity=s1'))).toBeNull();
+    expect(parseStudioSelect(new URLSearchParams('select=character'))).toBeNull();
   });
 
   it('chatHrefForStudio: 已知线程进线程，否则回对话首页', () => {

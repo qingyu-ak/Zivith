@@ -7,6 +7,7 @@ export const WORKSPACE_LAYOUT_KEYS = {
   dockCopilot: 'zivith.worldDockCopilotOpen',
   dockMemory: 'zivith.worldDockMemoryOpen',
   dockImport: 'zivith.worldDockImportOpen',
+  agentPanelOpen: 'zivith.studioAgentPanelOpen',
 } as const;
 
 export function clampPx(value: number, min: number, max: number): number {

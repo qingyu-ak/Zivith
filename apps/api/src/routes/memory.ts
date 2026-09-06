@@ -120,6 +120,35 @@ export function registerMemoryRoutes(app: FastifyInstance, memory: MemoryService
     return { items: cores.map(coreDto) };
   });
 
+  app.post('/projects/:projectId/cores', async (request) => {
+    const { projectId } = z.object({ projectId: idSchema }).strict().parse(request.params);
+    const body = z
+      .object({
+        kind: z.enum(['persona', 'scenario', 'world_rule', 'event_chain']).default('persona'),
+        topic: z.string().trim().min(1).max(200),
+        content: z.string().trim().min(1).max(20_000),
+      })
+      .strict()
+      .parse(request.body ?? {});
+    const core = await memory.saveCore(projectId, body);
+    return coreDto(core);
+  });
+
+  app.patch('/projects/:projectId/cores/:coreId', async (request) => {
+    const { projectId, coreId } = z
+      .object({ projectId: idSchema, coreId: idSchema })
+      .strict()
+      .parse(request.params);
+    const body = z
+      .object({
+        content: z.string().trim().min(1).max(20_000),
+      })
+      .strict()
+      .parse(request.body ?? {});
+    const core = await memory.patchCore(projectId, coreId, body.content);
+    return coreDto(core);
+  });
+
   // L2 展开溯源：核心块 + 源原子内容（sourceAtomIds 不只给裸 id）。
   app.get('/projects/:projectId/cores/:coreId', async (request) => {
     const { projectId, coreId } = z

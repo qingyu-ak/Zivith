@@ -156,6 +156,19 @@ export class PrismaMemoryStore implements MemoryStore {
     await this.db.memoryCore.create({ data: input });
   }
 
+  async findCore(id: string): Promise<MemoryCoreRecord | null> {
+    return this.db.memoryCore.findUnique({ where: { id } });
+  }
+
+  async updateCore(id: string, patch: { content: string }): Promise<MemoryCoreRecord | null> {
+    const existing = await this.db.memoryCore.findUnique({ where: { id } });
+    if (!existing) return null;
+    return this.db.memoryCore.update({
+      where: { id },
+      data: { content: patch.content, version: existing.version + 1 },
+    });
+  }
+
   async listCores(projectId: string): Promise<MemoryCoreRecord[]> {
     return this.db.memoryCore.findMany({ where: { projectId }, orderBy: { updatedAt: 'desc' } });
   }

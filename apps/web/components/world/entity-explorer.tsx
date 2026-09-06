@@ -15,6 +15,7 @@ import { threadDisplayTitle } from '@/lib/chat-history';
 import { createRoleplayThread } from '@/lib/api';
 import { DIMENSION_KIND_LABEL, resolveDisplayDimensions, worldTimeCaption } from '@/lib/world-line';
 import { useState, type ReactNode } from 'react';
+import type { RelationshipCreateInput, StudioCreateKind } from '@/lib/studio-entity-create';
 
 interface FileItem {
   id: string;
@@ -34,26 +35,45 @@ function TreeFolder({
   label,
   count,
   defaultOpen,
+  onCreate,
+  creating,
   children,
 }: {
   label: string;
   count: number;
   defaultOpen: boolean;
+  onCreate?: () => void;
+  creating?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <section className="min-w-0">
-      <button
-        type="button"
-        className="flex w-full items-center gap-1 px-2 py-1 text-left text-xs text-zinc-500 hover:text-zinc-800"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <Chevron open={open} />
-        <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
-        <span className="tabular-nums text-zinc-400">{count}</span>
-      </button>
+      <div className="flex w-full items-center gap-1 px-1">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1 py-1 text-left text-xs text-zinc-500 hover:text-zinc-800"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Chevron open={open} />
+          <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+          <span className="tabular-nums text-zinc-400">{count}</span>
+        </button>
+        {onCreate ? (
+          <button
+            type="button"
+            disabled={creating}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:opacity-50"
+            onClick={() => {
+              setOpen(true);
+              onCreate();
+            }}
+          >
+            {creating ? '…' : '+ 新建'}
+          </button>
+        ) : null}
+      </div>
       {open ? <div className="ml-2 border-l border-zinc-200/80 pl-1">{children}</div> : null}
     </section>
   );
@@ -106,16 +126,26 @@ export function EntityExplorer({
   onSelect,
   threads = [],
   onNewChat,
+  onCreate,
+  creatingKind,
+  createError,
 }: {
   resources: WorldResourcesDTO;
   selection: WorldSelection;
   onSelect: (selection: Exclude<WorldSelection, null>) => void;
   threads?: CreatorChatThreadDTO[];
   onNewChat?: () => void;
+  onCreate?: (
+    kind: StudioCreateKind,
+    extras?: { relationship?: RelationshipCreateInput },
+  ) => void | Promise<void>;
+  creatingKind?: StudioCreateKind | null;
+  createError?: string;
 }) {
   const router = useRouter();
   const { stories, characters, locations, scenes, world_events, relationships } =
     resources.entities;
+  const [relationshipOpen, setRelationshipOpen] = useState(false);
 
   const characterItems: FileItem[] = characters.map((item: AssetDTO) => ({
     id: item.id,
@@ -159,21 +189,11 @@ export function EntityExplorer({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto pb-6">
-      <div className="border-b border-line px-3 py-3">
-        <button
-          type="button"
-          onClick={() => onSelect({ kind: 'project', id: resources.project.id })}
-          className={`w-full rounded-md px-1 py-0.5 text-left ${
-            projectSelected ? 'bg-[#e8f0fe]' : 'hover:bg-zinc-100'
-          }`}
-        >
-          <h1 className="truncate text-sm font-semibold text-zinc-900">{resources.project.name}</h1>
-          <p className="mt-0.5 text-[11px] text-zinc-400">
-            {resources.project.workspace_path || '项目文件夹'}
-          </p>
-        </button>
-      </div>
-
+      {createError ? (
+        <p className="mx-2 mt-2 rounded-md bg-red-50 px-2 py-1.5 text-[11px] text-red-600" role="alert">
+          {createError}
+        </p>
+      ) : null}
       <div className="mt-1 space-y-0.5 px-1">
         <TreeFolder label="IP Core" count={1} defaultOpen>
           <TreeFile
@@ -220,7 +240,13 @@ export function EntityExplorer({
           )}
         </TreeFolder>
 
-        <TreeFolder label="角色" count={characterItems.length} defaultOpen={characterItems.length > 0}>
+        <TreeFolder
+          label="角色"
+          count={characterItems.length}
+          defaultOpen
+          onCreate={onCreate ? () => void onCreate('character') : undefined}
+          creating={creatingKind === 'character'}
+        >
           {characterItems.length === 0 ? (
             <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
           ) : (
@@ -244,7 +270,13 @@ export function EntityExplorer({
           )}
         </TreeFolder>
 
-        <TreeFolder label="地点" count={locationItems.length} defaultOpen={locationItems.length > 0}>
+        <TreeFolder
+          label="地点"
+          count={locationItems.length}
+          defaultOpen={locationItems.length > 0}
+          onCreate={onCreate ? () => void onCreate('location') : undefined}
+          creating={creatingKind === 'location'}
+        >
           {locationItems.length === 0 ? (
             <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
           ) : (
@@ -260,7 +292,13 @@ export function EntityExplorer({
           )}
         </TreeFolder>
 
-        <TreeFolder label="事件" count={eventItems.length} defaultOpen={eventItems.length > 0}>
+        <TreeFolder
+          label="事件"
+          count={eventItems.length}
+          defaultOpen={eventItems.length > 0}
+          onCreate={onCreate ? () => void onCreate('world_event') : undefined}
+          creating={creatingKind === 'world_event'}
+        >
           {eventItems.length === 0 ? (
             <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
           ) : (
@@ -276,7 +314,13 @@ export function EntityExplorer({
           )}
         </TreeFolder>
 
-        <TreeFolder label="故事" count={storyItems.length} defaultOpen={storyItems.length > 0}>
+        <TreeFolder
+          label="故事"
+          count={storyItems.length}
+          defaultOpen={storyItems.length > 0}
+          onCreate={onCreate ? () => void onCreate('story') : undefined}
+          creating={creatingKind === 'story'}
+        >
           {storyItems.length === 0 ? (
             <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
           ) : (
@@ -292,7 +336,13 @@ export function EntityExplorer({
           )}
         </TreeFolder>
 
-        <TreeFolder label="场景" count={sceneItems.length} defaultOpen={false}>
+        <TreeFolder
+          label="场景"
+          count={sceneItems.length}
+          defaultOpen={sceneItems.length > 0 || creatingKind === 'scene'}
+          onCreate={onCreate ? () => void onCreate('scene') : undefined}
+          creating={creatingKind === 'scene'}
+        >
           {sceneItems.length === 0 ? (
             <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
           ) : (
@@ -308,8 +358,26 @@ export function EntityExplorer({
           )}
         </TreeFolder>
 
-        <TreeFolder label="关系" count={relationshipItems.length} defaultOpen={false}>
-          {relationshipItems.length === 0 ? (
+        <TreeFolder
+          label="关系"
+          count={relationshipItems.length}
+          defaultOpen={relationshipItems.length > 0 || relationshipOpen}
+          onCreate={onCreate ? () => setRelationshipOpen(true) : undefined}
+          creating={creatingKind === 'relationship'}
+        >
+          {relationshipOpen && onCreate ? (
+            <RelationshipCreateForm
+              resources={resources}
+              busy={creatingKind === 'relationship'}
+              onCancel={() => setRelationshipOpen(false)}
+              onSubmit={(relationship) => {
+                void Promise.resolve(onCreate('relationship', { relationship })).then(() => {
+                  setRelationshipOpen(false);
+                });
+              }}
+            />
+          ) : null}
+          {relationshipItems.length === 0 && !relationshipOpen ? (
             <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
           ) : (
             relationshipItems.map((item) => (
@@ -324,7 +392,13 @@ export function EntityExplorer({
           )}
         </TreeFolder>
 
-        <TreeFolder label="时间维度" count={dimensionItems.length} defaultOpen={false}>
+        <TreeFolder
+          label="时间维度"
+          count={dimensionItems.length}
+          defaultOpen={false}
+          onCreate={onCreate ? () => void onCreate('dimension') : undefined}
+          creating={creatingKind === 'dimension'}
+        >
           {dimensionItems.map((item) => (
             <TreeFile
               key={item.id}
@@ -337,5 +411,135 @@ export function EntityExplorer({
         </TreeFolder>
       </div>
     </div>
+  );
+}
+
+type RelRef = RelationshipCreateInput['source'] & { label: string };
+
+function relationshipRefOptions(resources: WorldResourcesDTO): RelRef[] {
+  return [
+    ...resources.entities.characters.map((item) => ({
+      type: 'asset' as const,
+      id: item.id,
+      label: `角色 · ${item.name}`,
+    })),
+    ...resources.entities.locations.map((item) => ({
+      type: 'asset' as const,
+      id: item.id,
+      label: `地点 · ${item.name}`,
+    })),
+    ...resources.entities.scenes.map((item) => ({
+      type: 'scene' as const,
+      id: item.id,
+      label: `场景 · ${item.title}`,
+    })),
+    ...resources.entities.world_events.map((item) => ({
+      type: 'world_event' as const,
+      id: item.id,
+      label: `事件 · ${item.title}`,
+    })),
+    ...resources.entities.stories.map((item) => ({
+      type: 'story' as const,
+      id: item.id,
+      label: `故事 · ${item.title}`,
+    })),
+  ];
+}
+
+function RelationshipCreateForm({
+  resources,
+  busy,
+  onCancel,
+  onSubmit,
+}: {
+  resources: WorldResourcesDTO;
+  busy: boolean;
+  onCancel: () => void;
+  onSubmit: (input: RelationshipCreateInput) => void;
+}) {
+  const options = relationshipRefOptions(resources);
+  const [kind, setKind] = useState('related');
+  const [label, setLabel] = useState('');
+  const [sourceKey, setSourceKey] = useState(options[0] ? `${options[0].type}:${options[0].id}` : '');
+  const [targetKey, setTargetKey] = useState(options[1] ? `${options[1].type}:${options[1].id}` : '');
+
+  function parseKey(key: string): RelRef | undefined {
+    return options.find((item) => `${item.type}:${item.id}` === key);
+  }
+
+  if (options.length < 2) {
+    return (
+      <p className="px-2 py-1 text-[11px] text-zinc-500">
+        至少先有两个角色、地点或场景，才能建关系。
+        <button type="button" className="ml-1 text-[#4d6bfe]" onClick={onCancel}>
+          关闭
+        </button>
+      </p>
+    );
+  }
+
+  return (
+    <form
+      className="mx-1 mb-1 space-y-1 rounded-md border border-zinc-200 bg-white p-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const source = parseKey(sourceKey);
+        const target = parseKey(targetKey);
+        if (!source || !target) return;
+        onSubmit({
+          kind: kind.trim() || 'related',
+          source: { type: source.type, id: source.id },
+          target: { type: target.type, id: target.id },
+          label: label.trim() || undefined,
+        });
+      }}
+    >
+      <input
+        value={kind}
+        onChange={(event) => setKind(event.target.value)}
+        placeholder="关系类型，如师徒"
+        className="w-full rounded border border-zinc-200 px-1.5 py-1 text-[11px] outline-none focus:border-[#4d6bfe]"
+      />
+      <input
+        value={label}
+        onChange={(event) => setLabel(event.target.value)}
+        placeholder="显示名（可选）"
+        className="w-full rounded border border-zinc-200 px-1.5 py-1 text-[11px] outline-none focus:border-[#4d6bfe]"
+      />
+      <select
+        value={sourceKey}
+        onChange={(event) => setSourceKey(event.target.value)}
+        className="w-full rounded border border-zinc-200 bg-white px-1.5 py-1 text-[11px]"
+      >
+        {options.map((item) => (
+          <option key={`s-${item.type}-${item.id}`} value={`${item.type}:${item.id}`}>
+            从 {item.label}
+          </option>
+        ))}
+      </select>
+      <select
+        value={targetKey}
+        onChange={(event) => setTargetKey(event.target.value)}
+        className="w-full rounded border border-zinc-200 bg-white px-1.5 py-1 text-[11px]"
+      >
+        {options.map((item) => (
+          <option key={`t-${item.type}-${item.id}`} value={`${item.type}:${item.id}`}>
+            到 {item.label}
+          </option>
+        ))}
+      </select>
+      <div className="flex justify-end gap-1">
+        <button type="button" className="px-1.5 py-0.5 text-[11px] text-zinc-400" onClick={onCancel}>
+          取消
+        </button>
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded bg-zinc-900 px-1.5 py-0.5 text-[11px] text-white disabled:opacity-40"
+        >
+          {busy ? '…' : '创建'}
+        </button>
+      </div>
+    </form>
   );
 }

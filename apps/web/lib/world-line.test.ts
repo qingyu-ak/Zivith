@@ -14,6 +14,7 @@ import {
   isTimelineItemActive,
   clipSpan,
   canEditClip,
+  applyWorldLineView,
 } from './world-line';
 
 function resources(overrides?: Partial<WorldResourcesDTO['entities']>): WorldResourcesDTO {
@@ -535,3 +536,92 @@ describe('clipSpan and canEditClip', () => {
     expect(canEditClip('camera')).toBe(false);
   });
 });
+
+describe('applyWorldLineView', () => {
+  function crowded() {
+    return resources({
+      characters: [
+        { id: 'hero', project_id: 'p1', name: '路明非', description: '主角', tier: 'full', created_at: '2026-01-01' },
+        { id: 'chu', project_id: 'p1', name: '楚子航', description: '主角', tier: 'full', created_at: '2026-01-02' },
+        { id: 'extra', project_id: 'p1', name: '路人甲', description: '龙族成员', tier: 'light', created_at: '2026-01-03' },
+      ],
+      scenes: [
+        { id: 'sc1', story_id: 'st1', order: 1, title: '开场', location_id: 'loc1' },
+        { id: 'sc2', story_id: 'st1', order: 8, title: '夜谈', location_id: 'loc2' },
+      ],
+      locations: [
+        { id: 'loc1', project_id: 'p1', name: '卡塞尔', description: '', created_at: '2026-01-01' },
+        { id: 'loc2', project_id: 'p1', name: '楚府', description: '', created_at: '2026-01-02' },
+      ],
+      world_events: [
+        {
+          id: 'e1',
+          project_id: 'p1',
+          title: '入学',
+          state: 'draft',
+          presentation_order: 1,
+          character_ids: ['hero', 'chu'],
+          scene_ids: ['sc1'],
+          created_at: '2026-01-01',
+        },
+        {
+          id: 'e2',
+          project_id: 'p1',
+          title: '夜谈',
+          state: 'draft',
+          presentation_order: 8,
+          character_ids: ['hero', 'extra'],
+          scene_ids: ['sc2'],
+          created_at: '2026-01-02',
+        },
+      ],
+      shots: [],
+    });
+  }
+
+  it('keeps the full axis in overview', () => {
+    const source = crowded();
+    const model = buildWorldLineModel(source);
+    const viewed = applyWorldLineView(model, source, {
+      overview: true,
+      from: 1,
+      to: 1,
+      density: 'all',
+    });
+    expect(viewed.scaleDomain).toEqual(model.scaleDomain);
+    expect(viewed.tracks.find((track) => track.kind === 'world_event')?.items).toHaveLength(2);
+  });
+
+  it('narrows to one chapter and drops items outside it', () => {
+    const source = crowded();
+    const model = buildWorldLineModel(source);
+    const viewed = applyWorldLineView(model, source, {
+      overview: false,
+      from: 1,
+      to: 1,
+      density: 'all',
+    });
+    expect(viewed.scaleDomain).toEqual({ min: 1, max: 1 });
+    expect(viewed.tracks.find((track) => track.kind === 'world_event')?.items.map((item) => item.id)).toEqual([
+      'e1',
+    ]);
+    expect(viewed.tracks.find((track) => track.kind === 'scene')?.items.map((item) => item.id)).toEqual([
+      'sc1',
+    ]);
+  });
+
+  it('hides light-tier extras when showing main characters only', () => {
+    const source = crowded();
+    const model = buildWorldLineModel(source);
+    const viewed = applyWorldLineView(model, source, {
+      overview: true,
+      from: 1,
+      to: 8,
+      density: 'main',
+    });
+    expect(
+      viewed.tracks.find((track) => track.kind === 'character')?.items.map((item) => item.id),
+    ).toEqual(['hero', 'chu']);
+  });
+});
+

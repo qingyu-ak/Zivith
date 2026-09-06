@@ -150,6 +150,44 @@ export function studioHrefForChat(projectId: string | null | undefined): string 
   return projectId ? `/projects/${projectId}/world` : '/projects';
 }
 
+const STUDIO_SELECT_KINDS = [
+  'character',
+  'location',
+  'scene',
+  'world_event',
+  'story',
+  'project',
+  'dimension',
+  'relationship',
+] as const;
+
+export type StudioSelectKind = (typeof STUDIO_SELECT_KINDS)[number];
+
+function isStudioSelectKind(value: string): value is StudioSelectKind {
+  return (STUDIO_SELECT_KINDS as readonly string[]).includes(value);
+}
+
+/** Chat / 树点选跳到 Studio 时带上实体，世界工作区打开 Inspector。 */
+export function studioHrefForEntity(
+  projectId: string,
+  selection: Exclude<WorldSelection, null>,
+): string {
+  const params = new URLSearchParams({
+    select: selection.kind,
+    entity: selection.id,
+  });
+  return `/projects/${projectId}/world?${params.toString()}`;
+}
+
+export function parseStudioSelect(
+  search: URLSearchParams,
+): { kind: StudioSelectKind; id: string } | null {
+  const kind = search.get('select');
+  const id = search.get('entity')?.trim();
+  if (!kind || !id || !isStudioSelectKind(kind)) return null;
+  return { kind, id };
+}
+
 /** Studio 顶栏「Chat」：已知线程直接进线程，否则回对话首页（线程解析在点击时做）。 */
 export function chatHrefForStudio(threadId: string | null | undefined): string {
   return threadId ? `/creator-chats/${threadId}` : '/creator-chats';

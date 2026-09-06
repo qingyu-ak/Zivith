@@ -32,6 +32,12 @@ import {
   type ChatEffort,
 } from '@/lib/chat-composer';
 import {
+  decideWriteAction,
+  readStoredWriteMode,
+  writeStoredWriteMode,
+  type AgentWriteMode,
+} from '@/lib/agent-write-mode';
+import {
   CHAT_FOCUS_LABEL,
   clearPendingFocus,
   studioFocusHandoffMessage,
@@ -41,6 +47,7 @@ import {
   readPendingFocus,
   settingsHrefFor,
   studioHrefForChat,
+  studioHrefForEntity,
   type ChatFocus,
 } from '@/lib/creator-chat-nav';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
@@ -54,50 +61,17 @@ import type {
   WorldEventDTO,
 } from '@/lib/types';
 import { isDesktopApp, pickWorkspaceDirectory, asWorkspacePath } from '@/lib/desktop';
-import { IconExternal, IconSearch, IconSidebar } from '@/components/nav-icons';
+import { IconSidebar } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
 import { ChatSidebar, ChatSidebarRail } from './chat-sidebar';
 import { ProposalCard, type ChatProposal } from './proposal-card';
+import { ChatChoiceMenu, CharacterCardPeek } from './chat-choice-menu';
 import { RoleplayLaunchButton } from './roleplay-launch';
-
-const PROPOSAL_KINDS: ProposalKind[] = [
-  'create_project',
-  'create_world_event',
-  'create_character',
-  'create_location',
-  'create_scene',
-  'create_relationship',
-  'update_entity',
-];
+import { characterCardPreview } from '@/lib/character-card-preview';
+import { parseProposals } from '@/lib/chat-proposals';
 
 const STARTERS = ['我想创造一个东方玄幻世界', '先介绍一下主角', '帮我检查设定冲突'];
 const NEW_SELF = '__new_self__';
-
-function parseProposals(message: CreatorChatMessageDTO): {
-  proposals: ChatProposal[];
-  applied: boolean;
-  rejected: boolean;
-} {
-  if (!message.proposal) return { proposals: [], applied: false, rejected: false };
-  const rawList = Array.isArray(message.proposal) ? message.proposal : [message.proposal];
-  const proposals: ChatProposal[] = [];
-  for (const raw of rawList) {
-    if (typeof raw !== 'object' || raw === null) continue;
-    const record = raw as Record<string, unknown>;
-    const kind = record.kind;
-    const payload = record.payload;
-    if (
-      typeof kind !== 'string' ||
-      !PROPOSAL_KINDS.includes(kind as ProposalKind) ||
-      typeof payload !== 'object' ||
-      payload === null
-    ) {
-      continue;
-    }
-    proposals.push({ kind: kind as ProposalKind, payload: payload as Record<string, unknown> });
-  }
-  return { proposals, applied: message.proposal_state === 'applied', rejected: message.proposal_state === 'rejected' };
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
@@ -152,6 +126,7 @@ export function ChatPanel() {
   const [selfName, setSelfName] = useState('');
   const [selfPersonality, setSelfPersonality] = useState('');
   const [effort, setEffort] = useState<ChatEffort>('balanced');
+  const [writeMode, setWriteMode] = useState<AgentWriteMode>('confirm');
   const endRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const pendingConsumed = useRef(false);
@@ -160,10 +135,14 @@ export function ChatPanel() {
   focusRef.current = focus;
   const effortRef = useRef<ChatEffort>(effort);
   effortRef.current = effort;
+  const writeModeRef = useRef<AgentWriteMode>(writeMode);
+  writeModeRef.current = writeMode;
+  const autoApplyRef = useRef(new Set<string>());
 
   useEffect(() => {
     const stored = readStoredEffort();
     setEffort(stored);
+    setWriteMode(readStoredWriteMode());
     void api<ProviderCatalogDTO>('/providers')
       .then(setCatalog)
       .catch(() => setCatalog(null));
@@ -389,6 +368,35 @@ export function ChatPanel() {
   const activeRoleplayRef = useRef<RoleplayThreadDTO | null>(null);
   activeRoleplayRef.current = activeRoleplay;
 
+  const autoApplyIfAllowed = useCallback(async (message: CreatorChatMessageDTO) => {
+    if (autoApplyRef.current.has(message.id)) return;
+    const parsed = parseProposals(message);
+    if (parsed.applied || parsed.rejected || parsed.proposals.length === 0) return;
+    const action = decideWriteAction(
+      writeModeRef.current,
+      parsed.proposals.map((item) => item.kind),
+    );
+    if (action !== 'auto') return;
+    const targetThread = message.thread_id;
+    if (!targetThread) return;
+    autoApplyRef.current.add(message.id);
+    try {
+      await api(`/world/creator-chats/${targetThread}/proposals/${message.id}/apply`, {
+        method: 'POST',
+        body: {},
+      });
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id ? { ...item, proposal_state: 'applied' } : item,
+        ),
+      );
+      void load();
+      loadThreads();
+    } catch {
+      autoApplyRef.current.delete(message.id);
+    }
+  }, [load, loadThreads]);
+
   const sendContent = useCallback(
     async (content: string) => {
       if (!threadId || sendingRef.current) return;
@@ -434,6 +442,7 @@ export function ChatPanel() {
             const assistantMessage = asChatMessage(record?.assistant_message);
             if (assistantMessage) {
               setMessages((current) => [...current, assistantMessage]);
+              void autoApplyIfAllowed(assistantMessage);
             }
             setStreamText('');
             return;
@@ -486,7 +495,7 @@ export function ChatPanel() {
         setSending(false);
       }
     },
-    [threadId],
+    [threadId, autoApplyIfAllowed],
   );
 
   function stopGeneration() {
@@ -792,7 +801,13 @@ export function ChatPanel() {
     if (threadId) router.replace(`/creator-chats/${threadId}`);
   }
 
-  const studioHref = studioHrefForChat(thread?.project_id);
+  const studioHref =
+    activeRoleplay && thread?.project_id
+      ? studioHrefForEntity(thread.project_id, {
+          kind: 'character',
+          id: activeRoleplay.character_asset_id,
+        })
+      : studioHrefForChat(thread?.project_id);
   const settingsProjectId =
     thread?.project_id ??
     threads.find((item) => item.project_id)?.project_id ??
@@ -809,6 +824,11 @@ export function ChatPanel() {
       if (aSelf !== bSelf) return aSelf - bSelf;
       return a.name.localeCompare(b.name, 'zh');
     });
+  const assetById = new Map(characterAssets.map((item) => [item.id, item]));
+  const playableAssets = characterAssets.filter((item) => !item.tags?.includes('user_self'));
+  const playingCharacter = activeRoleplay
+    ? assetById.get(activeRoleplay.character_asset_id)
+    : undefined;
   const userSpeakerValue = creatingSelf
     ? NEW_SELF
     : (activeRoleplay?.user_character_asset_id ?? '');
@@ -821,7 +841,9 @@ export function ChatPanel() {
         right={
           <Link
             href={studioHref}
-            title="打开 Studio 世界工作区"
+            title={
+              activeRoleplay ? '在 Studio 打开这张角色卡' : '打开 Studio 世界工作区'
+            }
             className="rounded-lg px-2 py-1 text-xs text-zinc-600 transition hover:bg-zinc-200/80 hover:text-zinc-900"
           >
             Studio
@@ -854,27 +876,18 @@ export function ChatPanel() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 px-4 py-2 lg:px-6">
           {collapsed && (
-            <>
-              <button
-                type="button"
-                className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100"
-                aria-label="展开侧栏"
-                onClick={toggleCollapsed}
-              >
-                <IconSidebar className="size-4" />
-              </button>
-              <button
-                type="button"
-                className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100"
-                aria-label="搜索对话"
-                onClick={toggleCollapsed}
-              >
-                <IconSearch className="size-4" />
-              </button>
-            </>
+            <button
+              type="button"
+              className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100"
+              aria-label="展开侧栏"
+              onClick={toggleCollapsed}
+            >
+              <IconSidebar className="size-4" />
+            </button>
           )}
           {threadId ? (
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h1 className="min-w-0 truncate text-[15px] font-medium text-zinc-800">
                 {activeRoleplay
                   ? `与「${activeRoleplay.character_name}」对话`
@@ -882,58 +895,63 @@ export function ChatPanel() {
                     ? threadDisplayTitle(thread)
                     : '新世界对话'}
               </h1>
-              {thread?.project_id && characters.length > 0 && (
-                <label className="relative shrink-0">
-                  <span className="sr-only">切换对话对象</span>
-                  <select
-                    className="appearance-none rounded-full border border-zinc-200 bg-white py-1 pl-3 pr-7 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900"
-                    value={activeRoleplay ? activeRoleplay.character_asset_id : 'world'}
-                    disabled={switching || sending}
-                    onChange={(event) => void switchAgent(event.target.value)}
-                  >
-                    <option value="world">世界构建者</option>
-                    {characters
-                      .filter((character) => !character.tags.includes('user_self'))
-                      .map((character) => (
-                        <option key={character.id} value={character.id}>
-                          扮演：{character.name}
-                        </option>
-                      ))}
-                  </select>
-                  <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-[9px] text-zinc-400">
-                    ▼
-                  </span>
-                </label>
+              {thread?.project_id && playableAssets.length > 0 && (
+                <ChatChoiceMenu
+                  label="切换对话对象"
+                  value={activeRoleplay ? activeRoleplay.character_asset_id : 'world'}
+                  disabled={switching || sending}
+                  onChange={(next) => void switchAgent(next)}
+                  options={[
+                    {
+                      value: 'world',
+                      label: '世界构建者',
+                      description: '一起改设定、写实体',
+                    },
+                    ...playableAssets.map((character) => ({
+                      value: character.id,
+                      label: `扮演：${character.name}`,
+                      description: characterCardPreview(character) || undefined,
+                      href: studioHrefForEntity(thread.project_id!, {
+                        kind: 'character',
+                        id: character.id,
+                      }),
+                      hrefLabel: '改卡',
+                    })),
+                  ]}
+                />
               )}
-              {activeRoleplay && (
-                <label className="relative shrink-0">
-                  <span className="sr-only">你是谁</span>
-                  <select
-                    className="appearance-none rounded-full border border-zinc-200 bg-white py-1 pl-3 pr-7 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900"
-                    value={userSpeakerValue}
-                    disabled={switching || sending}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      if (next === NEW_SELF) {
-                        setCreatingSelf(true);
-                        return;
-                      }
-                      setCreatingSelf(false);
-                      void switchUserSpeaker(next === '' ? null : next);
-                    }}
-                  >
-                    <option value="">你是：读者</option>
-                    {speakerOptions.map((character) => (
-                      <option key={character.id} value={character.id}>
-                        你是：{character.name}
-                      </option>
-                    ))}
-                    <option value={NEW_SELF}>新建我自己…</option>
-                  </select>
-                  <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-[9px] text-zinc-400">
-                    ▼
-                  </span>
-                </label>
+              {activeRoleplay && thread?.project_id && (
+                <ChatChoiceMenu
+                  label="你是谁"
+                  value={userSpeakerValue}
+                  disabled={switching || sending}
+                  onChange={(next) => {
+                    if (next === NEW_SELF) {
+                      setCreatingSelf(true);
+                      return;
+                    }
+                    setCreatingSelf(false);
+                    void switchUserSpeaker(next === '' ? null : next);
+                  }}
+                  options={[
+                    {
+                      value: '',
+                      label: '你是：读者',
+                      description: '旁观提问，不代入某个角色',
+                    },
+                    ...speakerOptions.map((character) => ({
+                      value: character.id,
+                      label: `你是：${character.name}`,
+                      description: characterCardPreview(assetById.get(character.id)) || undefined,
+                      href: studioHrefForEntity(thread.project_id!, {
+                        kind: 'character',
+                        id: character.id,
+                      }),
+                      hrefLabel: '改卡',
+                    })),
+                    { value: NEW_SELF, label: '新建我自己…' },
+                  ]}
+                />
               )}
               {creatingSelf && activeRoleplay && (
                 <form
@@ -976,17 +994,19 @@ export function ChatPanel() {
                   </button>
                 </form>
               )}
+              </div>
+              {activeRoleplay && thread?.project_id ? (
+                <CharacterCardPeek
+                  projectId={thread.project_id}
+                  characterId={activeRoleplay.character_asset_id}
+                  name={activeRoleplay.character_name}
+                  preview={characterCardPreview(playingCharacter)}
+                />
+              ) : null}
             </div>
           ) : (
             <span className="flex-1" />
           )}
-          <Link
-            href={studioHref}
-            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
-          >
-            Studio
-            <IconExternal className="size-3.5" />
-          </Link>
         </header>
 
         {threadId && !thread && !loading ? (
@@ -1057,6 +1077,7 @@ export function ChatPanel() {
                     <p className="mt-2 text-sm leading-6 text-zinc-500">
                       你现在是{activeRoleplay.user_character_name?.trim() || '读者'}。TA
                       只记得时间锚点{activeRoleplay.anchor_title ?? '全书读完'}之前亲历的事。
+                      角色卡只读，改简介和个性请到 Studio。
                     </p>
                   </div>
                 )}
@@ -1144,6 +1165,20 @@ export function ChatPanel() {
                           proposals={proposals}
                           applied={applied}
                           rejected={rejected}
+                          plan={
+                            decideWriteAction(
+                              writeMode,
+                              proposals.map((item) => item.kind),
+                            ) === 'plan'
+                          }
+                          executeLabel={
+                            decideWriteAction(
+                              writeMode,
+                              proposals.map((item) => item.kind),
+                            ) === 'plan'
+                              ? '按此计划写入'
+                              : '确认'
+                          }
                           onApplied={handleApplied}
                           onRejected={handleApplied}
                         />
@@ -1222,6 +1257,11 @@ export function ChatPanel() {
                   setEffort(next);
                   writeStoredEffort(next);
                 }}
+                writeMode={writeMode}
+                onWriteModeChange={(next) => {
+                  setWriteMode(next);
+                  writeStoredWriteMode(next);
+                }}
                 onChange={setInput}
                 onSubmit={() => void send()}
                 onStop={stopGeneration}
@@ -1259,7 +1299,7 @@ export function ChatPanel() {
             </div>
             {pickerAssets.filter((item) => !item.tags?.includes('user_self')).length === 0 ? (
               <p className="text-sm text-zinc-500">
-                这个世界还没有角色。先在对话里创建，或到 Studio 实体库补一张角色卡。
+                这个世界还没有角色。先在对话里创建，或到 Studio 左侧树点「+ 新建」。
               </p>
             ) : (
               <ul className="grid max-h-[60vh] gap-3 overflow-y-auto">
@@ -1267,7 +1307,23 @@ export function ChatPanel() {
                   .filter((item) => !item.tags?.includes('user_self'))
                   .map((character) => (
                     <li key={character.id} className="rounded-xl border border-zinc-200 p-3">
-                      <p className="mb-2 text-sm font-medium text-zinc-800">{character.name}</p>
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-zinc-800">{character.name}</p>
+                          <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-zinc-500">
+                            {characterCardPreview(character) || '这张角色卡还没有简介。'}
+                          </p>
+                        </div>
+                        <Link
+                          href={studioHrefForEntity(roleplayPicker, {
+                            kind: 'character',
+                            id: character.id,
+                          })}
+                          className="shrink-0 text-[11px] text-[#4d6bfe] hover:underline"
+                        >
+                          改卡
+                        </Link>
+                      </div>
                       <RoleplayLaunchButton
                         projectId={roleplayPicker}
                         characterAssetId={character.id}

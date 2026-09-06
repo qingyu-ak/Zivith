@@ -8,7 +8,6 @@ import { Badge, Button, Card, EmptyState, Field, Input, Spinner, Textarea } from
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { getFormText } from '@/lib/form-data';
 import type { ProjectDTO, StoryDTO } from '@/lib/types';
-import { ContinueInChatButton } from '@/components/world/continue-in-chat';
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -94,11 +93,6 @@ export default function ProjectPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <ContinueInChatButton
-            projectId={projectId}
-            label="去创作对话"
-            className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-          />
           <Button variant="secondary" onClick={() => setShowForm((value) => !value)}>
             {showForm ? '取消' : '新建故事'}
           </Button>

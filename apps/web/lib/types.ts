@@ -269,6 +269,14 @@ export interface ApplyProposalResultDTO {
   title: string;
 }
 
+export interface WriteLogItemDTO {
+  id: string;
+  thread_id: string;
+  thread_title: string | null;
+  created_at: string;
+  summary: string;
+}
+
 export type WorkflowStepName =
   | 'story'
   | 'story_review'
