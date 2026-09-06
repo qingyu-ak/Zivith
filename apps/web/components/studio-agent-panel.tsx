@@ -16,6 +16,7 @@ import {
   type ChatEffort,
 } from '@/lib/chat-composer';
 import { parseProposals } from '@/lib/chat-proposals';
+import { IconArrowRight } from '@/components/nav-icons';
 import { useStudioSelection } from './world/studio-selection';
 import { ProposalCard } from './creator-chat/proposal-card';
 import { ModelPicker } from './model-picker';
@@ -254,57 +255,62 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
           void send();
         }}
       >
-        <textarea
-          className="min-h-[44px] w-full resize-none rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-[13px] leading-6 text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:bg-white"
-          placeholder="让 Agent 做点什么…"
-          value={input}
-          rows={2}
-          readOnly={busy}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              event.currentTarget.closest('form')?.requestSubmit();
-            }
-          }}
-        />
-        <div className="mt-1.5 flex items-center gap-2">
-          <ModelPicker projectId={projectId} />
-          <select
-            className="max-w-24 rounded-full border border-zinc-200 bg-transparent px-2 py-0.5 text-[11px] text-zinc-600"
-            value={effort}
-            title={CHAT_EFFORT_HINT[effort]}
-            aria-label="努力程度"
-            onChange={(event) => {
-              const next = event.target.value as ChatEffort;
-              setEffort(next);
-              writeStoredEffort(next);
+        {/* Cursor 式输入框：模型 / 努力程度 / 发送都在框内下沿 */}
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-2 pt-1.5 transition focus-within:border-zinc-400 focus-within:bg-white">
+          <textarea
+            className="min-h-[44px] w-full resize-none bg-transparent px-1 py-0.5 text-[13px] leading-6 text-zinc-800 outline-none placeholder:text-zinc-400"
+            placeholder="让 Agent 做点什么…"
+            value={input}
+            rows={2}
+            readOnly={busy}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.closest('form')?.requestSubmit();
+              }
             }}
-          >
-            {(['fast', 'balanced', 'deep'] as const).map((item) => (
-              <option key={item} value={item}>
-                {CHAT_EFFORT_LABEL[item]}
-              </option>
-            ))}
-          </select>
-          <span className="flex-1" />
-          {sending ? (
-            <button
-              type="button"
-              className="rounded-lg bg-zinc-900 px-3 py-1 text-xs text-white hover:bg-zinc-800"
-              onClick={() => abortRef.current?.abort()}
+          />
+          <div className="flex items-center gap-1 pb-1">
+            <ModelPicker projectId={projectId} />
+            <select
+              className="max-w-24 rounded-full bg-transparent px-1.5 py-0.5 text-[11px] text-zinc-600 outline-none transition hover:bg-zinc-100"
+              value={effort}
+              title={CHAT_EFFORT_HINT[effort]}
+              aria-label="努力程度"
+              onChange={(event) => {
+                const next = event.target.value as ChatEffort;
+                setEffort(next);
+                writeStoredEffort(next);
+              }}
             >
-              停止
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!input.trim() || !threadId}
-              className="rounded-lg bg-zinc-900 px-3 py-1 text-xs text-white transition hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400"
-            >
-              发送
-            </button>
-          )}
+              {(['fast', 'balanced', 'deep'] as const).map((item) => (
+                <option key={item} value={item}>
+                  {CHAT_EFFORT_LABEL[item]}
+                </option>
+              ))}
+            </select>
+            <span className="flex-1" />
+            {sending ? (
+              <button
+                type="button"
+                className="grid size-7 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800"
+                aria-label="停止生成"
+                onClick={() => abortRef.current?.abort()}
+              >
+                <span className="block size-2.5 rounded-[2px] bg-current" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim() || !threadId}
+                aria-label="发送"
+                className="grid size-7 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400"
+              >
+                <IconArrowRight className="size-4 -rotate-90" />
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </div>
