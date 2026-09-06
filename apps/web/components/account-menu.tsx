@@ -68,7 +68,7 @@ export function AccountMenu({
             系统设置
           </Link>
           <Link
-            href="/creator-chats"
+            href="/help"
             className={`flex items-center gap-3 px-3 py-2.5 text-sm ${
               light ? 'text-zinc-700 hover:bg-zinc-50' : 'text-zinc-600 hover:bg-zinc-100'
             }`}

@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-09-06 · pending · feat(web) · 帮助与反馈页（/help）
+
+账号菜单「帮助与反馈」从占位链接改为独立页面：设置壳风格左栏两模块。帮助 = 与产品实际能力对应的使用文档与注意事项；反馈 = 故障信息一键复制 + 开发者联系方式（群号/账号集中在 `lib/help-feedback.ts`，由开发者填真实值，未填显示「待补充」不放假链接）。
+
+- **feat(web)** 新增 `/help` 页（快速上手 / 对话与模型 / 记忆系统 / 扮演与桌面版 / 注意事项五个文档卡 + 反馈模块）
+- **feat(web)** `buildBugReportTemplate` 生成含版本/时间/页面/环境的故障模板，`navigator.clipboard` 一键复制
+- **fix(web)** 账号菜单「帮助与反馈」href 从 `/creator-chats` 改为 `/help`
+- 模块：`app/(studio)/help/page.tsx`、`lib/help-feedback.ts`、`account-menu.tsx`
+
 ## 2026-09-05 · bf5e5d0 · fix(web) · 设置分区改走查询参数深链
 
 「管理模型」用 `?section=models` 打开模型设置；左栏切换写入 URL。兼容旧的 `#models`。避免只改 hash 时客户端导航仍停在常规页。
