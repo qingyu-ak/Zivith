@@ -39,6 +39,7 @@ import {
   normalizeThread,
   parseFocusFromSearch,
   readPendingFocus,
+  settingsHrefFor,
   type ChatFocus,
 } from '@/lib/creator-chat-nav';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
@@ -791,6 +792,11 @@ export function ChatPanel() {
   }
 
   const studioHref = thread?.project_id ? `/projects/${thread.project_id}/world` : '/projects';
+  const settingsProjectId =
+    thread?.project_id ??
+    threads.find((item) => item.project_id)?.project_id ??
+    projects[0]?.id;
+  const settingsHref = settingsHrefFor(settingsProjectId);
   const empty = (!threadId || messages.length === 0) && !sending && !streamText && !loading;
   const canSend = input.trim().length > 0 && !sending && !busy;
   const speakerOptions = characters
@@ -819,7 +825,7 @@ export function ChatPanel() {
           threadId={threadId}
           busy={busy}
           pickerOpen={folderPickerOpen}
-          settingsHref={thread?.project_id ? `/projects/${thread.project_id}/settings` : '/projects'}
+          settingsHref={settingsHref}
           onToggle={toggleCollapsed}
           onPickerOpenChange={setFolderPickerOpen}
           onSelectProject={selectProject}
@@ -1195,6 +1201,7 @@ export function ChatPanel() {
                 sending={sending}
                 canSend={canSend}
                 projectId={thread?.project_id}
+                settingsProjectId={settingsProjectId}
                 threadId={threadId}
                 messageTexts={messages.map((item) => item.content)}
                 effort={effort}

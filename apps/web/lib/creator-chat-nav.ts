@@ -131,6 +131,20 @@ export function mergeChatFocus(
   return null;
 }
 
+/** 系统设置挂在项目路由下。没有当前项目时用列表里已有项目，避免掉进创作中心。 */
+export function settingsHrefFor(
+  projectId: string | null | undefined,
+  fallbackProjectIds: Array<string | null | undefined> = [],
+  section?: string,
+): string {
+  const id = [projectId, ...fallbackProjectIds].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  if (!id) return '/projects';
+  const path = `/projects/${id}/settings`;
+  return section ? `${path}?section=${section}` : path;
+}
+
 export function chatPathForThread(threadId: string, focus?: ChatFocus | null): string {
   if (!focus) return `/creator-chats/${threadId}`;
   const params = new URLSearchParams({

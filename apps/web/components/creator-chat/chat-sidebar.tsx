@@ -27,7 +27,7 @@ export function ChatSidebar({
   threadId,
   busy,
   pickerOpen,
-  settingsHref = '/projects',
+  settingsHref = '/creator-chats',
   onToggle,
   onPickerOpenChange,
   onSelectProject,

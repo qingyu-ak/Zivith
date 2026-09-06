@@ -8,6 +8,7 @@ import {
   mergeChatFocus,
   normalizeThread,
   parseFocusFromSearch,
+  settingsHrefFor,
 } from './creator-chat-nav';
 import type { WorldResourcesDTO } from './types';
 
@@ -122,5 +123,20 @@ describe('chat focus routing', () => {
       )?.name,
     ).toBe('韩立');
     expect(studioFocusHandoffMessage(focus)).toBe('从 Studio 继续：角色「韩立」');
+  });
+});
+
+describe('settingsHrefFor', () => {
+  it('uses the current project when present', () => {
+    expect(settingsHrefFor('p1', ['p2'])).toBe('/projects/p1/settings');
+    expect(settingsHrefFor('p1', [], 'models')).toBe('/projects/p1/settings?section=models');
+  });
+
+  it('falls back to another project instead of the project list', () => {
+    expect(settingsHrefFor(undefined, [null, 'p2'])).toBe('/projects/p2/settings');
+  });
+
+  it('only uses the project list when no project exists', () => {
+    expect(settingsHrefFor(undefined, [])).toBe('/projects');
   });
 });

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { api, unwrapList } from '@/lib/api';
 import type { ProjectDTO } from '@/lib/types';
+import { settingsHrefFor } from '@/lib/creator-chat-nav';
 import { IconGear } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
 
@@ -57,6 +58,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   function itemHref(item: NavItem) {
     if (item.label === '对话') {
       return projectId ? `/projects/${projectId}/chat` : '/creator-chats';
+    }
+    if (item.label === '设置') {
+      return settingsHrefFor(projectId, projects.map((project) => project.id));
     }
     return item.suffix !== undefined && projectId
       ? `/projects/${projectId}${item.suffix}`

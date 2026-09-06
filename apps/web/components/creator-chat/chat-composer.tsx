@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { api, errorMessage } from '@/lib/api';
+import { settingsHrefFor } from '@/lib/creator-chat-nav';
 import {
   CHAT_EFFORT_HINT,
   CHAT_EFFORT_LABEL,
@@ -55,6 +56,7 @@ export function ChatComposer({
   sending,
   canSend,
   projectId,
+  settingsProjectId,
   threadId,
   messageTexts,
   effort,
@@ -69,6 +71,7 @@ export function ChatComposer({
   sending: boolean;
   canSend: boolean;
   projectId?: string | null;
+  settingsProjectId?: string | null;
   threadId?: string | null;
   messageTexts: string[];
   effort: ChatEffort;
@@ -164,9 +167,7 @@ export function ChatComposer({
   const choices = llmChoices(catalog);
   const visibleChoices = filterLlmChoices(choices, modelQuery);
   const modelLabel = selectedLlmLabel(catalog);
-  const settingsHref = projectId
-    ? `/projects/${projectId}/settings?section=models`
-    : '/projects';
+  const settingsHref = settingsHrefFor(projectId, [settingsProjectId], 'models');
   const account = catalog?.siliconflow_account;
   const llmProvider = catalog?.providers.find((item) => item.id === catalog.selection.llm);
 

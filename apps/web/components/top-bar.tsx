@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { navigationHistory } from '@/lib/navigation-history';
 import { IconArrowLeft, IconArrowRight, IconSidebar } from './nav-icons';
 
-/** Chat 与 Studio 共用顶栏：logo 槽、收起侧栏、应用内上一步/下一步（会话级路径栈）。 */
+/** Chat 与 Studio 共用顶栏：logo、收起侧栏、应用内上一步/下一步。Electron 里这就是窗口标题栏。 */
 export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -29,11 +29,21 @@ export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 flex h-11 shrink-0 items-center gap-1 border-b border-line bg-[#f7f8fa] px-2">
-      {/* logo 位：28×28 圆角槽，正式 logo 就位后替换背景即可。 */}
-      <span
-        className="mx-1 size-7 shrink-0 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-900"
+    <header
+      className="sticky top-0 z-40 flex h-11 shrink-0 items-center gap-1 border-b border-line bg-[#f7f8fa] px-2 select-none [-webkit-app-region:drag]"
+      style={{
+        paddingLeft: 'max(0.5rem, env(titlebar-area-x, 0.5rem))',
+        height: 'env(titlebar-area-height, 2.75rem)',
+      }}
+    >
+      <img
+        src="/brand/icon.png"
+        alt="Zivith"
+        width={20}
+        height={20}
+        draggable={false}
         title="Zivith"
+        className="mx-1 size-4 shrink-0 rounded"
       />
       <TopBarButton
         label="上一步"
@@ -77,7 +87,7 @@ function TopBarButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-lg text-zinc-500 transition hover:bg-zinc-200/80 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-40"
+      className="grid size-8 place-items-center rounded-lg text-zinc-500 transition hover:bg-zinc-200/80 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-40 [-webkit-app-region:no-drag]"
     >
       {children}
     </button>
