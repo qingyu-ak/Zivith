@@ -12,6 +12,13 @@
 
 ---
 
+## 2026-09-06 · pending · docs(web) · 帮助文档补 WeClone 分身接入
+
+帮助页新增「接入 WeClone 数字分身（可选）」卡：WeClone（聊天记录 LoRA 微调数字分身，AGPL-3.0 独立进程）训练后用 `weclone-cli server` 起 OpenAI 兼容服务（默认 127.0.0.1:8005/v1，模型名 gpt-3.5-turbo、Key 任意），在设置 → 模型设置以自定义供应商接入，对话/扮演可直接切换选用。注明 AGPL 边界与 AI 生成提醒。
+
+- **docs(web)** `help/page.tsx` 新增文档卡
+- 模块：`apps/web/app/(studio)/help/page.tsx`
+
 ## 2026-09-06 · 4ba861a · feat(web) · Chat/Studio 分壳跳转 + Studio 侧栏重做（S1+S2）
 
 跨页只留一对跳转（Chat 顶栏「Studio」、Studio 顶栏「Chat」）；上一步/下一步按壳分栈互不串。Studio 去掉 56px 活动栏：项目切换、制作、设置进顶栏，左侧只剩 EntityExplorer 树，/world 里那列左树删除，选中态提升为壳级共享。

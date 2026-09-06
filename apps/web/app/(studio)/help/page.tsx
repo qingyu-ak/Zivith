@@ -62,7 +62,7 @@ function HelpDocs() {
             在 <b>对话</b> 里描述你想创造的世界，例如「我想创造一个东方玄幻世界」。
           </li>
           <li>
-            世界构建者会给出<b>提案卡片</b>（新建项目 / 角色 / 地点 / 事件等），你确认后才会写入世界。
+            世界构建者会给出<b>提案</b>（新建项目 / 角色 / 地点 / 事件等）。默认每步确认后写入；也可在输入条切换半自动、计划模式或完全访问。
           </li>
           <li>
             左侧活动栏进入<b>世界</b>工作区：时间线、实体（角色/地点/事件）、资产、记忆都在这里。
@@ -76,7 +76,7 @@ function HelpDocs() {
       <DocsCard title="对话与模型">
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            输入条左下可切换<b>模型</b>与<b>努力程度</b>（最低 / 均衡 / 最高，影响上下文预算与检查范围）。
+            输入条可切换<b>写入模式</b>（每步确认 / 半自动 / 计划 / 完全访问）、<b>模型</b>与<b>努力程度</b>（最低 / 均衡 / 最高，影响上下文预算与检查范围）。
           </li>
           <li>
             在 <b>设置 → 模型设置</b> 配置供应商密钥、自定义 OpenAI 兼容端点、模型列表；并用开关控制哪些模型出现在选择器里。
@@ -86,12 +86,51 @@ function HelpDocs() {
         </ul>
       </DocsCard>
 
+      <DocsCard title="接入 WeClone 数字分身（可选）">
+        <p>
+          <a
+            href="https://github.com/xming521/WeClone"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#4d6bfe] hover:underline"
+          >
+            WeClone
+          </a>{' '}
+          是独立的开源项目：用聊天记录 LoRA 微调出「数字分身」，再以 OpenAI 兼容 API 对外服务。它在本机独立运行，可以作为 Zivith 的自定义供应商接入对话与扮演。
+        </p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li>
+            按 WeClone 文档导出聊天记录并完成训练：
+            <code className="mx-0.5 rounded bg-zinc-100 px-1">weclone-cli make-dataset</code>
+            →{' '}
+            <code className="mx-0.5 rounded bg-zinc-100 px-1">weclone-cli train-sft</code>。
+          </li>
+          <li>
+            本机启动服务：
+            <code className="mx-0.5 rounded bg-zinc-100 px-1">weclone-cli server</code>
+            ，默认地址{' '}
+            <code className="mx-0.5 rounded bg-zinc-100 px-1">http://127.0.0.1:8005/v1</code>。
+          </li>
+          <li>
+            在 Zivith 的 <b>设置 → 模型设置 → 添加供应商</b>：名称随意（如「WeClone 分身」），Base
+            URL 填上面的地址，API Key 任意（服务不校验），格式 OpenAI Chat，模型添加{' '}
+            <code className="rounded bg-zinc-100 px-1">gpt-3.5-turbo</code>
+            （WeClone 忽略模型名，只会用你训好的分身回答）。
+          </li>
+          <li>在对话的模型菜单切到该模型即可；扮演线程同样可在「与此角色对话」前切换选用。</li>
+        </ol>
+        <p className="mt-2 text-zinc-500">
+          注意：分身的说话风格来自微调，Zivith 的记忆系统照常生效；WeClone 为 AGPL-3.0
+          独立进程，与本产品无代码耦合；分身回复系 AI 生成，请勿用于冒充真人。
+        </p>
+      </DocsCard>
+
       <DocsCard title="记忆系统">
         <ul className="list-disc space-y-1 pl-5">
           <li>对话中的事实会自动归档为记忆（L1 原子，按实体聚合成 L2 核心块）。</li>
           <li>与已有设定矛盾的内容<b>不会自动写入</b>：对话里会出现冲突确认卡，由你选择保留新卡还是已有卡。</li>
           <li>
-            在<b>世界工作区</b>的记忆面板查看、删除 L1/L2，展开核心块可溯源到原句。
+            选中角色后，在右侧属性的「全书档案」里查看和修改；下方记忆面板也可编辑 L2。展开核心块可溯源到原句。
           </li>
         </ul>
       </DocsCard>
@@ -112,7 +151,7 @@ function HelpDocs() {
       <DocsCard title="注意事项" accent>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <b>变更前确认是产品围栏</b>：任何写入世界的操作都必须经你确认，设置里锁定开启、无法关闭。
+            <b>写入模式可切换</b>：默认每步确认；半自动会写入常规设定、新建世界仍问你；计划模式先出计划再执行；完全访问自动写入世界。删除项目等高危操作始终询问。已写入的提案可在设置 → 修改记录里查看。
           </li>
           <li>API Key 只保存在本机，不会回传到浏览器，也不会随目录导出。</li>
           <li>Chat 与 Studio 界面固定浅色；时间轴操作的手势与「上一步/下一步」导航无关。</li>
