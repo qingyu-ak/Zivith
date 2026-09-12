@@ -10,7 +10,7 @@ import {
   threadDisplayTitle,
   threadKind,
 } from '@/lib/chat-history';
-import { isDesktopApp } from '@/lib/desktop';
+import { isDesktopApp, WEB_FOLDER_HINT } from '@/lib/desktop';
 import type { CreatorChatKind, CreatorChatThreadDTO, ProjectDTO } from '@/lib/types';
 import { AccountMenu } from '@/components/account-menu';
 import { IconChatPlus, IconFolder, IconPlusCircle, IconSearch, IconSidebar } from '@/components/nav-icons';
@@ -32,6 +32,7 @@ export function ChatSidebar({
   onPickerOpenChange,
   onSelectProject,
   onOpenFolder,
+  onCreateWorld,
   onNewInProject,
   onNewRoleplay,
   onRenameProject,
@@ -48,6 +49,7 @@ export function ChatSidebar({
   onPickerOpenChange: (open: boolean) => void;
   onSelectProject: (projectId: string) => void;
   onOpenFolder: () => void;
+  onCreateWorld?: () => void;
   onNewInProject: (projectId: string) => void;
   onNewRoleplay?: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => void;
@@ -118,23 +120,36 @@ export function ChatSidebar({
             }
             onPickerOpenChange(true);
           }}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-medium text-zinc-800 shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-zinc-200/80 transition hover:bg-zinc-50 disabled:opacity-40"
+          className={`flex h-11 w-full items-center justify-center gap-2 rounded-full text-sm font-medium transition disabled:opacity-40 ${
+            desktop
+              ? 'bg-white text-zinc-800 shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-zinc-200/80 hover:bg-zinc-50'
+              : 'bg-transparent text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50'
+          }`}
         >
           <IconPlusCircle className="size-4 text-zinc-600" />
-          选择文件夹
+          {desktop ? '选择文件夹' : '用桌面应用打开文件夹'}
         </button>
       </div>
 
       {pickerOpen && !desktop ? (
         <div className="mx-3 mt-3 rounded-xl border border-zinc-200 bg-white px-3 py-3">
-          <p className="text-xs leading-5 text-zinc-500">
-            浏览器拿不到真实磁盘路径。请用桌面应用（仓库根目录{' '}
-            <span className="font-mono text-[11px] text-zinc-700">pnpm desktop</span>
-            ）选择文件夹。已打开过的工作区仍可从下面点选。
-          </p>
+          <p className="text-xs leading-5 text-zinc-500">{WEB_FOLDER_HINT}</p>
+          {onCreateWorld ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="mt-2 mr-3 text-xs text-[#4d6bfe] disabled:opacity-40"
+              onClick={() => {
+                onPickerOpenChange(false);
+                onCreateWorld();
+              }}
+            >
+              新建一个世界
+            </button>
+          ) : null}
           <button
             type="button"
-            className="mt-2 text-xs text-[#4d6bfe]"
+            className="mt-2 text-xs text-zinc-500"
             onClick={() => onPickerOpenChange(false)}
           >
             关闭
@@ -182,7 +197,7 @@ export function ChatSidebar({
               ? '没有匹配的项目或对话'
               : desktop
                 ? '点「选择文件夹」打开一个已有目录作为世界。'
-                : '用桌面应用打开一个文件夹，或从已有项目继续。'}
+                : '用桌面应用打开文件夹，或从已有项目继续。也可以新建一个世界。'}
           </p>
         ) : (
           <ul className="grid gap-1">
@@ -468,7 +483,7 @@ export function ChatSidebarRail({
       <button
         type="button"
         className="grid size-9 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-800"
-        aria-label="选择文件夹"
+        aria-label={desktop ? '选择文件夹' : '用桌面应用打开文件夹'}
         onClick={onOpenFolder}
       >
         <IconPlusCircle className="size-5" />

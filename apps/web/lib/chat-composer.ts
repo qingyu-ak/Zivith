@@ -5,9 +5,9 @@ export type ChatEffort = 'fast' | 'balanced' | 'deep';
 export const CHAT_EFFORT_KEY = 'zivith.chatEffort';
 
 export const CHAT_EFFORT_LABEL: Record<ChatEffort, string> = {
-  fast: '最低',
+  fast: '快速',
   balanced: '均衡',
-  deep: '最高',
+  deep: '深度',
 };
 
 /** 与服务端 chat-v1 策略对齐的上下文预算；不是模型窗口上限。 */
@@ -59,6 +59,43 @@ export function formatTokenCount(count: number): string {
     return `${wan >= 10 ? wan.toFixed(0) : wan.toFixed(1).replace(/\.0$/, '')}万`;
   }
   return String(Math.round(count));
+}
+
+/** Cursor 式页脚：12.4k / 24k。 */
+export function formatTokenCompact(count: number): string {
+  if (count >= 1000) {
+    const k = count / 1000;
+    if (k >= 100) return `${Math.round(k)}k`;
+    return `${k.toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  return String(Math.round(count));
+}
+
+export function contextUsagePercent(used: number, cap: number): number {
+  if (cap <= 0) return 0;
+  return Math.max(0, (used / cap) * 100);
+}
+
+/** 用量弹层右侧：12.4k/24k (52%) */
+export function formatContextRatio(
+  used: number,
+  cap: number,
+  options?: { approximate?: boolean },
+): string {
+  const pct = contextUsagePercent(used, cap);
+  const approx = options?.approximate ? '约 ' : '';
+  return `${approx}${formatTokenCompact(used)}/${formatTokenCompact(cap)} (${pct.toFixed(0)}%)`;
+}
+
+/** Chat / Studio 共用页脚：上下文 12.4k/24k (51%) · LLM 3 次 */
+export function formatContextMeter(
+  used: number,
+  cap: number,
+  options?: { approximate?: boolean; llmCalls?: number | null },
+): string {
+  const meter = `上下文 ${formatContextRatio(used, cap, { approximate: options?.approximate })}`;
+  if (options?.llmCalls == null) return meter;
+  return `${meter} · LLM ${options.llmCalls} 次`;
 }
 
 export function llmChoices(catalog: ProviderCatalogDTO | null): LlmChoice[] {

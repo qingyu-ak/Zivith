@@ -232,7 +232,7 @@ function GeneralSection() {
         </p>
         <SettingRow
           title="默认努力程度"
-          description="新对话默认使用的思考深度；对话内可随时切换。"
+          description="新对话默认使用的上下文深度；对话内可随时切换。"
         >
           <select
             className="w-40 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400"

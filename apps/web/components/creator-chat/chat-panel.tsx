@@ -23,6 +23,8 @@ import {
   type MemoryConflictCard,
   type MemoryConflictDecision,
 } from '@/lib/memory-conflicts';
+import { formatMemoryOps } from '@/lib/memory-ops';
+import { ThoughtSummary } from '@/components/creator-chat/thought-summary';
 import { ChatComposer } from '@/components/creator-chat/chat-composer';
 import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
 import {
@@ -59,16 +61,25 @@ import type {
   ProposalKind,
   ProviderCatalogDTO,
   WorldEventDTO,
+  WorldResourcesDTO,
 } from '@/lib/types';
-import { isDesktopApp, pickWorkspaceDirectory, asWorkspacePath } from '@/lib/desktop';
+import { isDesktopApp, pickWorkspaceDirectory, asWorkspacePath, useIsDesktopApp, WEB_CHAT_NEEDS_WORLD, WEB_CHAT_NEEDS_WORLD_EMPTY, WEB_FOLDER_HINT } from '@/lib/desktop';
 import { IconSidebar } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
 import { ChatSidebar, ChatSidebarRail } from './chat-sidebar';
-import { ProposalCard, type ChatProposal } from './proposal-card';
+import { ChatErrorBanner } from './chat-error-banner';
+import { MessageActions } from './message-actions';
+import { ProposalCard } from './proposal-card';
+import {
+  appendUniqueById,
+  errorRetryContent,
+  lastUserContent,
+  retryTargetForMessage,
+} from '@/lib/message-actions';
 import { ChatChoiceMenu, CharacterCardPeek } from './chat-choice-menu';
 import { RoleplayLaunchButton } from './roleplay-launch';
 import { characterCardPreview } from '@/lib/character-card-preview';
-import { parseProposals } from '@/lib/chat-proposals';
+import { handledProposalState, parseProposals } from '@/lib/chat-proposals';
 
 const STARTERS = ['我想创造一个东方玄幻世界', '先介绍一下主角', '帮我检查设定冲突'];
 const NEW_SELF = '__new_self__';
@@ -100,6 +111,7 @@ export function ChatPanel() {
   const [threads, setThreads] = useState<CreatorChatThreadDTO[]>([]);
   const [projects, setProjects] = useState<Pick<ProjectDTO, 'id' | 'name' | 'workspace_path'>[]>([]);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const desktop = useIsDesktopApp();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(Boolean(threadId));
   const [sending, setSending] = useState(false);
@@ -108,12 +120,18 @@ export function ChatPanel() {
   const [memoryConflicts, setMemoryConflicts] = useState<MemoryConflictCard[]>([]);
   const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setErrorState] = useState('');
+  const [errorCanRetry, setErrorCanRetry] = useState(false);
+  const setError = (text: string, retryable = false) => {
+    setErrorState(text);
+    setErrorCanRetry(Boolean(text) && retryable);
+  };
   const [focus, setFocus] = useState<ChatFocus | null>(null);
   const [roleplayThreads, setRoleplayThreads] = useState<RoleplayThreadDTO[]>([]);
   const [characters, setCharacters] = useState<Array<{ id: string; name: string; tags: string[] }>>(
     [],
   );
+  const [worldResources, setWorldResources] = useState<WorldResourcesDTO | null>(null);
   const [characterAssets, setCharacterAssets] = useState<AssetDTO[]>([]);
   const [worldEvents, setWorldEvents] = useState<WorldEventDTO[]>([]);
   const [catalog, setCatalog] = useState<ProviderCatalogDTO | null>(null);
@@ -129,6 +147,9 @@ export function ChatPanel() {
   const [writeMode, setWriteMode] = useState<AgentWriteMode>('confirm');
   const endRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const sendingRef = useRef(false);
+  const lastSentRef = useRef('');
+  const generationIdRef = useRef(0);
   const pendingConsumed = useRef(false);
   const focusHandoff = useRef<ChatFocus | null>(null);
   const focusRef = useRef<ChatFocus | null>(null);
@@ -138,6 +159,7 @@ export function ChatPanel() {
   const writeModeRef = useRef<AgentWriteMode>(writeMode);
   writeModeRef.current = writeMode;
   const autoApplyRef = useRef(new Set<string>());
+  const [applyingProposalIds, setApplyingProposalIds] = useState<string[]>([]);
 
   useEffect(() => {
     const stored = readStoredEffort();
@@ -217,6 +239,7 @@ export function ChatPanel() {
       setCharacters([]);
       setCharacterAssets([]);
       setWorldEvents([]);
+      setWorldResources(null);
       return;
     }
     let cancelled = false;
@@ -224,15 +247,11 @@ export function ChatPanel() {
       try {
         const [roleplay, resources] = await Promise.all([
           listRoleplayThreads(projectId),
-          api<{
-            entities?: {
-              characters?: AssetDTO[];
-              world_events?: WorldEventDTO[];
-            };
-          }>(`/world/projects/${projectId}/resources`),
+          api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`),
         ]);
         if (cancelled) return;
         setRoleplayThreads(roleplay);
+        setWorldResources(resources);
         const assets = (resources.entities?.characters ?? []).filter(
           (character): character is AssetDTO =>
             typeof character.id === 'string' && typeof character.name === 'string',
@@ -259,6 +278,7 @@ export function ChatPanel() {
           setCharacters([]);
           setCharacterAssets([]);
           setWorldEvents([]);
+          setWorldResources(null);
         }
       }
     })();
@@ -306,6 +326,17 @@ export function ChatPanel() {
   useEffect(() => {
     pendingConsumed.current = false;
     focusHandoff.current = null;
+    abortRef.current?.abort();
+    sendingRef.current = false;
+    lastSentRef.current = '';
+    generationIdRef.current += 1;
+    setSending(false);
+    setStopped(false);
+    setStreamText('');
+    setMemoryNote('');
+    setError('');
+    setMessages([]);
+    setLoading(Boolean(threadId));
   }, [threadId]);
 
   useEffect(() => {
@@ -363,7 +394,6 @@ export function ChatPanel() {
     }
   }, []);
 
-  const sendingRef = useRef(false);
   const activeRoleplay = roleplayThreads.find((item) => item.thread_id === threadId) ?? null;
   const activeRoleplayRef = useRef<RoleplayThreadDTO | null>(null);
   activeRoleplayRef.current = activeRoleplay;
@@ -380,6 +410,9 @@ export function ChatPanel() {
     const targetThread = message.thread_id;
     if (!targetThread) return;
     autoApplyRef.current.add(message.id);
+    setApplyingProposalIds((current) =>
+      current.includes(message.id) ? current : [...current, message.id],
+    );
     try {
       await api(`/world/creator-chats/${targetThread}/proposals/${message.id}/apply`, {
         method: 'POST',
@@ -392,15 +425,40 @@ export function ChatPanel() {
       );
       void load();
       loadThreads();
-    } catch {
+    } catch (reason) {
+      const handled = handledProposalState(reason);
+      if (handled === 'applied') {
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === message.id ? { ...item, proposal_state: 'applied' } : item,
+          ),
+        );
+        void load();
+        loadThreads();
+        return;
+      }
+      if (handled === 'rejected') {
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === message.id ? { ...item, proposal_state: 'rejected' } : item,
+          ),
+        );
+        return;
+      }
       autoApplyRef.current.delete(message.id);
+      setError('自动写入失败，请手动确认提案');
+    } finally {
+      setApplyingProposalIds((current) => current.filter((id) => id !== message.id));
     }
   }, [load, loadThreads]);
 
   const sendContent = useCallback(
-    async (content: string) => {
-      if (!threadId || sendingRef.current) return;
+    async (content: string, options?: { retry?: boolean }) => {
+      const trimmed = content.trim();
+      if (!threadId || sendingRef.current || !trimmed) return;
       sendingRef.current = true;
+      lastSentRef.current = trimmed;
+      const generation = ++generationIdRef.current;
       setError('');
       setSending(true);
       setStopped(false);
@@ -409,16 +467,19 @@ export function ChatPanel() {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+      const stillCurrent = () => generation === generationIdRef.current;
       let acceptedUser = false;
+      let sawDone = false;
       try {
         let sawError = '';
         const onEvent = (event: string, data: unknown) => {
+          if (!stillCurrent()) return;
           const record = asRecord(data);
           if (event === 'user') {
             const userMessage = asChatMessage(record?.user_message);
             if (userMessage) {
               acceptedUser = true;
-              setMessages((current) => [...current, userMessage]);
+              setMessages((current) => appendUniqueById(current, userMessage));
             }
             return;
           }
@@ -439,9 +500,10 @@ export function ChatPanel() {
             return;
           }
           if (event === 'done') {
+            sawDone = true;
             const assistantMessage = asChatMessage(record?.assistant_message);
             if (assistantMessage) {
-              setMessages((current) => [...current, assistantMessage]);
+              setMessages((current) => appendUniqueById(current, assistantMessage));
               void autoApplyIfAllowed(assistantMessage);
             }
             setStreamText('');
@@ -457,19 +519,29 @@ export function ChatPanel() {
           }
         };
         const roleplay = activeRoleplayRef.current;
+        const retryOpts = options?.retry ? { retry: true } : undefined;
         if (roleplay) {
-          await sendRoleplayTurn(roleplay.id, content, onEvent, effortRef.current, controller.signal);
+          await sendRoleplayTurn(
+            roleplay.id,
+            trimmed,
+            onEvent,
+            effortRef.current,
+            controller.signal,
+            retryOpts,
+          );
         } else {
           await sendCreatorChatTurn(
             threadId,
-            content,
+            trimmed,
             onEvent,
             focusRef.current,
             effortRef.current,
             controller.signal,
+            retryOpts,
           );
         }
         if (sawError) throw new Error(sawError);
+        if (!stillCurrent()) return;
         setThreads((current) => {
           const target = current.find((item) => item.id === threadId);
           if (!target) return current;
@@ -479,23 +551,28 @@ export function ChatPanel() {
           ];
         });
       } catch (reason) {
+        if (!stillCurrent()) return;
         const aborted =
           (reason instanceof DOMException && reason.name === 'AbortError') ||
           (reason instanceof Error && reason.name === 'AbortError');
         if (aborted) {
           setStopped(true);
         } else {
-          setError(errorMessage(reason));
-          if (!acceptedUser) setInput(content);
+          setError(errorMessage(reason), true);
+          if (!acceptedUser) {
+            setInput((current) => (current.trim() ? current : trimmed));
+          }
           setStreamText('');
         }
       } finally {
+        if (!stillCurrent()) return;
         if (abortRef.current === controller) abortRef.current = null;
         sendingRef.current = false;
         setSending(false);
+        if (!sawDone) void load();
       }
     },
-    [threadId, autoApplyIfAllowed],
+    [threadId, autoApplyIfAllowed, load],
   );
 
   function stopGeneration() {
@@ -677,19 +754,15 @@ export function ChatPanel() {
     const targetProjectId = projectId?.trim() || thread?.project_id || undefined;
     if (!targetProjectId) {
       setFolderPickerOpen(true);
-      setError(
-        isDesktopApp()
-          ? '请先选择一个文件夹作为世界项目'
-          : '请用桌面应用选择文件夹，或从侧栏点选已有项目',
-      );
       return;
     }
     setError('');
     setBusy(true);
     try {
-      if (firstMessage) {
-        sessionStorage.setItem(PENDING_CHAT_TURN_KEY, firstMessage);
-      }
+    if (firstMessage) {
+      sessionStorage.setItem(PENDING_CHAT_TURN_KEY, firstMessage);
+      setInput('');
+    }
       const created = await api<unknown>('/world/creator-chats', {
         method: 'POST',
         body: { project_id: targetProjectId, title: null },
@@ -726,6 +799,10 @@ export function ChatPanel() {
   }
 
   async function pickFolder() {
+    if (!isDesktopApp()) {
+      setFolderPickerOpen(true);
+      return;
+    }
     try {
       const folderPath = await pickWorkspaceDirectory();
       if (!folderPath) return;
@@ -733,6 +810,24 @@ export function ChatPanel() {
     } catch (reason) {
       setFolderPickerOpen(true);
       setError(errorMessage(reason));
+    }
+  }
+
+  async function createBareWorld() {
+    setError('');
+    setBusy(true);
+    try {
+      const created = await api<{ id?: string }>('/projects', {
+        method: 'POST',
+        body: { name: '未命名世界' },
+      });
+      const id = typeof created.id === 'string' ? created.id : null;
+      if (!id) throw new Error('无法创建世界');
+      setBusy(false);
+      await startThread(undefined, id);
+    } catch (reason) {
+      setError(errorMessage(reason));
+      setBusy(false);
     }
   }
 
@@ -814,7 +909,8 @@ export function ChatPanel() {
     projects[0]?.id;
   const settingsHref = settingsHrefFor(settingsProjectId);
   const empty = (!threadId || messages.length === 0) && !sending && !streamText && !loading;
-  const canSend = input.trim().length > 0 && !sending && !busy;
+  const worldBound = Boolean(threadId);
+  const canSend = worldBound && input.trim().length > 0 && !sending && !busy;
   const speakerOptions = characters
     .filter((item) => item.id !== activeRoleplay?.character_asset_id)
     .slice()
@@ -852,7 +948,13 @@ export function ChatPanel() {
       />
       <div className="flex min-h-0 flex-1">
       {collapsed ? (
-        <ChatSidebarRail onToggle={toggleCollapsed} onOpenFolder={() => void pickFolder()} />
+        <ChatSidebarRail
+          onToggle={toggleCollapsed}
+          onOpenFolder={() => {
+            if (collapsed) toggleCollapsed();
+            void pickFolder();
+          }}
+        />
       ) : (
         <ChatSidebar
           threads={threads}
@@ -865,6 +967,7 @@ export function ChatPanel() {
           onPickerOpenChange={setFolderPickerOpen}
           onSelectProject={selectProject}
           onOpenFolder={() => void pickFolder()}
+          onCreateWorld={() => void createBareWorld()}
           onNewInProject={(projectId) => void startThread(undefined, projectId)}
           onNewRoleplay={(projectId) => setRoleplayPicker(projectId)}
           onRenameProject={(projectId, name) => void renameProject(projectId, name)}
@@ -1086,40 +1189,62 @@ export function ChatPanel() {
                     <div className="mx-auto mb-4 grid size-10 place-items-center rounded-full bg-white text-sm font-bold text-[#4d6bfe] shadow-sm">
                       Z
                     </div>
-                    <p className="text-lg font-medium text-zinc-900">开始构建你的世界</p>
-                    <p className="mt-2 text-sm leading-6 text-zinc-500">
-                      {thread?.project_id
-                        ? '这个对话属于当前工作区。确认后的设定会写成草稿，可在 Studio 里改 IP Core 和实体。'
-                        : '侧栏「选择文件夹」打开一个已有目录作为世界。项目里可以新开聊天、改名、删除对话。'}
-                    </p>
                     {thread?.project_id ? (
-                      <div className="mt-6 flex flex-wrap justify-center gap-2">
-                        {STARTERS.map((starter) => (
-                          <button
-                            key={starter}
-                            type="button"
-                            disabled={sending || busy}
-                            className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900 disabled:opacity-40"
-                            onClick={() => {
-                              if (!threadId) {
-                                void startThread(starter);
-                                return;
-                              }
-                              void sendContent(starter);
-                            }}
-                          >
-                            {starter}
-                          </button>
-                        ))}
-                      </div>
+                      <>
+                        <p className="text-lg font-medium text-zinc-900">开始构建你的世界</p>
+                        <p className="mt-2 text-sm leading-6 text-zinc-500">
+                          这个对话属于当前工作区。确认后的设定会写成草稿，可在 Studio 里改 IP Core 和实体。
+                        </p>
+                        <div className="mt-6 flex flex-wrap justify-center gap-2">
+                          {STARTERS.map((starter) => (
+                            <button
+                              key={starter}
+                              type="button"
+                              disabled={sending || busy}
+                              className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900 disabled:opacity-40"
+                              onClick={() => void sendContent(starter)}
+                            >
+                              {starter}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    ) : projects.length > 0 ? (
+                      <>
+                        <p className="text-lg font-medium text-zinc-900">从左侧选择一个项目</p>
+                        <p className="mt-2 text-sm leading-6 text-zinc-500">
+                          已有世界列在侧栏。点选后即可对话；新文件夹请用桌面应用打开。
+                        </p>
+                      </>
                     ) : (
-                      <button
-                        type="button"
-                        className="mt-6 inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
-                        onClick={() => void pickFolder()}
-                      >
-                        选择文件夹
-                      </button>
+                      <>
+                        <p className="text-lg font-medium text-zinc-900">先打开一个世界</p>
+                        <p className="mt-2 text-sm leading-6 text-zinc-500">
+                          {desktop
+                            ? '点「选择文件夹」打开一个已有目录作为世界。'
+                            : WEB_FOLDER_HINT}
+                        </p>
+                        <div className="mt-6 flex flex-wrap justify-center gap-2">
+                          {desktop ? (
+                            <button
+                              type="button"
+                              className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
+                              onClick={() => void pickFolder()}
+                            >
+                              选择文件夹
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+                              onClick={() => void createBareWorld()}
+                            >
+                              新建一个世界
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -1132,9 +1257,10 @@ export function ChatPanel() {
                       </p>
                     );
                   }
+                  const retry = retryTargetForMessage(messages, message.id);
                   if (message.role === 'user') {
                     return (
-                      <div key={message.id} className="flex justify-end">
+                      <div key={message.id} className="group flex justify-end">
                         <div className="max-w-[80%]">
                           {activeRoleplay && (
                             <p className="mb-1 text-right text-xs font-medium text-zinc-400">
@@ -1144,12 +1270,21 @@ export function ChatPanel() {
                           <div className="rounded-2xl bg-[#eef0f4] px-4 py-2.5 text-sm leading-6 text-zinc-800">
                             <p className="whitespace-pre-wrap">{message.content}</p>
                           </div>
+                          <MessageActions
+                            copyText={message.content}
+                            align="end"
+                            busy={sending}
+                            retry={() => {
+                              if (retry?.ok) void sendContent(retry.content, { retry: true });
+                            }}
+                            retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
+                          />
                         </div>
                       </div>
                     );
                   }
                   return (
-                    <div key={message.id} className="min-w-0">
+                    <div key={message.id} className="group min-w-0">
                       {activeRoleplay && (
                         <p className="mb-1 text-xs font-medium text-[#4d6bfe]">
                           {activeRoleplay.character_name}
@@ -1165,6 +1300,7 @@ export function ChatPanel() {
                           proposals={proposals}
                           applied={applied}
                           rejected={rejected}
+                          applying={applyingProposalIds.includes(message.id)}
                           plan={
                             decideWriteAction(
                               writeMode,
@@ -1177,29 +1313,46 @@ export function ChatPanel() {
                               proposals.map((item) => item.kind),
                             ) === 'plan'
                               ? '按此计划写入'
-                              : '确认'
+                              : undefined
                           }
                           onApplied={handleApplied}
                           onRejected={handleApplied}
                         />
                       )}
+                      <MessageActions
+                        copyText={message.content}
+                        busy={sending}
+                        retry={() => {
+                          if (retry?.ok) void sendContent(retry.content, { retry: true });
+                        }}
+                        retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
+                      />
                     </div>
                   );
                 })}
                 {(sending || stopped) && streamText && (
-                  <div>
+                  <div className="group">
                     <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
                       {streamText}
                     </p>
                     {stopped ? (
                       <p className="mt-1 text-xs text-zinc-400">已停止生成</p>
                     ) : null}
+                    <MessageActions
+                      copyText={streamText}
+                      busy={sending}
+                      retry={() => {
+                        const content = lastUserContent(messages) ?? lastSentRef.current;
+                        if (content.trim()) void sendContent(content, { retry: true });
+                      }}
+                      retryBlocked={
+                        lastUserContent(messages) || lastSentRef.current.trim() ? null : 'empty'
+                      }
+                    />
                   </div>
                 )}
                 {sending && !streamText && <p className="text-sm text-zinc-400">正在思考…</p>}
-                {memoryNote && !sending && (
-                  <p className="px-1 pb-1 text-xs text-zinc-400">{memoryNote}</p>
-                )}
+                {memoryNote && !sending ? <ThoughtSummary note={memoryNote} /> : null}
                 {!sending && memoryConflicts.length > 0 && (
                   <ul className="space-y-2 pb-1">
                     {memoryConflicts.map((card) => (
@@ -1218,11 +1371,23 @@ export function ChatPanel() {
             </div>
 
             <div className="px-4 pb-3 pt-1 lg:px-6">
-              {error && (
-                <p className="mx-auto mb-2 max-w-2xl px-1 text-xs text-red-500" role="alert">
-                  {error}
-                </p>
-              )}
+              {error ? (
+                <div className="mx-auto mb-2 max-w-2xl">
+                  <ChatErrorBanner
+                    message={error}
+                    busy={sending}
+                    onRetry={
+                      errorCanRetry
+                        ? () => {
+                            const content = errorRetryContent(lastSentRef.current, messages);
+                            if (content) void sendContent(content, { retry: true });
+                          }
+                        : undefined
+                    }
+                    onDismiss={() => setError('')}
+                  />
+                </div>
+              ) : null}
               {focus && (
                 <div className="mx-auto mb-2 flex max-w-2xl items-center justify-between gap-2 rounded-2xl bg-[#eef2ff] px-3 py-1.5 text-xs text-[#1e3a8a]">
                   <span>
@@ -1240,14 +1405,21 @@ export function ChatPanel() {
               <ChatComposer
                 value={input}
                 placeholder={
-                  focus
+                  !threadId
+                    ? projects.length > 0
+                      ? WEB_CHAT_NEEDS_WORLD
+                      : WEB_CHAT_NEEDS_WORLD_EMPTY
+                    : focus
                     ? `继续完善「${focus.name}」…`
                     : activeRoleplay
                       ? `对「${activeRoleplay.character_name}」说…`
-                      : '发给世界构建者…'
+                      : worldResources
+                        ? '发给世界构建者，或输入 @ 引用实体…'
+                        : '发给世界构建者…'
                 }
                 sending={sending}
                 canSend={canSend}
+                blocked={!threadId}
                 projectId={thread?.project_id}
                 settingsProjectId={settingsProjectId}
                 threadId={threadId}
@@ -1268,6 +1440,12 @@ export function ChatPanel() {
                 onNewChat={() => {
                   if (thread?.project_id) void startThread(undefined, thread.project_id);
                   else void pickFolder();
+                }}
+                resources={worldResources}
+                mentionEnabled={!activeRoleplay && Boolean(thread?.project_id)}
+                onMentionPick={(entity) => {
+                  focusRef.current = entity;
+                  setFocus(entity);
                 }}
               />
               <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-zinc-400">
@@ -1399,22 +1577,3 @@ function MemoryConflictNotice({
   );
 }
 
-function formatMemoryOps(ops: Record<string, unknown>): string {  const added = Number(ops.added ?? 0);
-  const updated = Number(ops.updated ?? 0);
-  const noop = Number(ops.noop ?? 0);
-  const conflicts = Array.isArray(ops.conflicts) ? ops.conflicts.length : 0;
-  const parts = [`归档 ${added}`];
-  if (updated > 0) parts.push(`合并 ${updated}`);
-  if (noop > 0) parts.push(`重复 ${noop}`);
-  if (conflicts > 0) {
-    const first = Array.isArray(ops.conflicts) ? ops.conflicts[0] : null;
-    const record =
-      first && typeof first === 'object' ? (first as Record<string, unknown>) : null;
-    const hint =
-      (typeof record?.content === 'string' && record.content.trim()) ||
-      (typeof record?.existing_content === 'string' && record.existing_content.trim()) ||
-      '';
-    parts.push(hint ? `冲突 ${conflicts}（待确认：${hint.slice(0, 24)}）` : `冲突 ${conflicts}（待确认）`);
-  }
-  return `记忆：${parts.join(' · ')}`;
-}

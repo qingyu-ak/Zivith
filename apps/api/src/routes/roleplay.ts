@@ -11,7 +11,8 @@ import {
   buildCharacterState,
   type RoleplayChatMessage,
 } from '../contexts/roleplay/roleplay-agent.js';
-import { formatSseEvent } from '../lib/sse.js';
+import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
+import { canReuseLastUser } from '../lib/chat-turn.js';
 import { chunkReply } from '../contexts/world-builder/world-builder-agent.js';
 import type { LLMAdapter } from '../ports/llm.js';
 import { effortDto, resolveAgentEffort, type EffectiveAgentEffort } from '../contexts/agent-effort.js';
@@ -205,6 +206,7 @@ export function registerRoleplayRoutes(
             z.object({ level: z.enum(['fast', 'balanced', 'deep']) }).strict(),
           ])
           .optional(),
+        retry: z.boolean().optional(),
       })
       .strict()
       .parse(request.body ?? {});
@@ -212,9 +214,18 @@ export function registerRoleplayRoutes(
     if (!roleplay || roleplay.status !== 'active') {
       throw new ApiError(404, 'THREAD_NOT_FOUND', '扮演线程不存在或已关闭');
     }
-    const userMessage = await db.creatorChatMessage.create({
-      data: { threadId: roleplay.threadId, role: 'user', content: body.content },
-    });
+    const lastMessage = body.retry
+      ? await db.creatorChatMessage.findFirst({
+          where: { threadId: roleplay.threadId },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    const userMessage =
+      canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
+        ? lastMessage
+        : await db.creatorChatMessage.create({
+            data: { threadId: roleplay.threadId, role: 'user', content: body.content },
+          });
 
     const effort = resolveAgentEffort(body.effort);
     const agent = currentAgent();
@@ -344,15 +355,18 @@ async function pipeRoleplaySse(
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
+    'Content-Encoding': 'identity',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
     ...(origin ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}),
   });
+  flushHttpStream(reply.raw);
 
   let closed = false;
   const writeEvent = (event: string, data: unknown) => {
     if (closed) return;
     reply.raw.write(formatSseEvent(event, data));
+    flushHttpStream(reply.raw);
   };
   const cleanup = () => {
     closed = true;

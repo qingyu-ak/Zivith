@@ -13,6 +13,7 @@ import {
   studioHrefForEntity,
   parseStudioSelect,
   chatHrefForStudio,
+  pickStudioAgentThread,
 } from './creator-chat-nav';
 import type { WorldResourcesDTO } from './types';
 
@@ -56,11 +57,17 @@ function resources(): WorldResourcesDTO {
 describe('normalizeThread', () => {
   it('accepts snake_case and camelCase payloads', () => {
     expect(
-      normalizeThread({ id: 't1', projectId: 'p1', updatedAt: '2026-01-01T00:00:00.000Z' }),
+      normalizeThread({
+        id: 't1',
+        projectId: 'p1',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        pending_proposal_count: 2,
+      }),
     ).toMatchObject({
       id: 't1',
       project_id: 'p1',
       updated_at: '2026-01-01T00:00:00.000Z',
+      pending_proposal_count: 2,
     });
     expect(
       normalizeThread({
@@ -168,5 +175,27 @@ describe('shell jump hrefs', () => {
     expect(chatHrefForStudio('t1')).toBe('/creator-chats/t1');
     expect(chatHrefForStudio(null)).toBe('/creator-chats');
     expect(chatHrefForStudio(undefined)).toBe('/creator-chats');
+  });
+
+  it('pickStudioAgentThread 记住上次打开的世界构建线程', () => {
+    const world = normalizeThread({
+      id: 't1',
+      kind: 'world',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    })!;
+    const older = normalizeThread({
+      id: 't2',
+      kind: 'world',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })!;
+    const play = normalizeThread({
+      id: 'r1',
+      kind: 'roleplay',
+      updatedAt: '2026-01-03T00:00:00.000Z',
+    })!;
+    expect(pickStudioAgentThread([play, world, older], null)).toBe('t1');
+    expect(pickStudioAgentThread([play, world, older], 't2')).toBe('t2');
+    expect(pickStudioAgentThread([play, world, older], 'r1')).toBe('t1');
+    expect(pickStudioAgentThread([play], 'r1')).toBeNull();
   });
 });

@@ -5,7 +5,12 @@ import {
   displayModelId,
   estimateMessageTokens,
   filterLlmChoices,
+  formatTokenCompact,
   formatTokenCount,
+  formatContextMeter,
+  formatContextRatio,
+  contextUsagePercent,
+  CHAT_EFFORT_LABEL,
   isLlmDegraded,
   llmChoices,
   selectedLlmLabel,
@@ -68,6 +73,28 @@ describe('chat composer helpers', () => {
     expect(formatTokenCount(97_000)).toBe('9.7万');
     expect(formatTokenCount(1_000_000)).toBe('100万');
     expect(formatTokenCount(320)).toBe('320');
+  });
+
+  it('formats compact k counts for the context footer', () => {
+    expect(formatTokenCompact(12_400)).toBe('12.4k');
+    expect(formatTokenCompact(24_000)).toBe('24k');
+    expect(formatTokenCompact(8000)).toBe('8k');
+    expect(formatTokenCompact(320)).toBe('320');
+  });
+
+  it('labels effort as 快速 / 均衡 / 深度', () => {
+    expect(CHAT_EFFORT_LABEL.fast).toBe('快速');
+    expect(CHAT_EFFORT_LABEL.balanced).toBe('均衡');
+    expect(CHAT_EFFORT_LABEL.deep).toBe('深度');
+  });
+
+  it('builds a shared Chinese context meter line', () => {
+    expect(formatContextRatio(12_400, 24_000)).toBe('12.4k/24k (52%)');
+    expect(formatContextMeter(12_400, 24_000)).toBe('上下文 12.4k/24k (52%)');
+    expect(formatContextMeter(800, 8_000, { approximate: true, llmCalls: 3 })).toBe(
+      '上下文 约 800/8k (10%) · LLM 3 次',
+    );
+    expect(contextUsagePercent(23_000, 24_000)).toBeGreaterThanOrEqual(90);
   });
 
   it('lists each provider model by API id', () => {

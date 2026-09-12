@@ -14,6 +14,14 @@ export const AGENT_WRITE_MODE_LABEL: Record<AgentWriteMode, string> = {
   full: '完全访问',
 };
 
+/** Agent 窄栏触发器用，完整名称留在下拉里。 */
+export const AGENT_WRITE_MODE_SHORT: Record<AgentWriteMode, string> = {
+  confirm: '确认',
+  semi: '半自动',
+  plan: '计划',
+  full: '完全访问',
+};
+
 export const AGENT_WRITE_MODE_HINT: Record<AgentWriteMode, string> = {
   confirm: '每步写入前先问你',
   semi: '常规设定自动写入，新建世界仍确认',

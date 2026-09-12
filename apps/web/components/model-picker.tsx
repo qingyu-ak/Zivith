@@ -83,7 +83,7 @@ export function ModelPicker({ projectId }: { projectId?: string | null }) {
     <div className="relative" ref={rootRef}>
       <button
         type="button"
-        className="inline-flex h-7 max-w-[9rem] items-center gap-1 rounded-full px-2 text-[11px] text-zinc-600 transition hover:bg-zinc-100"
+        className="inline-flex h-7 max-w-[7rem] items-center gap-1 rounded-full px-2 text-[11px] text-zinc-600 transition hover:bg-zinc-100"
         aria-label="选择模型"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { api, errorMessage } from '@/lib/api';
-import { settingsHrefFor } from '@/lib/creator-chat-nav';
+import { settingsHrefFor, type ChatFocus } from '@/lib/creator-chat-nav';
 import { captureSettingsReturn } from '@/lib/settings-return';
 import {
   CHAT_EFFORT_HINT,
@@ -11,6 +11,8 @@ import {
   CHAT_EFFORT_TOKEN_CAP,
   estimateMessageTokens,
   formatTokenCount,
+  formatContextRatio,
+  contextUsagePercent,
   llmChoices,
   selectedLlmLabel,
   writeStoredEffort,
@@ -18,7 +20,7 @@ import {
   filterLlmChoices,
   type ChatEffort,
 } from '@/lib/chat-composer';
-import type { ProviderCatalogDTO, ProviderId } from '@/lib/types';
+import type { ProviderCatalogDTO, ProviderId, WorldResourcesDTO } from '@/lib/types';
 import {
   IconBrain,
   IconCheck,
@@ -29,7 +31,6 @@ import {
   IconSend,
   IconShieldAlert,
   IconShieldCheck,
-  IconStatus,
   IconStop,
 } from '@/components/nav-icons';
 import {
@@ -39,6 +40,15 @@ import {
   writeStoredWriteMode,
   type AgentWriteMode,
 } from '@/lib/agent-write-mode';
+import {
+  filterFocusableEntities,
+  insertAtTrigger,
+  insertMention,
+  incompleteMentionHint,
+  listFocusableEntities,
+  mentionQueryAt,
+} from '@/lib/agent-mentions';
+import { MentionMenu } from './mention-menu';
 
 type MenuKind = 'confirm' | 'usage' | 'model' | 'effort' | null;
 
@@ -78,6 +88,10 @@ export function ChatComposer({
   onSubmit,
   onStop,
   onNewChat,
+  resources = null,
+  mentionEnabled = false,
+  onMentionPick,
+  blocked = false,
 }: {
   value: string;
   placeholder: string;
@@ -95,6 +109,11 @@ export function ChatComposer({
   onSubmit: () => void;
   onStop?: () => void;
   onNewChat: () => void;
+  resources?: WorldResourcesDTO | null;
+  mentionEnabled?: boolean;
+  onMentionPick?: (entity: ChatFocus) => void;
+  /** 还没有选中世界时锁定输入，避免发送后才报错。 */
+  blocked?: boolean;
 }) {
   const rootRef = useRef<HTMLFormElement | null>(null);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -106,6 +125,24 @@ export function ChatComposer({
   const [usage, setUsage] = useState<ProjectUsageDTO | null>(null);
   const [modelQuery, setModelQuery] = useState('');
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const [cursor, setCursor] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const mention = mentionEnabled ? mentionQueryAt(value, cursor) : null;
+  const mentionItems = useMemo(() => {
+    if (!mention || !resources) return [];
+    return filterFocusableEntities(listFocusableEntities(resources), mention.query);
+  }, [mention?.start, mention?.query, resources]);
+  const mentionMenuOpen = Boolean(mentionEnabled && mention);
+  const mentionHint = mentionEnabled ? incompleteMentionHint(value, cursor, mentionItems.length) : null;
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mention?.query, mention?.start]);
+
+  useEffect(() => {
+    if (cursor > value.length) setCursor(value.length);
+  }, [value, cursor]);
 
   useEffect(() => {
     void api<ProviderCatalogDTO>('/providers')
@@ -114,7 +151,6 @@ export function ChatComposer({
   }, []);
 
   useEffect(() => {
-    if (menu !== 'usage') return;
     let cancelled = false;
     if (threadId) {
       void api<ThreadContextDTO>(
@@ -143,7 +179,7 @@ export function ChatComposer({
     return () => {
       cancelled = true;
     };
-  }, [menu, threadId, projectId, effort]);
+  }, [threadId, projectId, effort, messageTexts.length]);
 
   useEffect(() => {
     if (!menu) return;
@@ -174,11 +210,11 @@ export function ChatComposer({
   }, []);
 
   const cap = context?.token_cap ?? CHAT_EFFORT_TOKEN_CAP[effort];
-  const used = context?.token_estimate ?? estimateMessageTokens(messageTexts.concat(value));
-  const usedLabel = formatTokenCount(used);
-  const capLabel = formatTokenCount(cap);
-  const usedPct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
+  const historyTokens = context?.token_estimate ?? estimateMessageTokens(messageTexts);
+  const used = historyTokens + estimateMessageTokens([value]);
+  const usedPct = contextUsagePercent(used, cap);
   const llmUsage = usage?.by_task_type.find((item) => item.task_type.startsWith('llm'));
+  const contextRatio = formatContextRatio(used, cap, { approximate: !context });
   const choices = llmChoices(catalog);
   const visibleChoices = filterLlmChoices(choices, modelQuery);
   const modelLabel = selectedLlmLabel(catalog);
@@ -214,13 +250,74 @@ export function ChatComposer({
     }
   }
 
+  function applyMention(entity: ChatFocus) {
+    if (!mention) return;
+    const next = insertMention(value, cursor, mention.start, entity.name);
+    onChange(next.text);
+    setCursor(next.cursor);
+    onMentionPick?.(entity);
+    setNotice('');
+    requestAnimationFrame(() => {
+      const area = areaRef.current;
+      if (!area) return;
+      area.focus();
+      area.setSelectionRange(next.cursor, next.cursor);
+    });
+  }
+
+  function insertAtFromToolbar() {
+    const at = areaRef.current?.selectionStart ?? cursor;
+    const next = insertAtTrigger(value, at);
+    onChange(next.text);
+    setCursor(next.cursor);
+    setMenu(null);
+    requestAnimationFrame(() => {
+      const area = areaRef.current;
+      if (!area) return;
+      area.focus();
+      area.setSelectionRange(next.cursor, next.cursor);
+    });
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSend) return;
+    if (mentionHint) {
+      setNotice(mentionHint);
+      return;
+    }
+    if (blocked || !canSend) return;
     onSubmit();
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (mentionMenuOpen) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setMentionIndex((index) => Math.min(Math.max(mentionItems.length - 1, 0), index + 1));
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setMentionIndex((index) => Math.max(0, index - 1));
+        return;
+      }
+      if ((event.key === 'Enter' || event.key === 'Tab') && mentionItems.length > 0) {
+        const picked = mentionItems[mentionIndex] ?? mentionItems[0];
+        if (picked) {
+          event.preventDefault();
+          applyMention(picked);
+        }
+        return;
+      }
+      if (event.key === 'Escape' && mention) {
+        event.preventDefault();
+        const next = `${value.slice(0, mention.start)}${value.slice(cursor)}`;
+        onChange(next);
+        setCursor(mention.start);
+        setNotice('');
+        return;
+      }
+    }
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       event.currentTarget.closest('form')?.requestSubmit();
@@ -233,16 +330,36 @@ export function ChatComposer({
       className="relative mx-auto max-w-2xl rounded-[28px] border border-zinc-200 bg-white px-3 pb-2 pt-3 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
       onSubmit={handleSubmit}
     >
-      <textarea
-        ref={areaRef}
-        className="min-h-[52px] w-full resize-none bg-transparent px-2 py-1 text-sm leading-6 text-zinc-800 outline-none placeholder:text-zinc-400 disabled:text-zinc-400"
-        placeholder={placeholder}
-        value={value}
-        rows={2}
-        readOnly={sending}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={handleKeyDown}
-      />
+      <div className="relative">
+        {mentionMenuOpen ? (
+          <MentionMenu
+            items={mentionItems}
+            activeIndex={mentionIndex}
+            onPick={applyMention}
+            emptyHint={resources ? '没有匹配的实体' : '打开世界项目后才能引用实体'}
+            id="chat-mention-list"
+          />
+        ) : null}
+        <textarea
+          ref={areaRef}
+          className="min-h-[52px] w-full resize-none bg-transparent px-2 py-1 text-sm leading-6 text-zinc-800 outline-none placeholder:text-zinc-400 disabled:text-zinc-400"
+          placeholder={placeholder}
+          value={value}
+          rows={2}
+          readOnly={sending || blocked}
+          aria-autocomplete={mentionEnabled ? 'list' : undefined}
+          aria-expanded={mentionMenuOpen}
+          aria-controls={mentionMenuOpen ? 'chat-mention-list' : undefined}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setCursor(event.target.selectionStart);
+            if (notice) setNotice('');
+          }}
+          onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
+          onKeyUp={(event) => setCursor(event.currentTarget.selectionStart)}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
       {notice ? (
         <p className="px-2 pb-1 text-[11px] text-red-500" role="alert">
           {notice}
@@ -257,6 +374,18 @@ export function ChatComposer({
         >
           <IconPlus className="size-4" />
         </button>
+        {mentionEnabled ? (
+          <button
+            type="button"
+            className="grid size-8 place-items-center rounded-full text-[15px] font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+            aria-label="引用实体"
+            title="输入 @ 引用实体，选中后作为本轮聚焦"
+            disabled={sending}
+            onClick={insertAtFromToolbar}
+          >
+            @
+          </button>
+        ) : null}
         <div className="relative">
           <button
             type="button"
@@ -304,19 +433,18 @@ export function ChatComposer({
           <button
             type="button"
             className="grid size-8 place-items-center rounded-full text-zinc-500 hover:bg-zinc-100"
-            aria-label="用量与上下文"
+            aria-label={`本轮上下文预算 ${contextRatio}`}
             aria-expanded={menu === 'usage'}
+            title={`本轮预算 ${contextRatio}（努力程度，不是模型窗口）`}
             onClick={() => setMenu(menu === 'usage' ? null : 'usage')}
           >
-            <IconStatus className="size-4" />
+            <ContextUsageRing percent={usedPct} hot={usedPct >= 90} />
           </button>
           {menu === 'usage' ? (
             <div className="absolute bottom-[calc(100%+8px)] right-0 z-20 w-80 rounded-2xl border border-zinc-200 bg-white p-3.5 text-sm shadow-[0_12px_40px_rgba(15,23,42,0.12)]">
               <div className="flex items-baseline justify-between gap-3">
-                <p className="text-zinc-500">本轮上下文</p>
-                <p className="tabular-nums text-zinc-800">
-                  {usedLabel}/{capLabel}（{usedPct.toFixed(1)}%）
-                </p>
+                <p className="text-zinc-500">本轮预算</p>
+                <p className="tabular-nums text-zinc-800">{contextRatio}</p>
               </div>
               <p className="mt-1 text-[11px] text-zinc-400">
                 {CHAT_EFFORT_LABEL[effort]} · {CHAT_EFFORT_HINT[effort]}
@@ -324,10 +452,13 @@ export function ChatComposer({
                   ? ` · 摘要 v${context.summary_version ?? 1}`
                   : ''}
               </p>
+              <p className="mt-1 text-[11px] text-zinc-400">
+                由努力程度决定，不是模型上下文上限。
+              </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100">
                 <div
                   className="h-full rounded-full bg-zinc-800"
-                  style={{ width: `${Math.max(usedPct, used > 0 ? 4 : 0)}%` }}
+                  style={{ width: `${Math.min(100, Math.max(usedPct, used > 0 ? 4 : 0))}%` }}
                 />
               </div>
               <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3">
@@ -500,15 +631,30 @@ export function ChatComposer({
         ) : (
           <button
             type="submit"
-            disabled={!canSend}
+            disabled={!canSend || Boolean(mentionHint) || blocked}
             className="grid size-8 place-items-center rounded-lg bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
             aria-label="发送"
+            title={mentionHint ?? '发送'}
           >
             <IconSend className="size-4" />
           </button>
         )}
       </div>
     </form>
+  );
+}
+
+function ContextUsageRing({ percent, hot }: { percent: number; hot: boolean }) {
+  const fill = Math.min(100, Math.max(0, percent));
+  const color = hot ? '#d97706' : '#3f3f46';
+  return (
+    <span className="relative grid size-4 place-items-center" aria-hidden>
+      <span
+        className="absolute inset-0 rounded-full"
+        style={{ background: `conic-gradient(${color} ${fill}%, #e4e4e7 0)` }}
+      />
+      <span className="relative size-2.5 rounded-full bg-white" />
+    </span>
   );
 }
 

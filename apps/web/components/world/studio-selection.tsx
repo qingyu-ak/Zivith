@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from 'react';
@@ -88,37 +89,55 @@ export function StudioSelectionProvider({
   }, [reload]);
 
   useEffect(() => {
-    setSelection(null);
-    setPendingEditKey(null);
-  }, [projectId]);
-
-  useEffect(() => {
     const parsed = parseStudioSelect(searchParams);
-    if (parsed) setSelection(parsed);
-  }, [searchParams, projectId]);
+    if (!parsed) return;
+    setSelection((current) =>
+      current?.kind === parsed.kind && current.id === parsed.id ? current : parsed,
+    );
+  }, [searchParams]);
+
+  const line = searchParams.get('line');
+  const resolvedSelection = useMemo((): WorldSelection => {
+    if (selection) return selection;
+    if (resources && line !== 'production') {
+      return { kind: 'project', id: resources.project.id };
+    }
+    return null;
+  }, [selection, resources, line]);
 
   const requestEdit = useCallback((target: Exclude<WorldSelection, null>) => {
     setPendingEditKey(`${target.kind}:${target.id}`);
   }, []);
   const consumeBeginEditing = useCallback(() => setPendingEditKey(null), []);
 
+  const value = useMemo(
+    () => ({
+      selection: resolvedSelection,
+      setSelection,
+      resources,
+      threads,
+      loading,
+      error,
+      reload,
+      requestEdit,
+      consumeBeginEditing,
+      pendingEditKey,
+    }),
+    [
+      resolvedSelection,
+      resources,
+      threads,
+      loading,
+      error,
+      reload,
+      requestEdit,
+      consumeBeginEditing,
+      pendingEditKey,
+    ],
+  );
+
   return (
-    <StudioSelectionContext.Provider
-      value={{
-        selection,
-        setSelection,
-        resources,
-        threads,
-        loading,
-        error,
-        reload,
-        requestEdit,
-        consumeBeginEditing,
-        pendingEditKey,
-      }}
-    >
-      {children}
-    </StudioSelectionContext.Provider>
+    <StudioSelectionContext.Provider value={value}>{children}</StudioSelectionContext.Provider>
   );
 }
 

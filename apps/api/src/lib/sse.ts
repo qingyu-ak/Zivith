@@ -3,6 +3,11 @@ export function formatSseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
+/** Node HTTP 可能缓冲 chunk；桌面壳里不 flush 会只看到 user 事件。 */
+export function flushHttpStream(stream: { flush?: () => void }): void {
+  if (typeof stream.flush === 'function') stream.flush();
+}
+
 export function parseSseBuffer(buffer: string): {
   frames: Array<{ event: string; data: unknown }>;
   rest: string;

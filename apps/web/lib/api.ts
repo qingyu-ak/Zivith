@@ -70,6 +70,11 @@ function extractMessage(payload: unknown): string {
   const error = record.error;
   if (typeof error === 'object' && error !== null) {
     const message = (error as Record<string, unknown>).message;
+    const details = (error as Record<string, unknown>).details;
+    if (Array.isArray(details) && details[0] && typeof details[0] === 'object') {
+      const first = details[0] as Record<string, unknown>;
+      if (typeof first.message === 'string' && first.message.trim()) return first.message;
+    }
     if (typeof message === 'string') return message;
   }
   if (typeof record.message === 'string') return record.message;
@@ -144,6 +149,7 @@ export async function sendCreatorChatTurn(
   focus?: { kind: string; id: string; name: string } | null,
   effort?: 'fast' | 'balanced' | 'deep',
   signal?: AbortSignal,
+  options?: { retry?: boolean },
 ): Promise<void> {
   await postChatTurn(
     `/world/creator-chats/${threadId}/messages`,
@@ -152,6 +158,7 @@ export async function sendCreatorChatTurn(
       content,
       ...(focus ? { focus } : {}),
       ...(effort ? { effort } : {}),
+      ...(options?.retry ? { retry: true } : {}),
     },
     onEvent,
     signal,
@@ -165,10 +172,11 @@ export async function sendRoleplayTurn(
   onEvent: (event: string, data: unknown) => void,
   effort?: 'fast' | 'balanced' | 'deep',
   signal?: AbortSignal,
+  options?: { retry?: boolean },
 ): Promise<void> {
   await postChatTurn(
     `/roleplay/threads/${roleplayThreadId}/messages`,
-    { content, ...(effort ? { effort } : {}) },
+    { content, ...(effort ? { effort } : {}), ...(options?.retry ? { retry: true } : {}) },
     onEvent,
     signal,
   );
@@ -302,7 +310,14 @@ async function request(
     const token = session.getToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
     if (body && typeof body === 'string') headers.set('Content-Type', 'application/json');
-    return fetch(`${API_URL}${path}`, { ...init, headers, body });
+    const streaming = headers.get('Accept')?.includes('text/event-stream');
+    if (streaming) headers.set('Cache-Control', 'no-cache');
+    return fetch(`${API_URL}${path}`, {
+      ...init,
+      headers,
+      body,
+      ...(streaming ? { cache: 'no-store' as const } : {}),
+    });
   };
 
   let response = await send();

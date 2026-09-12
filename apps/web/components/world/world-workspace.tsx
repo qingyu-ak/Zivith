@@ -21,6 +21,7 @@ import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import {
   WORKSPACE_LAYOUT_KEYS,
   clampPx,
+  inspectorWidthForLayout,
   usePersistedFlag,
   usePersistedPx,
 } from '@/lib/workspace-layout';
@@ -41,6 +42,7 @@ export function WorldWorkspace() {
   const { selection, setSelection, resources, loading, error, reload } = useStudioSelection();
   const [clipNotice, setClipNotice] = useState('');
   const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
+  const [agentOpen] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.agentPanelOpen, false);
   const expandedForSelect = useRef(false);
   const [rightWidth, setRightWidth] = usePersistedPx(
     WORKSPACE_LAYOUT_KEYS.rightWidth,
@@ -94,12 +96,6 @@ export function WorldWorkspace() {
       setClipNotice(errorMessage(reason));
     }
   }
-
-  useEffect(() => {
-    if (!resources || resources.project.id !== projectId) return;
-    if (view !== 'world') return;
-    setSelection((current) => current ?? { kind: 'project', id: resources.project.id });
-  }, [resources, projectId, view]);
 
   const worldModel = useMemo(
     () => (resources ? buildWorldLineModel(resources) : null),
@@ -346,7 +342,9 @@ export function WorldWorkspace() {
         {/* 右栏：Inspector */}
         <aside
           className={`min-h-0 overflow-hidden border-l border-line ${rightCollapsed ? 'pointer-events-none' : ''}`}
-          style={{ width: rightCollapsed ? 0 : rightWidth }}
+          style={{
+            width: rightCollapsed ? 0 : inspectorWidthForLayout(rightWidth, agentOpen),
+          }}
         >
           <InspectorPanel
             resources={resources}

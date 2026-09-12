@@ -229,6 +229,32 @@ export function IconCheck(props: IconProps) {
   );
 }
 
+export function IconCopy(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="8.5" y="8.5" width="10" height="12" rx="1.5" />
+      <path d="M15.5 8.5V6.8A1.3 1.3 0 0 0 14.2 5.5H6.8A1.3 1.3 0 0 0 5.5 6.8v10.4A1.3 1.3 0 0 0 6.8 18.5H8.5" />
+    </svg>
+  );
+}
+
+export function IconRetry(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7.2 8.2A6 6 0 1 0 12 6" />
+      <path d="M6 6.2v3.3h3.3" />
+    </svg>
+  );
+}
+
+export function IconClose(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 7l10 10M17 7 7 17" />
+    </svg>
+  );
+}
+
 export function IconStatus(props: IconProps) {
   return (
     <svg {...base} {...props}>

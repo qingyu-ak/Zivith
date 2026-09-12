@@ -43,7 +43,8 @@ import {
 import { detectWorldConflicts } from '../contexts/world-builder/conflict-detector.js';
 import { formatMemoryDigest } from '../contexts/memory/retrieval.js';
 import type { MemoryService } from '../contexts/memory/service.js';
-import { formatSseEvent } from '../lib/sse.js';
+import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
+import { canReuseLastUser, isOpenProposalState } from '../lib/chat-turn.js';
 import type { LLMAdapter } from '../ports/llm.js';
 import { effortDto, resolveAgentEffort, type EffectiveAgentEffort } from '../contexts/agent-effort.js';
 import { resolveRuntimeLlm } from '../contexts/llm-runtime.js';
@@ -768,6 +769,7 @@ const sendMessageBody = z
         z.object({ level: z.enum(['fast', 'balanced', 'deep']) }).strict(),
       ])
       .optional(),
+    retry: z.boolean().optional(),
   })
   .strict();
 
@@ -829,6 +831,7 @@ function chatThreadDto(
     projectName?: string | null;
     workspacePath?: string | null;
     roleplay?: RoleplayMeta | null;
+    pendingProposalCount?: number;
   },
 ) {
   const roleplay = extras?.roleplay ?? null;
@@ -842,9 +845,27 @@ function chatThreadDto(
     kind: roleplay ? ('roleplay' as const) : ('world' as const),
     character_name: roleplay?.characterName ? roleplay.characterName : null,
     user_character_name: roleplay?.userCharacterName ?? null,
+    pending_proposal_count: extras?.pendingProposalCount ?? 0,
     created_at: thread.createdAt.toISOString(),
     updated_at: thread.updatedAt.toISOString(),
   };
+}
+
+async function loadPendingProposalCounts(
+  db: PrismaClient,
+  threadIds: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (threadIds.length === 0) return counts;
+  const rows = await db.creatorChatMessage.groupBy({
+    by: ['threadId'],
+    where: { threadId: { in: threadIds }, proposalState: 'pending' },
+    _count: { id: true },
+  });
+  for (const row of rows) {
+    counts.set(row.threadId, row._count.id);
+  }
+  return counts;
 }
 
 async function chatThreadDtos(
@@ -855,14 +876,16 @@ async function chatThreadDtos(
     workspacePath: string | null;
   },
 ) {
-  const meta = await loadRoleplayMeta(
-    db,
-    threads.map((thread) => thread.id),
-  );
+  const ids = threads.map((thread) => thread.id);
+  const [meta, pending] = await Promise.all([
+    loadRoleplayMeta(db, ids),
+    loadPendingProposalCounts(db, ids),
+  ]);
   return threads.map((thread) =>
     chatThreadDto(thread, {
       ...extrasOf(thread),
       roleplay: meta.get(thread.id) ?? null,
+      pendingProposalCount: pending.get(thread.id) ?? 0,
     }),
   );
 }
@@ -1064,15 +1087,18 @@ async function pipeCreatorChatSse(
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
+    'Content-Encoding': 'identity',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
     ...(origin ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}),
   });
+  flushHttpStream(reply.raw);
 
   let closed = false;
   const writeEvent = (event: string, data: unknown) => {
     if (closed) return;
     reply.raw.write(formatSseEvent(event, data));
+    flushHttpStream(reply.raw);
   };
   const cleanup = () => {
     closed = true;
@@ -1361,20 +1387,29 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const userMessage = await db.creatorChatMessage.create({
-      data: {
-        threadId,
-        role: body.role,
-        content: body.content,
-        ...(body.proposal
-          ? {
-              proposal: body.proposal as Prisma.InputJsonValue,
-              proposalKey: body.proposal_key ?? null,
-              proposalState: 'pending',
-            }
-          : {}),
-      },
-    });
+    const lastMessage = body.retry
+      ? await db.creatorChatMessage.findFirst({
+          where: { threadId },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    const userMessage =
+      canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
+        ? lastMessage
+        : await db.creatorChatMessage.create({
+            data: {
+              threadId,
+              role: body.role,
+              content: body.content,
+              ...(body.proposal
+                ? {
+                    proposal: body.proposal as Prisma.InputJsonValue,
+                    proposalKey: body.proposal_key ?? null,
+                    proposalState: 'pending',
+                  }
+                : {}),
+            },
+          });
 
     const effort = resolveAgentEffort(body.effort);
     const builder = currentBuilder();
@@ -1434,13 +1469,22 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const userMessage = await db.creatorChatMessage.create({
-      data: {
-        threadId,
-        role: 'user',
-        content: body.content,
-      },
-    });
+    const lastMessage = body.retry
+      ? await db.creatorChatMessage.findFirst({
+          where: { threadId },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    const userMessage =
+      canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
+        ? lastMessage
+        : await db.creatorChatMessage.create({
+            data: {
+              threadId,
+              role: 'user',
+              content: body.content,
+            },
+          });
     await pipeCreatorChatSse(
       request,
       reply,
@@ -1485,8 +1529,10 @@ function registerCreatorChatRoutes(
     if (body.proposal_key && body.proposal_key !== message.proposalKey) {
       throw new ApiError(400, 'PROPOSAL_KEY_MISMATCH', '提案标识不匹配');
     }
-    if (message.proposalState && message.proposalState !== 'pending') {
-      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能重复确认');
+    if (!isOpenProposalState(message.proposalState)) {
+      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能重复确认', {
+        proposal_state: message.proposalState,
+      });
     }
 
     // The agent stores a proposals array on the assistant message (ADR-0010).
@@ -1500,6 +1546,23 @@ function registerCreatorChatRoutes(
     }
 
     const { results, skipped } = await db.$transaction(async (tx) => {
+      const claimed = await tx.creatorChatMessage.updateMany({
+        where: {
+          id: messageId,
+          threadId,
+          OR: [{ proposalState: 'pending' }, { proposalState: null }],
+        },
+        data: { proposalState: 'applied' },
+      });
+      if (claimed.count !== 1) {
+        const current = await tx.creatorChatMessage.findFirst({
+          where: { id: messageId, threadId },
+          select: { proposalState: true },
+        });
+        throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能重复确认', {
+          proposal_state: current?.proposalState ?? 'applied',
+        });
+      }
       const results: Array<{
         kind: string;
         project_id: string;
@@ -1544,10 +1607,6 @@ function registerCreatorChatRoutes(
       if (results.length === 0 && skipped.length > 0) {
         throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
       }
-      await tx.creatorChatMessage.update({
-        where: { id: messageId },
-        data: { proposalState: 'applied' },
-      });
       return { results, skipped };
     });
     return { applied: results, skipped };
@@ -1568,14 +1627,29 @@ function registerCreatorChatRoutes(
     if (!message.proposal || !message.proposalKey) {
       throw new ApiError(400, 'NO_PROPOSAL', '该消息没有待确认的提案');
     }
-    if (message.proposalState && message.proposalState !== 'pending') {
-      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能再拒绝');
+    if (!isOpenProposalState(message.proposalState)) {
+      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能再拒绝', {
+        proposal_state: message.proposalState,
+      });
     }
 
-    await db.creatorChatMessage.update({
-      where: { id: messageId },
+    const claimed = await db.creatorChatMessage.updateMany({
+      where: {
+        id: messageId,
+        threadId,
+        OR: [{ proposalState: 'pending' }, { proposalState: null }],
+      },
       data: { proposalState: 'rejected' },
     });
+    if (claimed.count !== 1) {
+      const current = await db.creatorChatMessage.findFirst({
+        where: { id: messageId, threadId },
+        select: { proposalState: true },
+      });
+      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能再拒绝', {
+        proposal_state: current?.proposalState ?? 'applied',
+      });
+    }
     return { rejected: true };
   });
 }

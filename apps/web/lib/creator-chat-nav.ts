@@ -46,6 +46,11 @@ function asString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function asPendingCount(record: Record<string, unknown>): number {
+  const raw = record.pending_proposal_count ?? record.pendingProposalCount;
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 0;
+}
+
 export function isChatFocusKind(value: unknown): value is ChatFocusKind {
   return typeof value === 'string' && (CHAT_FOCUS_KINDS as readonly string[]).includes(value);
 }
@@ -69,6 +74,7 @@ export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
     user_character_name: asString(record.user_character_name) ?? asString(record.userCharacterName),
     created_at: asString(record.created_at) ?? asString(record.createdAt) ?? '',
     updated_at: asString(record.updated_at) ?? asString(record.updatedAt) ?? '',
+    pending_proposal_count: asPendingCount(record),
   };
 }
 
@@ -271,4 +277,18 @@ export async function resolveThreadForProject(projectId: string): Promise<string
   const thread = normalizeThread(created);
   if (!thread?.id) throw new Error('无法创建创作对话');
   return thread.id;
+}
+
+export function studioAgentThreadKey(projectId: string): string {
+  return `zivith.studioAgentThread.${projectId}`;
+}
+
+/** Agent 面板：记住上次打开的世界构建线程；没有记录则用最近一条。 */
+export function pickStudioAgentThread(
+  threads: CreatorChatThreadDTO[],
+  storedId: string | null | undefined,
+): string | null {
+  const world = threads.filter((thread) => thread.kind !== 'roleplay');
+  if (storedId && world.some((thread) => thread.id === storedId)) return storedId;
+  return world[0]?.id ?? null;
 }

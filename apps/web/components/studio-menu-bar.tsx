@@ -80,6 +80,9 @@ export function StudioMenuBar({
     <nav ref={rootRef} className="flex items-center gap-0.5 [-webkit-app-region:no-drag]" aria-label="Studio 菜单">
       <Menu label="文件" id="file" open={open} setOpen={setOpen}>
         {desktop ? <MenuButton onClick={() => void openFolder()}>打开文件夹</MenuButton> : null}
+        <MenuLink href="/projects?new=1" onClick={() => setOpen(null)}>
+          新建项目
+        </MenuLink>
         <MenuLink href="/projects" onClick={() => setOpen(null)}>
           打开项目…
         </MenuLink>
@@ -95,13 +98,15 @@ export function StudioMenuBar({
           打开 Chat
         </MenuButton>
       </Menu>
-      <Menu label="编辑" id="edit" open={open} setOpen={setOpen}>
-        <MenuButton onClick={() => edit('undo')}>撤销</MenuButton>
-        <MenuButton onClick={() => edit('redo')}>重做</MenuButton>
-        <MenuButton onClick={() => edit('cut')}>剪切</MenuButton>
-        <MenuButton onClick={() => edit('copy')}>复制</MenuButton>
-        <MenuButton onClick={() => edit('paste')}>粘贴</MenuButton>
-      </Menu>
+      {desktop ? (
+        <Menu label="编辑" id="edit" open={open} setOpen={setOpen}>
+          <MenuButton onClick={() => edit('undo')}>撤销</MenuButton>
+          <MenuButton onClick={() => edit('redo')}>重做</MenuButton>
+          <MenuButton onClick={() => edit('cut')}>剪切</MenuButton>
+          <MenuButton onClick={() => edit('copy')}>复制</MenuButton>
+          <MenuButton onClick={() => edit('paste')}>粘贴</MenuButton>
+        </Menu>
+      ) : null}
       <Menu label="视图" id="view" open={open} setOpen={setOpen}>
         <MenuButton
           onClick={() => {

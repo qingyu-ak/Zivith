@@ -236,6 +236,8 @@ export interface CreatorChatThreadDTO {
   kind?: CreatorChatKind;
   character_name?: string | null;
   user_character_name?: string | null;
+  /** 该线程未确认提案条数；列表接口附带，缺省按 0。 */
+  pending_proposal_count?: number;
   created_at: string;
   updated_at: string;
 }

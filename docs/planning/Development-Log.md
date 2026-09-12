@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-09-12 · pending · feat(web,api) · 对话重试 / @提及 / 思考摘要 / SSE 及时刷出
+
+Creator Chat 与 Studio Agent 对齐 Cursor 式一轮操作：失败可重试且不插重复 user、消息复制、输入 `@` 把实体设为本轮 focus、记忆操作收进「想了一下」、提案确认用 updateMany 抢占避免双击、线程列表带待确认条数。SSE 对 Node HTTP 显式 flush，桌面壳不再只看到 user 事件。浏览器选文件夹改说明文案；`/signup`、`/studio` 做别名重定向。
+
+- **feat(api)** `chat-turn` 复用末条 user；提案 pending/null 均可确认或拒绝；world/roleplay 流 flush；线程 DTO `pending_proposal_count`
+- **feat(web)** mention 菜单、message-actions、error banner、thought-summary；Agent 侧栏与 composer 共用
+- 模块：`apps/api/src/lib/chat-turn.ts`、`routes/world.ts`、`routes/roleplay.ts`、`studio-agent-panel.tsx`、`creator-chat/*`
+
 ## 2026-09-06 · cad776e · feat(web,api) · Studio 菜单栏 + L2 档案编辑 + Agent 侧栏（两股工作合并提交）
 
 app-shell / chat-panel 两股改动交织，合并为一笔。①（Grok-A）Studio 顶部菜单栏（文件/编辑/视图/设置/帮助，无假菜单）、L2 核心块新建与编辑（`saveCore`/`patchCore` 路由 + 记忆面板编辑 + 测试）、资源加载收编壳级 provider、`?select=` 深链、`backLeaving` 覆盖层后退、实体创建流、写入模式说明。②（ZCode-A）Agent 侧栏面板（类 Cursor）：壳级右侧 380px 可收起面板，内嵌当前项目世界构建者对话——`resolveThreadForProject` 解析线程、SSE 流式、提案卡就地确认（`parseProposals` 抽到 `lib/chat-proposals.ts` 共用）、选中实体自动作为 focus、努力程度选择；顶栏星形按钮开关，状态持久化。

@@ -91,6 +91,9 @@ export function worldBuilderPublicError(error: unknown): string {
     if (message.startsWith('[') || message.startsWith('{')) {
       return '这一轮回复格式异常，请再发一次。';
     }
+    if (/did not return valid JSON/i.test(message)) {
+      return '模型没有返回可用的结构化回复，请再试一次。';
+    }
     return message || '世界构建者回复失败';
   }
   return '世界构建者回复失败';

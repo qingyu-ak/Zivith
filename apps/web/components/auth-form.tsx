@@ -12,6 +12,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const isLogin = mode === 'login';
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,13 +43,13 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       router.push('/projects');
       router.refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      const text = errorMessage(reason).trim();
+      setError(text || (isLogin ? '邮箱或密码错误' : '注册失败，请重试'));
     } finally {
       setPending(false);
     }
   }
 
-  const isLogin = mode === 'login';
   return (
     <form
       className="grid gap-5"
@@ -70,11 +71,11 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
           placeholder="name@example.com"
         />
       </Field>
-      <Field label="密码" hint={!isLogin ? '至少 8 个字符' : undefined}>
+      <Field label="密码" hint={!isLogin ? '至少 10 个字符' : undefined}>
         <Input
           name="password"
           type="password"
-          minLength={8}
+          minLength={isLogin ? 1 : 10}
           autoComplete={isLogin ? 'current-password' : 'new-password'}
           required
         />
@@ -88,7 +89,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
         </p>
       )}
       <Button type="submit" disabled={pending}>
-        {pending ? '请稍候…' : isLogin ? '进入工作室' : '创建账户'}
+        {pending ? '请稍候…' : isLogin ? '登录' : '创建账户'}
       </Button>
       <p className="text-center text-sm text-zinc-400">
         {isLogin ? '还没有账户？' : '已有账户？'}
