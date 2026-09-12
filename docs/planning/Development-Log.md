@@ -12,7 +12,14 @@
 
 ---
 
-## 2026-09-12 · pending · fix(web) · 补上 typecheck：侧栏 desktop 与 AssetDTO description
+## 2026-09-12 · pending · fix(api) · SSE flush 类型与 Node ServerResponse 对齐
+
+`flushHttpStream` 参数写成弱类型 `{ flush?: () => void }`，`reply.raw`（ServerResponse）无法赋入。改成 `object` 再探测 flush，桌面壳及时刷出 SSE 的行为不变。
+
+- **fix(api)** `apps/api/src/lib/sse.ts`
+- 模块：`sse.ts`（world / roleplay 流式路由调用处）
+
+## 2026-09-12 · b55fba9 · fix(web) · 补上 typecheck：侧栏 desktop 与 AssetDTO description
 
 CI typecheck 在 `@zivith/web` 失败：`ChatSidebarRail` 引用了未定义的 `desktop`；`agent-mentions` 测试夹具缺 `AssetDTO.description`。
 
