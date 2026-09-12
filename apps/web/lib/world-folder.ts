@@ -66,17 +66,11 @@ export async function unbindProjectWorkspace(projectId: string): Promise<void> {
 
 export interface FolderFlowDialogs {
   confirm(message: string): boolean | Promise<boolean>;
-  promptName(message: string, defaultValue: string): string | null | Promise<string | null>;
 }
 
 const browserDialogs: FolderFlowDialogs = {
   confirm: (message) => window.confirm(message),
-  promptName: (message, defaultValue) => window.prompt(message, defaultValue),
 };
-
-export function folderNameFromPath(folderPath: string): string {
-  return folderPath.split(/[\\/]/).filter(Boolean).pop() ?? '';
-}
 
 /**
  * 桌面端「打开文件夹」统一入口：检查 → 按状态对话确认 → open/create。
@@ -93,15 +87,15 @@ export async function openWorldFromFolder(
 
   const inspect = await inspectWorldFolder(folderPath);
 
-  // §18.1 文件夹没有 .zivith/：[导入为新世界] / [取消]。
+  // §18.1 文件夹没有 .zivith/：[打开/导入为新世界] / [取消]。
+  // 走 on_missing=import 而不是 /folders/create：数据库（含归档）仍绑着该路径时
+  // 由服务端收回原绑定；否则才导入为新世界。走 create 会在已有绑定时卡死。
   if (inspect.state === 'not_a_world') {
     const confirmed = await dialogs.confirm(
-      '这不是一个 Zivith 世界。\n\n要把这个文件夹导入为新的世界吗？',
+      '这不是一个 Zivith 世界。\n\n要把它作为世界工作区打开吗？\n本机已有绑定会自动收回；没有绑定时将导入为新的世界。',
     );
     if (!confirmed) throw new FolderFlowCancelled();
-    const name = await dialogs.promptName('为这个世界起个名字：', folderNameFromPath(folderPath));
-    if (name === null) throw new FolderFlowCancelled();
-    return createWorldInFolderRequest(folderPath, name);
+    return openWorldFolderRequest(folderPath, { on_missing: 'import' });
   }
 
   // §18.2 workspace.json 损坏：[恢复] / [取消]。
@@ -113,13 +107,15 @@ export async function openWorldFromFolder(
     return openWorldFolderRequest(folderPath, { on_corrupt: 'recover' });
   }
 
-  // §8 正常世界；worldId 在本机无运行数据时提供 §18.3 [创建运行副本]。
+  // §8 正常世界；worldId 在本机无运行数据时提供 §18.3 [创建运行副本]
+  //（沿用文件 worldId 建本机运行数据，不改写文件身份）。
+  // [重新绑定] 走项目卡的「绑定文件夹 / 重新定位」（rebind_project_id）。
   try {
     return await openWorldFolderRequest(folderPath);
   } catch (error) {
     if (apiErrorCode(error) !== 'WORLD_NOT_FOUND') throw error;
     const confirmed = await dialogs.confirm(
-      '这个世界文件存在，但当前本机没有对应的运行数据。\n\n要创建一个运行副本吗？',
+      '这个世界文件存在，但当前本机没有对应的运行数据。\n\n要创建一个运行副本吗？（沿用文件中的世界身份）',
     );
     if (!confirmed) throw new FolderFlowCancelled();
     return openWorldFolderRequest(folderPath, { on_orphan: 'create' });

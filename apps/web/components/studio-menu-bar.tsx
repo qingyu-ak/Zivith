@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { errorMessage } from '@/lib/api';
 import { normalizeThread } from '@/lib/creator-chat-nav';
 import { isDesktopApp, pickWorkspaceDirectory } from '@/lib/desktop';
 import { captureSettingsReturn } from '@/lib/settings-return';
@@ -62,7 +63,8 @@ export function StudioMenuBar({
       if (thread?.project_id) router.push(`/projects/${thread.project_id}/world`);
     } catch (reason) {
       if (reason instanceof FolderFlowCancelled) return;
-      router.push('/projects');
+      // §18.4：冲突/异常必须把原因告诉用户，不再静默跳转项目页。
+      window.alert(errorMessage(reason));
     }
   }
 

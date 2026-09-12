@@ -231,6 +231,8 @@ export function syncWorkspaceMarkerName(project: {
 export async function createWorldProject(
   db: Db,
   input: {
+    /** 显式指定 worldId（§18.3 运行副本沿用文件身份时使用）；缺省由数据库生成。 */
+    id?: string;
     name?: string;
     description?: string | null;
     memberUserId?: string | null;
@@ -244,6 +246,7 @@ export async function createWorldProject(
   const project = await db.project.create({
     data: {
       ownerId,
+      ...(input.id ? { id: input.id } : {}),
       name: input.name?.trim() || WORKSPACE_SEED_NAME,
       description: input.description ?? null,
       workspacePath: input.workspacePath ?? null,
@@ -430,6 +433,20 @@ export async function openWorldFolder(
 
   if (project) {
     await requireNoOtherPathOwner(db, ownerId, workspacePath, project.id);
+    // §18.4：原绑定路径仍然存在、且也带着同一 worldId 的标记 —— 用户复制了
+    // 整个世界文件夹。两个位置都有效时「当前位置」漂移，需用户显式选择，
+    // Zivith 不替用户决定哪个副本是正本。
+    if (
+      project.workspacePath &&
+      project.workspacePath !== workspacePath &&
+      readWorkspaceMarker(project.workspacePath)?.worldId === project.id
+    ) {
+      throw new ApiError(
+        409,
+        'WORLD_IDENTITY_CONFLICT',
+        `检测到两个文件夹包含同一个世界：${project.workspacePath} 与当前文件夹。请在项目列表对该世界使用「重新定位」选择要使用的位置。`,
+      );
+    }
     if (project.workspacePath !== workspacePath) {
       project = await db.project.update({
         where: { id: project.id },
@@ -445,19 +462,31 @@ export async function openWorldFolder(
   if (options.onOrphan !== 'create') {
     throw new ApiError(404, 'WORLD_NOT_FOUND', '这个世界文件存在，但当前本机没有对应的运行数据。');
   }
+  // 运行副本沿用文件里的稳定 worldId 建本机运行数据——不改写 workspace.json
+  // 的身份，跨机器复制/搬运后 worldId 仍然一致。
   project = await createWorldProject(db, {
+    id: marker.worldId,
     name: marker.name || path.basename(workspacePath) || WORKSPACE_SEED_NAME,
     memberUserId: options.memberUserId ?? null,
     seed: false,
     workspacePath,
   });
-  // 运行副本获得新的本地 worldId，标记随之改写以保持文件与数据库一致。
+  // worldId 未变：重写只为补齐基础目录并把标记规范化为新格式。
   initializeWorldFolder(workspacePath, { worldId: project.id, name: project.name });
   const thread = await ensureActiveThread(db, project.id);
   return { project, thread };
 }
 
-/** §18.3 [重新绑定] / §19 [重新定位]：把文件夹显式绑到用户选定的项目。 */
+/**
+ * §18.3 [重新绑定] / §19 [重新定位]：把文件夹显式绑到用户选定的项目。
+ * 必须先检查 workspace.json（§19：通过 worldId 校验后再绑路径）——
+ * 绝不把目标项目 id 写进一个身份未知的文件夹：
+ * - 标记指向同一世界 → 直接绑定（移动/改名后的正路）；
+ * - 标记指向本地存活或归档的其他世界 → 拒绝，绝不覆盖其文件身份；
+ * - 标记指向本机不存在的孤儿 worldId → 允许（§18.3 [重新绑定]，用户显式选择）；
+ * - 标记损坏 → 拒绝（走 §18.2 恢复）；
+ * - 没有 .zivith → 允许（文件夹无身份可破坏，是找回丢失标记世界的唯一入口）。
+ */
 async function openWithRebind(
   db: Db,
   workspacePath: string,
@@ -469,6 +498,26 @@ async function openWithRebind(
   });
   if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', '项目不存在');
   await requireNoOtherPathOwner(db, ownerId, workspacePath, project.id);
+  const inspect = inspectWorkspaceFolder(workspacePath);
+  if (inspect.state === 'corrupt') {
+    throw new ApiError(
+      409,
+      'WORKSPACE_CORRUPT',
+      '该文件夹的 Zivith 配置无法读取，不能直接绑定。请先恢复或选择其他文件夹。',
+    );
+  }
+  if (inspect.state === 'ok' && inspect.marker.worldId !== project.id) {
+    const foreignLocal = await db.project.findFirst({
+      where: { id: inspect.marker.worldId, ownerId },
+    });
+    if (foreignLocal) {
+      throw new ApiError(
+        409,
+        'WORLD_IDENTITY_CONFLICT',
+        `此文件夹属于世界「${inspect.marker.name || inspect.marker.worldId}」，不能绑定到「${project.name}」。Zivith 不会覆盖另一个世界的身份文件。`,
+      );
+    }
+  }
   initializeWorldFolder(workspacePath, { worldId: project.id, name: project.name });
   if (project.workspacePath !== workspacePath) {
     project = await db.project.update({

@@ -10,6 +10,7 @@ import { isDesktopApp, pickWorkspaceDirectory, WEB_FOLDER_HINT } from '@/lib/des
 import { normalizeThread } from '@/lib/creator-chat-nav';
 import { getFormText } from '@/lib/form-data';
 import {
+  createWorldInFolderRequest,
   FolderFlowCancelled,
   openWorldFromFolder,
   unbindProjectWorkspace,
@@ -25,6 +26,7 @@ export default function ProjectsPage() {
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
   const [desktop, setDesktop] = useState(false);
+  const [worldFolder, setWorldFolder] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -64,7 +66,20 @@ export default function ProjectsPage() {
     setError('');
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    const folderPath = worldFolder.trim();
     try {
+      if (folderPath) {
+        // §7 选文件夹新建世界：.zivith/ + 基础目录 + 数据库 World 同 worldId。
+        const created = await createWorldInFolderRequest(folderPath, getFormText(form, 'name'));
+        const thread = normalizeThread(created);
+        const projectId = thread?.project_id;
+        formElement.reset();
+        setWorldFolder('');
+        setCreating(false);
+        await load();
+        if (projectId) router.push(`/projects/${projectId}/world`);
+        return;
+      }
       await api('/projects', {
         method: 'POST',
         body: {
@@ -75,6 +90,17 @@ export default function ProjectsPage() {
       formElement.reset();
       setCreating(false);
       await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  async function pickWorldFolder() {
+    try {
+      const folderPath = await pickWorkspaceDirectory();
+      if (!folderPath) return;
+      setWorldFolder(folderPath);
+      setError('');
     } catch (reason) {
       setError(errorMessage(reason));
     }
@@ -99,12 +125,14 @@ export default function ProjectsPage() {
     }
   }
 
-  // §19 [重新定位]：把世界重新绑定到新文件夹，通过 workspace.json 的 worldId 完成校验。
-  async function relocate(project: ProjectDTO) {
+  // §18.3 [重新绑定] / §19 [重新定位/绑定文件夹]：把世界显式绑到所选文件夹，
+  // 服务端会先按 workspace.json 的 worldId 校验，不会覆盖其他世界的身份。
+  async function bindFolder(project: ProjectDTO, stale: boolean) {
     try {
       const folderPath = await pickWorkspaceDirectory();
       if (!folderPath) return;
-      if (!window.confirm(`把世界「${project.name}」重新绑定到这个文件夹？\n${folderPath}`)) {
+      const purpose = stale ? '重新定位到这个文件夹' : '绑定到这个文件夹';
+      if (!window.confirm(`把世界「${project.name}」${purpose}？\n${folderPath}`)) {
         return;
       }
       setError('');
@@ -112,7 +140,7 @@ export default function ProjectsPage() {
       const created = await openWorldFromFolder(folderPath, { rebindProjectId: project.id });
       const thread = normalizeThread(created);
       const projectId = thread?.project_id;
-      if (!projectId) throw new Error('无法重新绑定文件夹');
+      if (!projectId) throw new Error('无法绑定文件夹');
       router.push(`/projects/${projectId}/world`);
     } catch (reason) {
       if (reason instanceof FolderFlowCancelled) return;
@@ -200,8 +228,34 @@ export default function ProjectsPage() {
                 placeholder="一句话描述你的创意宇宙"
               />
             </Field>
+            {desktop ? (
+              <div className="md:col-span-2">
+                <Field label="世界文件夹（可选，选中后拥有可搬运的文件身份）">
+                  <div className="flex gap-2">
+                    <Input
+                      value={worldFolder}
+                      readOnly
+                      placeholder="不选择则创建无文件夹的世界"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void pickWorldFolder()}
+                    >
+                      选择…
+                    </Button>
+                    {worldFolder ? (
+                      <Button type="button" variant="secondary" onClick={() => setWorldFolder('')}>
+                        清除
+                      </Button>
+                    ) : null}
+                  </div>
+                </Field>
+              </div>
+            ) : null}
             <div className="md:col-span-2">
-              <Button type="submit">创建项目</Button>
+              <Button type="submit">{worldFolder ? '创建世界' : '创建项目'}</Button>
             </div>
           </form>
         </Card>
@@ -257,7 +311,7 @@ export default function ProjectsPage() {
                     <Button
                       variant="secondary"
                       onClick={() => {
-                        void relocate(project);
+                        void bindFolder(project, true);
                       }}
                     >
                       重新定位
@@ -271,6 +325,18 @@ export default function ProjectsPage() {
                       移除本机绑定
                     </Button>
                   </div>
+                </div>
+              ) : null}
+              {!project.workspace_path && desktop ? (
+                <div className="mx-1 mb-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      void bindFolder(project, false);
+                    }}
+                  >
+                    绑定文件夹
+                  </Button>
                 </div>
               ) : null}
               <Button

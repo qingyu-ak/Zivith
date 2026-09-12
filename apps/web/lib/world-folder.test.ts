@@ -4,7 +4,6 @@ import { ApiError } from './api';
 import {
   apiErrorCode,
   FolderFlowCancelled,
-  folderNameFromPath,
   openWorldFolderRequest,
   openWorldFromFolder,
   type FolderFlowDialogs,
@@ -26,10 +25,9 @@ vi.mock('./api', () => ({
   api: apiMock,
 }));
 
-function makeDialogs(confirm: boolean, name: string | null = '龙族'): FolderFlowDialogs {
+function makeDialogs(confirm: boolean): FolderFlowDialogs {
   return {
     confirm: vi.fn(() => confirm),
-    promptName: vi.fn(() => name),
   };
 }
 
@@ -39,13 +37,6 @@ function errorWithCode(code: string): ApiError {
 
 beforeEach(() => {
   apiMock.mockReset();
-});
-
-describe('folderNameFromPath', () => {
-  it('works for windows and posix separators', () => {
-    expect(folderNameFromPath('D:\\Zivith Worlds\\龙族')).toBe('龙族');
-    expect(folderNameFromPath('/home/user/worlds/雾城/')).toBe('雾城');
-  });
 });
 
 describe('apiErrorCode', () => {
@@ -71,16 +62,18 @@ describe('openWorldFromFolder', () => {
     expect(dialogs.confirm).not.toHaveBeenCalled();
   });
 
-  it('imports a plain folder only after explicit confirmation and naming', async () => {
+  it('reclaims or imports a plain folder via on_missing=import after confirmation', async () => {
     apiMock
       .mockResolvedValueOnce({ path: 'D:\\W', state: 'not_a_world', world_id: null, name: null })
-      .mockResolvedValueOnce({ id: 't1', project_id: 'p-new' });
-    const dialogs = makeDialogs(true, '龙族');
+      .mockResolvedValueOnce({ id: 't1', project_id: 'p-reclaimed' });
+    const dialogs = makeDialogs(true);
     await openWorldFromFolder('D:\\W', { dialogs });
     expect(dialogs.confirm).toHaveBeenCalledOnce();
+    // 走 open 的 import 分支而不是 create：数据库仍绑着该路径（含归档）时由服务端
+    // 收回原绑定，否则导入为新世界 —— 避免 WORLD_PATH_CONFLICT 卡死。
     expect(apiMock).toHaveBeenLastCalledWith(
-      '/world/folders/create',
-      expect.objectContaining({ body: { path: 'D:\\W', name: '龙族' } }),
+      '/world/folders/open',
+      expect.objectContaining({ body: { path: 'D:\\W', on_missing: 'import' } }),
     );
   });
 
@@ -92,20 +85,6 @@ describe('openWorldFromFolder', () => {
       name: null,
     });
     const dialogs = makeDialogs(false);
-    await expect(openWorldFromFolder('D:\\W', { dialogs })).rejects.toBeInstanceOf(
-      FolderFlowCancelled,
-    );
-    expect(apiMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('cancels when the user dismisses the naming prompt', async () => {
-    apiMock.mockResolvedValueOnce({
-      path: 'D:\\W',
-      state: 'not_a_world',
-      world_id: null,
-      name: null,
-    });
-    const dialogs = makeDialogs(true, null);
     await expect(openWorldFromFolder('D:\\W', { dialogs })).rejects.toBeInstanceOf(
       FolderFlowCancelled,
     );

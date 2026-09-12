@@ -386,7 +386,7 @@ describe('openWorldFolder', () => {
           return null;
         }),
         create: vi.fn().mockImplementation(async ({ data }) => ({
-          id: 'p-new',
+          id: data.id ?? 'p-new',
           name: data.name,
           workspacePath: data.workspacePath,
         })),
@@ -544,12 +544,38 @@ describe('openWorldFolder', () => {
       await expect(openWorldFolder(db, folder)).rejects.toMatchObject({
         code: 'WORLD_NOT_FOUND',
       });
+      // 运行副本沿用文件里的稳定 worldId，不改写 workspace.json 身份。
       const { project } = await openWorldFolder(db, folder, { onOrphan: 'create' });
-      expect(project).toMatchObject({ id: 'p-new' });
-      // 运行副本改写标记，文件与数据库重新一致。
-      expect(readWorkspaceMarker(folder)).toMatchObject({ worldId: 'p-new' });
+      expect(project).toMatchObject({ id: 'p-gone', name: '消失的世界' });
+      expect(db.project.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ id: 'p-gone' }),
+        }),
+      );
+      expect(readWorkspaceMarker(folder)).toMatchObject({ worldId: 'p-gone' });
     } finally {
       fs.rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to open a copied folder while the original still holds the same worldId', async () => {
+    const original = makeTempFolder('zivith-copy-a-');
+    const copy = makeTempFolder('zivith-copy-b-');
+    try {
+      // 复制整个文件夹：两处都有同一 worldId 的标记，original 仍是数据库绑定。
+      writeWorkspaceMarker(original, { id: 'p1', name: '雾城' });
+      writeWorkspaceMarker(copy, { id: 'p1', name: '雾城' });
+      const db = openDb({
+        findById: (id) =>
+          id === 'p1' ? { id: 'p1', name: '雾城', workspacePath: original } : null,
+      });
+      // 「当前位置」漂移需要用户显式选择，不静默改绑到副本。
+      await expect(openWorldFolder(db, copy)).rejects.toMatchObject({
+        code: 'WORLD_IDENTITY_CONFLICT',
+      });
+    } finally {
+      fs.rmSync(original, { recursive: true, force: true });
+      fs.rmSync(copy, { recursive: true, force: true });
     }
   });
 
@@ -600,6 +626,64 @@ describe('openWorldFolder', () => {
       await expect(
         openWorldFolder(db, folder, { rebindProjectId: 'p-missing' }),
       ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses rebinding onto a folder owned by another local world (§19 via worldId)', async () => {
+    const folder = makeTempFolder();
+    try {
+      // 目标文件夹是另一个本地存活世界的副本/正本：绝不覆盖其身份。
+      writeWorkspaceMarker(folder, { id: 'p-other', name: '别人的世界' });
+      const db = openDb({
+        findById: (id) => {
+          if (id === 'p-target') return { id: 'p-target', name: '选中的世界', workspacePath: null };
+          if (id === 'p-other') return { id: 'p-other', name: '别人的世界', workspacePath: null };
+          return null;
+        },
+      });
+      await expect(
+        openWorldFolder(db, folder, { rebindProjectId: 'p-target' }),
+      ).rejects.toMatchObject({ code: 'WORLD_IDENTITY_CONFLICT' });
+      expect(readWorkspaceMarker(folder)).toMatchObject({ worldId: 'p-other' });
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  it('allows rebinding onto an orphan foreign marker (§18.3 重新绑定)', async () => {
+    const folder = makeTempFolder();
+    try {
+      const normalized = normalizeWorkspacePath(folder);
+      // 文件夹带的外来 worldId 在本机没有运行数据：显式重绑允许改写。
+      writeWorkspaceMarker(folder, { id: 'p-foreign', name: '外来身份' });
+      const db = openDb({
+        findById: (id) =>
+          id === 'p-target' ? { id: 'p-target', name: '选中的世界', workspacePath: null } : null,
+      });
+      const { project } = await openWorldFolder(db, folder, { rebindProjectId: 'p-target' });
+      expect(project).toMatchObject({ id: 'p-target', workspacePath: normalized });
+      expect(readWorkspaceMarker(folder)).toMatchObject({
+        worldId: 'p-target',
+        name: '选中的世界',
+      });
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses rebinding onto a corrupt marker instead of overwriting it', async () => {
+    const folder = makeTempFolder();
+    try {
+      writeRawMarker(folder, '{ broken');
+      const db = openDb({
+        findById: (id) =>
+          id === 'p-target' ? { id: 'p-target', name: '选中的世界', workspacePath: null } : null,
+      });
+      await expect(
+        openWorldFolder(db, folder, { rebindProjectId: 'p-target' }),
+      ).rejects.toMatchObject({ code: 'WORKSPACE_CORRUPT' });
     } finally {
       fs.rmSync(folder, { recursive: true, force: true });
     }
