@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-12 · pending · chore · Prettier 对齐并清掉 lint，修复 CI 格式门禁
+## 2026-09-12 · 33aee5f · chore · Prettier 对齐并清掉 lint，修复 CI 格式门禁
 
 feat 合进 main 后 `pnpm format:check` 报 58 个文件未排版。本轮 `pnpm format` 写回，并修 23 处 ESLint（未使用变量、finally 里 return、冗余联合类型等）。`pnpm/action-setup` 升到 v5，去掉 Node 20 警告。
 
