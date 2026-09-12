@@ -282,11 +282,7 @@ function main(): Promise<number> {
       threadId = thread.json?.id as string | null;
       const seededProjectId = asString(thread.json?.project_id);
       check('创建会话返回 201 且含 id', thread.status === 201 && Boolean(threadId));
-      check(
-        '创建会话即打开世界项目（空工作区）',
-        Boolean(seededProjectId),
-        seededProjectId,
-      );
+      check('创建会话即打开世界项目（空工作区）', Boolean(seededProjectId), seededProjectId);
       if (!threadId) return 1;
 
       const m1 = await expectKinds(

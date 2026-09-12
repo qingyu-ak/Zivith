@@ -200,7 +200,9 @@ function eventItem(event: WorldEventDTO): WorldLineItem {
   const mode = worldTimeMode(event.world_time_envelope);
   const order = eventPresentationOrder(event);
   const envelope = event.world_time_envelope;
-  const rangeStart = numericOrderHint(envelope && typeof envelope === 'object' ? envelope.start : null);
+  const rangeStart = numericOrderHint(
+    envelope && typeof envelope === 'object' ? envelope.start : null,
+  );
   const rangeEnd = numericOrderHint(envelope && typeof envelope === 'object' ? envelope.end : null);
   const span =
     mode === 'range' && (rangeStart != null || rangeEnd != null)
@@ -500,6 +502,169 @@ export function buildWorldLineModel(resources: WorldResourcesDTO): WorldLineMode
     relationships: lines,
     scaleDomain: { min, max },
     axisMarks: worldAxisMarks(world_events, scenes),
+  };
+}
+
+/** 世界线画布范围：总览全轴，或收成一章 / 连续几章。 */
+export interface WorldLineViewState {
+  overview: boolean;
+  from: number;
+  to: number;
+  density: 'all' | 'main';
+}
+
+export const MAIN_CHARACTER_LIMIT = 12;
+export const MAIN_SCENE_LIMIT = 12;
+
+export function defaultWorldLineView(
+  domain: { min: number; max: number },
+  characterCount: number,
+): WorldLineViewState {
+  const min = Math.floor(domain.min);
+  const max = Math.ceil(domain.max);
+  return {
+    overview: true,
+    from: min,
+    to: max,
+    density: characterCount > MAIN_CHARACTER_LIMIT ? 'main' : 'all',
+  };
+}
+
+export function asWorldLineViewState(
+  value: unknown,
+  domain: { min: number; max: number },
+  characterCount: number,
+): WorldLineViewState {
+  const fallback = defaultWorldLineView(domain, characterCount);
+  if (!value || typeof value !== 'object') return fallback;
+  const record = value as Record<string, unknown>;
+  const from =
+    typeof record.from === 'number' && Number.isFinite(record.from)
+      ? Math.round(record.from)
+      : fallback.from;
+  const to =
+    typeof record.to === 'number' && Number.isFinite(record.to)
+      ? Math.round(record.to)
+      : fallback.to;
+  return {
+    overview: record.overview !== false,
+    from: Math.min(from, to),
+    to: Math.max(from, to),
+    density:
+      record.density === 'main' || record.density === 'all' ? record.density : fallback.density,
+  };
+}
+
+function itemOverlapsRange(item: WorldLineItem, from: number, to: number): boolean {
+  const span = clipSpan(item);
+  return span.end >= from && span.start <= to;
+}
+
+export function pickMainCharacterIds(
+  characters: AssetDTO[],
+  appearance: Map<string, number>,
+  limit = MAIN_CHARACTER_LIMIT,
+): string[] {
+  const candidates = characters.filter((character) => character.tier !== 'light');
+  const pool = candidates.length > 0 ? candidates : characters;
+  if (pool.length <= limit) return pool.map((character) => character.id);
+  return [...pool]
+    .sort(
+      (a, b) =>
+        (appearance.get(b.id) ?? 0) - (appearance.get(a.id) ?? 0) ||
+        a.name.localeCompare(b.name, 'zh'),
+    )
+    .slice(0, limit)
+    .map((character) => character.id);
+}
+
+function sampleEvenly<T>(items: T[], limit: number): T[] {
+  if (items.length <= limit) return items;
+  if (limit <= 1) return items.slice(0, 1);
+  const sampled: T[] = [];
+  for (let index = 0; index < limit; index += 1) {
+    const at = Math.round((index * (items.length - 1)) / (limit - 1));
+    const item = items[at];
+    if (item !== undefined) sampled.push(item);
+  }
+  return sampled;
+}
+
+/**
+ * 总览或按章裁剪世界线；角色/场景过多时只留主要条目。
+ * 不改 build 结果，便于时间线仍能从完整模型恢复。
+ */
+export function applyWorldLineView(
+  model: WorldLineModel,
+  resources: WorldResourcesDTO,
+  view: WorldLineViewState,
+): WorldLineModel {
+  const from = view.overview ? model.scaleDomain.min : Math.min(view.from, view.to);
+  const to = view.overview ? model.scaleDomain.max : Math.max(view.from, view.to);
+
+  let tracks = model.tracks.map((track) => ({
+    ...track,
+    items: track.items.filter((item) => itemOverlapsRange(item, from, to)),
+  }));
+
+  if (view.density === 'main') {
+    const eventItems = tracks.find((track) => track.kind === 'world_event')?.items ?? [];
+    const eventIds = new Set(eventItems.map((item) => item.id));
+    const eventsInView = resources.entities.world_events.filter((event) => eventIds.has(event.id));
+    const appearance = new Map<string, number>();
+    for (const event of eventsInView) {
+      for (const characterId of event.character_ids ?? []) {
+        appearance.set(characterId, (appearance.get(characterId) ?? 0) + 1);
+      }
+    }
+    const mainCharacterIds = new Set(
+      pickMainCharacterIds(resources.entities.characters, appearance),
+    );
+    const linkedSceneIds = new Set(eventsInView.flatMap((event) => event.scene_ids ?? []));
+
+    tracks = tracks.map((track) => {
+      if (track.kind === 'character') {
+        return { ...track, items: track.items.filter((item) => mainCharacterIds.has(item.id)) };
+      }
+      if (track.kind === 'scene') {
+        let items = track.items;
+        if (items.length > MAIN_SCENE_LIMIT) {
+          const preferred = items.filter((item) => linkedSceneIds.has(item.id));
+          items = preferred.length > 0 ? preferred : items;
+        }
+        if (items.length > MAIN_SCENE_LIMIT) items = sampleEvenly(items, MAIN_SCENE_LIMIT);
+        return { ...track, items };
+      }
+      return track;
+    });
+
+    const keptScenes = tracks.find((track) => track.kind === 'scene')?.items ?? [];
+    const locationIds = new Set(
+      keptScenes
+        .map((item) => item.extra?.location_id)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0),
+    );
+    tracks = tracks.map((track) => {
+      if (track.kind !== 'location' || locationIds.size === 0) return track;
+      const linked = track.items.filter((item) => locationIds.has(item.id));
+      return { ...track, items: linked.length > 0 ? linked : track.items.slice(0, 8) };
+    });
+  }
+
+  const keptIds = new Set(tracks.flatMap((track) => track.items.map((item) => item.id)));
+  const relationships = model.relationships.filter(
+    (line) =>
+      (!line.sourceItemId || keptIds.has(line.sourceItemId)) &&
+      (!line.targetItemId || keptIds.has(line.targetItemId)),
+  );
+  const axisMarks = model.axisMarks.filter((mark) => mark.order >= from && mark.order <= to);
+
+  return {
+    ...model,
+    tracks,
+    relationships,
+    scaleDomain: view.overview ? model.scaleDomain : { min: from, max: Math.max(to, from) },
+    axisMarks,
   };
 }
 

@@ -236,6 +236,8 @@ export interface CreatorChatThreadDTO {
   kind?: CreatorChatKind;
   character_name?: string | null;
   user_character_name?: string | null;
+  /** 该线程未确认提案条数；列表接口附带，缺省按 0。 */
+  pending_proposal_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -267,6 +269,14 @@ export interface ApplyProposalResultDTO {
     'project' | 'world_event' | 'asset' | 'scene' | 'relationship' | 'story' | (string & {});
   entity_id: string;
   title: string;
+}
+
+export interface WriteLogItemDTO {
+  id: string;
+  thread_id: string;
+  thread_title: string | null;
+  created_at: string;
+  summary: string;
 }
 
 export type WorkflowStepName =
@@ -410,6 +420,8 @@ export interface ProviderCatalogDTO {
     audio: ProviderId;
   };
   models: ProviderModelsDTO;
+  /** 模型选择器里被隐藏的模型（设置页开关；当前在用的由 llmChoices 保留）。 */
+  hidden_models?: Array<{ provider: ProviderId; model: string }>;
   providers: Array<{
     id: ProviderId;
     label: string;

@@ -3,21 +3,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card, EmptyState, Field, Input, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
-import { pickWorkspaceDirectory } from '@/lib/desktop';
+import { isDesktopApp, pickWorkspaceDirectory, WEB_FOLDER_HINT } from '@/lib/desktop';
 import { normalizeThread } from '@/lib/creator-chat-nav';
 import { getFormText } from '@/lib/form-data';
 import type { ProjectDTO } from '@/lib/types';
 
 export default function ProjectsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
+  const [desktop, setDesktop] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +45,14 @@ export default function ProjectsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setDesktop(isDesktopApp());
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get('new') === '1') setCreating(true);
+  }, [searchParams]);
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,19 +113,26 @@ export default function ProjectsPage() {
           <p className="text-sm text-accent">创作中心</p>
           <h1 className="mt-1 text-3xl font-semibold">你的项目</h1>
           <p className="mt-2 text-zinc-400">
-            一个文件夹是一个世界工作区。用桌面应用选择真实路径；Chat 里可新建聊天、改名、删除对话。
+            {desktop
+              ? '一个文件夹是一个世界工作区。用桌面应用选择真实路径；Chat 里可新建聊天、改名、删除对话。'
+              : '在网页里可以新建世界并继续已有项目。绑定磁盘文件夹需要 Zivith 桌面应用。'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {desktop ? (
+            <Button
+              disabled={opening}
+              onClick={() => {
+                void openLocalFolder();
+              }}
+            >
+              {opening ? '正在打开…' : '打开文件夹'}
+            </Button>
+          ) : null}
           <Button
-            disabled={opening}
-            onClick={() => {
-              void openLocalFolder();
-            }}
+            variant={desktop ? 'secondary' : undefined}
+            onClick={() => setCreating((value) => !value)}
           >
-            {opening ? '正在打开…' : '打开文件夹'}
-          </Button>
-          <Button variant="secondary" onClick={() => setCreating((value) => !value)}>
             {creating ? '取消' : '新建项目'}
           </Button>
         </div>
@@ -156,19 +173,21 @@ export default function ProjectsPage() {
         <Spinner label="正在加载项目…" />
       ) : projects.length === 0 ? (
         <EmptyState
-          title="还没有项目文件夹"
-          description="用桌面应用（pnpm desktop）选择一个已有文件夹作为世界工作区。"
+          title="还没有项目"
+          description={desktop ? '选择一个已有文件夹作为世界工作区。' : WEB_FOLDER_HINT}
           action={
             <div className="flex flex-wrap gap-2">
-              <Button
-                disabled={opening}
-                onClick={() => {
-                  void openLocalFolder();
-                }}
-              >
-                {opening ? '正在打开…' : '打开文件夹'}
-              </Button>
-              <Button variant="secondary" onClick={() => setCreating(true)}>
+              {desktop ? (
+                <Button
+                  disabled={opening}
+                  onClick={() => {
+                    void openLocalFolder();
+                  }}
+                >
+                  {opening ? '正在打开…' : '打开文件夹'}
+                </Button>
+              ) : null}
+              <Button variant={desktop ? 'secondary' : undefined} onClick={() => setCreating(true)}>
                 新建项目
               </Button>
             </div>

@@ -42,6 +42,23 @@ function createSplash() {
   splashWindow.once('ready-to-show', () => splashWindow?.show());
 }
 
+function mainWindowChrome() {
+  if (process.platform === 'darwin') {
+    return { titleBarStyle: 'hiddenInset' };
+  }
+  if (process.platform === 'win32') {
+    return {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#f7f8fa',
+        symbolColor: '#52525b',
+        height: 44,
+      },
+    };
+  }
+  return {};
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -53,6 +70,7 @@ function createWindow() {
     backgroundColor: '#ffffff',
     icon: ICON,
     autoHideMenuBar: true,
+    ...mainWindowChrome(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

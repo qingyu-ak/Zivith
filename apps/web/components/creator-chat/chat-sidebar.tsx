@@ -10,10 +10,16 @@ import {
   threadDisplayTitle,
   threadKind,
 } from '@/lib/chat-history';
-import { isDesktopApp } from '@/lib/desktop';
+import { isDesktopApp, WEB_FOLDER_HINT } from '@/lib/desktop';
 import type { CreatorChatKind, CreatorChatThreadDTO, ProjectDTO } from '@/lib/types';
 import { AccountMenu } from '@/components/account-menu';
-import { IconChatPlus, IconFolder, IconPlusCircle, IconSearch, IconSidebar } from '@/components/nav-icons';
+import {
+  IconChatPlus,
+  IconFolder,
+  IconPlusCircle,
+  IconSearch,
+  IconSidebar,
+} from '@/components/nav-icons';
 
 type MenuState =
   | { kind: 'project'; id: string; name: string; x: number; y: number }
@@ -27,11 +33,13 @@ export function ChatSidebar({
   threadId,
   busy,
   pickerOpen,
-  onToggle,
+  settingsHref = '/creator-chats',
   onPickerOpenChange,
   onSelectProject,
   onOpenFolder,
+  onCreateWorld,
   onNewInProject,
+  onNewRoleplay,
   onRenameProject,
   onRenameThread,
   onDeleteThread,
@@ -41,32 +49,29 @@ export function ChatSidebar({
   threadId?: string;
   busy: boolean;
   pickerOpen: boolean;
+  settingsHref?: string;
   onToggle: () => void;
   onPickerOpenChange: (open: boolean) => void;
   onSelectProject: (projectId: string) => void;
   onOpenFolder: () => void;
+  onCreateWorld?: () => void;
   onNewInProject: (projectId: string) => void;
+  onNewRoleplay?: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => void;
   onRenameThread: (threadId: string, name: string) => void;
   onDeleteThread: (threadId: string, name: string) => void;
 }) {
   const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
   const [tab, setTab] = useState<CreatorChatKind>('world');
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [rename, setRename] = useState<RenameState | null>(null);
   const syncedThreadId = useRef<string | undefined>(undefined);
-  const searchRef = useRef<HTMLInputElement | null>(null);
   const [desktop, setDesktop] = useState(false);
   const groups = filterProjectGroups(groupProjectsWithThreads(projects, threads), query);
 
   useEffect(() => {
     setDesktop(isDesktopApp());
   }, []);
-
-  useEffect(() => {
-    if (searching) searchRef.current?.focus();
-  }, [searching]);
 
   useEffect(() => {
     if (!threadId || threadId === syncedThreadId.current) return;
@@ -97,7 +102,10 @@ export function ChatSidebar({
     };
   }, [menu]);
 
-  function openMenu(event: MouseEvent, next: Omit<MenuState, 'x' | 'y'> & { kind: MenuState['kind'] }) {
+  function openMenu(
+    event: MouseEvent,
+    next: Omit<MenuState, 'x' | 'y'> & { kind: MenuState['kind'] },
+  ) {
     event.preventDefault();
     event.stopPropagation();
     setMenu({
@@ -109,32 +117,6 @@ export function ChatSidebar({
 
   return (
     <aside className="flex h-full w-[268px] shrink-0 flex-col bg-[#f7f8fa]">
-      <div className="flex items-center gap-1 px-3 pt-3">
-        <Link
-          href="/creator-chats"
-          className="px-1 text-[17px] font-semibold tracking-tight text-zinc-900"
-        >
-          ZIVITH
-        </Link>
-        <span className="flex-1" />
-        <button
-          type="button"
-          className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-800"
-          aria-label="搜索对话"
-          onClick={() => setSearching((value) => !value)}
-        >
-          <IconSearch className="size-4" />
-        </button>
-        <button
-          type="button"
-          className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-800"
-          aria-label="收起侧栏"
-          onClick={onToggle}
-        >
-          <IconSidebar className="size-4" />
-        </button>
-      </div>
-
       <div className="px-3 pt-3">
         <button
           type="button"
@@ -146,23 +128,36 @@ export function ChatSidebar({
             }
             onPickerOpenChange(true);
           }}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-medium text-zinc-800 shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-zinc-200/80 transition hover:bg-zinc-50 disabled:opacity-40"
+          className={`flex h-11 w-full items-center justify-center gap-2 rounded-full text-sm font-medium transition disabled:opacity-40 ${
+            desktop
+              ? 'bg-white text-zinc-800 shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-zinc-200/80 hover:bg-zinc-50'
+              : 'bg-transparent text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50'
+          }`}
         >
           <IconPlusCircle className="size-4 text-zinc-600" />
-          选择文件夹
+          {desktop ? '选择文件夹' : '用桌面应用打开文件夹'}
         </button>
       </div>
 
       {pickerOpen && !desktop ? (
         <div className="mx-3 mt-3 rounded-xl border border-zinc-200 bg-white px-3 py-3">
-          <p className="text-xs leading-5 text-zinc-500">
-            浏览器拿不到真实磁盘路径。请用桌面应用（仓库根目录{' '}
-            <span className="font-mono text-[11px] text-zinc-700">pnpm desktop</span>
-            ）选择文件夹。已打开过的工作区仍可从下面点选。
-          </p>
+          <p className="text-xs leading-5 text-zinc-500">{WEB_FOLDER_HINT}</p>
+          {onCreateWorld ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="mt-2 mr-3 text-xs text-[#4d6bfe] disabled:opacity-40"
+              onClick={() => {
+                onPickerOpenChange(false);
+                onCreateWorld();
+              }}
+            >
+              新建一个世界
+            </button>
+          ) : null}
           <button
             type="button"
-            className="mt-2 text-xs text-[#4d6bfe]"
+            className="mt-2 text-xs text-zinc-500"
             onClick={() => onPickerOpenChange(false)}
           >
             关闭
@@ -191,17 +186,17 @@ export function ChatSidebar({
         />
       </div>
 
-      {searching && (
-        <div className="px-3 pt-3">
+      <div className="px-3 pt-3">
+        <label className="relative block">
+          <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-400" />
           <input
-            ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索项目或对话"
-            className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-[#4d6bfe]"
+            className="h-8 w-full rounded-lg border border-zinc-200 bg-white py-1 pl-8 pr-2 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-[#4d6bfe]"
           />
-        </div>
-      )}
+        </label>
+      </div>
 
       <nav className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="工作区列表">
         {groups.length === 0 ? (
@@ -210,7 +205,7 @@ export function ChatSidebar({
               ? '没有匹配的项目或对话'
               : desktop
                 ? '点「选择文件夹」打开一个已有目录作为世界。'
-                : '用桌面应用打开一个文件夹，或从已有项目继续。'}
+                : '用桌面应用打开文件夹，或从已有项目继续。也可以新建一个世界。'}
           </p>
         ) : (
           <ul className="grid gap-1">
@@ -218,9 +213,6 @@ export function ChatSidebar({
             {groups.map((group) => {
               const { world, roleplay } = partitionThreadsByKind(group.threads);
               const tabThreads = tab === 'roleplay' ? roleplay : world;
-              if (tab === 'roleplay' && tabThreads.length === 0 && group.id !== '__unbound__') {
-                return null;
-              }
               const renamingProject = rename?.kind === 'project' && rename.id === group.id;
               return (
                 <li key={group.id}>
@@ -246,7 +238,8 @@ export function ChatSidebar({
                           if (group.id !== '__unbound__') onSelectProject(group.id);
                         }}
                         onDoubleClick={() => {
-                          if (group.id !== '__unbound__') setRename({ kind: 'project', id: group.id });
+                          if (group.id !== '__unbound__')
+                            setRename({ kind: 'project', id: group.id });
                         }}
                         onContextMenu={(event) => {
                           if (group.id === '__unbound__') return;
@@ -264,15 +257,35 @@ export function ChatSidebar({
                         type="button"
                         disabled={busy}
                         className="grid size-7 shrink-0 place-items-center rounded-md text-zinc-400 hover:bg-zinc-200 hover:text-zinc-800 disabled:opacity-40"
-                        aria-label={`在「${group.label}」新建聊天`}
-                        onClick={() => onNewInProject(group.id)}
+                        aria-label={
+                          tab === 'roleplay'
+                            ? `在「${group.label}」开始扮演`
+                            : `在「${group.label}」新建聊天`
+                        }
+                        onClick={() => {
+                          if (tab === 'roleplay' && onNewRoleplay) onNewRoleplay(group.id);
+                          else onNewInProject(group.id);
+                        }}
                       >
                         <IconChatPlus className="size-3.5" />
                       </button>
                     ) : null}
                   </div>
                   {tabThreads.length === 0 ? (
-                    <p className="py-1 pl-8 pr-2 text-[12px] text-zinc-400">暂无对话</p>
+                    <div className="py-1 pl-8 pr-2">
+                      <p className="text-[12px] text-zinc-400">
+                        {tab === 'roleplay' ? '还没有扮演对话' : '暂无对话'}
+                      </p>
+                      {tab === 'roleplay' && group.id !== '__unbound__' && onNewRoleplay ? (
+                        <button
+                          type="button"
+                          className="mt-1 text-[12px] text-[#4d6bfe] hover:underline"
+                          onClick={() => onNewRoleplay(group.id)}
+                        >
+                          选择角色开始扮演
+                        </button>
+                      ) : null}
+                    </div>
                   ) : (
                     <ul className="grid gap-0.5 pl-6">
                       {tabThreads.map((item) => {
@@ -368,7 +381,7 @@ export function ChatSidebar({
       ) : null}
 
       <div className="border-t border-zinc-200/80 px-1 pb-3 pt-2">
-        <AccountMenu settingsHref="/projects" tone="light" />
+        <AccountMenu settingsHref={settingsHref} tone="light" />
       </div>
     </aside>
   );
@@ -479,7 +492,7 @@ export function ChatSidebarRail({
       <button
         type="button"
         className="grid size-9 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-800"
-        aria-label="选择文件夹"
+        aria-label={isDesktopApp() ? '选择文件夹' : '用桌面应用打开文件夹'}
         onClick={onOpenFolder}
       >
         <IconPlusCircle className="size-5" />

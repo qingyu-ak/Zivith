@@ -49,7 +49,9 @@ function withLaunchPath(env) {
     process.env.APPDATA ? path.join(process.env.APPDATA, 'npm') : '',
     process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'pnpm') : '',
     process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'nodejs') : '',
-    process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Docker', 'Docker', 'resources', 'bin') : '',
+    process.env.ProgramFiles
+      ? path.join(process.env.ProgramFiles, 'Docker', 'Docker', 'resources', 'bin')
+      : '',
   ].filter(Boolean);
   const current = env.PATH || env.Path || '';
   const existingNodeOptions = env.NODE_OPTIONS ?? '';
@@ -157,11 +159,10 @@ function stopProcessTree(child) {
 function ensureDocker(repoRoot, onStatus) {
   onStatus('正在启动本地数据库…');
   return new Promise((resolve) => {
-    const child = spawnHidden(
-      'docker',
-      ['compose', 'up', '-d', 'postgres', 'redis', 'minio'],
-      { cwd: repoRoot, env: withLaunchPath(process.env) },
-    );
+    const child = spawnHidden('docker', ['compose', 'up', '-d', 'postgres', 'redis', 'minio'], {
+      cwd: repoRoot,
+      env: withLaunchPath(process.env),
+    });
     child.stdout?.resume();
     child.stderr?.resume();
     let settled = false;

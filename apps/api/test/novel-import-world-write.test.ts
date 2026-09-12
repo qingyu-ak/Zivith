@@ -39,7 +39,12 @@ function chapterDb(rows: ChapterRow[]) {
       async ({
         data,
       }: {
-        data: Array<{ importId: string; chapterIndex: number; title: string | null; status: string }>;
+        data: Array<{
+          importId: string;
+          chapterIndex: number;
+          title: string | null;
+          status: string;
+        }>;
       }) => {
         rows.push(
           ...data.map((row) => ({
@@ -125,13 +130,12 @@ describe('NovelImportService world-write failure', () => {
       details: expect.objectContaining({ import_id: 'imp1' }),
     });
 
-    const failed = [...reports].reverse().find(
-      (value): value is Record<string, unknown> =>
-        value !== null &&
-        typeof value === 'object' &&
-        !Array.isArray(value) &&
-        'error' in value,
-    );
+    const failed = [...reports]
+      .reverse()
+      .find(
+        (value): value is Record<string, unknown> =>
+          value !== null && typeof value === 'object' && !Array.isArray(value) && 'error' in value,
+      );
     expect(failed).toBeDefined();
     const characters = failed!.characters as Array<{ name: string }> | undefined;
     expect(characters?.map((character) => character.name)).toContain('林澈');
@@ -172,9 +176,7 @@ describe('NovelImportService world-write failure', () => {
           config: { sourceText: SAMPLE, maxFullCards: 15, maxLocations: 30, maxEvents: 60 },
           chapters: rows,
           report: {
-            characters: [
-              { id: 'a-lin', name: '林澈', aliases: [], mentions: 16, tier: 'full' },
-            ],
+            characters: [{ id: 'a-lin', name: '林澈', aliases: [], mentions: 16, tier: 'full' }],
             locations: [],
             events: [],
             relationships: [],
@@ -207,9 +209,9 @@ describe('NovelImportService world-write failure', () => {
       relationship: { create: vi.fn() },
     } as unknown as PrismaClient;
 
-    const result = await new NovelImportService(db, () =>
-      namedExtraction(['林澈', '艾拉']),
-    ).retry('imp1');
+    const result = await new NovelImportService(db, () => namedExtraction(['林澈', '艾拉'])).retry(
+      'imp1',
+    );
 
     expect(createdNames).toEqual(['艾拉']);
     expect(result.report.characters.map((character) => character.id)).toContain('a-lin');

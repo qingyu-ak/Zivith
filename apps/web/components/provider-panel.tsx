@@ -199,7 +199,7 @@ export function ProviderPanel() {
                     onChange={(event) =>
                       setSelection((current) => ({
                         ...current,
-                        [modality]: event.target.value as ProviderId,
+                        [modality]: event.target.value,
                       }))
                     }
                   >

@@ -5,7 +5,14 @@ import { NovelImportService } from '../src/contexts/novel-import/service.js';
 function lightReport() {
   return {
     characters: [
-      { id: 'a-light', name: '路鸣泽', aliases: [], mentions: 7, tier: 'light' as const },
+      {
+        id: 'a-light',
+        name: '路鸣泽',
+        aliases: [],
+        mentions: 7,
+        // idempotent 用例会把 tier 改写为 'full'，不能收窄成 const。
+        tier: 'light' as 'light' | 'full',
+      },
     ],
     locations: [],
     events: [],

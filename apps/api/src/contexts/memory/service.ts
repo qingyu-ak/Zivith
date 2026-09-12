@@ -1,9 +1,11 @@
 import {
   jaccardSimilarity,
   tokenizeForSimilarity,
+  type MemoryConflictDecision,
   type MemoryIngestOps,
   type RetrievedMemory,
 } from '@zivith/domain';
+import { ApiError } from '../../errors.js';
 import type { EmbeddingAdapter, QueuePort } from '../../ports/index.js';
 import type { LLMAdapter } from '../../ports/llm.js';
 import type { LocalVectorStore } from '../../adapters/memory/local-vector-store.js';
@@ -24,7 +26,7 @@ import {
   MEMORY_REFINE_SYSTEM_PROMPT,
   memoryRefineSchema,
 } from './pipeline.js';
-import type { MemoryStore } from './store.js';
+import type { MemoryConflictRecord, MemoryCoreRecord, MemoryStore } from './store.js';
 
 export interface MemoryServiceDeps {
   store: MemoryStore;
@@ -94,10 +96,29 @@ export class MemoryService {
       }
       if (decision.op === 'CONFLICT') {
         const conflictAtom = existing.find((atom) => atom.id === decision.conflictAtomId);
+        // D4：矛盾不自动写入，落冲突清单等确认；id 随 SSE 回传给内联确认卡。
+        const conflict = await this.deps.store.createConflict({
+          projectId: params.projectId,
+          threadId: params.threadId,
+          sourceMessageId: params.messageId,
+          entityType,
+          entityId,
+          factType: candidate.factType,
+          incomingContent: candidate.content,
+          existingContent: conflictAtom?.content ?? '',
+          existingAtomId: conflictAtom?.id ?? null,
+          antonym: [decision.antonym[0], decision.antonym[1]],
+          dedupHash,
+        });
         ops.conflicts.push({
+          id: conflict.id,
           content: candidate.content,
           existing_content: conflictAtom?.content ?? '',
           antonym: [decision.antonym[0], decision.antonym[1]],
+          entity_type: entityType,
+          entity_id: entityId,
+          fact_type: candidate.factType,
+          status: 'pending',
         });
         continue;
       }
@@ -396,6 +417,104 @@ export class MemoryService {
 
   async listCores(projectId: string) {
     return this.deps.store.listCores(projectId);
+  }
+
+  async saveCore(
+    projectId: string,
+    input: { kind: string; topic: string; content: string },
+  ): Promise<MemoryCoreRecord> {
+    const content = input.content.trim();
+    if (!content) throw new ApiError(400, 'EMPTY_CORE', '档案内容不能为空');
+    const existing = (await this.deps.store.listCores(projectId)).find(
+      (core) => core.kind === input.kind && core.topic === input.topic,
+    );
+    await this.deps.store.upsertCore({
+      projectId,
+      kind: input.kind,
+      topic: input.topic.trim(),
+      content,
+      sourceAtomIds: existing?.sourceAtomIds ?? [],
+    });
+    const saved = (await this.deps.store.listCores(projectId)).find(
+      (core) => core.kind === input.kind && core.topic === input.topic,
+    );
+    if (!saved) throw new ApiError(500, 'CORE_SAVE_FAILED', '档案未能保存');
+    return saved;
+  }
+
+  async patchCore(projectId: string, coreId: string, content: string): Promise<MemoryCoreRecord> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new ApiError(400, 'EMPTY_CORE', '档案内容不能为空');
+    const existing = await this.deps.store.findCore(coreId);
+    if (!existing || existing.projectId !== projectId) {
+      throw new ApiError(404, 'CORE_NOT_FOUND', '核心记忆不存在');
+    }
+    const updated = await this.deps.store.updateCore(coreId, { content: trimmed });
+    if (!updated) throw new ApiError(404, 'CORE_NOT_FOUND', '核心记忆不存在');
+    return updated;
+  }
+
+  /** 记忆面板 L2 展开溯源：核心块 + 其源原子内容。 */
+  async coreDetail(projectId: string, coreId: string) {
+    const core = (await this.deps.store.listCores(projectId)).find((item) => item.id === coreId);
+    if (!core) return null;
+    const sourceAtoms = await this.deps.store.findAtomsByIds(core.sourceAtomIds);
+    return { core, sourceAtoms };
+  }
+
+  async listConflicts(projectId: string, options?: { status?: string; threadId?: string }) {
+    return this.deps.store.listConflicts(projectId, options);
+  }
+
+  /**
+   * D4 冲突裁决：确认 = 保留新卡（新原子取代旧卡），丢弃 = 保留已有卡。
+   * 只动记忆层原子，不改世界实体。
+   */
+  async resolveConflict(
+    conflictId: string,
+    decision: MemoryConflictDecision,
+  ): Promise<MemoryConflictRecord> {
+    const conflict = await this.deps.store.findConflict(conflictId);
+    if (!conflict) throw new ApiError(404, 'CONFLICT_NOT_FOUND', '记忆冲突不存在');
+    if (conflict.status !== 'pending') {
+      throw new ApiError(409, 'CONFLICT_ALREADY_RESOLVED', '该冲突已处理，不能重复裁决');
+    }
+    let resolvedAtomId: string | null = null;
+    if (decision === 'keep_new') {
+      const previous = conflict.existingAtomId
+        ? ((await this.deps.store.findAtomsByIds([conflict.existingAtomId]))[0] ?? null)
+        : null;
+      const previousActive = previous && previous.status === 'active' ? previous : null;
+      const created = await this.deps.store.createAtom({
+        projectId: conflict.projectId,
+        threadId: conflict.threadId,
+        sourceMessageId: conflict.sourceMessageId,
+        entityType: conflict.entityType,
+        entityId: conflict.entityId,
+        factType: conflict.factType,
+        content: conflict.incomingContent,
+        confidence: 0.75,
+        dedupHash: conflict.dedupHash,
+        memoryOp: previousActive ? 'UPDATE' : 'ADD',
+      });
+      if (previousActive) {
+        await this.deps.store.updateAtom(previousActive.id, {
+          status: 'superseded',
+          supersededById: created.id,
+          validTo: new Date(),
+        });
+      }
+      resolvedAtomId = created.id;
+    }
+    await this.deps.store.updateConflict(conflictId, {
+      status: decision === 'keep_new' ? 'resolved' : 'discarded',
+      decision,
+      resolvedAtomId,
+      resolvedAt: new Date(),
+    });
+    const updated = await this.deps.store.findConflict(conflictId);
+    if (!updated) throw new ApiError(404, 'CONFLICT_NOT_FOUND', '记忆冲突不存在');
+    return updated;
   }
 
   async invalidateAtom(atomId: string): Promise<boolean> {

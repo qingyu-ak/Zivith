@@ -22,7 +22,7 @@ import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
 import { ApiError } from '../errors.js';
 import { ensureProjectMember } from '../contexts/world/local-user.js';
-import { archiveWorldWorkspace } from '../contexts/world/workspace.js';
+import { archiveWorldWorkspace, syncWorkspaceMarkerName } from '../contexts/world/workspace.js';
 import type { StoragePort } from '../ports/index.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 import { maybeRecordEntityChange } from '../contexts/history/index.js';
@@ -455,7 +455,7 @@ export function registerResourceRoutes(
     const { id } = idParams.parse(request.params);
     await requireMember(db, request.user.sub, id, true);
     const body = projectBody.partial().parse(request.body);
-    return db.project.update({
+    const project = await db.project.update({
       where: { id },
       data: clean({
         name: body.name,
@@ -466,6 +466,9 @@ export function registerResourceRoutes(
         worldview: body.worldview === undefined ? undefined : json(parseWorldview(body.worldview)),
       }),
     });
+    // 改显示名后同步已绑定文件夹里的工作区标记（不重命名磁盘目录）。
+    if (body.name !== undefined) syncWorkspaceMarkerName(project);
+    return project;
   });
   app.delete('/projects/:id', async (request, reply) => {
     const { id } = idParams.parse(request.params);

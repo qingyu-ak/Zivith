@@ -5,9 +5,9 @@ export type ChatEffort = 'fast' | 'balanced' | 'deep';
 export const CHAT_EFFORT_KEY = 'zivith.chatEffort';
 
 export const CHAT_EFFORT_LABEL: Record<ChatEffort, string> = {
-  fast: '最低',
+  fast: '快速',
   balanced: '均衡',
-  deep: '最高',
+  deep: '深度',
 };
 
 /** 与服务端 chat-v1 策略对齐的上下文预算；不是模型窗口上限。 */
@@ -61,23 +61,68 @@ export function formatTokenCount(count: number): string {
   return String(Math.round(count));
 }
 
+/** Cursor 式页脚：12.4k / 24k。 */
+export function formatTokenCompact(count: number): string {
+  if (count >= 1000) {
+    const k = count / 1000;
+    if (k >= 100) return `${Math.round(k)}k`;
+    return `${k.toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  return String(Math.round(count));
+}
+
+export function contextUsagePercent(used: number, cap: number): number {
+  if (cap <= 0) return 0;
+  return Math.max(0, (used / cap) * 100);
+}
+
+/** 用量弹层右侧：12.4k/24k (52%) */
+export function formatContextRatio(
+  used: number,
+  cap: number,
+  options?: { approximate?: boolean },
+): string {
+  const pct = contextUsagePercent(used, cap);
+  const approx = options?.approximate ? '约 ' : '';
+  return `${approx}${formatTokenCompact(used)}/${formatTokenCompact(cap)} (${pct.toFixed(0)}%)`;
+}
+
+/** Chat / Studio 共用页脚：上下文 12.4k/24k (51%) · LLM 3 次 */
+export function formatContextMeter(
+  used: number,
+  cap: number,
+  options?: { approximate?: boolean; llmCalls?: number | null },
+): string {
+  const meter = `上下文 ${formatContextRatio(used, cap, { approximate: options?.approximate })}`;
+  if (options?.llmCalls == null) return meter;
+  return `${meter} · LLM ${options.llmCalls} 次`;
+}
+
 export function llmChoices(catalog: ProviderCatalogDTO | null): LlmChoice[] {
   if (!catalog) return [];
+  // 设置页可隐藏模型；当前正在用的那条即使被隐藏也先留着，直到用户另选。
+  const hidden = new Set(
+    (catalog.hidden_models ?? []).map((item) => `${item.provider}\n${item.model}`),
+  );
+  const currentKey = `${catalog.selection.llm}\n${catalog.models.llm}`;
   return catalog.providers
     .filter((provider) => provider.modalities.includes('llm'))
     .flatMap((provider) => {
       const models =
-        provider.llm_models && provider.llm_models.length > 0
-          ? provider.llm_models
-          : [];
-      return models.map((item) => ({
-        provider: provider.id,
-        providerLabel: provider.label,
-        model: item.id,
-        label: item.label || item.id,
-        configured: provider.configured,
-        tag: provider.configured ? undefined : '未配置',
-      }));
+        provider.llm_models && provider.llm_models.length > 0 ? provider.llm_models : [];
+      return models
+        .filter((item) => {
+          const key = `${provider.id}\n${item.id}`;
+          return !hidden.has(key) || key === currentKey;
+        })
+        .map((item) => ({
+          provider: provider.id,
+          providerLabel: provider.label,
+          model: item.id,
+          label: item.label || item.id,
+          configured: provider.configured,
+          tag: provider.configured ? undefined : '未配置',
+        }));
     });
 }
 
@@ -104,4 +149,13 @@ export function selectedLlmLabel(catalog: ProviderCatalogDTO | null): string {
   );
   const id = current?.model || catalog.models.llm;
   return id ? displayModelId(id) : current?.providerLabel || '选择模型';
+}
+
+/** Mock or unconfigured chat provider — roleplay should show 降级模式. */
+export function isLlmDegraded(catalog: ProviderCatalogDTO | null): boolean {
+  if (!catalog) return false;
+  const id = catalog.selection.llm;
+  if (id === 'mock') return true;
+  const provider = catalog.providers.find((item) => item.id === id);
+  return !provider?.configured;
 }

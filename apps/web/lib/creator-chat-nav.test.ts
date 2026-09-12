@@ -8,6 +8,12 @@ import {
   mergeChatFocus,
   normalizeThread,
   parseFocusFromSearch,
+  settingsHrefFor,
+  studioHrefForChat,
+  studioHrefForEntity,
+  parseStudioSelect,
+  chatHrefForStudio,
+  pickStudioAgentThread,
 } from './creator-chat-nav';
 import type { WorldResourcesDTO } from './types';
 
@@ -51,11 +57,17 @@ function resources(): WorldResourcesDTO {
 describe('normalizeThread', () => {
   it('accepts snake_case and camelCase payloads', () => {
     expect(
-      normalizeThread({ id: 't1', projectId: 'p1', updatedAt: '2026-01-01T00:00:00.000Z' }),
+      normalizeThread({
+        id: 't1',
+        projectId: 'p1',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        pending_proposal_count: 2,
+      }),
     ).toMatchObject({
       id: 't1',
       project_id: 'p1',
       updated_at: '2026-01-01T00:00:00.000Z',
+      pending_proposal_count: 2,
     });
     expect(
       normalizeThread({
@@ -122,5 +134,68 @@ describe('chat focus routing', () => {
       )?.name,
     ).toBe('韩立');
     expect(studioFocusHandoffMessage(focus)).toBe('从 Studio 继续：角色「韩立」');
+  });
+});
+
+describe('settingsHrefFor', () => {
+  it('uses the current project when present', () => {
+    expect(settingsHrefFor('p1', ['p2'])).toBe('/projects/p1/settings');
+    expect(settingsHrefFor('p1', [], 'models')).toBe('/projects/p1/settings?section=models');
+  });
+
+  it('falls back to another project instead of the project list', () => {
+    expect(settingsHrefFor(undefined, [null, 'p2'])).toBe('/projects/p2/settings');
+  });
+
+  it('only uses the project list when no project exists', () => {
+    expect(settingsHrefFor(undefined, [])).toBe('/projects');
+  });
+});
+
+describe('shell jump hrefs', () => {
+  it('studioHrefForChat: 有项目进 world，没有才回项目列表', () => {
+    expect(studioHrefForChat('p1')).toBe('/projects/p1/world');
+    expect(studioHrefForChat(null)).toBe('/projects');
+    expect(studioHrefForChat(undefined)).toBe('/projects');
+  });
+
+  it('studioHrefForEntity / parseStudioSelect 把角色卡带到 Inspector', () => {
+    expect(studioHrefForEntity('p1', { kind: 'character', id: 'c1' })).toBe(
+      '/projects/p1/world?select=character&entity=c1',
+    );
+    expect(parseStudioSelect(new URLSearchParams('select=character&entity=c1'))).toEqual({
+      kind: 'character',
+      id: 'c1',
+    });
+    expect(parseStudioSelect(new URLSearchParams('select=shot&entity=s1'))).toBeNull();
+    expect(parseStudioSelect(new URLSearchParams('select=character'))).toBeNull();
+  });
+
+  it('chatHrefForStudio: 已知线程进线程，否则回对话首页', () => {
+    expect(chatHrefForStudio('t1')).toBe('/creator-chats/t1');
+    expect(chatHrefForStudio(null)).toBe('/creator-chats');
+    expect(chatHrefForStudio(undefined)).toBe('/creator-chats');
+  });
+
+  it('pickStudioAgentThread 记住上次打开的世界构建线程', () => {
+    const world = normalizeThread({
+      id: 't1',
+      kind: 'world',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    })!;
+    const older = normalizeThread({
+      id: 't2',
+      kind: 'world',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })!;
+    const play = normalizeThread({
+      id: 'r1',
+      kind: 'roleplay',
+      updatedAt: '2026-01-03T00:00:00.000Z',
+    })!;
+    expect(pickStudioAgentThread([play, world, older], null)).toBe('t1');
+    expect(pickStudioAgentThread([play, world, older], 't2')).toBe('t2');
+    expect(pickStudioAgentThread([play, world, older], 'r1')).toBe('t1');
+    expect(pickStudioAgentThread([play], 'r1')).toBeNull();
   });
 });

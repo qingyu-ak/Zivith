@@ -5,7 +5,13 @@ import {
   displayModelId,
   estimateMessageTokens,
   filterLlmChoices,
+  formatTokenCompact,
   formatTokenCount,
+  formatContextMeter,
+  formatContextRatio,
+  contextUsagePercent,
+  CHAT_EFFORT_LABEL,
+  isLlmDegraded,
   llmChoices,
   selectedLlmLabel,
 } from './chat-composer';
@@ -69,6 +75,28 @@ describe('chat composer helpers', () => {
     expect(formatTokenCount(320)).toBe('320');
   });
 
+  it('formats compact k counts for the context footer', () => {
+    expect(formatTokenCompact(12_400)).toBe('12.4k');
+    expect(formatTokenCompact(24_000)).toBe('24k');
+    expect(formatTokenCompact(8000)).toBe('8k');
+    expect(formatTokenCompact(320)).toBe('320');
+  });
+
+  it('labels effort as 快速 / 均衡 / 深度', () => {
+    expect(CHAT_EFFORT_LABEL.fast).toBe('快速');
+    expect(CHAT_EFFORT_LABEL.balanced).toBe('均衡');
+    expect(CHAT_EFFORT_LABEL.deep).toBe('深度');
+  });
+
+  it('builds a shared Chinese context meter line', () => {
+    expect(formatContextRatio(12_400, 24_000)).toBe('12.4k/24k (52%)');
+    expect(formatContextMeter(12_400, 24_000)).toBe('上下文 12.4k/24k (52%)');
+    expect(formatContextMeter(800, 8_000, { approximate: true, llmCalls: 3 })).toBe(
+      '上下文 约 800/8k (10%) · LLM 3 次',
+    );
+    expect(contextUsagePercent(23_000, 24_000)).toBeGreaterThanOrEqual(90);
+  });
+
   it('lists each provider model by API id', () => {
     const choices = llmChoices(catalog);
     expect(choices.map((item) => `${item.provider}:${item.model}`)).toEqual([
@@ -85,5 +113,37 @@ describe('chat composer helpers', () => {
     const choices = llmChoices(catalog);
     expect(filterLlmChoices(choices, 'pro').map((item) => item.model)).toEqual(['deepseek-v4-pro']);
     expect(filterLlmChoices(choices, 'DeepSeek')).toHaveLength(2);
+  });
+
+  it('flags mock or unconfigured chat providers as degraded', () => {
+    expect(isLlmDegraded(catalog)).toBe(false);
+    expect(isLlmDegraded({ ...catalog, selection: { ...catalog.selection, llm: 'mock' } })).toBe(
+      true,
+    );
+  });
+
+  it('drops hidden models from the picker but keeps the current selection', () => {
+    const hidden = {
+      ...catalog,
+      hidden_models: [
+        { provider: 'deepseek' as const, model: 'deepseek-v4-pro' },
+        { provider: 'mock' as const, model: 'mock-text-v1' },
+      ],
+    };
+    expect(llmChoices(hidden).map((item) => `${item.provider}:${item.model}`)).toEqual([
+      'deepseek:deepseek-v4-flash',
+    ]);
+    // 当前在用的 deepseek-v4-flash 即使被隐藏也保留；mock 未被隐藏照常出现。
+    const currentHidden = {
+      ...catalog,
+      hidden_models: [{ provider: 'deepseek' as const, model: 'deepseek-v4-flash' }],
+    };
+    const choices = llmChoices(currentHidden);
+    expect(choices.map((item) => item.model)).toEqual([
+      'mock-text-v1',
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
+    ]);
+    expect(selectedLlmLabel(currentHidden)).toBe('deepseek-v4-flash');
   });
 });

@@ -6,13 +6,15 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Badge, Button, Card, Field, Input, Select, Spinner, Textarea } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
-import { getFormList, getFormText, getOptionalFormText } from '@/lib/form-data';
+import { RoleplayLaunchButton } from '@/components/creator-chat/roleplay-launch';
 import type {
   AppearanceVariantDTO,
   AppearanceVariantMediaDTO,
   AssetDTO,
   MediaDTO,
+  WorldResourcesDTO,
 } from '@/lib/types';
+import { getFormList, getFormText, getOptionalFormText } from '@/lib/form-data';
 
 function imageUrl(image: string | MediaDTO | AppearanceVariantMediaDTO) {
   if (typeof image === 'string') {
@@ -48,6 +50,7 @@ export default function AssetDetailPage() {
   const { projectId, assetId } = useParams<{ projectId: string; assetId: string }>();
   const router = useRouter();
   const [asset, setAsset] = useState<AssetDTO | null>(null);
+  const [worldResources, setWorldResources] = useState<WorldResourcesDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [variants, setVariants] = useState<AppearanceVariantDTO[]>([]);
@@ -82,6 +85,20 @@ export default function AssetDetailPage() {
       setLoading(false);
     }
   }, [assetId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`)
+      .then((value) => {
+        if (!cancelled) setWorldResources(value);
+      })
+      .catch(() => {
+        if (!cancelled) setWorldResources(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const loadVariants = useCallback(async () => {
     if (!asset || asset.type !== 'character') {
@@ -438,9 +455,21 @@ export default function AssetDetailPage() {
             <h1 className="mt-1 text-3xl font-semibold">{asset.name}</h1>
             <p className="mt-2 max-w-3xl text-zinc-400">{asset.description}</p>
           </div>
-          <Button variant="danger" onClick={() => void remove()}>
-            删除
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+            {isCharacter && worldResources ? (
+              <RoleplayLaunchButton
+                projectId={projectId}
+                characterAssetId={asset.id}
+                characterName={asset.name}
+                characters={worldResources.entities.characters}
+                worldEvents={worldResources.entities.world_events}
+                align="end"
+              />
+            ) : null}
+            <Button variant="danger" onClick={() => void remove()}>
+              删除
+            </Button>
+          </div>
         </div>
       </header>
 

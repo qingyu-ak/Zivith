@@ -48,6 +48,41 @@ export interface ThreadContextStateRecord {
   tokenEstimate: number;
 }
 
+/** 冲突清单记录（D4）：pending 待确认，resolved/discarded 已裁决。 */
+export interface MemoryConflictRecord {
+  id: string;
+  projectId: string;
+  threadId: string | null;
+  sourceMessageId: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  factType: string;
+  incomingContent: string;
+  existingContent: string;
+  existingAtomId: string | null;
+  antonym: string[];
+  dedupHash: string;
+  status: string;
+  decision: string | null;
+  resolvedAtomId: string | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
+}
+
+export interface CreateConflictInput {
+  projectId: string;
+  threadId: string | null;
+  sourceMessageId: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  factType: string;
+  incomingContent: string;
+  existingContent: string;
+  existingAtomId: string | null;
+  antonym: string[];
+  dedupHash: string;
+}
+
 export interface CreateAtomInput {
   projectId: string;
   threadId: string | null;
@@ -110,7 +145,22 @@ export interface MemoryStore {
     messageId: string,
   ): Promise<{ id: string; content: string; projectId: string | null } | null>;
   upsertCore(input: UpsertCoreInput): Promise<void>;
+  findCore(id: string): Promise<MemoryCoreRecord | null>;
+  updateCore(id: string, patch: { content: string }): Promise<MemoryCoreRecord | null>;
   listCores(projectId: string): Promise<MemoryCoreRecord[]>;
+  findAtomsByIds(ids: string[]): Promise<MemoryAtomRecord[]>;
+  createConflict(input: CreateConflictInput): Promise<MemoryConflictRecord>;
+  findConflict(id: string): Promise<MemoryConflictRecord | null>;
+  listConflicts(
+    projectId: string,
+    options?: { status?: string; threadId?: string },
+  ): Promise<MemoryConflictRecord[]>;
+  updateConflict(
+    id: string,
+    patch: Partial<
+      Pick<MemoryConflictRecord, 'status' | 'decision' | 'resolvedAtomId' | 'resolvedAt'>
+    >,
+  ): Promise<void>;
   buildWorldContext(projectId: string): Promise<WorldContext | null>;
   findContextState(threadId: string): Promise<ThreadContextStateRecord | null>;
   upsertContextState(

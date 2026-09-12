@@ -817,6 +817,32 @@ model MemoryPipelineState {
   @@map("memory_pipeline_states")
 }
 
+// Track M2 — 冲突清单（D4）：矛盾不自动写入，落库等用户确认；
+// 确认 = 写入新原子并取代旧卡，丢弃 = 维持旧卡。不静默改世界实体。
+model MemoryConflict {
+  id              String    @id @default(uuid())
+  projectId       String    @map("project_id")
+  threadId        String?   @map("thread_id")
+  sourceMessageId String?   @map("source_message_id")
+  entityType      String?   @map("entity_type")
+  entityId        String?   @map("entity_id")
+  factType        String    @map("fact_type")
+  incomingContent String    @map("incoming_content")
+  existingContent String    @map("existing_content")
+  existingAtomId  String?   @map("existing_atom_id")
+  antonym         String[]  @default([])
+  dedupHash       String    @map("dedup_hash")
+  status          String    @default("pending") // pending | resolved | discarded
+  decision        String? // keep_new | keep_existing
+  resolvedAtomId  String?   @map("resolved_atom_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  resolvedAt      DateTime? @map("resolved_at")
+
+  @@index([projectId, status])
+  @@index([threadId, status])
+  @@map("memory_conflicts")
+}
+
 // 线程级上下文状态：滚动摘要 + 压缩进度（Creator Chat 与未来扮演线程共用）。
 model ThreadContextState {
   threadId                 String   @id @map("thread_id")

@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type {
   AssetDTO,
@@ -14,8 +13,11 @@ import type {
   WorldResourcesDTO,
   WorldSelection,
 } from '@/lib/types';
-import { api, createRoleplayThread, errorMessage } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
+import { RoleplayLaunchButton } from '@/components/creator-chat/roleplay-launch';
 import { focusFromSelection } from '@/lib/creator-chat-nav';
+import { CharacterArchive } from './character-archive';
+import { useStudioSelection } from './studio-selection';
 import {
   canonicalizeWorldTimeMode,
   DIMENSION_KIND_LABEL,
@@ -504,6 +506,7 @@ export function InspectorPanel({
   onSelect?: (selection: Exclude<WorldSelection, null>) => void;
   onUpdated?: () => void;
 }) {
+  const { pendingEditKey, consumeBeginEditing } = useStudioSelection();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -513,6 +516,15 @@ export function InspectorPanel({
     setEditing(false);
     setEditError('');
   }, [selection]);
+
+  useEffect(() => {
+    if (!selection || !pendingEditKey) return;
+    if (pendingEditKey === `${selection.kind}:${selection.id}`) {
+      setEditing(true);
+      return;
+    }
+    consumeBeginEditing();
+  }, [pendingEditKey, selection, consumeBeginEditing]);
 
   useEffect(() => {
     if (!selection) return;
@@ -528,6 +540,7 @@ export function InspectorPanel({
     setEditError('');
     try {
       await persistSelection(resources, selection, draft);
+      consumeBeginEditing();
       setEditing(false);
       onUpdated?.();
     } catch (reason) {
@@ -551,7 +564,10 @@ export function InspectorPanel({
           () => {
             void save();
           },
-          () => setEditing(false),
+          () => {
+            consumeBeginEditing();
+            setEditing(false);
+          },
         )
       : renderReadonly(selection, resources);
     if (!detail) {
@@ -622,6 +638,18 @@ export function InspectorPanel({
               />
             ) : null}
             {detail}
+            {selection.kind === 'character' &&
+            resources.entities.characters.some((item) => item.id === selection.id) ? (
+              <CharacterArchive
+                projectId={resources.project.id}
+                characterId={selection.id}
+                characterName={
+                  resources.entities.characters.find((item) => item.id === selection.id)?.name ?? ''
+                }
+                resources={resources}
+                onSelect={onSelect}
+              />
+            ) : null}
           </>
         ) : view === 'production' ? (
           <div className="px-4 pb-6">
@@ -636,7 +664,8 @@ export function InspectorPanel({
         ) : (
           <div className="px-4 pb-6">
             <p className="text-sm leading-6 text-zinc-600">
-              世界时间默认跟随呈现顺序。点左侧「IP Core」可改世界观与规则；点时间维度芯片可增改梦境、历法、平行世界。
+              世界时间默认跟随呈现顺序。点左侧「IP
+              Core」可改世界观与规则；点时间维度芯片可增改梦境、历法、平行世界。
             </p>
             <ul className="mt-3 space-y-1.5">
               {defaultDimensions(resources).map((dimension) => (
@@ -678,13 +707,7 @@ export function InspectorPanel({
 }
 
 /** 导入轻量条目 → 全量角色卡（设计 §5.6）。 */
-function ImportUpgradeButton({
-  asset,
-  onUpgraded,
-}: {
-  asset?: AssetDTO;
-  onUpgraded?: () => void;
-}) {
+function ImportUpgradeButton({ asset, onUpgraded }: { asset?: AssetDTO; onUpgraded?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const importId = asset?.import_id;
@@ -719,141 +742,6 @@ function ImportUpgradeButton({
       </button>
       {error ? <span className="text-[10px] text-red-500">{error}</span> : null}
     </span>
-  );
-}
-
-/** M3 角色扮演启动：选时间锚点 + 用户身份（读者 / 已有卡 / 新建自己）→ 跳转聊天页。 */
-const NEW_SELF = '__new_self__';
-
-function RoleplayLaunchButton({
-  projectId,
-  characterAssetId,
-  characterName,
-  characters,
-  worldEvents,
-}: {
-  projectId: string;
-  characterAssetId: string;
-  characterName: string;
-  characters: AssetDTO[];
-  worldEvents: WorldEventDTO[];
-}) {
-  const router = useRouter();
-  const [anchorId, setAnchorId] = useState('');
-  const [userChoice, setUserChoice] = useState('');
-  const [selfName, setSelfName] = useState('');
-  const [selfPersonality, setSelfPersonality] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const others = characters
-    .filter((item) => item.id !== characterAssetId)
-    .slice()
-    .sort((a, b) => {
-      const aSelf = a.tags?.includes('user_self') ? 0 : 1;
-      const bSelf = b.tags?.includes('user_self') ? 0 : 1;
-      if (aSelf !== bSelf) return aSelf - bSelf;
-      return a.name.localeCompare(b.name, 'zh');
-    });
-
-  async function launch() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      let userCharacterAssetId: string | null = userChoice || null;
-      if (userChoice === NEW_SELF) {
-        const name = selfName.trim();
-        if (!name) throw new Error('请填写你的角色名');
-        const created = await api<AssetDTO>(`/projects/${projectId}/assets`, {
-          method: 'POST',
-          body: {
-            asset_type: 'character',
-            name,
-            description: selfPersonality.trim()
-              ? `用户角色卡：${selfPersonality.trim()}`
-              : '用户自己的角色卡',
-            personality: selfPersonality.trim() || null,
-            tags: ['user_self'],
-            state: 'active',
-          },
-        });
-        userCharacterAssetId = created.id;
-      }
-      const created = await createRoleplayThread(
-        projectId,
-        characterAssetId,
-        anchorId || null,
-        userCharacterAssetId,
-      );
-      router.push(`/creator-chats/${created.thread_id}`);
-    } catch (reason) {
-      setError(errorMessage(reason));
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex max-w-md flex-col items-end gap-1">
-      <div className="flex flex-wrap items-center justify-end gap-1">
-        <select
-          className="max-w-36 rounded-md border border-line bg-white px-1.5 py-0.5 text-xs text-zinc-600"
-          value={anchorId}
-          disabled={busy}
-          onChange={(event) => setAnchorId(event.target.value)}
-          title="时间锚点：角色只知道该时刻之前亲历的事"
-        >
-          <option value="">全书读完</option>
-          {worldEvents.map((event) => (
-            <option key={event.id} value={event.id}>
-              {event.title}
-            </option>
-          ))}
-        </select>
-        <select
-          className="max-w-40 rounded-md border border-line bg-white px-1.5 py-0.5 text-xs text-zinc-600"
-          value={userChoice}
-          disabled={busy}
-          onChange={(event) => setUserChoice(event.target.value)}
-          title="你在对话里是谁"
-        >
-          <option value="">你是：读者（默认）</option>
-          {others.map((character) => (
-            <option key={character.id} value={character.id}>
-              你是：{character.name}
-            </option>
-          ))}
-          <option value={NEW_SELF}>新建我自己…</option>
-        </select>
-        <button
-          type="button"
-          onClick={() => void launch()}
-          disabled={busy}
-          className="whitespace-nowrap rounded-md border border-[#4d6bfe]/40 bg-[#eef2ff] px-2 py-0.5 text-xs text-[#1e3a8a] transition hover:border-[#4d6bfe] disabled:opacity-50"
-        >
-          {busy ? '创建中…' : `与${characterName}对话`}
-        </button>
-      </div>
-      {userChoice === NEW_SELF && (
-        <div className="flex w-full flex-wrap justify-end gap-1">
-          <input
-            className="w-28 rounded-md border border-line bg-white px-1.5 py-0.5 text-xs text-zinc-700"
-            placeholder="你的名字"
-            value={selfName}
-            disabled={busy}
-            onChange={(event) => setSelfName(event.target.value)}
-          />
-          <input
-            className="w-40 rounded-md border border-line bg-white px-1.5 py-0.5 text-xs text-zinc-700"
-            placeholder="个性（可选）"
-            value={selfPersonality}
-            disabled={busy}
-            onChange={(event) => setSelfPersonality(event.target.value)}
-          />
-        </div>
-      )}
-      {error && <span className="text-[10px] text-red-500">{error}</span>}
-    </div>
   );
 }
 

@@ -43,9 +43,14 @@ import {
 import { detectWorldConflicts } from '../contexts/world-builder/conflict-detector.js';
 import { formatMemoryDigest } from '../contexts/memory/retrieval.js';
 import type { MemoryService } from '../contexts/memory/service.js';
-import { formatSseEvent } from '../lib/sse.js';
+import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
+import { canReuseLastUser, isOpenProposalState } from '../lib/chat-turn.js';
 import type { LLMAdapter } from '../ports/llm.js';
-import { effortDto, resolveAgentEffort, type EffectiveAgentEffort } from '../contexts/agent-effort.js';
+import {
+  effortDto,
+  resolveAgentEffort,
+  type EffectiveAgentEffort,
+} from '../contexts/agent-effort.js';
 import { resolveRuntimeLlm } from '../contexts/llm-runtime.js';
 
 const idSchema = z.string().min(1).max(128);
@@ -768,6 +773,7 @@ const sendMessageBody = z
         z.object({ level: z.enum(['fast', 'balanced', 'deep']) }).strict(),
       ])
       .optional(),
+    retry: z.boolean().optional(),
   })
   .strict();
 
@@ -829,6 +835,7 @@ function chatThreadDto(
     projectName?: string | null;
     workspacePath?: string | null;
     roleplay?: RoleplayMeta | null;
+    pendingProposalCount?: number;
   },
 ) {
   const roleplay = extras?.roleplay ?? null;
@@ -842,9 +849,27 @@ function chatThreadDto(
     kind: roleplay ? ('roleplay' as const) : ('world' as const),
     character_name: roleplay?.characterName ? roleplay.characterName : null,
     user_character_name: roleplay?.userCharacterName ?? null,
+    pending_proposal_count: extras?.pendingProposalCount ?? 0,
     created_at: thread.createdAt.toISOString(),
     updated_at: thread.updatedAt.toISOString(),
   };
+}
+
+async function loadPendingProposalCounts(
+  db: PrismaClient,
+  threadIds: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (threadIds.length === 0) return counts;
+  const rows = await db.creatorChatMessage.groupBy({
+    by: ['threadId'],
+    where: { threadId: { in: threadIds }, proposalState: 'pending' },
+    _count: { id: true },
+  });
+  for (const row of rows) {
+    counts.set(row.threadId, row._count.id);
+  }
+  return counts;
 }
 
 async function chatThreadDtos(
@@ -855,16 +880,65 @@ async function chatThreadDtos(
     workspacePath: string | null;
   },
 ) {
-  const meta = await loadRoleplayMeta(
-    db,
-    threads.map((thread) => thread.id),
-  );
+  const ids = threads.map((thread) => thread.id);
+  const [meta, pending] = await Promise.all([
+    loadRoleplayMeta(db, ids),
+    loadPendingProposalCounts(db, ids),
+  ]);
   return threads.map((thread) =>
     chatThreadDto(thread, {
       ...extrasOf(thread),
       roleplay: meta.get(thread.id) ?? null,
+      pendingProposalCount: pending.get(thread.id) ?? 0,
     }),
   );
+}
+
+const PROPOSAL_KIND_LABEL: Record<string, string> = {
+  create_project: '项目',
+  create_world_event: '事件',
+  create_character: '角色',
+  create_location: '地点',
+  create_scene: '场景',
+  create_relationship: '关系',
+  update_entity: '更新',
+};
+
+function proposalItemName(payload: Record<string, unknown>): string {
+  const fields = payload.fields;
+  const fromFields =
+    typeof fields === 'object' && fields !== null
+      ? (() => {
+          const record = fields as Record<string, unknown>;
+          const name = record.name;
+          const title = record.title;
+          if (typeof name === 'string' && name.trim()) return name.trim();
+          if (typeof title === 'string' && title.trim()) return title.trim();
+          return null;
+        })()
+      : null;
+  for (const key of ['name', 'title', 'label'] as const) {
+    const value = payload[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return fromFields ?? '未命名';
+}
+
+function summarizeProposals(raw: unknown): string {
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const parts: string[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const kind = typeof record.kind === 'string' ? record.kind : '';
+    const payload =
+      record.payload && typeof record.payload === 'object'
+        ? (record.payload as Record<string, unknown>)
+        : {};
+    const label = PROPOSAL_KIND_LABEL[kind] ?? kind ?? '写入';
+    parts.push(`${label}「${proposalItemName(payload)}」`);
+  }
+  return parts.join(' · ');
 }
 
 function chatMessageDto(message: {
@@ -1017,15 +1091,18 @@ async function pipeCreatorChatSse(
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
+    'Content-Encoding': 'identity',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
     ...(origin ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}),
   });
+  flushHttpStream(reply.raw);
 
   let closed = false;
   const writeEvent = (event: string, data: unknown) => {
     if (closed) return;
     reply.raw.write(formatSseEvent(event, data));
+    flushHttpStream(reply.raw);
   };
   const cleanup = () => {
     closed = true;
@@ -1085,9 +1162,7 @@ function registerCreatorChatRoutes(
   llmModel?: string,
   memory?: MemoryService | null,
 ) {
-  const injectedBuilder = llm
-    ? new WorldBuilderAgent(llm, llmModel ?? 'mock-text-v1')
-    : null;
+  const injectedBuilder = llm ? new WorldBuilderAgent(llm, llmModel ?? 'mock-text-v1') : null;
 
   function currentBuilder(): WorldBuilderAgent {
     if (injectedBuilder) return injectedBuilder;
@@ -1167,6 +1242,29 @@ function registerCreatorChatRoutes(
       projectName: project.name,
       workspacePath: project.workspacePath,
     }));
+  });
+
+  app.get('/projects/:projectId/write-log', async (request) => {
+    const { projectId } = projectParams.parse(request.params);
+    await requireProject(db, projectId);
+    const messages = await db.creatorChatMessage.findMany({
+      where: {
+        proposalState: 'applied',
+        thread: { projectId },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { thread: { select: { id: true, title: true } } },
+    });
+    return {
+      items: messages.map((message) => ({
+        id: message.id,
+        thread_id: message.threadId,
+        thread_title: message.thread.title,
+        created_at: message.createdAt.toISOString(),
+        summary: summarizeProposals(message.proposal),
+      })),
+    };
   });
 
   // Local single user (ADR-0013): list every active thread with its project name.
@@ -1291,20 +1389,29 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const userMessage = await db.creatorChatMessage.create({
-      data: {
-        threadId,
-        role: body.role,
-        content: body.content,
-        ...(body.proposal
-          ? {
-              proposal: body.proposal as Prisma.InputJsonValue,
-              proposalKey: body.proposal_key ?? null,
-              proposalState: 'pending',
-            }
-          : {}),
-      },
-    });
+    const lastMessage = body.retry
+      ? await db.creatorChatMessage.findFirst({
+          where: { threadId },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    const userMessage =
+      canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
+        ? lastMessage
+        : await db.creatorChatMessage.create({
+            data: {
+              threadId,
+              role: body.role,
+              content: body.content,
+              ...(body.proposal
+                ? {
+                    proposal: body.proposal as Prisma.InputJsonValue,
+                    proposalKey: body.proposal_key ?? null,
+                    proposalState: 'pending',
+                  }
+                : {}),
+            },
+          });
 
     const effort = resolveAgentEffort(body.effort);
     const builder = currentBuilder();
@@ -1364,13 +1471,22 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const userMessage = await db.creatorChatMessage.create({
-      data: {
-        threadId,
-        role: 'user',
-        content: body.content,
-      },
-    });
+    const lastMessage = body.retry
+      ? await db.creatorChatMessage.findFirst({
+          where: { threadId },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    const userMessage =
+      canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
+        ? lastMessage
+        : await db.creatorChatMessage.create({
+            data: {
+              threadId,
+              role: 'user',
+              content: body.content,
+            },
+          });
     await pipeCreatorChatSse(
       request,
       reply,
@@ -1415,8 +1531,10 @@ function registerCreatorChatRoutes(
     if (body.proposal_key && body.proposal_key !== message.proposalKey) {
       throw new ApiError(400, 'PROPOSAL_KEY_MISMATCH', '提案标识不匹配');
     }
-    if (message.proposalState && message.proposalState !== 'pending') {
-      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能重复确认');
+    if (!isOpenProposalState(message.proposalState)) {
+      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能重复确认', {
+        proposal_state: message.proposalState,
+      });
     }
 
     // The agent stores a proposals array on the assistant message (ADR-0010).
@@ -1430,6 +1548,23 @@ function registerCreatorChatRoutes(
     }
 
     const { results, skipped } = await db.$transaction(async (tx) => {
+      const claimed = await tx.creatorChatMessage.updateMany({
+        where: {
+          id: messageId,
+          threadId,
+          OR: [{ proposalState: 'pending' }, { proposalState: null }],
+        },
+        data: { proposalState: 'applied' },
+      });
+      if (claimed.count !== 1) {
+        const current = await tx.creatorChatMessage.findFirst({
+          where: { id: messageId, threadId },
+          select: { proposalState: true },
+        });
+        throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能重复确认', {
+          proposal_state: current?.proposalState ?? 'applied',
+        });
+      }
       const results: Array<{
         kind: string;
         project_id: string;
@@ -1474,12 +1609,49 @@ function registerCreatorChatRoutes(
       if (results.length === 0 && skipped.length > 0) {
         throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
       }
-      await tx.creatorChatMessage.update({
-        where: { id: messageId },
-        data: { proposalState: 'applied' },
-      });
       return { results, skipped };
     });
     return { applied: results, skipped };
+  });
+
+  app.post('/creator-chats/:threadId/proposals/:messageId/reject', async (request) => {
+    const { threadId, messageId } = z
+      .object({ threadId: idSchema, messageId: idSchema })
+      .strict()
+      .parse(request.params);
+
+    await requireOpenThread(db, threadId);
+
+    const message = await db.creatorChatMessage.findFirst({
+      where: { id: messageId, threadId },
+    });
+    if (!message) throw new ApiError(404, 'MESSAGE_NOT_FOUND', '消息不存在');
+    if (!message.proposal || !message.proposalKey) {
+      throw new ApiError(400, 'NO_PROPOSAL', '该消息没有待确认的提案');
+    }
+    if (!isOpenProposalState(message.proposalState)) {
+      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能再拒绝', {
+        proposal_state: message.proposalState,
+      });
+    }
+
+    const claimed = await db.creatorChatMessage.updateMany({
+      where: {
+        id: messageId,
+        threadId,
+        OR: [{ proposalState: 'pending' }, { proposalState: null }],
+      },
+      data: { proposalState: 'rejected' },
+    });
+    if (claimed.count !== 1) {
+      const current = await db.creatorChatMessage.findFirst({
+        where: { id: messageId, threadId },
+        select: { proposalState: true },
+      });
+      throw new ApiError(409, 'PROPOSAL_ALREADY_HANDLED', '提案已处理，不能再拒绝', {
+        proposal_state: current?.proposalState ?? 'applied',
+      });
+    }
+    return { rejected: true };
   });
 }

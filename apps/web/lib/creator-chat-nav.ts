@@ -46,6 +46,11 @@ function asString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function asPendingCount(record: Record<string, unknown>): number {
+  const raw = record.pending_proposal_count ?? record.pendingProposalCount;
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 0;
+}
+
 export function isChatFocusKind(value: unknown): value is ChatFocusKind {
   return typeof value === 'string' && (CHAT_FOCUS_KINDS as readonly string[]).includes(value);
 }
@@ -69,6 +74,7 @@ export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
     user_character_name: asString(record.user_character_name) ?? asString(record.userCharacterName),
     created_at: asString(record.created_at) ?? asString(record.createdAt) ?? '',
     updated_at: asString(record.updated_at) ?? asString(record.updatedAt) ?? '',
+    pending_proposal_count: asPendingCount(record),
   };
 }
 
@@ -129,6 +135,68 @@ export function mergeChatFocus(
   }
   if (pending && (!threadId || pending.thread_id === threadId)) return pending;
   return null;
+}
+
+/** 系统设置挂在项目路由下。没有当前项目时用列表里已有项目，避免掉进创作中心。 */
+export function settingsHrefFor(
+  projectId: string | null | undefined,
+  fallbackProjectIds: Array<string | null | undefined> = [],
+  section?: string,
+): string {
+  const id = [projectId, ...fallbackProjectIds].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  if (!id) return '/projects';
+  const path = `/projects/${id}/settings`;
+  return section ? `${path}?section=${section}` : path;
+}
+
+/** Chat 顶栏「Studio」：有项目进世界工作区，没有项目才退回项目列表。 */
+export function studioHrefForChat(projectId: string | null | undefined): string {
+  return projectId ? `/projects/${projectId}/world` : '/projects';
+}
+
+const STUDIO_SELECT_KINDS = [
+  'character',
+  'location',
+  'scene',
+  'world_event',
+  'story',
+  'project',
+  'dimension',
+  'relationship',
+] as const;
+
+export type StudioSelectKind = (typeof STUDIO_SELECT_KINDS)[number];
+
+function isStudioSelectKind(value: string): value is StudioSelectKind {
+  return (STUDIO_SELECT_KINDS as readonly string[]).includes(value);
+}
+
+/** Chat / 树点选跳到 Studio 时带上实体，世界工作区打开 Inspector。 */
+export function studioHrefForEntity(
+  projectId: string,
+  selection: Exclude<WorldSelection, null>,
+): string {
+  const params = new URLSearchParams({
+    select: selection.kind,
+    entity: selection.id,
+  });
+  return `/projects/${projectId}/world?${params.toString()}`;
+}
+
+export function parseStudioSelect(
+  search: URLSearchParams,
+): { kind: StudioSelectKind; id: string } | null {
+  const kind = search.get('select');
+  const id = search.get('entity')?.trim();
+  if (!kind || !id || !isStudioSelectKind(kind)) return null;
+  return { kind, id };
+}
+
+/** Studio 顶栏「Chat」：已知线程直接进线程，否则回对话首页（线程解析在点击时做）。 */
+export function chatHrefForStudio(threadId: string | null | undefined): string {
+  return threadId ? `/creator-chats/${threadId}` : '/creator-chats';
 }
 
 export function chatPathForThread(threadId: string, focus?: ChatFocus | null): string {
@@ -209,4 +277,18 @@ export async function resolveThreadForProject(projectId: string): Promise<string
   const thread = normalizeThread(created);
   if (!thread?.id) throw new Error('无法创建创作对话');
   return thread.id;
+}
+
+export function studioAgentThreadKey(projectId: string): string {
+  return `zivith.studioAgentThread.${projectId}`;
+}
+
+/** Agent 面板：记住上次打开的世界构建线程；没有记录则用最近一条。 */
+export function pickStudioAgentThread(
+  threads: CreatorChatThreadDTO[],
+  storedId: string | null | undefined,
+): string | null {
+  const world = threads.filter((thread) => thread.kind !== 'roleplay');
+  if (storedId && world.some((thread) => thread.id === storedId)) return storedId;
+  return world[0]?.id ?? null;
 }

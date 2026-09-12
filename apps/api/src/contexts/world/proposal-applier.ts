@@ -91,7 +91,7 @@ async function applyCreateProject(
       await claimWorkspaceSeed(db, existing.id, {
         name,
         description,
-        ...(worldview ? { worldview: worldview as Prisma.InputJsonValue } : {}),
+        ...(worldview ? { worldview: worldview } : {}),
       });
       return {
         kind: proposal.kind,

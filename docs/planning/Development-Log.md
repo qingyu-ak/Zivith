@@ -12,6 +12,147 @@
 
 ---
 
+## 2026-09-12 · d0cd17a · fix(api) · SSE flush 类型与 Node ServerResponse 对齐
+
+`flushHttpStream` 参数写成弱类型 `{ flush?: () => void }`，`reply.raw`（ServerResponse）无法赋入。改成 `object` 再探测 flush，桌面壳及时刷出 SSE 的行为不变。
+
+- **fix(api)** `apps/api/src/lib/sse.ts`
+- 模块：`sse.ts`（world / roleplay 流式路由调用处）
+
+## 2026-09-12 · b55fba9 · fix(web) · 补上 typecheck：侧栏 desktop 与 AssetDTO description
+
+CI typecheck 在 `@zivith/web` 失败：`ChatSidebarRail` 引用了未定义的 `desktop`；`agent-mentions` 测试夹具缺 `AssetDTO.description`。
+
+- **fix(web)** 收起侧栏用 `isDesktopApp()` 写 aria-label
+- **test(web)** 角色/地点夹具补 description
+- 模块：`chat-sidebar.tsx`、`agent-mentions.test.ts`
+
+## 2026-09-12 · 33aee5f · chore · Prettier 对齐并清掉 lint，修复 CI 格式门禁
+
+feat 合进 main 后 `pnpm format:check` 报 58 个文件未排版。本轮 `pnpm format` 写回，并修 23 处 ESLint（未使用变量、finally 里 return、冗余联合类型等）。`pnpm/action-setup` 升到 v5，去掉 Node 20 警告。
+
+- **chore** Prettier 写回合入 feat 的源文件
+- **fix** ESLint 错误（chat-panel / agent 面板 / providers / 记忆摘要等）
+- **chore** `.github/workflows/ci.yml` `pnpm/action-setup@v5`
+- 模块：web/api 源码与测试、`ci.yml`
+
+## 2026-09-12 · d7a1689 · fix(ci) · 本地对象存储改用可拉取的 Silo 镜像
+
+GitHub Actions 在 `docker compose up` 拉 `minio/minio` 时 403（上游社区镜像已停发）。改用 MinIO 兼容的 `pgsty/silo` + `pgsty/mc` 固定 tag，健康检查改为 `silo healthcheck ready`。Actions 升到 checkout@v5 / setup-node@v5，去掉 Node 20 弃用警告。
+
+- **fix** `compose.yaml` 对象存储与 mc 初始化镜像
+- **chore** `.github/workflows/ci.yml` action 版本
+- 模块：`compose.yaml`、`.github/workflows/ci.yml`
+
+## 2026-09-12 · 053788d · feat(web,api) · 对话重试 / @提及 / 思考摘要 / SSE 及时刷出
+
+Creator Chat 与 Studio Agent 对齐 Cursor 式一轮操作：失败可重试且不插重复 user、消息复制、输入 `@` 把实体设为本轮 focus、记忆操作收进「想了一下」、提案确认用 updateMany 抢占避免双击、线程列表带待确认条数。SSE 对 Node HTTP 显式 flush，桌面壳不再只看到 user 事件。浏览器选文件夹改说明文案；`/signup`、`/studio` 做别名重定向。
+
+- **feat(api)** `chat-turn` 复用末条 user；提案 pending/null 均可确认或拒绝；world/roleplay 流 flush；线程 DTO `pending_proposal_count`
+- **feat(web)** mention 菜单、message-actions、error banner、thought-summary；Agent 侧栏与 composer 共用
+- 模块：`apps/api/src/lib/chat-turn.ts`、`routes/world.ts`、`routes/roleplay.ts`、`studio-agent-panel.tsx`、`creator-chat/*`
+
+## 2026-09-06 · cad776e · feat(web,api) · Studio 菜单栏 + L2 档案编辑 + Agent 侧栏（两股工作合并提交）
+
+app-shell / chat-panel 两股改动交织，合并为一笔。①（Grok-A）Studio 顶部菜单栏（文件/编辑/视图/设置/帮助，无假菜单）、L2 核心块新建与编辑（`saveCore`/`patchCore` 路由 + 记忆面板编辑 + 测试）、资源加载收编壳级 provider、`?select=` 深链、`backLeaving` 覆盖层后退、实体创建流、写入模式说明。②（ZCode-A）Agent 侧栏面板（类 Cursor）：壳级右侧 380px 可收起面板，内嵌当前项目世界构建者对话——`resolveThreadForProject` 解析线程、SSE 流式、提案卡就地确认（`parseProposals` 抽到 `lib/chat-proposals.ts` 共用）、选中实体自动作为 focus、努力程度选择；顶栏星形按钮开关，状态持久化。
+
+- **feat(web)** `studio-agent-panel.tsx`、`lib/chat-proposals.ts`（+测试）、app-shell 挂载与开关
+- **feat(web,api)** 菜单栏 `studio-menu-bar.tsx`、L2 编辑路由与面板、`agent-write-mode`、`character-archive`、`settings-return` 等
+- 模块：详见提交文件清单（app-shell / chat-panel / memory 链路 / world 组件为两股交织）
+
+## 2026-09-06 · 4f5a017 · docs(web) · 帮助文档补 VoiceStudio 本地配音接入
+
+帮助页新增「接入 VoiceStudio 本地配音（可选）」卡：VoiceStudio（全本地 TTS/ASR 套件，16 TTS 引擎，OpenAI 兼容 /v1/audio/speech，AGPL-3.0 独立进程）安装后把 SiliconFlow Base URL 指到 127.0.0.1:3900/v1、语音槽位填引擎 ID，即可把制作线配音换成本地引擎。注明三点：SiliconFlow 图像/视频与配音共用 Base URL 的临时性、默认 OmniVoice 权重 CC-BY-NC 禁商用、克隆须本人同意与 AudioSeal 水印。
+
+- **docs(web)** `help/page.tsx` 新增文档卡
+- 模块：`apps/web/app/(studio)/help/page.tsx`
+
+## 2026-09-06 · ac151fb · docs(web) · 帮助文档补 WeClone 分身接入
+
+帮助页新增「接入 WeClone 数字分身（可选）」卡：WeClone（聊天记录 LoRA 微调数字分身，AGPL-3.0 独立进程）训练后用 `weclone-cli server` 起 OpenAI 兼容服务（默认 127.0.0.1:8005/v1，模型名 gpt-3.5-turbo、Key 任意），在设置 → 模型设置以自定义供应商接入，对话/扮演可直接切换选用。注明 AGPL 边界与 AI 生成提醒。
+
+- **docs(web)** `help/page.tsx` 新增文档卡
+- 模块：`apps/web/app/(studio)/help/page.tsx`
+
+## 2026-09-06 · 4ba861a · feat(web) · Chat/Studio 分壳跳转 + Studio 侧栏重做（S1+S2）
+
+跨页只留一对跳转（Chat 顶栏「Studio」、Studio 顶栏「Chat」）；上一步/下一步按壳分栈互不串。Studio 去掉 56px 活动栏：项目切换、制作、设置进顶栏，左侧只剩 EntityExplorer 树，/world 里那列左树删除，选中态提升为壳级共享。
+
+- **feat(web)** `NavigationHistory` 按 surface 分栈（chat/studio），换壳不把对岸页面推进当前栈，回壳恢复各自栈
+- **feat(web)** 顶栏加 `middle`/`right` 插槽：Studio = 项目切换（六边形下拉，切完落 /world）+ 制作/设置/Chat；Chat = 「Studio」（有项目进 world，无项目回 /projects）
+- **feat(web)** `EntityExplorer` 提升到 `AppShell`；`StudioSelectionProvider` 壳级选中态（树点选不在 /world 时先跳 /world 再选中）；工作区自带左栏与左宽拖拽移除，深链 /assets、/stories 保留
+- **feat(web)** Studio「Chat」点击时 `resolveThreadForProject`（排除扮演，无则建）进对应线程；无项目回 /creator-chats；Explorer 空态 = 打开文件夹 / 去选项目
+- 模块：`top-bar.tsx`、`navigation-history.ts`、`creator-chat-nav.ts`、`app-shell.tsx`、`world/studio-selection.tsx`、`world/world-workspace.tsx`、`chat-panel.tsx`
+
+## 2026-09-06 · e219945 · feat(web) · Chat 与 Studio 共用顶栏（logo 槽 + 收起 + 前进/后退）
+
+参考 ZCode / Cursor 顶栏节奏：最顶上一条横跨侧栏与主区，28×28 圆角 logo 槽、侧栏收起、应用内上一步/下一步（会话级路径栈，与浏览器历史独立；Chat 线程、Studio 页、设置互跳都进栈）。侧栏里原「ZIVITH 字 + 收起」一行让位给顶栏，搜索留在侧栏。
+
+- **feat(web)** `TopBar` 共用组件接 `app-shell`（Studio 收起按钮作用于活动栏）与 `chat-panel`（接现有 `useCollapsedSidebar('chat')`）
+- **feat(web)** `NavigationHistory` 会话级路径栈：push 幂等、回退后新跳转截断前进栈、到头 disabled
+- **chore(web)** `nav-icons` 增加左右箭头；聊天侧栏头部与收起态主区头部去掉 ZIVITH 字让位 logo 槽
+- 模块：`components/top-bar.tsx`、`lib/navigation-history.ts`、`app-shell.tsx`、`chat-panel.tsx`、`chat-sidebar.tsx`、`nav-icons.tsx`
+
+## 2026-09-06 · c491a4b · feat(web) · 帮助与反馈页（/help）
+
+账号菜单「帮助与反馈」从占位链接改为独立页面：设置壳风格左栏两模块。帮助 = 与产品实际能力对应的使用文档与注意事项；反馈 = 故障信息一键复制 + 开发者联系方式（群号/账号集中在 `lib/help-feedback.ts`，由开发者填真实值，未填显示「待补充」不放假链接）。
+
+- **feat(web)** 新增 `/help` 页（快速上手 / 对话与模型 / 记忆系统 / 扮演与桌面版 / 注意事项五个文档卡 + 反馈模块）
+- **feat(web)** `buildBugReportTemplate` 生成含版本/时间/页面/环境的故障模板，`navigator.clipboard` 一键复制
+- **fix(web)** 账号菜单「帮助与反馈」href 从 `/creator-chats` 改为 `/help`
+- 模块：`app/(studio)/help/page.tsx`、`lib/help-feedback.ts`、`account-menu.tsx`
+
+## 2026-09-05 · bf5e5d0 · fix(web) · 设置分区改走查询参数深链
+
+「管理模型」用 `?section=models` 打开模型设置；左栏切换写入 URL。兼容旧的 `#models`。避免只改 hash 时客户端导航仍停在常规页。
+
+- **fix(web)** `settings/page.tsx` 从 search/hash 恢复分区；`chat-composer` 深链改查询参数
+- 模块：`settings/page.tsx`、`chat-composer.tsx`
+
+## 2026-09-05 · e501867 · feat(web,api) · 系统设置重组：三组五页 + 模型选择器开关
+
+设置页从「供应商+用量拼盘」改为真设置：左栏基础设置（常规/外观/模型设置）、Agent 能力（记忆）、数据统计（使用统计），只放有真实能力的页。
+
+- **feat(api)** `PUT /providers/model-visibility`（进程内持久化）+ `GET /providers` 回传 `hidden_models`；删供应商/删模型时同步清理
+- **feat(web)** 模型选择器搜索 + 每条开关；`llmChoices` 过滤隐藏模型，当前在用的保留直到另选；composer「管理模型/管理提供商」深链到模型分区
+- **feat(web)** 常规（变更前确认锁定开启 + 默认努力程度）、外观（真实固定项说明）、记忆（能力说明 + 世界工作区入口）、使用统计（`UsageSummaryCard` 从本页挪入，年度热力图不做）
+- 模块：`routes/providers.ts`、`settings/page.tsx`、`model-visibility.tsx`、`chat-composer.tsx`、`lib/chat-composer.ts`、`lib/types.ts`
+
+## 2026-09-05 · da14981 · fix(api) · 清掉最后两处 typecheck 既有错误
+
+api 侧 `tsc --noEmit` 归零；行为不变，纯类型收紧。
+
+- **fix(api)** `updateCustomProvider` patch 类型放宽 `| undefined`（exactOptionalPropertyTypes 下 zod 解析产物如此；函数内逐字段守卫，无行为变化）
+- **fix(test)** `lightReport` 的 tier 放宽为 `'light' | 'full'`，幂等用例可改写
+- 模块：`apps/api/src/providers/custom-providers.ts`、`apps/api/test/novel-import-upgrade.test.ts`
+
+## 2026-09-05 · c041df5 · feat(api,web) · 记忆冲突确认卡 + L2 核心块面板
+
+冲突不再只报不记：矛盾落库成清单，对话流内联确认（保留新卡 / 保留已有卡），记忆面板可看 L2 核心块并溯源到原子。只写记忆层，不静默改世界实体。
+
+- **feat(api)** 新增 `memory_conflicts` 表（迁移 `20260905120000`）；ingest 冲突落库，SSE `memory_ops` 带回冲突 id
+- **feat(api)** `POST /memory/conflicts/:id/resolve`（keep_new = 新原子取代旧卡 / keep_existing = 维持旧卡）、`GET /memory/projects/:id/conflicts`、`GET /memory/projects/:id/cores/:coreId` 展开源原子
+- **feat(web)** Creator Chat 内联冲突卡（内容对比 + 确认/丢弃，刷新后按线程补拉未裁决项）；记忆面板补 L2 列表、展开溯源、按实体过滤
+- 模块：`schema.prisma`、`contexts/memory/*`、`routes/memory.ts`、`chat-panel.tsx`、`memory-panel.tsx`、`lib/memory-conflicts.ts`
+
+## 2026-09-05 · 7f3f28a · feat(web,api) · Creator Chat 与扮演 UI 补齐
+
+对话壳能拒绝提案、停止生成；扮演可从侧栏/实体树/资产页启动，并可在顶栏改时间锚点。降级模式可见。不写工作区文件，不插队 I3。
+
+- **feat(api)** `POST .../proposals/:messageId/reject` 将提案标为 rejected
+- **feat(web)** Composer 发送中改为停止；SSE 可 Abort
+- **feat(web)** 侧栏角色 Tab 空态/加号打开扮演选择；Explorer 与资产页「与此角色对话」
+- **feat(web)** 扮演顶栏改锚点（新线程复用三元组）；Mock/未配置密钥显示降级模式
+- 模块：`proposal-card.tsx`、`chat-panel.tsx`、`chat-sidebar.tsx`、`roleplay-launch.tsx`、`entity-explorer.tsx`、`assets`、`world.ts`
+
+## 2026-09-05 · 7f3f28a · feat(api) · W1 工作区标记
+
+打开文件夹时写入 `.zivith/workspace.json`；搬家后靠 id 重绑 `workspacePath`。库仍是权威。
+
+- **feat(api)** `openWorldFolder` 优先读标记 id，再回退路径匹配
+- **feat(api)** 改项目显示名同步标记 `name`，不重命名磁盘目录
+- 模块：`workspace.ts`、`resources.ts`、`workspace.test.ts`
+
 ## 2026-09-03 · 91530bd · feat(web) · Studio 轨道剪辑块
 
 世界线用剪辑块表达呈现序与关系：左右拖改位置、拉两端改跨度、拖轨名换上下。轴仍是呈现顺序，不是秒/帧。

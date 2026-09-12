@@ -25,7 +25,11 @@ export function labelFromModelId(id: string): string {
 export function isChatLlmId(provider: string, id: string): boolean {
   const lower = id.toLowerCase();
   if (!id.trim()) return false;
-  if (/(embedding|rerank|whisper|tts|audio|image|video|vision|flux|wan[-/]|stable-diffusion|kolors|bge[-/]|embed)/.test(lower)) {
+  if (
+    /(embedding|rerank|whisper|tts|audio|image|video|vision|flux|wan[-/]|stable-diffusion|kolors|bge[-/]|embed)/.test(
+      lower,
+    )
+  ) {
     return false;
   }
   if (provider === 'deepseek') return lower.startsWith('deepseek');

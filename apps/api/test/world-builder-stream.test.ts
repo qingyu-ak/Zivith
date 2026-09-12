@@ -191,5 +191,8 @@ describe('world builder response schema', () => {
     expect(worldBuilderPublicError(new Error(JSON.stringify(error.issues)))).toBe(
       '这一轮回复格式异常，请再发一次。',
     );
+    expect(worldBuilderPublicError(new Error('DeepSeek did not return valid JSON'))).toBe(
+      '模型没有返回可用的结构化回复，请再试一次。',
+    );
   });
 });

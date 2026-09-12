@@ -92,7 +92,7 @@ export function loadProviderSelection(override?: Partial<ProviderSelection>): Pr
   };
   const envLlm = envValue('LLM_PROVIDER', defaults.llm);
   return {
-    llm: asProvider(envLlm, defaults.llm as ProviderId) as string,
+    llm: asProvider(envLlm, defaults.llm as ProviderId),
     image: asProvider(envValue('IMAGE_PROVIDER', defaults.image), defaults.image),
     video: asProvider(envValue('VIDEO_PROVIDER', defaults.video), defaults.video),
     audio: asProvider(envValue('AUDIO_PROVIDER', defaults.audio), defaults.audio),
