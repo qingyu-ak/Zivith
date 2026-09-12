@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-09-12 · 30b36b9 · feat(api,web) · 世界文件夹身份 V1（world-folder-v1 设计落地）
+
+按 [world-folder-v1.md](world-folder-v1.md) 把 Track W1 的临时标记升级为 V1 规范：`.zivith/workspace.json` 写入 `format/formatVersion/worldId/createdAt/zivith.minVersion`（兼容读取旧 `{version,id,name}`）；`initializeWorldFolder` 建 `.zivith/` + `world/ characters/ locations/ stories/ scenes/ sources/ assets/{images,audio,video}` 基础目录（幂等、失败严格报错）。新增 `createWorldInFolder`（§7 创建：文件夹检查 → 初始化 → 数据库 World 同 worldId，初始化失败补偿删行）。`openWorldFolder` 不再静默降级（§18）：默认对 `NOT_A_ZIVITH_WORLD` / `WORKSPACE_CORRUPT` / `WORLD_NOT_FOUND` 明确报错，由前端 inspect → 确认对话框 → `on_missing/on_corrupt/on_orphan/rebind_project_id` 显式选择；移动/改名/换盘符仍按 worldId 重绑（§9），归档世界重新打开自动恢复；路径被另一项目绑定时报 `WORLD_IDENTITY_CONFLICT`（§18.4，不自动合并）。路由新增 `/world/folders/inspect`、`/world/folders/create`，`/world/folders/open` 支持选项；`GET /projects` 带 `workspace_exists`，`DELETE /projects/:id/workspace` 解绑（§19）。Web 端 `lib/world-folder.ts` 统一流程接入 projects 页 / studio 菜单栏 / chat 面板，项目卡展示「当前文件夹不存在 → 重新定位 / 移除本机绑定」。设计文档入库为 `docs/planning/world-folder-v1.md`。
+
+- **feat(api)** `apps/api/src/contexts/world/workspace.ts`（核心服务重写）、`apps/api/src/routes/world.ts`、`apps/api/src/routes/resources.ts`
+- **test(api)** `apps/api/test/workspace.test.ts` 重写扩至 29 例：spec 格式/旧格式兼容/损坏/基础目录/创建补偿/孤儿/冲突/重绑定/移动改名重绑定/不静默创建
+- **feat(web)** `apps/web/lib/world-folder.ts`（+11 例测试）、`projects/page.tsx`、`studio-menu-bar.tsx`、`chat-panel.tsx`、`lib/types.ts`
+- 回归验证：turbo typecheck 6/6；test 全绿（api 261+1 skipped POSIX-only、web 139、domain 58）；eslint / prettier 全绿
+
 ## 2026-09-12 · d0cd17a · fix(api) · SSE flush 类型与 Node ServerResponse 对齐
 
 `flushHttpStream` 参数写成弱类型 `{ flush?: () => void }`，`reply.raw`（ServerResponse）无法赋入。改成 `object` 再探测 flush，桌面壳及时刷出 SSE 的行为不变。
