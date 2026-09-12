@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-12 · pending · fix(ci) · 本地对象存储改用可拉取的 Silo 镜像
+## 2026-09-12 · d7a1689 · fix(ci) · 本地对象存储改用可拉取的 Silo 镜像
 
 GitHub Actions 在 `docker compose up` 拉 `minio/minio` 时 403（上游社区镜像已停发）。改用 MinIO 兼容的 `pgsty/silo` + `pgsty/mc` 固定 tag，健康检查改为 `silo healthcheck ready`。Actions 升到 checkout@v5 / setup-node@v5，去掉 Node 20 弃用警告。
 
