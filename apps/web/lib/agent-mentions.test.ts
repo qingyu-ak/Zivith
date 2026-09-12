@@ -18,10 +18,10 @@ function resources(): WorldResourcesDTO {
     entities: {
       stories: [{ id: 'st1', project_id: 'p1', title: '第一卷' }],
       characters: [
-        { id: 'c1', project_id: 'p1', name: '路明非' },
-        { id: 'c2', project_id: 'p1', name: '诺诺' },
+        { id: 'c1', project_id: 'p1', name: '路明非', description: '主角' },
+        { id: 'c2', project_id: 'p1', name: '诺诺', description: '学姐' },
       ],
-      locations: [{ id: 'loc1', project_id: 'p1', name: '卡塞尔学院' }],
+      locations: [{ id: 'loc1', project_id: 'p1', name: '卡塞尔学院', description: '学校' }],
       scenes: [],
       world_events: [],
       relationships: [],

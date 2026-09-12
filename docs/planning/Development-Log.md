@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-09-12 · pending · fix(web) · 补上 typecheck：侧栏 desktop 与 AssetDTO description
+
+CI typecheck 在 `@zivith/web` 失败：`ChatSidebarRail` 引用了未定义的 `desktop`；`agent-mentions` 测试夹具缺 `AssetDTO.description`。
+
+- **fix(web)** 收起侧栏用 `isDesktopApp()` 写 aria-label
+- **test(web)** 角色/地点夹具补 description
+- 模块：`chat-sidebar.tsx`、`agent-mentions.test.ts`
+
 ## 2026-09-12 · 33aee5f · chore · Prettier 对齐并清掉 lint，修复 CI 格式门禁
 
 feat 合进 main 后 `pnpm format:check` 报 58 个文件未排版。本轮 `pnpm format` 写回，并修 23 处 ESLint（未使用变量、finally 里 return、冗余联合类型等）。`pnpm/action-setup` 升到 v5，去掉 Node 20 警告。

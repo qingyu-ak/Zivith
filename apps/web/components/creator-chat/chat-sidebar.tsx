@@ -492,7 +492,7 @@ export function ChatSidebarRail({
       <button
         type="button"
         className="grid size-9 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-800"
-        aria-label={desktop ? '选择文件夹' : '用桌面应用打开文件夹'}
+        aria-label={isDesktopApp() ? '选择文件夹' : '用桌面应用打开文件夹'}
         onClick={onOpenFolder}
       >
         <IconPlusCircle className="size-5" />
