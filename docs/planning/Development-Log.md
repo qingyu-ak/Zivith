@@ -12,7 +12,7 @@
 
 ---
 
-## 2026-09-12 · pending · fix(api) · SSE flush 类型与 Node ServerResponse 对齐
+## 2026-09-12 · d0cd17a · fix(api) · SSE flush 类型与 Node ServerResponse 对齐
 
 `flushHttpStream` 参数写成弱类型 `{ flush?: () => void }`，`reply.raw`（ServerResponse）无法赋入。改成 `object` 再探测 flush，桌面壳及时刷出 SSE 的行为不变。
 
