@@ -12,6 +12,13 @@
 
 ---
 
+## 2026-09-12 · 243e03a · fix(desktop) · 修复「桌面端打不开」：隐形窗口不再霸占单实例锁
+
+用户桌面端无法打开：屏幕无窗口但残留 4 个 Zivith.exe 持有单实例锁，再次双击时新进程 `app.quit()`、旧实例 `second-instance` 只对 `show:false` 的隐形窗口做 `focus()`，毫无效果。根因是 `mainWindow.loadURL(WEB_URL)` 被 `void` 吞掉：web 编译期加载失败后窗口永不 `ready-to-show`，进程带着隐形窗口常驻。修复：`loadMainWindowUrl` 失败重试（5 次每次 2s），仍失败强制 `show()` + 错误弹窗，保证窗口可见可关闭；`second-instance` 增加对不可见窗口的 `show()`。现场处理：taskkill 僵尸实例后经 Zivith.vbs 重启，窗口正常显示并获焦。
+
+- **fix(desktop)** `apps/desktop/src/main.cjs`
+- 回归验证：node --check 语法通过；prettier 全绿；实机重启后窗口出现（list_apps 确认 Zivith active）
+
 ## 2026-09-12 · f055390 · fix(api,web) · 世界身份保护：重绑定 / 运行副本 / 导入收回
 
 审查 30b36b9 的四个必修项。**H1**：`openWithRebind` 先检查 `workspace.json`（§19 worldId 校验后再绑路径）——目标文件夹属于本地存活/归档的其他世界时拒绝（`WORLD_IDENTITY_CONFLICT`，绝不覆盖其身份文件）；外来孤儿 worldId 允许显式重绑（§18.3 [重新绑定]）；损坏标记拒绝（走 §18.2）；无标记文件夹允许绑定（无可破坏身份，是找回丢失标记世界的唯一入口）。**H4**：孤儿「运行副本」沿用文件里的稳定 worldId（`createWorldProject` 支持显式 id），不再新造 UUID 回写 workspace.json。**H3**：§18.1 对话改走 `/world/folders/open` + `on_missing=import`，由服务端收回已有绑定（含归档）或导入新世界，不再被 create 的 `WORLD_PATH_CONFLICT` 卡死。**H2**：新建项目表单增加可选世界文件夹（桌面端，走 `/world/folders/create`，§7）；未绑定项目卡增加「绑定文件夹」。附带：复制文件夹抢占 currentPath 时报 `WORLD_IDENTITY_CONFLICT` 需显式选择；studio 菜单栏打开失败弹出原因不再静默跳转。
