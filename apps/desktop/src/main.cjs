@@ -78,7 +78,6 @@ function createWindow() {
       sandbox: true,
     },
   });
-  void mainWindow.loadURL(WEB_URL);
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
@@ -87,6 +86,30 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  void loadMainWindowUrl();
+}
+
+/**
+ * 开发期 web 可能还在编译，首次 loadURL 会失败。绝不把 show:false 的窗口
+ * 永远晾在后台：重试后仍失败就强制显示窗口并报错，保证用户看得见、可关闭。
+ */
+async function loadMainWindowUrl(attempt = 0) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    await mainWindow.loadURL(WEB_URL);
+  } catch (error) {
+    if (attempt >= 4 || !mainWindow || mainWindow.isDestroyed()) {
+      mainWindow?.show();
+      dialog.showErrorBox(
+        'Zivith 界面加载失败',
+        `无法加载 ${WEB_URL}。请确认界面服务已启动后重试。\n\n${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    setTimeout(() => {
+      void loadMainWindowUrl(attempt + 1);
+    }, 2_000);
+  }
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -94,10 +117,11 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    // 隐形窗口（加载失败兜底前）也要能被再次点击唤出。
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
   });
 
   app.whenReady().then(async () => {
