@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-09-12 · f055390 · fix(api,web) · 世界身份保护：重绑定 / 运行副本 / 导入收回
+
+审查 30b36b9 的四个必修项。**H1**：`openWithRebind` 先检查 `workspace.json`（§19 worldId 校验后再绑路径）——目标文件夹属于本地存活/归档的其他世界时拒绝（`WORLD_IDENTITY_CONFLICT`，绝不覆盖其身份文件）；外来孤儿 worldId 允许显式重绑（§18.3 [重新绑定]）；损坏标记拒绝（走 §18.2）；无标记文件夹允许绑定（无可破坏身份，是找回丢失标记世界的唯一入口）。**H4**：孤儿「运行副本」沿用文件里的稳定 worldId（`createWorldProject` 支持显式 id），不再新造 UUID 回写 workspace.json。**H3**：§18.1 对话改走 `/world/folders/open` + `on_missing=import`，由服务端收回已有绑定（含归档）或导入新世界，不再被 create 的 `WORLD_PATH_CONFLICT` 卡死。**H2**：新建项目表单增加可选世界文件夹（桌面端，走 `/world/folders/create`，§7）；未绑定项目卡增加「绑定文件夹」。附带：复制文件夹抢占 currentPath 时报 `WORLD_IDENTITY_CONFLICT` 需显式选择；studio 菜单栏打开失败弹出原因不再静默跳转。
+
+- **fix(api)** `apps/api/src/contexts/world/workspace.ts`（rebind 门禁 / 孤儿沿用 worldId / 副本冲突检测）
+- **fix(web)** `apps/web/lib/world-folder.ts`（§18.1 走 import）、`projects/page.tsx`（§7 表单 + 绑定入口）、`studio-menu-bar.tsx`
+- **test** api workspace 33 例（+4：重绑定三态门禁、副本冲突）；web world-folder 9 例
+- 回归验证：turbo typecheck 6/6；test 全绿（api 265+1 skipped、web 137、domain 58）；eslint / prettier 全绿
+
 ## 2026-09-12 · 30b36b9 · feat(api,web) · 世界文件夹身份 V1（world-folder-v1 设计落地）
 
 按 [world-folder-v1.md](world-folder-v1.md) 把 Track W1 的临时标记升级为 V1 规范：`.zivith/workspace.json` 写入 `format/formatVersion/worldId/createdAt/zivith.minVersion`（兼容读取旧 `{version,id,name}`）；`initializeWorldFolder` 建 `.zivith/` + `world/ characters/ locations/ stories/ scenes/ sources/ assets/{images,audio,video}` 基础目录（幂等、失败严格报错）。新增 `createWorldInFolder`（§7 创建：文件夹检查 → 初始化 → 数据库 World 同 worldId，初始化失败补偿删行）。`openWorldFolder` 不再静默降级（§18）：默认对 `NOT_A_ZIVITH_WORLD` / `WORKSPACE_CORRUPT` / `WORLD_NOT_FOUND` 明确报错，由前端 inspect → 确认对话框 → `on_missing/on_corrupt/on_orphan/rebind_project_id` 显式选择；移动/改名/换盘符仍按 worldId 重绑（§9），归档世界重新打开自动恢复；路径被另一项目绑定时报 `WORLD_IDENTITY_CONFLICT`（§18.4，不自动合并）。路由新增 `/world/folders/inspect`、`/world/folders/create`，`/world/folders/open` 支持选项；`GET /projects` 带 `workspace_exists`，`DELETE /projects/:id/workspace` 解绑（§19）。Web 端 `lib/world-folder.ts` 统一流程接入 projects 页 / studio 菜单栏 / chat 面板，项目卡展示「当前文件夹不存在 → 重新定位 / 移除本机绑定」。设计文档入库为 `docs/planning/world-folder-v1.md`。
