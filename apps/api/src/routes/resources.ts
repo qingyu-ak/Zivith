@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, type PrismaClient } from '@zivith/database';
 import {
@@ -424,12 +425,19 @@ export function registerResourceRoutes(
   db: PrismaClient,
   storage?: StoragePort,
 ): void {
-  app.get('/projects', async () =>
-    db.project.findMany({
+  app.get('/projects', async () => {
+    const projects = await db.project.findMany({
       where: { deletedAt: null },
       orderBy: { updatedAt: 'desc' },
-    }),
-  );
+    });
+    // §19 路径管理：currentPath 只是本机最近位置，列表顺便报告文件夹是否仍在，
+    // 供前端展示「当前文件夹不存在 → [重新定位][移除本机绑定]」。
+    return projects.map((project) => ({
+      ...project,
+      workspace_exists:
+        project.workspacePath === null ? null : fs.existsSync(project.workspacePath),
+    }));
+  });
   app.post('/projects', async (request, reply) => {
     const body = projectBody.parse(request.body);
     const project = await db.project.create({
@@ -477,6 +485,12 @@ export function registerResourceRoutes(
       throw new ApiError(403, 'OWNER_REQUIRED', '仅项目所有者可删除项目');
     await archiveWorldWorkspace(db, id);
     return reply.status(204).send();
+  });
+  // §19 移除本机绑定：保留世界运行数据，只清除与本机文件夹的路径关联。
+  app.delete('/projects/:id/workspace', async (request) => {
+    const { id } = idParams.parse(request.params);
+    await requireMember(db, request.user.sub, id, true);
+    return db.project.update({ where: { id }, data: { workspacePath: null } });
   });
   app.get('/projects/:id/settings', async (request) => {
     const { id } = idParams.parse(request.params);

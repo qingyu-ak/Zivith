@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
 import { normalizeThread } from '@/lib/creator-chat-nav';
 import { isDesktopApp, pickWorkspaceDirectory } from '@/lib/desktop';
 import { captureSettingsReturn } from '@/lib/settings-return';
+import { FolderFlowCancelled, openWorldFromFolder } from '@/lib/world-folder';
 
 type MenuId = 'file' | 'edit' | 'view' | 'settings' | 'help';
 
@@ -56,13 +56,12 @@ export function StudioMenuBar({
     try {
       const folderPath = await pickWorkspaceDirectory();
       if (!folderPath) return;
-      const created = await api<unknown>('/world/folders/open', {
-        method: 'POST',
-        body: { path: folderPath },
-      });
+      // §8/§18：先检查 .zivith/workspace.json，再按异常状态引导用户选择。
+      const created = await openWorldFromFolder(folderPath);
       const thread = normalizeThread(created);
       if (thread?.project_id) router.push(`/projects/${thread.project_id}/world`);
-    } catch {
+    } catch (reason) {
+      if (reason instanceof FolderFlowCancelled) return;
       router.push('/projects');
     }
   }

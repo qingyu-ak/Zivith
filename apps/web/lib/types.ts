@@ -16,6 +16,8 @@ export interface ProjectDTO {
   asset_count?: number;
   created_at?: string;
   workspace_path?: string | null;
+  /** §19 路径管理：绑定文件夹在本机是否仍然存在（未绑定时为 null）。 */
+  workspace_exists?: boolean | null;
 }
 
 export interface StoryDTO {

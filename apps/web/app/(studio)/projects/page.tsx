@@ -9,6 +9,11 @@ import { api, errorMessage, unwrapList } from '@/lib/api';
 import { isDesktopApp, pickWorkspaceDirectory, WEB_FOLDER_HINT } from '@/lib/desktop';
 import { normalizeThread } from '@/lib/creator-chat-nav';
 import { getFormText } from '@/lib/form-data';
+import {
+  FolderFlowCancelled,
+  openWorldFromFolder,
+  unbindProjectWorkspace,
+} from '@/lib/world-folder';
 import type { ProjectDTO } from '@/lib/types';
 
 export default function ProjectsPage() {
@@ -81,18 +86,51 @@ export default function ProjectsPage() {
       if (!folderPath) return;
       setError('');
       setOpening(true);
-      const created = await api<unknown>('/world/folders/open', {
-        method: 'POST',
-        body: { path: folderPath },
-      });
+      const created = await openWorldFromFolder(folderPath);
       const thread = normalizeThread(created);
       const projectId = thread?.project_id;
       if (!projectId) throw new Error('无法打开项目文件夹');
       router.push(`/projects/${projectId}/world`);
     } catch (reason) {
+      if (reason instanceof FolderFlowCancelled) return;
       setError(errorMessage(reason));
     } finally {
       setOpening(false);
+    }
+  }
+
+  // §19 [重新定位]：把世界重新绑定到新文件夹，通过 workspace.json 的 worldId 完成校验。
+  async function relocate(project: ProjectDTO) {
+    try {
+      const folderPath = await pickWorkspaceDirectory();
+      if (!folderPath) return;
+      if (!window.confirm(`把世界「${project.name}」重新绑定到这个文件夹？\n${folderPath}`)) {
+        return;
+      }
+      setError('');
+      setOpening(true);
+      const created = await openWorldFromFolder(folderPath, { rebindProjectId: project.id });
+      const thread = normalizeThread(created);
+      const projectId = thread?.project_id;
+      if (!projectId) throw new Error('无法重新绑定文件夹');
+      router.push(`/projects/${projectId}/world`);
+    } catch (reason) {
+      if (reason instanceof FolderFlowCancelled) return;
+      setError(errorMessage(reason));
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  // §19 [移除本机绑定]：只清除路径关联，世界数据全部保留。
+  async function unbind(project: ProjectDTO) {
+    if (!window.confirm(`移除世界「${project.name}」的本机文件夹绑定？世界数据会保留。`)) return;
+    try {
+      setError('');
+      await unbindProjectWorkspace(project.id);
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
     }
   }
 
@@ -211,6 +249,30 @@ export default function ProjectsPage() {
                   <span>{project.asset_count ?? 0} 项资产</span>
                 </div>
               </Link>
+              {project.workspace_path && project.workspace_exists === false ? (
+                <div className="mx-1 mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
+                  <p className="font-medium">当前文件夹不存在</p>
+                  <p className="mt-1 break-all leading-4">上次位置：{project.workspace_path}</p>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        void relocate(project);
+                      }}
+                    >
+                      重新定位
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        void unbind(project);
+                      }}
+                    >
+                      移除本机绑定
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               <Button
                 className="absolute right-3 top-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                 variant="danger"

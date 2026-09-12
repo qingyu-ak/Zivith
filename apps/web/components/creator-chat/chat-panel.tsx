@@ -24,6 +24,7 @@ import {
   type MemoryConflictDecision,
 } from '@/lib/memory-conflicts';
 import { formatMemoryOps } from '@/lib/memory-ops';
+import { FolderFlowCancelled, openWorldFromFolder } from '@/lib/world-folder';
 import { ThoughtSummary } from '@/components/creator-chat/thought-summary';
 import { ChatComposer } from '@/components/creator-chat/chat-composer';
 import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
@@ -793,16 +794,15 @@ export function ChatPanel() {
     setError('');
     setBusy(true);
     try {
-      const created = await api<unknown>('/world/folders/open', {
-        method: 'POST',
-        body: { path: folderPath },
-      });
+      // §8/§18：先检查 .zivith/workspace.json，再按异常状态引导用户选择。
+      const created = await openWorldFromFolder(folderPath);
       const createdThread = normalizeThread(created);
       if (!createdThread?.id) throw new Error('无法打开文件夹');
       setFolderPickerOpen(false);
       loadThreads();
       router.push(`/creator-chats/${createdThread.id}`);
     } catch (reason) {
+      if (reason instanceof FolderFlowCancelled) return;
       setError(errorMessage(reason));
     } finally {
       setBusy(false);

@@ -24,8 +24,11 @@ import { ApiError } from '../errors.js';
 import { applyProposal } from '../contexts/world/proposal-applier.js';
 import {
   archiveCreatorChat,
+  createWorldInFolder,
   createWorldWorkspace,
+  inspectWorkspaceFolder,
   isWorkspaceSeed,
+  normalizeWorkspacePath,
   openWorldFolder,
 } from '../contexts/world/workspace.js';
 import { assetDto, sceneDto } from './resources.js';
@@ -736,6 +739,19 @@ const createThreadBody = z
 const openFolderBody = z
   .object({
     path: z.string().trim().min(1).max(4096),
+    // §18.1/§18.2/§18.3：异常场景的处理方式由前端明确选择，API 不静默降级。
+    on_missing: z.enum(['error', 'import']).optional(),
+    on_corrupt: z.enum(['error', 'recover']).optional(),
+    on_orphan: z.enum(['error', 'create']).optional(),
+    rebind_project_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const createFolderBody = z
+  .object({
+    path: z.string().trim().min(1).max(4096),
+    name: z.string().trim().min(1).max(200).optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
   })
   .strict();
 
@@ -1213,6 +1229,43 @@ function registerCreatorChatRoutes(
     );
   });
 
+  // §8 打开世界前先检查文件夹身份，前端据此渲染 §18 的异常选择对话框。
+  app.post('/folders/inspect', (request) => {
+    const body = openFolderBody.pick({ path: true }).parse(request.body ?? {});
+    const workspacePath = normalizeWorkspacePath(body.path);
+    const inspect = inspectWorkspaceFolder(workspacePath);
+    return {
+      path: workspacePath,
+      state: inspect.state,
+      world_id: inspect.state === 'ok' ? inspect.marker.worldId : null,
+      name: inspect.state === 'ok' ? inspect.marker.name : null,
+    };
+  });
+
+  // §7 在选定文件夹中创建新世界（.zivith/ + 基础目录 + 数据库 World 同 worldId）。
+  app.post('/folders/create', async (request, reply) => {
+    const body = createFolderBody.parse(request.body ?? {});
+    let memberUserId: string | null = null;
+    try {
+      await request.jwtVerify();
+      memberUserId = (request.user as { sub?: string } | undefined)?.sub ?? null;
+    } catch {
+      memberUserId = null;
+    }
+    const { project, thread } = await createWorldInFolder(db, {
+      folderPath: body.path,
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      description: body.description ?? null,
+      memberUserId,
+    });
+    return reply.status(201).send(
+      chatThreadDto(thread, {
+        projectName: project.name,
+        workspacePath: project.workspacePath,
+      }),
+    );
+  });
+
   app.post('/folders/open', async (request, reply) => {
     const body = openFolderBody.parse(request.body ?? {});
     let memberUserId: string | null = null;
@@ -1222,7 +1275,13 @@ function registerCreatorChatRoutes(
     } catch {
       memberUserId = null;
     }
-    const { project, thread } = await openWorldFolder(db, body.path, memberUserId);
+    const { project, thread } = await openWorldFolder(db, body.path, {
+      memberUserId,
+      ...(body.on_missing ? { onMissing: body.on_missing } : {}),
+      ...(body.on_corrupt ? { onCorrupt: body.on_corrupt } : {}),
+      ...(body.on_orphan ? { onOrphan: body.on_orphan } : {}),
+      ...(body.rebind_project_id ? { rebindProjectId: body.rebind_project_id } : {}),
+    });
     return reply.status(200).send(
       chatThreadDto(thread, {
         projectName: project.name,
