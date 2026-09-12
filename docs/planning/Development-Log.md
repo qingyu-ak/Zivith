@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-09-12 · pending · chore · Prettier 对齐并清掉 lint，修复 CI 格式门禁
+
+feat 合进 main 后 `pnpm format:check` 报 58 个文件未排版。本轮 `pnpm format` 写回，并修 23 处 ESLint（未使用变量、finally 里 return、冗余联合类型等）。`pnpm/action-setup` 升到 v5，去掉 Node 20 警告。
+
+- **chore** Prettier 写回合入 feat 的源文件
+- **fix** ESLint 错误（chat-panel / agent 面板 / providers / 记忆摘要等）
+- **chore** `.github/workflows/ci.yml` `pnpm/action-setup@v5`
+- 模块：web/api 源码与测试、`ci.yml`
+
 ## 2026-09-12 · d7a1689 · fix(ci) · 本地对象存储改用可拉取的 Silo 镜像
 
 GitHub Actions 在 `docker compose up` 拉 `minio/minio` 时 403（上游社区镜像已停发）。改用 MinIO 兼容的 `pgsty/silo` + `pgsty/mc` 固定 tag，健康检查改为 `silo healthcheck ready`。Actions 升到 checkout@v5 / setup-node@v5，去掉 Node 20 弃用警告。

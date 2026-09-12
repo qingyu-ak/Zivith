@@ -32,8 +32,20 @@ describe('extractPendingConflicts', () => {
   it('兼容 REST incoming_content 形状并跳过已裁决的冲突', () => {
     const cards = extractPendingConflicts({
       conflicts: [
-        { id: 'c2', incoming_content: '新卡', existing_content: '旧卡', antonym: [], status: 'pending' },
-        { id: 'c3', incoming_content: '新3', existing_content: '旧3', antonym: [], status: 'resolved' },
+        {
+          id: 'c2',
+          incoming_content: '新卡',
+          existing_content: '旧卡',
+          antonym: [],
+          status: 'pending',
+        },
+        {
+          id: 'c3',
+          incoming_content: '新3',
+          existing_content: '旧3',
+          antonym: [],
+          status: 'resolved',
+        },
       ],
     });
     expect(cards).toHaveLength(1);

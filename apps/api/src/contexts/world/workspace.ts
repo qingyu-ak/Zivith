@@ -58,10 +58,9 @@ function workspaceMarkerPath(workspacePath: string): string {
 /** Missing or unreadable markers are not errors: path identity remains the fallback. */
 export function readWorkspaceMarker(workspacePath: string): WorkspaceMarker | null {
   try {
-    const parsed = JSON.parse(fs.readFileSync(workspaceMarkerPath(workspacePath), 'utf8')) as Record<
-      string,
-      unknown
-    >;
+    const parsed = JSON.parse(
+      fs.readFileSync(workspaceMarkerPath(workspacePath), 'utf8'),
+    ) as Record<string, unknown>;
     if (typeof parsed.id !== 'string' || !parsed.id) return null;
     return {
       version: typeof parsed.version === 'number' ? parsed.version : WORKSPACE_MARKER_VERSION,
@@ -86,7 +85,11 @@ export function writeWorkspaceMarker(
       id: marker.id,
       name: marker.name,
     };
-    fs.writeFileSync(workspaceMarkerPath(workspacePath), `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(
+      workspaceMarkerPath(workspacePath),
+      `${JSON.stringify(payload, null, 2)}\n`,
+      'utf8',
+    );
   } catch {
     return;
   }
@@ -123,9 +126,7 @@ export async function createWorldProject(
       workspacePath: input.workspacePath ?? null,
       ...(input.worldview ? { worldview: input.worldview } : {}),
       defaults: { language: 'zh-CN' },
-      settings: seed
-        ? { creator_layer: true, workspace_seed: true }
-        : { creator_layer: true },
+      settings: seed ? { creator_layer: true, workspace_seed: true } : { creator_layer: true },
       members: { create: { userId: input.memberUserId ?? ownerId, role: 'owner' } },
     },
   });
@@ -153,11 +154,7 @@ export async function createWorldWorkspace(
   return { project, thread };
 }
 
-export async function openWorldFolder(
-  db: Db,
-  folderPath: string,
-  memberUserId?: string | null,
-) {
+export async function openWorldFolder(db: Db, folderPath: string, memberUserId?: string | null) {
   const workspacePath = normalizeWorkspacePath(folderPath);
   const ownerId = await resolveLocalOwner(db);
   const marker = readWorkspaceMarker(workspacePath);

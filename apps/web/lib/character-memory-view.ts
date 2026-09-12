@@ -5,7 +5,9 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 
 function num(value: unknown): number | null {
@@ -56,10 +58,17 @@ export function eventsExperiencedBy(
   return resources.entities.world_events
     .filter((event) => worldEventCharacterIds(event).includes(characterId))
     .slice()
-    .sort((a, b) => worldEventOrder(a) - worldEventOrder(b) || worldEventTitle(a).localeCompare(worldEventTitle(b), 'zh'));
+    .sort(
+      (a, b) =>
+        worldEventOrder(a) - worldEventOrder(b) ||
+        worldEventTitle(a).localeCompare(worldEventTitle(b), 'zh'),
+    );
 }
 
-function relationshipEnds(relationship: WorldRelationshipDTO): { sourceId: string; targetId: string } {
+function relationshipEnds(relationship: WorldRelationshipDTO): {
+  sourceId: string;
+  targetId: string;
+} {
   const record = asRecord(relationship);
   return {
     sourceId:

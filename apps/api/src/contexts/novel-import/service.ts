@@ -126,12 +126,10 @@ export class NovelImportService {
       });
       return { importId: record.id, report };
     } catch (error) {
-      if (
-        !(
-          error instanceof ApiError &&
-          (error.code === 'IMPORT_CHAPTER_FAILED' || error.code === 'WORLD_WRITE_FAILED')
-        )
-      ) {
+      if (!(
+        error instanceof ApiError &&
+        (error.code === 'IMPORT_CHAPTER_FAILED' || error.code === 'WORLD_WRITE_FAILED')
+      )) {
         await this.failWorldWrite(record.id, error);
       }
       throw error;
@@ -190,12 +188,10 @@ export class NovelImportService {
       });
       return { importId, report };
     } catch (error) {
-      if (
-        !(
-          error instanceof ApiError &&
-          (error.code === 'IMPORT_CHAPTER_FAILED' || error.code === 'WORLD_WRITE_FAILED')
-        )
-      ) {
+      if (!(
+        error instanceof ApiError &&
+        (error.code === 'IMPORT_CHAPTER_FAILED' || error.code === 'WORLD_WRITE_FAILED')
+      )) {
         await this.failWorldWrite(importId, error);
       }
       throw error;
@@ -632,12 +628,9 @@ export class NovelImportService {
       if (error instanceof ApiError && error.code === 'WORLD_WRITE_FAILED') throw error;
       await this.failWorldWrite(importId, error, report);
       const message = error instanceof Error ? error.message : String(error);
-      throw new ApiError(
-        422,
-        'WORLD_WRITE_FAILED',
-        `写入世界层失败：${message.slice(0, 80)}`,
-        { import_id: importId },
-      );
+      throw new ApiError(422, 'WORLD_WRITE_FAILED', `写入世界层失败：${message.slice(0, 80)}`, {
+        import_id: importId,
+      });
     }
   }
 

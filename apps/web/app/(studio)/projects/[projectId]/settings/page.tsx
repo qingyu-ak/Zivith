@@ -4,10 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { IconArrowLeft } from '@/components/nav-icons';
-import {
-  STUDIO_SURFACE,
-  navigationHistoryFor,
-} from '@/lib/navigation-history';
+import { STUDIO_SURFACE, navigationHistoryFor } from '@/lib/navigation-history';
 import { clearSettingsReturn, readSettingsReturn } from '@/lib/settings-return';
 import { ModelSettings } from '@/components/model-settings';
 import { ModelVisibilityList } from '@/components/model-visibility';
@@ -226,9 +223,7 @@ function GeneralSection() {
           </select>
         </SettingRow>
         <p className="-mt-1 px-1 text-xs leading-5 text-zinc-500">
-          {AGENT_WRITE_MODE_HINT[writeMode]}
-          {' '}
-          记忆冲突仍以内联卡确认，不会随写入模式自动覆盖。
+          {AGENT_WRITE_MODE_HINT[writeMode]} 记忆冲突仍以内联卡确认，不会随写入模式自动覆盖。
         </p>
         <SettingRow
           title="默认努力程度"
@@ -264,7 +259,9 @@ function AppearanceSection() {
       <h2 className="text-base font-semibold text-zinc-900">外观</h2>
       <div className="mt-4 grid gap-3">
         <SettingRow title="主题" description="Chat 与 Studio 均为浅色，暂不提供深色主题。">
-          <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500">浅色 · 固定</span>
+          <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500">
+            浅色 · 固定
+          </span>
         </SettingRow>
         <SettingRow title="代码主题" description="Zivith 不含代码编辑器，无代码高亮设置。">
           <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500">不适用</span>

@@ -13,7 +13,13 @@ import {
 import { isDesktopApp, WEB_FOLDER_HINT } from '@/lib/desktop';
 import type { CreatorChatKind, CreatorChatThreadDTO, ProjectDTO } from '@/lib/types';
 import { AccountMenu } from '@/components/account-menu';
-import { IconChatPlus, IconFolder, IconPlusCircle, IconSearch, IconSidebar } from '@/components/nav-icons';
+import {
+  IconChatPlus,
+  IconFolder,
+  IconPlusCircle,
+  IconSearch,
+  IconSidebar,
+} from '@/components/nav-icons';
 
 type MenuState =
   | { kind: 'project'; id: string; name: string; x: number; y: number }
@@ -28,7 +34,6 @@ export function ChatSidebar({
   busy,
   pickerOpen,
   settingsHref = '/creator-chats',
-  onToggle,
   onPickerOpenChange,
   onSelectProject,
   onOpenFolder,
@@ -97,7 +102,10 @@ export function ChatSidebar({
     };
   }, [menu]);
 
-  function openMenu(event: MouseEvent, next: Omit<MenuState, 'x' | 'y'> & { kind: MenuState['kind'] }) {
+  function openMenu(
+    event: MouseEvent,
+    next: Omit<MenuState, 'x' | 'y'> & { kind: MenuState['kind'] },
+  ) {
     event.preventDefault();
     event.stopPropagation();
     setMenu({
@@ -230,7 +238,8 @@ export function ChatSidebar({
                           if (group.id !== '__unbound__') onSelectProject(group.id);
                         }}
                         onDoubleClick={() => {
-                          if (group.id !== '__unbound__') setRename({ kind: 'project', id: group.id });
+                          if (group.id !== '__unbound__')
+                            setRename({ kind: 'project', id: group.id });
                         }}
                         onContextMenu={(event) => {
                           if (group.id === '__unbound__') return;

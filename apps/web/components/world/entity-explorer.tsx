@@ -25,7 +25,10 @@ interface FileItem {
 
 function Chevron({ open }: { open: boolean }) {
   return (
-    <span aria-hidden className={`inline-block w-3 text-[10px] text-zinc-400 ${open ? '' : '-rotate-90'}`}>
+    <span
+      aria-hidden
+      className={`inline-block w-3 text-[10px] text-zinc-400 ${open ? '' : '-rotate-90'}`}
+    >
       ▼
     </span>
   );
@@ -97,10 +100,16 @@ function TreeFile({
   return (
     <div
       className={`flex w-full items-center gap-1 rounded-md ${
-        active ? 'bg-[#e8f0fe] text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+        active
+          ? 'bg-[#e8f0fe] text-zinc-900'
+          : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
       }`}
     >
-      <button type="button" onClick={onClick} className="min-w-0 flex-1 flex flex-col px-2 py-1 text-left">
+      <button
+        type="button"
+        onClick={onClick}
+        className="min-w-0 flex-1 flex flex-col px-2 py-1 text-left"
+      >
         <span className="truncate text-[13px] leading-5">{title}</span>
         {subtitle ? <span className="truncate text-[11px] text-zinc-400">{subtitle}</span> : null}
       </button>
@@ -190,7 +199,10 @@ export function EntityExplorer({
   return (
     <div className="flex h-full flex-col overflow-y-auto pb-6">
       {createError ? (
-        <p className="mx-2 mt-2 rounded-md bg-red-50 px-2 py-1.5 text-[11px] text-red-600" role="alert">
+        <p
+          className="mx-2 mt-2 rounded-md bg-red-50 px-2 py-1.5 text-[11px] text-red-600"
+          role="alert"
+        >
           {createError}
         </p>
       ) : null}
@@ -460,8 +472,12 @@ function RelationshipCreateForm({
   const options = relationshipRefOptions(resources);
   const [kind, setKind] = useState('related');
   const [label, setLabel] = useState('');
-  const [sourceKey, setSourceKey] = useState(options[0] ? `${options[0].type}:${options[0].id}` : '');
-  const [targetKey, setTargetKey] = useState(options[1] ? `${options[1].type}:${options[1].id}` : '');
+  const [sourceKey, setSourceKey] = useState(
+    options[0] ? `${options[0].type}:${options[0].id}` : '',
+  );
+  const [targetKey, setTargetKey] = useState(
+    options[1] ? `${options[1].type}:${options[1].id}` : '',
+  );
 
   function parseKey(key: string): RelRef | undefined {
     return options.find((item) => `${item.type}:${item.id}` === key);
@@ -529,7 +545,11 @@ function RelationshipCreateForm({
         ))}
       </select>
       <div className="flex justify-end gap-1">
-        <button type="button" className="px-1.5 py-0.5 text-[11px] text-zinc-400" onClick={onCancel}>
+        <button
+          type="button"
+          className="px-1.5 py-0.5 text-[11px] text-zinc-400"
+          onClick={onCancel}
+        >
           取消
         </button>
         <button

@@ -2,11 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  APP_VERSION,
-  buildBugReportTemplate,
-  FEEDBACK_CHANNELS,
-} from '@/lib/help-feedback';
+import { APP_VERSION, buildBugReportTemplate, FEEDBACK_CHANNELS } from '@/lib/help-feedback';
 
 type HelpSection = 'docs' | 'feedback';
 
@@ -62,24 +58,26 @@ function HelpDocs() {
             在 <b>对话</b> 里描述你想创造的世界，例如「我想创造一个东方玄幻世界」。
           </li>
           <li>
-            世界构建者会给出<b>提案</b>（新建项目 / 角色 / 地点 / 事件等）。默认每步确认后写入；也可在输入条切换半自动、计划模式或完全访问。
+            世界构建者会给出<b>提案</b>（新建项目 / 角色 / 地点 /
+            事件等）。默认每步确认后写入；也可在输入条切换半自动、计划模式或完全访问。
           </li>
           <li>
             左侧活动栏进入<b>世界</b>工作区：时间线、实体（角色/地点/事件）、资产、记忆都在这里。
           </li>
-          <li>
-            「实体」页可管理角色卡与资产，「故事」「制作」负责章节与生成流水线。
-          </li>
+          <li>「实体」页可管理角色卡与资产，「故事」「制作」负责章节与生成流水线。</li>
         </ol>
       </DocsCard>
 
       <DocsCard title="对话与模型">
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            输入条可切换<b>写入模式</b>（每步确认 / 半自动 / 计划 / 完全访问）、<b>模型</b>与<b>努力程度</b>（快速 / 均衡 / 深度，影响本轮注入预算与检查范围）。点输入条上的圆点可看占用；数字是努力程度预算，不是模型窗口。
+            输入条可切换<b>写入模式</b>（每步确认 / 半自动 / 计划 / 完全访问）、<b>模型</b>与
+            <b>努力程度</b>（快速 / 均衡 /
+            深度，影响本轮注入预算与检查范围）。点输入条上的圆点可看占用；数字是努力程度预算，不是模型窗口。
           </li>
           <li>
-            在 <b>设置 → 模型设置</b> 配置供应商密钥、自定义 OpenAI 兼容端点、模型列表；并用开关控制哪些模型出现在选择器里。
+            在 <b>设置 → 模型设置</b> 配置供应商密钥、自定义 OpenAI
+            兼容端点、模型列表；并用开关控制哪些模型出现在选择器里。
           </li>
           <li>未配置密钥时对话走本地 Mock（内容为占位，界面会显示降级提示）。</li>
           <li>供应商与密钥保存在本机 API 进程内，重启 API 后恢复为环境变量默认。</li>
@@ -96,13 +94,13 @@ function HelpDocs() {
           >
             WeClone
           </a>{' '}
-          是独立的开源项目：用聊天记录 LoRA 微调出「数字分身」，再以 OpenAI 兼容 API 对外服务。它在本机独立运行，可以作为 Zivith 的自定义供应商接入对话与扮演。
+          是独立的开源项目：用聊天记录 LoRA 微调出「数字分身」，再以 OpenAI 兼容 API
+          对外服务。它在本机独立运行，可以作为 Zivith 的自定义供应商接入对话与扮演。
         </p>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           <li>
             按 WeClone 文档导出聊天记录并完成训练：
-            <code className="mx-0.5 rounded bg-zinc-100 px-1">weclone-cli make-dataset</code>
-            →{' '}
+            <code className="mx-0.5 rounded bg-zinc-100 px-1">weclone-cli make-dataset</code>→{' '}
             <code className="mx-0.5 rounded bg-zinc-100 px-1">weclone-cli train-sft</code>。
           </li>
           <li>
@@ -127,10 +125,17 @@ function HelpDocs() {
 
       <DocsCard title="记忆系统">
         <ul className="list-disc space-y-1 pl-5">
-          <li>对话中的事实会自动归档为记忆（L1 原子，按实体聚合成 L2 核心块）。本轮归档会收成「想了一下」，点开可看条数。</li>
-          <li>与已有设定矛盾的内容<b>不会自动写入</b>：对话里会出现冲突确认卡，由你选择保留新卡还是已有卡。</li>
           <li>
-            选中角色后，在右侧属性的「全书档案」里查看和修改；下方记忆面板也可编辑 L2。展开核心块可溯源到原句。
+            对话中的事实会自动归档为记忆（L1 原子，按实体聚合成 L2
+            核心块）。本轮归档会收成「想了一下」，点开可看条数。
+          </li>
+          <li>
+            与已有设定矛盾的内容<b>不会自动写入</b>
+            ：对话里会出现冲突确认卡，由你选择保留新卡还是已有卡。
+          </li>
+          <li>
+            选中角色后，在右侧属性的「全书档案」里查看和修改；下方记忆面板也可编辑
+            L2。展开核心块可溯源到原句。
           </li>
         </ul>
       </DocsCard>
@@ -138,7 +143,8 @@ function HelpDocs() {
       <DocsCard title="扮演与桌面版">
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            侧栏「角色」Tab 或实体页的「与此角色对话」可开始<b>扮演</b>；可选时间锚点与「你是谁」（读者 / 已有角色 / 新建自己）。
+            侧栏「角色」Tab 或实体页的「与此角色对话」可开始<b>扮演</b>
+            ；可选时间锚点与「你是谁」（读者 / 已有角色 / 新建自己）。
           </li>
           <li>
             桌面版（Windows 一键启动）需要本机 Docker；打开文件夹会把世界绑定到该目录，生成{' '}
@@ -158,9 +164,9 @@ function HelpDocs() {
           >
             VoiceStudio
           </a>{' '}
-          是全本地运行的开源语音套件（ElevenLabs 替代）：语音克隆、语音设计、配音、转录，内置 16
-          个 TTS 引擎，并暴露 OpenAI 兼容的配音接口。Zivith
-          的配音槽走同款协议，可把制作线的配音从云端 TTS 换成本地引擎，离线、零调用费。
+          是全本地运行的开源语音套件（ElevenLabs 替代）：语音克隆、语音设计、配音、转录，内置 16 个
+          TTS 引擎，并暴露 OpenAI 兼容的配音接口。Zivith 的配音槽走同款协议，可把制作线的配音从云端
+          TTS 换成本地引擎，离线、零调用费。
         </p>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           <li>
@@ -168,15 +174,16 @@ function HelpDocs() {
             <code className="mx-0.5 rounded bg-zinc-100 px-1">
               docker run -d -p 127.0.0.1:3900:3900 palashdeb/omnivoice-studio:stable
             </code>
-            ），在其设置里选好 TTS 引擎（NVIDIA 8GB+ 建议 OmniVoice / CosyVoice 3；低配用
-            PocketTTS / Moonshine）。
+            ），在其设置里选好 TTS 引擎（NVIDIA 8GB+ 建议 OmniVoice / CosyVoice 3；低配用 PocketTTS
+            / Moonshine）。
           </li>
           <li>
             查引擎 ID：访问{' '}
             <code className="mx-0.5 rounded bg-zinc-100 px-1">
               http://127.0.0.1:3900/v1/audio/voices
             </code>
-            ，或直接用 VoiceStudio 的模型目录（示例用 <code className="rounded bg-zinc-100 px-1">tts-1</code>）。
+            ，或直接用 VoiceStudio 的模型目录（示例用{' '}
+            <code className="rounded bg-zinc-100 px-1">tts-1</code>）。
           </li>
           <li>
             在 Zivith 的 <b>设置 → 模型设置 → SiliconFlow</b>：Base URL 改为{' '}
@@ -185,14 +192,14 @@ function HelpDocs() {
             <b> 语音槽位</b>把模型名改成上面的引擎 ID，保存媒体槽位。
           </li>
           <li>
-            在制作线点一次语音生成验证；若报「音色不存在」，在 VoiceStudio
-            里建一个 ID 为 <code className="rounded bg-zinc-100 px-1">alloy</code>{' '}
-            的音色档（Zivith 未指定音色时的默认名）。
+            在制作线点一次语音生成验证；若报「音色不存在」，在 VoiceStudio 里建一个 ID 为{' '}
+            <code className="rounded bg-zinc-100 px-1">alloy</code> 的音色档（Zivith
+            未指定音色时的默认名）。
           </li>
         </ol>
         <p className="mt-2 text-zinc-500">
-          注意：① SiliconFlow 的配音、图像、视频共用同一 Base
-          URL，指向 VoiceStudio 后图像/视频生成会失效——用完改回即可；干净的方案是给音频单独开供应商槽，已在计划。②
+          注意：① SiliconFlow 的配音、图像、视频共用同一 Base URL，指向 VoiceStudio
+          后图像/视频生成会失效——用完改回即可；干净的方案是给音频单独开供应商槽，已在计划。②
           权重许可分层：默认 OmniVoice 权重 CC-BY-NC 禁商用，商用请换 Apache/MIT 引擎（如
           GPT-SoVITS）。③ 克隆声音须获得本人同意；生成语音默认嵌 AudioSeal 水印。
         </p>
@@ -201,7 +208,9 @@ function HelpDocs() {
       <DocsCard title="注意事项" accent>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <b>写入模式可切换</b>：默认每步确认；半自动会写入常规设定、新建世界仍问你；计划模式先出计划再执行；完全访问自动写入世界。删除项目等高危操作始终询问。已写入的提案可在设置 → 修改记录里查看。
+            <b>写入模式可切换</b>
+            ：默认每步确认；半自动会写入常规设定、新建世界仍问你；计划模式先出计划再执行；完全访问自动写入世界。删除项目等高危操作始终询问。已写入的提案可在设置
+            → 修改记录里查看。
           </li>
           <li>API Key 只保存在本机，不会回传到浏览器，也不会随目录导出。</li>
           <li>Chat 与 Studio 界面固定浅色；时间轴操作的手势与「上一步/下一步」导航无关。</li>
@@ -239,7 +248,8 @@ function Feedback() {
       <div className="rounded-2xl border border-zinc-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-zinc-900">提交 Bug</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          点下面的按钮复制故障信息模板，粘贴到 QQ 群并补上复现步骤即可。信息只包含版本、时间、页面地址与浏览器环境，不含你的创作内容。
+          点下面的按钮复制故障信息模板，粘贴到 QQ
+          群并补上复现步骤即可。信息只包含版本、时间、页面地址与浏览器环境，不含你的创作内容。
         </p>
         <div className="mt-4 flex items-center gap-3">
           <button
@@ -291,8 +301,8 @@ function Feedback() {
           ))}
         </ul>
         <p className="mt-3 text-xs text-zinc-400">
-          群号与账号由开发者在 <code className="rounded bg-zinc-100 px-1">lib/help-feedback.ts</code>{' '}
-          中维护。
+          群号与账号由开发者在{' '}
+          <code className="rounded bg-zinc-100 px-1">lib/help-feedback.ts</code> 中维护。
         </p>
       </div>
     </div>

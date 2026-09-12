@@ -79,7 +79,9 @@ export function RoleplayLaunchButton({
   }
 
   return (
-    <div className={`flex max-w-md flex-col gap-1 ${align === 'end' ? 'items-end' : 'items-start'}`}>
+    <div
+      className={`flex max-w-md flex-col gap-1 ${align === 'end' ? 'items-end' : 'items-start'}`}
+    >
       <div className={`flex flex-wrap items-center gap-1 ${align === 'end' ? 'justify-end' : ''}`}>
         <select
           className="max-w-36 rounded-md border border-line bg-white px-1.5 py-0.5 text-xs text-zinc-600"

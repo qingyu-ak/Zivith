@@ -227,7 +227,10 @@ export function registerProviderRoutes(app: FastifyInstance): void {
     if (body.visible) {
       runtimeHiddenModels = runtimeHiddenModels.filter((item) => !key(item));
     } else if (!runtimeHiddenModels.some(key)) {
-      runtimeHiddenModels = [...runtimeHiddenModels, { provider: body.provider, model: body.model }];
+      runtimeHiddenModels = [
+        ...runtimeHiddenModels,
+        { provider: body.provider, model: body.model },
+      ];
     }
     return {
       provider: body.provider,
@@ -275,7 +278,7 @@ export function registerProviderRoutes(app: FastifyInstance): void {
     return reply.status(201).send(created);
   });
 
-  app.put('/providers/custom/:id', async (request) => {
+  app.put('/providers/custom/:id', (request) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
     const body = customPatchBody.parse(request.body ?? {});
     const updated = updateCustomProvider(id, body);
@@ -285,7 +288,8 @@ export function registerProviderRoutes(app: FastifyInstance): void {
 
   app.delete('/providers/custom/:id', async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
-    if (!deleteCustomProvider(id)) throw new ApiError(404, 'PROVIDER_NOT_FOUND', '自定义供应商不存在');
+    if (!deleteCustomProvider(id))
+      throw new ApiError(404, 'PROVIDER_NOT_FOUND', '自定义供应商不存在');
     if (runtimeSelection.llm === id) runtimeSelection.llm = 'mock';
     runtimeHiddenModels = runtimeHiddenModels.filter((item) => item.provider !== id);
     return reply.status(204).send();
@@ -293,7 +297,10 @@ export function registerProviderRoutes(app: FastifyInstance): void {
 
   app.post('/providers/:id/models', async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
-    const body = z.object({ model: z.string().trim().min(1).max(200) }).strict().parse(request.body ?? {});
+    const body = z
+      .object({ model: z.string().trim().min(1).max(200) })
+      .strict()
+      .parse(request.body ?? {});
     if (isCustomProviderId(id)) {
       const current = getCustomProvider(id);
       if (!current) throw new ApiError(404, 'PROVIDER_NOT_FOUND', '自定义供应商不存在');
@@ -323,7 +330,7 @@ export function registerProviderRoutes(app: FastifyInstance): void {
     return reply.status(204).send();
   });
 
-  app.put('/providers/credentials', async (request) => {
+  app.put('/providers/credentials', (request) => {
     const body = z
       .object({
         provider: z.enum(['deepseek', 'siliconflow']),
@@ -351,9 +358,7 @@ export function registerProviderRoutes(app: FastifyInstance): void {
           ? Boolean(credentials.deepseekApiKey)
           : Boolean(credentials.siliconflowApiKey),
       base_url:
-        body.provider === 'deepseek'
-          ? credentials.deepseekBaseUrl
-          : credentials.siliconflowBaseUrl,
+        body.provider === 'deepseek' ? credentials.deepseekBaseUrl : credentials.siliconflowBaseUrl,
     };
   });
 }

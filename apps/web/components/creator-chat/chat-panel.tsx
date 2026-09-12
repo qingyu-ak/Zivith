@@ -58,12 +58,19 @@ import type {
   CreatorChatMessageDTO,
   CreatorChatThreadDTO,
   ProjectDTO,
-  ProposalKind,
   ProviderCatalogDTO,
   WorldEventDTO,
   WorldResourcesDTO,
 } from '@/lib/types';
-import { isDesktopApp, pickWorkspaceDirectory, asWorkspacePath, useIsDesktopApp, WEB_CHAT_NEEDS_WORLD, WEB_CHAT_NEEDS_WORLD_EMPTY, WEB_FOLDER_HINT } from '@/lib/desktop';
+import {
+  isDesktopApp,
+  pickWorkspaceDirectory,
+  asWorkspacePath,
+  useIsDesktopApp,
+  WEB_CHAT_NEEDS_WORLD,
+  WEB_CHAT_NEEDS_WORLD_EMPTY,
+  WEB_FOLDER_HINT,
+} from '@/lib/desktop';
 import { IconSidebar } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
 import { ChatSidebar, ChatSidebarRail } from './chat-sidebar';
@@ -109,7 +116,9 @@ export function ChatPanel() {
   const [thread, setThread] = useState<CreatorChatThreadDTO | null>(null);
   const [messages, setMessages] = useState<CreatorChatMessageDTO[]>([]);
   const [threads, setThreads] = useState<CreatorChatThreadDTO[]>([]);
-  const [projects, setProjects] = useState<Pick<ProjectDTO, 'id' | 'name' | 'workspace_path'>[]>([]);
+  const [projects, setProjects] = useState<Pick<ProjectDTO, 'id' | 'name' | 'workspace_path'>[]>(
+    [],
+  );
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const desktop = useIsDesktopApp();
   const [input, setInput] = useState('');
@@ -398,36 +407,27 @@ export function ChatPanel() {
   const activeRoleplayRef = useRef<RoleplayThreadDTO | null>(null);
   activeRoleplayRef.current = activeRoleplay;
 
-  const autoApplyIfAllowed = useCallback(async (message: CreatorChatMessageDTO) => {
-    if (autoApplyRef.current.has(message.id)) return;
-    const parsed = parseProposals(message);
-    if (parsed.applied || parsed.rejected || parsed.proposals.length === 0) return;
-    const action = decideWriteAction(
-      writeModeRef.current,
-      parsed.proposals.map((item) => item.kind),
-    );
-    if (action !== 'auto') return;
-    const targetThread = message.thread_id;
-    if (!targetThread) return;
-    autoApplyRef.current.add(message.id);
-    setApplyingProposalIds((current) =>
-      current.includes(message.id) ? current : [...current, message.id],
-    );
-    try {
-      await api(`/world/creator-chats/${targetThread}/proposals/${message.id}/apply`, {
-        method: 'POST',
-        body: {},
-      });
-      setMessages((current) =>
-        current.map((item) =>
-          item.id === message.id ? { ...item, proposal_state: 'applied' } : item,
-        ),
+  const autoApplyIfAllowed = useCallback(
+    async (message: CreatorChatMessageDTO) => {
+      if (autoApplyRef.current.has(message.id)) return;
+      const parsed = parseProposals(message);
+      if (parsed.applied || parsed.rejected || parsed.proposals.length === 0) return;
+      const action = decideWriteAction(
+        writeModeRef.current,
+        parsed.proposals.map((item) => item.kind),
       );
-      void load();
-      loadThreads();
-    } catch (reason) {
-      const handled = handledProposalState(reason);
-      if (handled === 'applied') {
+      if (action !== 'auto') return;
+      const targetThread = message.thread_id;
+      if (!targetThread) return;
+      autoApplyRef.current.add(message.id);
+      setApplyingProposalIds((current) =>
+        current.includes(message.id) ? current : [...current, message.id],
+      );
+      try {
+        await api(`/world/creator-chats/${targetThread}/proposals/${message.id}/apply`, {
+          method: 'POST',
+          body: {},
+        });
         setMessages((current) =>
           current.map((item) =>
             item.id === message.id ? { ...item, proposal_state: 'applied' } : item,
@@ -435,22 +435,34 @@ export function ChatPanel() {
         );
         void load();
         loadThreads();
-        return;
+      } catch (reason) {
+        const handled = handledProposalState(reason);
+        if (handled === 'applied') {
+          setMessages((current) =>
+            current.map((item) =>
+              item.id === message.id ? { ...item, proposal_state: 'applied' } : item,
+            ),
+          );
+          void load();
+          loadThreads();
+          return;
+        }
+        if (handled === 'rejected') {
+          setMessages((current) =>
+            current.map((item) =>
+              item.id === message.id ? { ...item, proposal_state: 'rejected' } : item,
+            ),
+          );
+          return;
+        }
+        autoApplyRef.current.delete(message.id);
+        setError('自动写入失败，请手动确认提案');
+      } finally {
+        setApplyingProposalIds((current) => current.filter((id) => id !== message.id));
       }
-      if (handled === 'rejected') {
-        setMessages((current) =>
-          current.map((item) =>
-            item.id === message.id ? { ...item, proposal_state: 'rejected' } : item,
-          ),
-        );
-        return;
-      }
-      autoApplyRef.current.delete(message.id);
-      setError('自动写入失败，请手动确认提案');
-    } finally {
-      setApplyingProposalIds((current) => current.filter((id) => id !== message.id));
-    }
-  }, [load, loadThreads]);
+    },
+    [load, loadThreads],
+  );
 
   const sendContent = useCallback(
     async (content: string, options?: { retry?: boolean }) => {
@@ -564,13 +576,12 @@ export function ChatPanel() {
           }
           setStreamText('');
         }
-      } finally {
-        if (!stillCurrent()) return;
-        if (abortRef.current === controller) abortRef.current = null;
-        sendingRef.current = false;
-        setSending(false);
-        if (!sawDone) void load();
       }
+      if (!stillCurrent()) return;
+      if (abortRef.current === controller) abortRef.current = null;
+      sendingRef.current = false;
+      setSending(false);
+      if (!sawDone) void load();
     },
     [threadId, autoApplyIfAllowed, load],
   );
@@ -759,10 +770,10 @@ export function ChatPanel() {
     setError('');
     setBusy(true);
     try {
-    if (firstMessage) {
-      sessionStorage.setItem(PENDING_CHAT_TURN_KEY, firstMessage);
-      setInput('');
-    }
+      if (firstMessage) {
+        sessionStorage.setItem(PENDING_CHAT_TURN_KEY, firstMessage);
+        setInput('');
+      }
       const created = await api<unknown>('/world/creator-chats', {
         method: 'POST',
         body: { project_id: targetProjectId, title: null },
@@ -904,9 +915,7 @@ export function ChatPanel() {
         })
       : studioHrefForChat(thread?.project_id);
   const settingsProjectId =
-    thread?.project_id ??
-    threads.find((item) => item.project_id)?.project_id ??
-    projects[0]?.id;
+    thread?.project_id ?? threads.find((item) => item.project_id)?.project_id ?? projects[0]?.id;
   const settingsHref = settingsHrefFor(settingsProjectId);
   const empty = (!threadId || messages.length === 0) && !sending && !streamText && !loading;
   const worldBound = Boolean(threadId);
@@ -937,9 +946,7 @@ export function ChatPanel() {
         right={
           <Link
             href={studioHref}
-            title={
-              activeRoleplay ? '在 Studio 打开这张角色卡' : '打开 Studio 世界工作区'
-            }
+            title={activeRoleplay ? '在 Studio 打开这张角色卡' : '打开 Studio 世界工作区'}
             className="rounded-lg px-2 py-1 text-xs text-zinc-600 transition hover:bg-zinc-200/80 hover:text-zinc-900"
           >
             Studio
@@ -947,514 +954,516 @@ export function ChatPanel() {
         }
       />
       <div className="flex min-h-0 flex-1">
-      {collapsed ? (
-        <ChatSidebarRail
-          onToggle={toggleCollapsed}
-          onOpenFolder={() => {
-            if (collapsed) toggleCollapsed();
-            void pickFolder();
-          }}
-        />
-      ) : (
-        <ChatSidebar
-          threads={threads}
-          projects={projects}
-          threadId={threadId}
-          busy={busy}
-          pickerOpen={folderPickerOpen}
-          settingsHref={settingsHref}
-          onToggle={toggleCollapsed}
-          onPickerOpenChange={setFolderPickerOpen}
-          onSelectProject={selectProject}
-          onOpenFolder={() => void pickFolder()}
-          onCreateWorld={() => void createBareWorld()}
-          onNewInProject={(projectId) => void startThread(undefined, projectId)}
-          onNewRoleplay={(projectId) => setRoleplayPicker(projectId)}
-          onRenameProject={(projectId, name) => void renameProject(projectId, name)}
-          onRenameThread={(id, name) => void renameThread(id, name)}
-          onDeleteThread={(id, name) => void deleteThread(id, name)}
-        />
-      )}
+        {collapsed ? (
+          <ChatSidebarRail
+            onToggle={toggleCollapsed}
+            onOpenFolder={() => {
+              if (collapsed) toggleCollapsed();
+              void pickFolder();
+            }}
+          />
+        ) : (
+          <ChatSidebar
+            threads={threads}
+            projects={projects}
+            threadId={threadId}
+            busy={busy}
+            pickerOpen={folderPickerOpen}
+            settingsHref={settingsHref}
+            onToggle={toggleCollapsed}
+            onPickerOpenChange={setFolderPickerOpen}
+            onSelectProject={selectProject}
+            onOpenFolder={() => void pickFolder()}
+            onCreateWorld={() => void createBareWorld()}
+            onNewInProject={(projectId) => void startThread(undefined, projectId)}
+            onNewRoleplay={(projectId) => setRoleplayPicker(projectId)}
+            onRenameProject={(projectId, name) => void renameProject(projectId, name)}
+            onRenameThread={(id, name) => void renameThread(id, name)}
+            onDeleteThread={(id, name) => void deleteThread(id, name)}
+          />
+        )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 px-4 py-2 lg:px-6">
-          {collapsed && (
-            <button
-              type="button"
-              className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100"
-              aria-label="展开侧栏"
-              onClick={toggleCollapsed}
-            >
-              <IconSidebar className="size-4" />
-            </button>
-          )}
-          {threadId ? (
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h1 className="min-w-0 truncate text-[15px] font-medium text-zinc-800">
-                {activeRoleplay
-                  ? `与「${activeRoleplay.character_name}」对话`
-                  : thread
-                    ? threadDisplayTitle(thread)
-                    : '新世界对话'}
-              </h1>
-              {thread?.project_id && playableAssets.length > 0 && (
-                <ChatChoiceMenu
-                  label="切换对话对象"
-                  value={activeRoleplay ? activeRoleplay.character_asset_id : 'world'}
-                  disabled={switching || sending}
-                  onChange={(next) => void switchAgent(next)}
-                  options={[
-                    {
-                      value: 'world',
-                      label: '世界构建者',
-                      description: '一起改设定、写实体',
-                    },
-                    ...playableAssets.map((character) => ({
-                      value: character.id,
-                      label: `扮演：${character.name}`,
-                      description: characterCardPreview(character) || undefined,
-                      href: studioHrefForEntity(thread.project_id!, {
-                        kind: 'character',
-                        id: character.id,
-                      }),
-                      hrefLabel: '改卡',
-                    })),
-                  ]}
-                />
-              )}
-              {activeRoleplay && thread?.project_id && (
-                <ChatChoiceMenu
-                  label="你是谁"
-                  value={userSpeakerValue}
-                  disabled={switching || sending}
-                  onChange={(next) => {
-                    if (next === NEW_SELF) {
-                      setCreatingSelf(true);
-                      return;
-                    }
-                    setCreatingSelf(false);
-                    void switchUserSpeaker(next === '' ? null : next);
-                  }}
-                  options={[
-                    {
-                      value: '',
-                      label: '你是：读者',
-                      description: '旁观提问，不代入某个角色',
-                    },
-                    ...speakerOptions.map((character) => ({
-                      value: character.id,
-                      label: `你是：${character.name}`,
-                      description: characterCardPreview(assetById.get(character.id)) || undefined,
-                      href: studioHrefForEntity(thread.project_id!, {
-                        kind: 'character',
-                        id: character.id,
-                      }),
-                      hrefLabel: '改卡',
-                    })),
-                    { value: NEW_SELF, label: '新建我自己…' },
-                  ]}
-                />
-              )}
-              {creatingSelf && activeRoleplay && (
-                <form
-                  className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void createSelfAndSwitch();
-                  }}
-                >
-                  <input
-                    value={selfName}
-                    onChange={(event) => setSelfName(event.target.value)}
-                    placeholder="你的名字"
-                    className="w-28 rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none focus:border-[#4d6bfe]"
-                    autoFocus
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 px-4 py-2 lg:px-6">
+            {collapsed && (
+              <button
+                type="button"
+                className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100"
+                aria-label="展开侧栏"
+                onClick={toggleCollapsed}
+              >
+                <IconSidebar className="size-4" />
+              </button>
+            )}
+            {threadId ? (
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h1 className="min-w-0 truncate text-[15px] font-medium text-zinc-800">
+                    {activeRoleplay
+                      ? `与「${activeRoleplay.character_name}」对话`
+                      : thread
+                        ? threadDisplayTitle(thread)
+                        : '新世界对话'}
+                  </h1>
+                  {thread?.project_id && playableAssets.length > 0 && (
+                    <ChatChoiceMenu
+                      label="切换对话对象"
+                      value={activeRoleplay ? activeRoleplay.character_asset_id : 'world'}
+                      disabled={switching || sending}
+                      onChange={(next) => void switchAgent(next)}
+                      options={[
+                        {
+                          value: 'world',
+                          label: '世界构建者',
+                          description: '一起改设定、写实体',
+                        },
+                        ...playableAssets.map((character) => ({
+                          value: character.id,
+                          label: `扮演：${character.name}`,
+                          description: characterCardPreview(character) || undefined,
+                          href: studioHrefForEntity(thread.project_id!, {
+                            kind: 'character',
+                            id: character.id,
+                          }),
+                          hrefLabel: '改卡',
+                        })),
+                      ]}
+                    />
+                  )}
+                  {activeRoleplay && thread?.project_id && (
+                    <ChatChoiceMenu
+                      label="你是谁"
+                      value={userSpeakerValue}
+                      disabled={switching || sending}
+                      onChange={(next) => {
+                        if (next === NEW_SELF) {
+                          setCreatingSelf(true);
+                          return;
+                        }
+                        setCreatingSelf(false);
+                        void switchUserSpeaker(next === '' ? null : next);
+                      }}
+                      options={[
+                        {
+                          value: '',
+                          label: '你是：读者',
+                          description: '旁观提问，不代入某个角色',
+                        },
+                        ...speakerOptions.map((character) => ({
+                          value: character.id,
+                          label: `你是：${character.name}`,
+                          description:
+                            characterCardPreview(assetById.get(character.id)) || undefined,
+                          href: studioHrefForEntity(thread.project_id!, {
+                            kind: 'character',
+                            id: character.id,
+                          }),
+                          hrefLabel: '改卡',
+                        })),
+                        { value: NEW_SELF, label: '新建我自己…' },
+                      ]}
+                    />
+                  )}
+                  {creatingSelf && activeRoleplay && (
+                    <form
+                      className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void createSelfAndSwitch();
+                      }}
+                    >
+                      <input
+                        value={selfName}
+                        onChange={(event) => setSelfName(event.target.value)}
+                        placeholder="你的名字"
+                        className="w-28 rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none focus:border-[#4d6bfe]"
+                        autoFocus
+                      />
+                      <input
+                        value={selfPersonality}
+                        onChange={(event) => setSelfPersonality(event.target.value)}
+                        placeholder="个性（可选）"
+                        className="min-w-[8rem] flex-1 rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none focus:border-[#4d6bfe]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={switching || !selfName.trim()}
+                        className="rounded-md bg-zinc-900 px-2 py-1 text-xs text-white disabled:opacity-40"
+                      >
+                        {switching ? '…' : '确定'}
+                      </button>
+                      <button
+                        type="button"
+                        className="px-1 text-xs text-zinc-400"
+                        onClick={() => {
+                          setCreatingSelf(false);
+                          setSelfName('');
+                          setSelfPersonality('');
+                        }}
+                      >
+                        取消
+                      </button>
+                    </form>
+                  )}
+                </div>
+                {activeRoleplay && thread?.project_id ? (
+                  <CharacterCardPeek
+                    projectId={thread.project_id}
+                    characterId={activeRoleplay.character_asset_id}
+                    name={activeRoleplay.character_name}
+                    preview={characterCardPreview(playingCharacter)}
                   />
-                  <input
-                    value={selfPersonality}
-                    onChange={(event) => setSelfPersonality(event.target.value)}
-                    placeholder="个性（可选）"
-                    className="min-w-[8rem] flex-1 rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none focus:border-[#4d6bfe]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={switching || !selfName.trim()}
-                    className="rounded-md bg-zinc-900 px-2 py-1 text-xs text-white disabled:opacity-40"
-                  >
-                    {switching ? '…' : '确定'}
-                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <span className="flex-1" />
+            )}
+          </header>
+
+          {threadId && !thread && !loading ? (
+            <div className="grid flex-1 place-items-center p-8">
+              <div className="max-w-sm text-center">
+                <p className="text-base font-medium text-zinc-800">对话加载失败</p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  {error || '暂时无法连接到服务器，请稍后重试。'}
+                </p>
+                <div className="mt-5 flex items-center justify-center gap-3">
                   <button
                     type="button"
-                    className="px-1 text-xs text-zinc-400"
-                    onClick={() => {
-                      setCreatingSelf(false);
-                      setSelfName('');
-                      setSelfPersonality('');
-                    }}
+                    className="rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
+                    onClick={() => void load()}
                   >
-                    取消
+                    重试
                   </button>
-                </form>
-              )}
+                  <Link className="text-sm text-[#4d6bfe]" href="/creator-chats">
+                    新对话
+                  </Link>
+                </div>
               </div>
-              {activeRoleplay && thread?.project_id ? (
-                <CharacterCardPeek
-                  projectId={thread.project_id}
-                  characterId={activeRoleplay.character_asset_id}
-                  name={activeRoleplay.character_name}
-                  preview={characterCardPreview(playingCharacter)}
-                />
-              ) : null}
             </div>
           ) : (
-            <span className="flex-1" />
-          )}
-        </header>
-
-        {threadId && !thread && !loading ? (
-          <div className="grid flex-1 place-items-center p-8">
-            <div className="max-w-sm text-center">
-              <p className="text-base font-medium text-zinc-800">对话加载失败</p>
-              <p className="mt-2 text-sm text-zinc-500">
-                {error || '暂时无法连接到服务器，请稍后重试。'}
-              </p>
-              <div className="mt-5 flex items-center justify-center gap-3">
-                <button
-                  type="button"
-                  className="rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
-                  onClick={() => void load()}
-                >
-                  重试
-                </button>
-                <Link className="text-sm text-[#4d6bfe]" href="/creator-chats">
-                  新对话
-                </Link>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div
-              className={`min-h-0 flex-1 overflow-y-auto px-4 lg:px-6 ${empty ? 'flex items-center' : 'py-6'}`}
-            >
-              <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-                {activeRoleplay && (
-                  <div className="mx-auto flex flex-wrap items-center justify-center gap-2">
-                    <label className="inline-flex items-center gap-1 rounded-full bg-[#eef2ff] px-3 py-1 text-xs text-[#1e3a8a]">
-                      正在扮演「{activeRoleplay.character_name}」· 时间锚点
-                      <select
-                        className="max-w-[12rem] bg-transparent font-medium outline-none"
-                        value={activeRoleplay.anchored_world_event_id ?? ''}
-                        disabled={switching || sending}
-                        onChange={(event) => void changeAnchor(event.target.value)}
-                      >
-                        <option value="">全书读完</option>
-                        {worldEvents.map((event) => (
-                          <option key={event.id} value={event.id}>
-                            {event.title}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {isLlmDegraded(catalog) ? (
-                      <span
-                        className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] text-amber-800"
-                        title="当前是 Mock 或未配置密钥，扮演走模板回复"
-                      >
-                        降级模式
-                      </span>
-                    ) : null}
-                  </div>
-                )}
-                {loading && (
-                  <div className="grid min-h-[40vh] place-items-center">
-                    <Spinner label="正在加载对话…" />
-                  </div>
-                )}
-                {empty && activeRoleplay && (
-                  <div className="mx-auto w-full max-w-xl rounded-2xl bg-[#f3f4f6] px-8 py-10 text-center">
-                    <p className="text-lg font-medium text-zinc-900">
-                      与「{activeRoleplay.character_name}」开启对话
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-zinc-500">
-                      你现在是{activeRoleplay.user_character_name?.trim() || '读者'}。TA
-                      只记得时间锚点{activeRoleplay.anchor_title ?? '全书读完'}之前亲历的事。
-                      角色卡只读，改简介和个性请到 Studio。
-                    </p>
-                  </div>
-                )}
-                {empty && !activeRoleplay && (
-                  <div className="mx-auto w-full max-w-xl rounded-2xl bg-[#f3f4f6] px-8 py-10 text-center">
-                    <div className="mx-auto mb-4 grid size-10 place-items-center rounded-full bg-white text-sm font-bold text-[#4d6bfe] shadow-sm">
-                      Z
-                    </div>
-                    {thread?.project_id ? (
-                      <>
-                        <p className="text-lg font-medium text-zinc-900">开始构建你的世界</p>
-                        <p className="mt-2 text-sm leading-6 text-zinc-500">
-                          这个对话属于当前工作区。确认后的设定会写成草稿，可在 Studio 里改 IP Core 和实体。
-                        </p>
-                        <div className="mt-6 flex flex-wrap justify-center gap-2">
-                          {STARTERS.map((starter) => (
-                            <button
-                              key={starter}
-                              type="button"
-                              disabled={sending || busy}
-                              className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900 disabled:opacity-40"
-                              onClick={() => void sendContent(starter)}
-                            >
-                              {starter}
-                            </button>
+            <>
+              <div
+                className={`min-h-0 flex-1 overflow-y-auto px-4 lg:px-6 ${empty ? 'flex items-center' : 'py-6'}`}
+              >
+                <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+                  {activeRoleplay && (
+                    <div className="mx-auto flex flex-wrap items-center justify-center gap-2">
+                      <label className="inline-flex items-center gap-1 rounded-full bg-[#eef2ff] px-3 py-1 text-xs text-[#1e3a8a]">
+                        正在扮演「{activeRoleplay.character_name}」· 时间锚点
+                        <select
+                          className="max-w-[12rem] bg-transparent font-medium outline-none"
+                          value={activeRoleplay.anchored_world_event_id ?? ''}
+                          disabled={switching || sending}
+                          onChange={(event) => void changeAnchor(event.target.value)}
+                        >
+                          <option value="">全书读完</option>
+                          {worldEvents.map((event) => (
+                            <option key={event.id} value={event.id}>
+                              {event.title}
+                            </option>
                           ))}
-                        </div>
-                      </>
-                    ) : projects.length > 0 ? (
-                      <>
-                        <p className="text-lg font-medium text-zinc-900">从左侧选择一个项目</p>
-                        <p className="mt-2 text-sm leading-6 text-zinc-500">
-                          已有世界列在侧栏。点选后即可对话；新文件夹请用桌面应用打开。
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-lg font-medium text-zinc-900">先打开一个世界</p>
-                        <p className="mt-2 text-sm leading-6 text-zinc-500">
-                          {desktop
-                            ? '点「选择文件夹」打开一个已有目录作为世界。'
-                            : WEB_FOLDER_HINT}
-                        </p>
-                        <div className="mt-6 flex flex-wrap justify-center gap-2">
-                          {desktop ? (
-                            <button
-                              type="button"
-                              className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
-                              onClick={() => void pickFolder()}
-                            >
-                              选择文件夹
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-                              onClick={() => void createBareWorld()}
-                            >
-                              新建一个世界
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-                {messages.map((message) => {
-                  const { proposals, applied, rejected } = parseProposals(message);
-                  if (message.role === 'system') {
-                    return (
-                      <p key={message.id} className="mx-auto text-center text-xs text-zinc-400">
-                        {message.content}
+                        </select>
+                      </label>
+                      {isLlmDegraded(catalog) ? (
+                        <span
+                          className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] text-amber-800"
+                          title="当前是 Mock 或未配置密钥，扮演走模板回复"
+                        >
+                          降级模式
+                        </span>
+                      ) : null}
+                    </div>
+                  )}
+                  {loading && (
+                    <div className="grid min-h-[40vh] place-items-center">
+                      <Spinner label="正在加载对话…" />
+                    </div>
+                  )}
+                  {empty && activeRoleplay && (
+                    <div className="mx-auto w-full max-w-xl rounded-2xl bg-[#f3f4f6] px-8 py-10 text-center">
+                      <p className="text-lg font-medium text-zinc-900">
+                        与「{activeRoleplay.character_name}」开启对话
                       </p>
-                    );
-                  }
-                  const retry = retryTargetForMessage(messages, message.id);
-                  if (message.role === 'user') {
-                    return (
-                      <div key={message.id} className="group flex justify-end">
-                        <div className="max-w-[80%]">
-                          {activeRoleplay && (
-                            <p className="mb-1 text-right text-xs font-medium text-zinc-400">
-                              {activeRoleplay.user_character_name?.trim() || '读者'}
-                            </p>
-                          )}
-                          <div className="rounded-2xl bg-[#eef0f4] px-4 py-2.5 text-sm leading-6 text-zinc-800">
-                            <p className="whitespace-pre-wrap">{message.content}</p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-500">
+                        你现在是{activeRoleplay.user_character_name?.trim() || '读者'}。TA
+                        只记得时间锚点{activeRoleplay.anchor_title ?? '全书读完'}之前亲历的事。
+                        角色卡只读，改简介和个性请到 Studio。
+                      </p>
+                    </div>
+                  )}
+                  {empty && !activeRoleplay && (
+                    <div className="mx-auto w-full max-w-xl rounded-2xl bg-[#f3f4f6] px-8 py-10 text-center">
+                      <div className="mx-auto mb-4 grid size-10 place-items-center rounded-full bg-white text-sm font-bold text-[#4d6bfe] shadow-sm">
+                        Z
+                      </div>
+                      {thread?.project_id ? (
+                        <>
+                          <p className="text-lg font-medium text-zinc-900">开始构建你的世界</p>
+                          <p className="mt-2 text-sm leading-6 text-zinc-500">
+                            这个对话属于当前工作区。确认后的设定会写成草稿，可在 Studio 里改 IP Core
+                            和实体。
+                          </p>
+                          <div className="mt-6 flex flex-wrap justify-center gap-2">
+                            {STARTERS.map((starter) => (
+                              <button
+                                key={starter}
+                                type="button"
+                                disabled={sending || busy}
+                                className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 transition hover:border-[#4d6bfe]/40 hover:text-zinc-900 disabled:opacity-40"
+                                onClick={() => void sendContent(starter)}
+                              >
+                                {starter}
+                              </button>
+                            ))}
                           </div>
-                          <MessageActions
-                            copyText={message.content}
-                            align="end"
-                            busy={sending}
-                            retry={() => {
-                              if (retry?.ok) void sendContent(retry.content, { retry: true });
-                            }}
-                            retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
-                          />
+                        </>
+                      ) : projects.length > 0 ? (
+                        <>
+                          <p className="text-lg font-medium text-zinc-900">从左侧选择一个项目</p>
+                          <p className="mt-2 text-sm leading-6 text-zinc-500">
+                            已有世界列在侧栏。点选后即可对话；新文件夹请用桌面应用打开。
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-lg font-medium text-zinc-900">先打开一个世界</p>
+                          <p className="mt-2 text-sm leading-6 text-zinc-500">
+                            {desktop
+                              ? '点「选择文件夹」打开一个已有目录作为世界。'
+                              : WEB_FOLDER_HINT}
+                          </p>
+                          <div className="mt-6 flex flex-wrap justify-center gap-2">
+                            {desktop ? (
+                              <button
+                                type="button"
+                                className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
+                                onClick={() => void pickFolder()}
+                              >
+                                选择文件夹
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+                                onClick={() => void createBareWorld()}
+                              >
+                                新建一个世界
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {messages.map((message) => {
+                    const { proposals, applied, rejected } = parseProposals(message);
+                    if (message.role === 'system') {
+                      return (
+                        <p key={message.id} className="mx-auto text-center text-xs text-zinc-400">
+                          {message.content}
+                        </p>
+                      );
+                    }
+                    const retry = retryTargetForMessage(messages, message.id);
+                    if (message.role === 'user') {
+                      return (
+                        <div key={message.id} className="group flex justify-end">
+                          <div className="max-w-[80%]">
+                            {activeRoleplay && (
+                              <p className="mb-1 text-right text-xs font-medium text-zinc-400">
+                                {activeRoleplay.user_character_name?.trim() || '读者'}
+                              </p>
+                            )}
+                            <div className="rounded-2xl bg-[#eef0f4] px-4 py-2.5 text-sm leading-6 text-zinc-800">
+                              <p className="whitespace-pre-wrap">{message.content}</p>
+                            </div>
+                            <MessageActions
+                              copyText={message.content}
+                              align="end"
+                              busy={sending}
+                              retry={() => {
+                                if (retry?.ok) void sendContent(retry.content, { retry: true });
+                              }}
+                              retryBlocked={
+                                retry && !retry.ok ? retry.blocked : retry ? null : 'empty'
+                              }
+                            />
+                          </div>
                         </div>
+                      );
+                    }
+                    return (
+                      <div key={message.id} className="group min-w-0">
+                        {activeRoleplay && (
+                          <p className="mb-1 text-xs font-medium text-[#4d6bfe]">
+                            {activeRoleplay.character_name}
+                          </p>
+                        )}
+                        <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
+                          {message.content}
+                        </p>
+                        {proposals.length > 0 && (
+                          <ProposalCard
+                            threadId={threadId ?? message.thread_id}
+                            messageId={message.id}
+                            proposals={proposals}
+                            applied={applied}
+                            rejected={rejected}
+                            applying={applyingProposalIds.includes(message.id)}
+                            plan={
+                              decideWriteAction(
+                                writeMode,
+                                proposals.map((item) => item.kind),
+                              ) === 'plan'
+                            }
+                            executeLabel={
+                              decideWriteAction(
+                                writeMode,
+                                proposals.map((item) => item.kind),
+                              ) === 'plan'
+                                ? '按此计划写入'
+                                : undefined
+                            }
+                            onApplied={handleApplied}
+                            onRejected={handleApplied}
+                          />
+                        )}
+                        <MessageActions
+                          copyText={message.content}
+                          busy={sending}
+                          retry={() => {
+                            if (retry?.ok) void sendContent(retry.content, { retry: true });
+                          }}
+                          retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
+                        />
                       </div>
                     );
-                  }
-                  return (
-                    <div key={message.id} className="group min-w-0">
-                      {activeRoleplay && (
-                        <p className="mb-1 text-xs font-medium text-[#4d6bfe]">
-                          {activeRoleplay.character_name}
-                        </p>
-                      )}
+                  })}
+                  {(sending || stopped) && streamText && (
+                    <div className="group">
                       <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
-                        {message.content}
+                        {streamText}
                       </p>
-                      {proposals.length > 0 && (
-                        <ProposalCard
-                          threadId={threadId ?? message.thread_id}
-                          messageId={message.id}
-                          proposals={proposals}
-                          applied={applied}
-                          rejected={rejected}
-                          applying={applyingProposalIds.includes(message.id)}
-                          plan={
-                            decideWriteAction(
-                              writeMode,
-                              proposals.map((item) => item.kind),
-                            ) === 'plan'
-                          }
-                          executeLabel={
-                            decideWriteAction(
-                              writeMode,
-                              proposals.map((item) => item.kind),
-                            ) === 'plan'
-                              ? '按此计划写入'
-                              : undefined
-                          }
-                          onApplied={handleApplied}
-                          onRejected={handleApplied}
-                        />
-                      )}
+                      {stopped ? <p className="mt-1 text-xs text-zinc-400">已停止生成</p> : null}
                       <MessageActions
-                        copyText={message.content}
+                        copyText={streamText}
                         busy={sending}
                         retry={() => {
-                          if (retry?.ok) void sendContent(retry.content, { retry: true });
+                          const content = lastUserContent(messages) ?? lastSentRef.current;
+                          if (content.trim()) void sendContent(content, { retry: true });
                         }}
-                        retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
+                        retryBlocked={
+                          lastUserContent(messages) || lastSentRef.current.trim() ? null : 'empty'
+                        }
                       />
                     </div>
-                  );
-                })}
-                {(sending || stopped) && streamText && (
-                  <div className="group">
-                    <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
-                      {streamText}
-                    </p>
-                    {stopped ? (
-                      <p className="mt-1 text-xs text-zinc-400">已停止生成</p>
-                    ) : null}
-                    <MessageActions
-                      copyText={streamText}
+                  )}
+                  {sending && !streamText && <p className="text-sm text-zinc-400">正在思考…</p>}
+                  {memoryNote && !sending ? <ThoughtSummary note={memoryNote} /> : null}
+                  {!sending && memoryConflicts.length > 0 && (
+                    <ul className="space-y-2 pb-1">
+                      {memoryConflicts.map((card) => (
+                        <li key={card.id}>
+                          <MemoryConflictNotice
+                            card={card}
+                            busy={resolvingConflictId === card.id}
+                            onResolve={(decision) => void resolveConflict(card.id, decision)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div ref={endRef} />
+                </div>
+              </div>
+
+              <div className="px-4 pb-3 pt-1 lg:px-6">
+                {error ? (
+                  <div className="mx-auto mb-2 max-w-2xl">
+                    <ChatErrorBanner
+                      message={error}
                       busy={sending}
-                      retry={() => {
-                        const content = lastUserContent(messages) ?? lastSentRef.current;
-                        if (content.trim()) void sendContent(content, { retry: true });
-                      }}
-                      retryBlocked={
-                        lastUserContent(messages) || lastSentRef.current.trim() ? null : 'empty'
+                      onRetry={
+                        errorCanRetry
+                          ? () => {
+                              const content = errorRetryContent(lastSentRef.current, messages);
+                              if (content) void sendContent(content, { retry: true });
+                            }
+                          : undefined
                       }
+                      onDismiss={() => setError('')}
                     />
                   </div>
+                ) : null}
+                {focus && (
+                  <div className="mx-auto mb-2 flex max-w-2xl items-center justify-between gap-2 rounded-2xl bg-[#eef2ff] px-3 py-1.5 text-xs text-[#1e3a8a]">
+                    <span>
+                      正在讨论{CHAT_FOCUS_LABEL[focus.kind]}「{focus.name}」
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-[11px] text-zinc-500 hover:text-zinc-800"
+                      onClick={dismissFocus}
+                    >
+                      取消
+                    </button>
+                  </div>
                 )}
-                {sending && !streamText && <p className="text-sm text-zinc-400">正在思考…</p>}
-                {memoryNote && !sending ? <ThoughtSummary note={memoryNote} /> : null}
-                {!sending && memoryConflicts.length > 0 && (
-                  <ul className="space-y-2 pb-1">
-                    {memoryConflicts.map((card) => (
-                      <li key={card.id}>
-                        <MemoryConflictNotice
-                          card={card}
-                          busy={resolvingConflictId === card.id}
-                          onResolve={(decision) => void resolveConflict(card.id, decision)}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div ref={endRef} />
+                <ChatComposer
+                  value={input}
+                  placeholder={
+                    !threadId
+                      ? projects.length > 0
+                        ? WEB_CHAT_NEEDS_WORLD
+                        : WEB_CHAT_NEEDS_WORLD_EMPTY
+                      : focus
+                        ? `继续完善「${focus.name}」…`
+                        : activeRoleplay
+                          ? `对「${activeRoleplay.character_name}」说…`
+                          : worldResources
+                            ? '发给世界构建者，或输入 @ 引用实体…'
+                            : '发给世界构建者…'
+                  }
+                  sending={sending}
+                  canSend={canSend}
+                  blocked={!threadId}
+                  projectId={thread?.project_id}
+                  settingsProjectId={settingsProjectId}
+                  threadId={threadId}
+                  messageTexts={messages.map((item) => item.content)}
+                  effort={effort}
+                  onEffortChange={(next) => {
+                    setEffort(next);
+                    writeStoredEffort(next);
+                  }}
+                  writeMode={writeMode}
+                  onWriteModeChange={(next) => {
+                    setWriteMode(next);
+                    writeStoredWriteMode(next);
+                  }}
+                  onChange={setInput}
+                  onSubmit={() => void send()}
+                  onStop={stopGeneration}
+                  onNewChat={() => {
+                    if (thread?.project_id) void startThread(undefined, thread.project_id);
+                    else void pickFolder();
+                  }}
+                  resources={worldResources}
+                  mentionEnabled={!activeRoleplay && Boolean(thread?.project_id)}
+                  onMentionPick={(entity) => {
+                    focusRef.current = entity;
+                    setFocus(entity);
+                  }}
+                />
+                <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-zinc-400">
+                  内容由 AI 生成，请仔细甄别
+                </p>
               </div>
-            </div>
-
-            <div className="px-4 pb-3 pt-1 lg:px-6">
-              {error ? (
-                <div className="mx-auto mb-2 max-w-2xl">
-                  <ChatErrorBanner
-                    message={error}
-                    busy={sending}
-                    onRetry={
-                      errorCanRetry
-                        ? () => {
-                            const content = errorRetryContent(lastSentRef.current, messages);
-                            if (content) void sendContent(content, { retry: true });
-                          }
-                        : undefined
-                    }
-                    onDismiss={() => setError('')}
-                  />
-                </div>
-              ) : null}
-              {focus && (
-                <div className="mx-auto mb-2 flex max-w-2xl items-center justify-between gap-2 rounded-2xl bg-[#eef2ff] px-3 py-1.5 text-xs text-[#1e3a8a]">
-                  <span>
-                    正在讨论{CHAT_FOCUS_LABEL[focus.kind]}「{focus.name}」
-                  </span>
-                  <button
-                    type="button"
-                    className="shrink-0 text-[11px] text-zinc-500 hover:text-zinc-800"
-                    onClick={dismissFocus}
-                  >
-                    取消
-                  </button>
-                </div>
-              )}
-              <ChatComposer
-                value={input}
-                placeholder={
-                  !threadId
-                    ? projects.length > 0
-                      ? WEB_CHAT_NEEDS_WORLD
-                      : WEB_CHAT_NEEDS_WORLD_EMPTY
-                    : focus
-                    ? `继续完善「${focus.name}」…`
-                    : activeRoleplay
-                      ? `对「${activeRoleplay.character_name}」说…`
-                      : worldResources
-                        ? '发给世界构建者，或输入 @ 引用实体…'
-                        : '发给世界构建者…'
-                }
-                sending={sending}
-                canSend={canSend}
-                blocked={!threadId}
-                projectId={thread?.project_id}
-                settingsProjectId={settingsProjectId}
-                threadId={threadId}
-                messageTexts={messages.map((item) => item.content)}
-                effort={effort}
-                onEffortChange={(next) => {
-                  setEffort(next);
-                  writeStoredEffort(next);
-                }}
-                writeMode={writeMode}
-                onWriteModeChange={(next) => {
-                  setWriteMode(next);
-                  writeStoredWriteMode(next);
-                }}
-                onChange={setInput}
-                onSubmit={() => void send()}
-                onStop={stopGeneration}
-                onNewChat={() => {
-                  if (thread?.project_id) void startThread(undefined, thread.project_id);
-                  else void pickFolder();
-                }}
-                resources={worldResources}
-                mentionEnabled={!activeRoleplay && Boolean(thread?.project_id)}
-                onMentionPick={(entity) => {
-                  focusRef.current = entity;
-                  setFocus(entity);
-                }}
-              />
-              <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-zinc-400">
-                内容由 AI 生成，请仔细甄别
-              </p>
-            </div>
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </div>
       </div>
       {roleplayPicker ? (
         <div
@@ -1576,4 +1585,3 @@ function MemoryConflictNotice({
     </div>
   );
 }
-

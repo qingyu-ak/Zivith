@@ -26,9 +26,7 @@ export function ThoughtSummary({ note, className = '' }: { note: string; classNa
         />
         想了一下
       </button>
-      {open ? (
-        <p className="mt-1 pl-4 text-xs leading-5 text-zinc-400">{note}</p>
-      ) : null}
+      {open ? <p className="mt-1 pl-4 text-xs leading-5 text-zinc-400">{note}</p> : null}
     </div>
   );
 }

@@ -109,9 +109,7 @@ export function llmChoices(catalog: ProviderCatalogDTO | null): LlmChoice[] {
     .filter((provider) => provider.modalities.includes('llm'))
     .flatMap((provider) => {
       const models =
-        provider.llm_models && provider.llm_models.length > 0
-          ? provider.llm_models
-          : [];
+        provider.llm_models && provider.llm_models.length > 0 ? provider.llm_models : [];
       return models
         .filter((item) => {
           const key = `${provider.id}\n${item.id}`;

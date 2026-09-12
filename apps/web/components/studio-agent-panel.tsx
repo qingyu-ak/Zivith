@@ -35,7 +35,11 @@ import {
   writeStoredEffort,
   type ChatEffort,
 } from '@/lib/chat-composer';
-import { handledProposalState, parseProposals, unconfirmedProposalCount } from '@/lib/chat-proposals';
+import {
+  handledProposalState,
+  parseProposals,
+  unconfirmedProposalCount,
+} from '@/lib/chat-proposals';
 import { formatMemoryOps } from '@/lib/memory-ops';
 import {
   appendUniqueById,
@@ -218,16 +222,13 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
     if (threadId) void loadContext(threadId, effort);
   }, [threadId, effort, loadContext]);
 
-  const loadHistory = useCallback(
-    async (id: string) => {
-      const value = await api<{
-        thread: unknown;
-        messages: CreatorChatMessageDTO[];
-      }>(`/world/creator-chats/${id}`);
-      setMessages(Array.isArray(value.messages) ? value.messages : []);
-    },
-    [],
-  );
+  const loadHistory = useCallback(async (id: string) => {
+    const value = await api<{
+      thread: unknown;
+      messages: CreatorChatMessageDTO[];
+    }>(`/world/creator-chats/${id}`);
+    setMessages(Array.isArray(value.messages) ? value.messages : []);
+  }, []);
 
   // 写入模式为「完全访问 / 半自动」时，done 后按裁决自动写入提案（高危种类永远询问）。
   const autoApplyIfAllowed = useCallback(
@@ -327,7 +328,9 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
     setThreadId(null);
     setMessages([]);
     const stored =
-      typeof window === 'undefined' ? null : window.localStorage.getItem(studioAgentThreadKey(projectId));
+      typeof window === 'undefined'
+        ? null
+        : window.localStorage.getItem(studioAgentThreadKey(projectId));
     void (async () => {
       try {
         const listed = await api<unknown[] | { data?: unknown[]; items?: unknown[] }>(
@@ -441,7 +444,8 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
           return;
         }
         if (event === 'delta' && typeof record?.text === 'string') {
-          setStreamText((current) => current + record?.text);
+          const chunk = record.text;
+          setStreamText((current) => current + chunk);
           return;
         }
         if (event === 'done') {
@@ -494,16 +498,15 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             setInput((current) => (current.trim() ? current : trimmed));
           }
         }
-      } finally {
-        if (!stillCurrent()) return;
-        if (abortRef.current === controller) abortRef.current = null;
-        sendingRef.current = false;
-        setSending(false);
-        if (!sawDone) void loadHistory(startedThreadId).catch(() => {});
-        loadUsage();
-        void loadContext(startedThreadId, effort);
-        void reload({ silent: true });
       }
+      if (!stillCurrent()) return;
+      if (abortRef.current === controller) abortRef.current = null;
+      sendingRef.current = false;
+      setSending(false);
+      if (!sawDone) void loadHistory(startedThreadId).catch(() => {});
+      loadUsage();
+      void loadContext(startedThreadId, effort);
+      void reload({ silent: true });
     },
     [threadId, effort, loadHistory, loadUsage, loadContext, autoApplyIfAllowed, reload],
   );
@@ -851,7 +854,9 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
                         setWriteMenuOpen(false);
                       }}
                     >
-                      <span className={`mt-0.5 ${item === 'full' ? 'text-amber-600' : 'text-zinc-500'}`}>
+                      <span
+                        className={`mt-0.5 ${item === 'full' ? 'text-amber-600' : 'text-zinc-500'}`}
+                      >
                         <WriteModeIcon mode={item} />
                       </span>
                       <span className="min-w-0 flex-1">

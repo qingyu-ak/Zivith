@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseProposals, proposalBarLabel, unconfirmedProposalCount, handledProposalState } from './chat-proposals';
+import {
+  parseProposals,
+  proposalBarLabel,
+  unconfirmedProposalCount,
+  handledProposalState,
+} from './chat-proposals';
 
 describe('parseProposals', () => {
   it('解析单对象与数组提案，过滤未知 kind', () => {
@@ -22,11 +27,17 @@ describe('parseProposals', () => {
   });
 
   it('标记 applied / rejected 状态', () => {
-    const applied = parseProposals({ proposal: { kind: 'update_entity', payload: { id: 'e1' } }, proposal_state: 'applied' });
+    const applied = parseProposals({
+      proposal: { kind: 'update_entity', payload: { id: 'e1' } },
+      proposal_state: 'applied',
+    });
     expect(applied.applied).toBe(true);
     expect(applied.rejected).toBe(false);
 
-    const rejected = parseProposals({ proposal: { kind: 'update_entity', payload: { id: 'e1' } }, proposal_state: 'rejected' });
+    const rejected = parseProposals({
+      proposal: { kind: 'update_entity', payload: { id: 'e1' } },
+      proposal_state: 'rejected',
+    });
     expect(rejected.rejected).toBe(true);
 
     const none = parseProposals({});

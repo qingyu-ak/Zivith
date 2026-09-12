@@ -162,19 +162,21 @@ describe('openWorldFolder', () => {
       const normalizedNew = normalizeWorkspacePath(newFolder);
       // 文件夹（连同标记）从 oldFolder 挪到 newFolder 后重新打开。
       writeWorkspaceMarker(newFolder, { id: 'p1', name: '雾城' });
-      const update = vi.fn().mockImplementation(
-        async ({ data }: { data: { workspacePath: string } }) => ({
+      const update = vi
+        .fn()
+        .mockImplementation(async ({ data }: { data: { workspacePath: string } }) => ({
           id: 'p1',
           name: '雾城',
           workspacePath: data.workspacePath,
-        }),
-      );
+        }));
       const db = {
         user: { findFirst: vi.fn().mockResolvedValue({ id: 'owner-1' }) },
         project: {
-          findFirst: vi.fn().mockImplementation(async ({ where }: { where: { id?: string } }) =>
-            where.id === 'p1' ? { id: 'p1', name: '雾城', workspacePath: normalizedOld } : null,
-          ),
+          findFirst: vi
+            .fn()
+            .mockImplementation(async ({ where }: { where: { id?: string } }) =>
+              where.id === 'p1' ? { id: 'p1', name: '雾城', workspacePath: normalizedOld } : null,
+            ),
           update,
         },
         creatorChatThread: {
@@ -254,4 +256,3 @@ describe('syncWorkspaceMarkerName', () => {
     }
   });
 });
-

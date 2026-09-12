@@ -116,11 +116,7 @@ export function WorldWorkspace() {
       stored = null;
     }
     setLineView(
-      asWorldLineViewState(
-        stored,
-        worldModel.scaleDomain,
-        resources.entities.characters.length,
-      ),
+      asWorldLineViewState(stored, worldModel.scaleDomain, resources.entities.characters.length),
     );
   }, [worldModel, resources]);
 
@@ -193,7 +189,10 @@ export function WorldWorkspace() {
   return (
     <div className="flex h-[calc(100dvh-2.75rem)] flex-col">
       {clipNotice ? (
-        <p className="shrink-0 border-b border-red-200 bg-red-50 px-5 py-1.5 text-xs text-red-600" role="alert">
+        <p
+          className="shrink-0 border-b border-red-200 bg-red-50 px-5 py-1.5 text-xs text-red-600"
+          role="alert"
+        >
           轨道未能保存：{clipNotice}
         </p>
       ) : null}
@@ -267,7 +266,9 @@ export function WorldWorkspace() {
               <div className="grid h-full place-items-center">
                 <div className="max-w-sm text-center">
                   <p className="text-zinc-400">这一段没有可显示的条目。</p>
-                  <p className="mt-3 text-sm text-zinc-500">放宽章范围，或改回「全部」角色/场景。</p>
+                  <p className="mt-3 text-sm text-zinc-500">
+                    放宽章范围，或改回「全部」角色/场景。
+                  </p>
                   <button
                     type="button"
                     className="mt-4 rounded-lg border border-line px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"

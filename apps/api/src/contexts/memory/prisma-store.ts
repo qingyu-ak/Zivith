@@ -175,7 +175,10 @@ export class PrismaMemoryStore implements MemoryStore {
 
   async findAtomsByIds(ids: string[]): Promise<MemoryAtomRecord[]> {
     if (ids.length === 0) return [];
-    return this.db.memoryAtom.findMany({ where: { id: { in: ids } }, orderBy: { createdAt: 'asc' } });
+    return this.db.memoryAtom.findMany({
+      where: { id: { in: ids } },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   async createConflict(input: CreateConflictInput): Promise<MemoryConflictRecord> {

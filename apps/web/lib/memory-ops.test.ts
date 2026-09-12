@@ -19,8 +19,6 @@ describe('formatMemoryOps', () => {
   });
 
   it('falls back when conflict has no preview text', () => {
-    expect(formatMemoryOps({ added: 0, conflicts: [{}] })).toBe(
-      '记忆：归档 0 · 冲突 1（待确认）',
-    );
+    expect(formatMemoryOps({ added: 0, conflicts: [{}] })).toBe('记忆：归档 0 · 冲突 1（待确认）');
   });
 });

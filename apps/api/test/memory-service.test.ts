@@ -337,7 +337,11 @@ describe('MemoryService 冲突清单（D4）', () => {
     expect(resolved.resolvedAt).not.toBeNull();
     const active = store.atoms.filter((atom) => atom.status === 'active');
     expect(active).toHaveLength(1);
-    expect(active[0]).toMatchObject({ id: 'atom-2', content: '林澈性格开朗。', memoryOp: 'UPDATE' });
+    expect(active[0]).toMatchObject({
+      id: 'atom-2',
+      content: '林澈性格开朗。',
+      memoryOp: 'UPDATE',
+    });
     expect(store.atoms[0]).toMatchObject({
       id: 'atom-1',
       status: 'superseded',

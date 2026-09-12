@@ -60,9 +60,6 @@ export function mergeConflictCards(
 }
 
 /** 裁决成功后移除对应卡片。 */
-export function removeConflictCard(
-  cards: MemoryConflictCard[],
-  id: string,
-): MemoryConflictCard[] {
+export function removeConflictCard(cards: MemoryConflictCard[], id: string): MemoryConflictCard[] {
   return cards.filter((card) => card.id !== id);
 }

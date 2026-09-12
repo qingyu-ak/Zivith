@@ -123,7 +123,6 @@ describe('DeepSeekLLMAdapter', () => {
   });
 });
 
-
 describe('SiliconFlow adapters', () => {
   it('maps image generation URLs', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({

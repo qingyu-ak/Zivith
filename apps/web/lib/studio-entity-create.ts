@@ -3,13 +3,7 @@ import type { WorldResourcesDTO, WorldSelection } from './types';
 import { resolveDisplayDimensions } from './world-line';
 
 export type StudioCreateKind =
-  | 'character'
-  | 'location'
-  | 'scene'
-  | 'story'
-  | 'world_event'
-  | 'relationship'
-  | 'dimension';
+  'character' | 'location' | 'scene' | 'story' | 'world_event' | 'relationship' | 'dimension';
 
 export interface RelationshipCreateInput {
   kind: string;
@@ -28,7 +22,7 @@ export function nextUntitledName(existing: string[], base: string): string {
 
 function createdId(value: unknown, fallbackMessage: string): string {
   if (typeof value === 'object' && value !== null && 'id' in value) {
-    const id = (value as { id: unknown }).id;
+    const id = value.id;
     if (typeof id === 'string' && id.length > 0) return id;
   }
   throw new Error(fallbackMessage);

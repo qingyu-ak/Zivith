@@ -181,10 +181,7 @@ export function registerMemoryRoutes(app: FastifyInstance, memory: MemoryService
 
   // D4 冲突裁决：确认（保留新卡）/ 丢弃（保留已有卡）。不静默改世界实体。
   app.post('/conflicts/:conflictId/resolve', async (request) => {
-    const { conflictId } = z
-      .object({ conflictId: idSchema })
-      .strict()
-      .parse(request.params);
+    const { conflictId } = z.object({ conflictId: idSchema }).strict().parse(request.params);
     const body = z
       .object({ decision: memoryConflictDecisionSchema })
       .strict()

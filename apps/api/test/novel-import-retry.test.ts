@@ -52,7 +52,12 @@ function chapterDb(rows: ChapterRow[]) {
       async ({
         data,
       }: {
-        data: Array<{ importId: string; chapterIndex: number; title: string | null; status: string }>;
+        data: Array<{
+          importId: string;
+          chapterIndex: number;
+          title: string | null;
+          status: string;
+        }>;
       }) => {
         rows.push(
           ...data.map((row) => ({
@@ -250,7 +255,10 @@ describe('NovelImportService chapter retry', () => {
           id: 'imp1',
           projectId: 'p1',
           status: 'failed',
-          config: { sourceText: '第一章 只有一章\n\n林澈走进学院大门，开始新的生活。后面还有很长很长的正文。' },
+          config: {
+            sourceText:
+              '第一章 只有一章\n\n林澈走进学院大门，开始新的生活。后面还有很长很长的正文。',
+          },
           chapters: rows,
         }),
         update: vi.fn().mockResolvedValue({}),

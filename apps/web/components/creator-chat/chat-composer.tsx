@@ -134,7 +134,9 @@ export function ChatComposer({
     return filterFocusableEntities(listFocusableEntities(resources), mention.query);
   }, [mention?.start, mention?.query, resources]);
   const mentionMenuOpen = Boolean(mentionEnabled && mention);
-  const mentionHint = mentionEnabled ? incompleteMentionHint(value, cursor, mentionItems.length) : null;
+  const mentionHint = mentionEnabled
+    ? incompleteMentionHint(value, cursor, mentionItems.length)
+    : null;
 
   useEffect(() => {
     setMentionIndex(0);
@@ -413,7 +415,9 @@ export function ChatComposer({
                     setMenu(null);
                   }}
                 >
-                  <span className={`mt-0.5 ${item === 'full' ? 'text-amber-600' : 'text-zinc-500'}`}>
+                  <span
+                    className={`mt-0.5 ${item === 'full' ? 'text-amber-600' : 'text-zinc-500'}`}
+                  >
                     <WriteModeIcon mode={item} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -448,13 +452,9 @@ export function ChatComposer({
               </div>
               <p className="mt-1 text-[11px] text-zinc-400">
                 {CHAT_EFFORT_LABEL[effort]} · {CHAT_EFFORT_HINT[effort]}
-                {context?.rolling_summary_present
-                  ? ` · 摘要 v${context.summary_version ?? 1}`
-                  : ''}
+                {context?.rolling_summary_present ? ` · 摘要 v${context.summary_version ?? 1}` : ''}
               </p>
-              <p className="mt-1 text-[11px] text-zinc-400">
-                由努力程度决定，不是模型上下文上限。
-              </p>
+              <p className="mt-1 text-[11px] text-zinc-400">由努力程度决定，不是模型上下文上限。</p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100">
                 <div
                   className="h-full rounded-full bg-zinc-800"
@@ -499,7 +499,7 @@ export function ChatComposer({
                   }
                   ok={Boolean(
                     account ||
-                      catalog?.providers.find((item) => item.id === 'siliconflow')?.configured,
+                    catalog?.providers.find((item) => item.id === 'siliconflow')?.configured,
                   )}
                 />
               </div>
@@ -542,11 +542,14 @@ export function ChatComposer({
                     const showProvider =
                       index === 0 || visibleChoices[index - 1]?.provider !== choice.provider;
                     const active =
-                      catalog?.selection.llm === choice.provider && catalog.models.llm === choice.model;
+                      catalog?.selection.llm === choice.provider &&
+                      catalog.models.llm === choice.model;
                     return (
                       <div key={`${choice.provider}:${choice.model}`}>
                         {showProvider ? (
-                          <p className="px-3 pb-1 pt-2 text-[11px] text-zinc-400">{choice.providerLabel}</p>
+                          <p className="px-3 pb-1 pt-2 text-[11px] text-zinc-400">
+                            {choice.providerLabel}
+                          </p>
                         ) : null}
                         <button
                           type="button"
@@ -555,7 +558,9 @@ export function ChatComposer({
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
                           onClick={() => void pickModel(choice.provider, choice.model)}
                         >
-                          <span className="min-w-0 flex-1 truncate">{displayModelId(choice.model)}</span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {displayModelId(choice.model)}
+                          </span>
                           {choice.tag ? (
                             <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">
                               {choice.tag}

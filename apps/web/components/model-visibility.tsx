@@ -91,7 +91,9 @@ export function ModelVisibilityList() {
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       {filtered.length === 0 ? (
         <p className="mt-3 rounded-lg border border-dashed border-zinc-200 px-3 py-6 text-center text-sm text-zinc-400">
-          {rows.length === 0 ? '还没有可用模型。先在下方 API Keys 里给供应商添加模型。' : '没有匹配的模型'}
+          {rows.length === 0
+            ? '还没有可用模型。先在下方 API Keys 里给供应商添加模型。'
+            : '没有匹配的模型'}
         </p>
       ) : (
         <ul className="mt-3 max-h-80 divide-y divide-zinc-100 overflow-y-auto rounded-lg border border-zinc-200">

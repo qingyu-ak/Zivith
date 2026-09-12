@@ -200,7 +200,9 @@ function eventItem(event: WorldEventDTO): WorldLineItem {
   const mode = worldTimeMode(event.world_time_envelope);
   const order = eventPresentationOrder(event);
   const envelope = event.world_time_envelope;
-  const rangeStart = numericOrderHint(envelope && typeof envelope === 'object' ? envelope.start : null);
+  const rangeStart = numericOrderHint(
+    envelope && typeof envelope === 'object' ? envelope.start : null,
+  );
   const rangeEnd = numericOrderHint(envelope && typeof envelope === 'object' ? envelope.end : null);
   const span =
     mode === 'range' && (rangeStart != null || rangeEnd != null)
@@ -548,7 +550,8 @@ export function asWorldLineViewState(
     overview: record.overview !== false,
     from: Math.min(from, to),
     to: Math.max(from, to),
-    density: record.density === 'main' || record.density === 'all' ? record.density : fallback.density,
+    density:
+      record.density === 'main' || record.density === 'all' ? record.density : fallback.density,
   };
 }
 
@@ -568,7 +571,8 @@ export function pickMainCharacterIds(
   return [...pool]
     .sort(
       (a, b) =>
-        (appearance.get(b.id) ?? 0) - (appearance.get(a.id) ?? 0) || a.name.localeCompare(b.name, 'zh'),
+        (appearance.get(b.id) ?? 0) - (appearance.get(a.id) ?? 0) ||
+        a.name.localeCompare(b.name, 'zh'),
     )
     .slice(0, limit)
     .map((character) => character.id);
@@ -613,7 +617,9 @@ export function applyWorldLineView(
         appearance.set(characterId, (appearance.get(characterId) ?? 0) + 1);
       }
     }
-    const mainCharacterIds = new Set(pickMainCharacterIds(resources.entities.characters, appearance));
+    const mainCharacterIds = new Set(
+      pickMainCharacterIds(resources.entities.characters, appearance),
+    );
     const linkedSceneIds = new Set(eventsInView.flatMap((event) => event.scene_ids ?? []));
 
     tracks = tracks.map((track) => {

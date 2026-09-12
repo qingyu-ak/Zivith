@@ -36,7 +36,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [explorerCollapsed, toggleExplorer] = useCollapsedSidebar('studio');
   const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
   // Agent 侧栏（类 Cursor）：壳级右侧面板，记住开合状态。
-  const [agentOpen, toggleAgentOpen] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.agentPanelOpen, false);
+  const [agentOpen, toggleAgentOpen] = usePersistedFlag(
+    WORKSPACE_LAYOUT_KEYS.agentPanelOpen,
+    false,
+  );
 
   const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
 
@@ -75,12 +78,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
-  const settingsHref = settingsHrefFor(projectId, projects.map((project) => project.id));
+  const settingsHref = settingsHrefFor(
+    projectId,
+    projects.map((project) => project.id),
+  );
   const productionHref = projectId ? `/projects/${projectId}/production` : '/projects';
   const showExplorer =
-    Boolean(projectId) &&
-    !pathname.includes('/settings') &&
-    !pathname.includes('/help');
+    Boolean(projectId) && !pathname.includes('/settings') && !pathname.includes('/help');
 
   // Chat 是独立浅色壳，不套 Studio 顶栏和 Explorer。
   if (pathname.startsWith('/creator-chats')) {
@@ -158,24 +162,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 /** 树点选：更新壳级选中态；不在 /world 时先跳过去，时间线/Inspector 跟随选中。 */
-function ExplorerTree({
-  projectId,
-  pathname,
-}: {
-  projectId: string;
-  pathname: string;
-}) {
+function ExplorerTree({ projectId, pathname }: { projectId: string; pathname: string }) {
   const router = useRouter();
-  const {
-    selection,
-    setSelection,
-    resources,
-    threads,
-    loading,
-    error,
-    reload,
-    requestEdit,
-  } = useStudioSelection();
+  const { selection, setSelection, resources, threads, loading, error, reload, requestEdit } =
+    useStudioSelection();
   const [creatingKind, setCreatingKind] = useState<StudioCreateKind | null>(null);
   const [createError, setCreateError] = useState('');
   const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
@@ -211,7 +201,10 @@ function ExplorerTree({
 
   if (!resources) {
     return (
-      <p className={`px-4 py-4 text-xs ${error ? 'text-red-600' : 'text-zinc-500'}`} role={error ? 'alert' : undefined}>
+      <p
+        className={`px-4 py-4 text-xs ${error ? 'text-red-600' : 'text-zinc-500'}`}
+        role={error ? 'alert' : undefined}
+      >
         {error || (loading ? '正在加载项目树…' : '无法加载项目树')}
       </p>
     );
@@ -371,7 +364,9 @@ function TopBarLink({
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       className={`rounded-lg px-2 py-1 text-xs transition ${
-        active ? 'bg-zinc-200/80 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-200/80 hover:text-zinc-900'
+        active
+          ? 'bg-zinc-200/80 text-zinc-900'
+          : 'text-zinc-600 hover:bg-zinc-200/80 hover:text-zinc-900'
       }`}
     >
       {icon ?? label}
@@ -379,13 +374,7 @@ function TopBarLink({
   );
 }
 
-function ProjectSwitcher({
-  projects,
-  currentId,
-}: {
-  projects: ProjectDTO[];
-  currentId?: string;
-}) {
+function ProjectSwitcher({ projects, currentId }: { projects: ProjectDTO[]; currentId?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);

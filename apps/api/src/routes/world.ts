@@ -46,7 +46,11 @@ import type { MemoryService } from '../contexts/memory/service.js';
 import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
 import { canReuseLastUser, isOpenProposalState } from '../lib/chat-turn.js';
 import type { LLMAdapter } from '../ports/llm.js';
-import { effortDto, resolveAgentEffort, type EffectiveAgentEffort } from '../contexts/agent-effort.js';
+import {
+  effortDto,
+  resolveAgentEffort,
+  type EffectiveAgentEffort,
+} from '../contexts/agent-effort.js';
 import { resolveRuntimeLlm } from '../contexts/llm-runtime.js';
 
 const idSchema = z.string().min(1).max(128);
@@ -1158,9 +1162,7 @@ function registerCreatorChatRoutes(
   llmModel?: string,
   memory?: MemoryService | null,
 ) {
-  const injectedBuilder = llm
-    ? new WorldBuilderAgent(llm, llmModel ?? 'mock-text-v1')
-    : null;
+  const injectedBuilder = llm ? new WorldBuilderAgent(llm, llmModel ?? 'mock-text-v1') : null;
 
   function currentBuilder(): WorldBuilderAgent {
     if (injectedBuilder) return injectedBuilder;

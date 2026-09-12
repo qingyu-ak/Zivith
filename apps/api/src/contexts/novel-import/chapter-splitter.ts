@@ -9,7 +9,7 @@ export interface ChapterText {
 
 /** 独立成行的「第N章/回/卷…」标题；允许【】包裹、数字两侧空格、较长副标题。 */
 const CHAPTER_TITLE =
-  /^[ \t]*[【\[]?(第[ \t]*[0-9０-９一二三四五六七八九十百千零〇两]+[ \t]*[章回卷节部集][^\n【\]]{0,80})[】\]]?[ \t]*$/gm;
+  /^[ \t]*[[【]?(第[ \t]*[0-9０-９一二三四五六七八九十百千零〇两]+[ \t]*[章回卷节部集][^\n【\]]{0,80})[】\]]?[ \t]*$/gm;
 
 /** 极短章节（<50 字）并入前一章，避免正则误切。 */
 export function splitChapters(raw: string, fallbackChunkChars = 4000): ChapterText[] {

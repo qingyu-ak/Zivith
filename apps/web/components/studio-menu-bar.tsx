@@ -77,7 +77,11 @@ export function StudioMenuBar({
   const storiesHref = projectId ? `/projects/${projectId}` : '/projects';
 
   return (
-    <nav ref={rootRef} className="flex items-center gap-0.5 [-webkit-app-region:no-drag]" aria-label="Studio 菜单">
+    <nav
+      ref={rootRef}
+      className="flex items-center gap-0.5 [-webkit-app-region:no-drag]"
+      aria-label="Studio 菜单"
+    >
       <Menu label="文件" id="file" open={open} setOpen={setOpen}>
         {desktop ? <MenuButton onClick={() => void openFolder()}>打开文件夹</MenuButton> : null}
         <MenuLink href="/projects?new=1" onClick={() => setOpen(null)}>
@@ -177,7 +181,9 @@ function Menu({
       <button
         type="button"
         className={`rounded-md px-2 py-1 text-xs transition ${
-          shown ? 'bg-zinc-200/80 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-200/80 hover:text-zinc-900'
+          shown
+            ? 'bg-zinc-200/80 text-zinc-900'
+            : 'text-zinc-600 hover:bg-zinc-200/80 hover:text-zinc-900'
         }`}
         aria-expanded={shown}
         aria-haspopup="menu"
@@ -210,7 +216,15 @@ function MenuButton({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
-function MenuLink({ href, onClick, children }: { href: string; onClick: () => void; children: ReactNode }) {
+function MenuLink({
+  href,
+  onClick,
+  children,
+}: {
+  href: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
     <Link
       href={href}

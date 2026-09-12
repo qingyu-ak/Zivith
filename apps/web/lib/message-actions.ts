@@ -8,9 +8,7 @@ export interface ChatTurnMessage {
 
 export type RetryBlocked = 'not-latest' | 'empty';
 
-export type RetryTarget =
-  | { ok: true; content: string }
-  | { ok: false; blocked: RetryBlocked };
+export type RetryTarget = { ok: true; content: string } | { ok: false; blocked: RetryBlocked };
 
 export const RETRY_BLOCKED_HINT: Record<RetryBlocked, string> = {
   'not-latest': '只能重试最近一轮，避免对话分叉',
@@ -39,7 +37,10 @@ export function canReuseLastUser(
   retry?: boolean,
 ): boolean {
   return Boolean(
-    retry && last?.role === 'user' && last.content.trim() === content.trim() && Boolean(content.trim()),
+    retry &&
+    last?.role === 'user' &&
+    last.content.trim() === content.trim() &&
+    Boolean(content.trim()),
   );
 }
 

@@ -6,7 +6,10 @@ export function canReuseLastUser(
   retry?: boolean,
 ): boolean {
   return Boolean(
-    retry && last?.role === 'user' && last.content.trim() === content.trim() && Boolean(content.trim()),
+    retry &&
+    last?.role === 'user' &&
+    last.content.trim() === content.trim() &&
+    Boolean(content.trim()),
   );
 }
 

@@ -14,8 +14,7 @@ declare global {
 export const WEB_FOLDER_HINT =
   '浏览器拿不到真实磁盘路径。请使用 Zivith 桌面应用打开文件夹；已经打开过的世界可以从侧栏点选。';
 
-export const WEB_CHAT_NEEDS_WORLD =
-  '请先从左侧选择一个项目，或使用桌面应用打开新文件夹。';
+export const WEB_CHAT_NEEDS_WORLD = '请先从左侧选择一个项目，或使用桌面应用打开新文件夹。';
 
 export const WEB_CHAT_NEEDS_WORLD_EMPTY =
   '请先选择一个世界再发送。左侧点选已有项目，或新建一个世界。';

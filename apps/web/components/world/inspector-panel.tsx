@@ -644,8 +644,7 @@ export function InspectorPanel({
                 projectId={resources.project.id}
                 characterId={selection.id}
                 characterName={
-                  resources.entities.characters.find((item) => item.id === selection.id)?.name ??
-                  ''
+                  resources.entities.characters.find((item) => item.id === selection.id)?.name ?? ''
                 }
                 resources={resources}
                 onSelect={onSelect}
@@ -665,7 +664,8 @@ export function InspectorPanel({
         ) : (
           <div className="px-4 pb-6">
             <p className="text-sm leading-6 text-zinc-600">
-              世界时间默认跟随呈现顺序。点左侧「IP Core」可改世界观与规则；点时间维度芯片可增改梦境、历法、平行世界。
+              世界时间默认跟随呈现顺序。点左侧「IP
+              Core」可改世界观与规则；点时间维度芯片可增改梦境、历法、平行世界。
             </p>
             <ul className="mt-3 space-y-1.5">
               {defaultDimensions(resources).map((dimension) => (
@@ -707,13 +707,7 @@ export function InspectorPanel({
 }
 
 /** 导入轻量条目 → 全量角色卡（设计 §5.6）。 */
-function ImportUpgradeButton({
-  asset,
-  onUpgraded,
-}: {
-  asset?: AssetDTO;
-  onUpgraded?: () => void;
-}) {
+function ImportUpgradeButton({ asset, onUpgraded }: { asset?: AssetDTO; onUpgraded?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const importId = asset?.import_id;

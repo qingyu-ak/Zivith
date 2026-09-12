@@ -541,9 +541,30 @@ describe('applyWorldLineView', () => {
   function crowded() {
     return resources({
       characters: [
-        { id: 'hero', project_id: 'p1', name: '路明非', description: '主角', tier: 'full', created_at: '2026-01-01' },
-        { id: 'chu', project_id: 'p1', name: '楚子航', description: '主角', tier: 'full', created_at: '2026-01-02' },
-        { id: 'extra', project_id: 'p1', name: '路人甲', description: '龙族成员', tier: 'light', created_at: '2026-01-03' },
+        {
+          id: 'hero',
+          project_id: 'p1',
+          name: '路明非',
+          description: '主角',
+          tier: 'full',
+          created_at: '2026-01-01',
+        },
+        {
+          id: 'chu',
+          project_id: 'p1',
+          name: '楚子航',
+          description: '主角',
+          tier: 'full',
+          created_at: '2026-01-02',
+        },
+        {
+          id: 'extra',
+          project_id: 'p1',
+          name: '路人甲',
+          description: '龙族成员',
+          tier: 'light',
+          created_at: '2026-01-03',
+        },
       ],
       scenes: [
         { id: 'sc1', story_id: 'st1', order: 1, title: '开场', location_id: 'loc1' },
@@ -602,12 +623,12 @@ describe('applyWorldLineView', () => {
       density: 'all',
     });
     expect(viewed.scaleDomain).toEqual({ min: 1, max: 1 });
-    expect(viewed.tracks.find((track) => track.kind === 'world_event')?.items.map((item) => item.id)).toEqual([
-      'e1',
-    ]);
-    expect(viewed.tracks.find((track) => track.kind === 'scene')?.items.map((item) => item.id)).toEqual([
-      'sc1',
-    ]);
+    expect(
+      viewed.tracks.find((track) => track.kind === 'world_event')?.items.map((item) => item.id),
+    ).toEqual(['e1']);
+    expect(
+      viewed.tracks.find((track) => track.kind === 'scene')?.items.map((item) => item.id),
+    ).toEqual(['sc1']);
   });
 
   it('hides light-tier extras when showing main characters only', () => {
@@ -624,4 +645,3 @@ describe('applyWorldLineView', () => {
     ).toEqual(['hero', 'chu']);
   });
 });
-

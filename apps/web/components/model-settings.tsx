@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
-import type { ApiFormat, ProviderCatalogDTO, ProviderId, ProviderModelsDTO } from '@/lib/types';
+import type { ApiFormat, ProviderCatalogDTO, ProviderModelsDTO } from '@/lib/types';
 
 const ADD_ID = '__add__';
 
-type Pane = ProviderId | typeof ADD_ID;
+type Pane = string;
 
 export function ModelSettings() {
   const [catalog, setCatalog] = useState<ProviderCatalogDTO | null>(null);
@@ -35,7 +35,8 @@ export function ModelSettings() {
 
   const builtins = catalog?.providers.filter((item) => item.kind !== 'custom') ?? [];
   const customs = catalog?.providers.filter((item) => item.kind === 'custom') ?? [];
-  const active = pane === ADD_ID ? null : catalog?.providers.find((item) => item.id === pane) ?? null;
+  const active =
+    pane === ADD_ID ? null : (catalog?.providers.find((item) => item.id === pane) ?? null);
 
   async function refresh(nextPane?: Pane) {
     const value = await load();
@@ -78,7 +79,9 @@ export function ModelSettings() {
           <button
             type="button"
             className={`mx-2 mt-1 flex w-[calc(100%-1rem)] items-center rounded-lg px-2 py-1.5 text-left text-sm ${
-              pane === ADD_ID ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:bg-white/80'
+              pane === ADD_ID
+                ? 'bg-white text-zinc-900 shadow-sm'
+                : 'text-zinc-600 hover:bg-white/80'
             }`}
             onClick={() => setPane(ADD_ID)}
           >
@@ -90,7 +93,9 @@ export function ModelSettings() {
             <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
           ) : null}
           {notice ? (
-            <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>
+            <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {notice}
+            </p>
           ) : null}
           {pane === ADD_ID ? (
             <AddProviderForm
@@ -245,7 +250,9 @@ function AddProviderForm({
           </select>
         </Field>
         {format === 'anthropic_messages' ? (
-          <p className="text-xs text-amber-700">对话目前只走 OpenAI 兼容接口，Anthropic 格式暂不能用于聊天。</p>
+          <p className="text-xs text-amber-700">
+            对话目前只走 OpenAI 兼容接口，Anthropic 格式暂不能用于聊天。
+          </p>
         ) : null}
         <ModelList
           models={models}
@@ -380,7 +387,11 @@ function ProviderDetail({
           </p>
         </div>
         {provider.kind === 'custom' ? (
-          <button type="button" className="text-sm text-red-500 hover:underline" onClick={() => void removeCustom()}>
+          <button
+            type="button"
+            className="text-sm text-red-500 hover:underline"
+            onClick={() => void removeCustom()}
+          >
             删除
           </button>
         ) : null}
@@ -427,7 +438,9 @@ function ProviderDetail({
           onDraft={setDraft}
           onAdd={() => void addModel()}
           onRemove={(id) => void removeModel(id)}
-          onUse={provider.api_format === 'anthropic_messages' ? undefined : (id) => void useInChat(id)}
+          onUse={
+            provider.api_format === 'anthropic_messages' ? undefined : (id) => void useInChat(id)
+          }
         />
       </div>
       {provider.id !== 'mock' ? (
@@ -477,15 +490,25 @@ function ModelList({
         <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
           {models.map((id) => (
             <li key={id} className="flex items-center gap-2 px-3 py-2 text-sm">
-              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-zinc-800">{id}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-zinc-800">
+                {id}
+              </span>
               {selected === id ? (
                 <span className="text-[11px] text-emerald-600">当前对话</span>
               ) : onUse ? (
-                <button type="button" className="text-[11px] text-[#4d6bfe]" onClick={() => onUse(id)}>
+                <button
+                  type="button"
+                  className="text-[11px] text-[#4d6bfe]"
+                  onClick={() => onUse(id)}
+                >
                   用于对话
                 </button>
               ) : null}
-              <button type="button" className="text-zinc-400 hover:text-red-500" onClick={() => onRemove(id)}>
+              <button
+                type="button"
+                className="text-zinc-400 hover:text-red-500"
+                onClick={() => onRemove(id)}
+              >
                 ×
               </button>
             </li>
@@ -547,7 +570,9 @@ function MediaSlots({
             <input
               className={`${inputClass} mt-1`}
               value={models[key]}
-              onChange={(event) => setModels((current) => ({ ...current, [key]: event.target.value }))}
+              onChange={(event) =>
+                setModels((current) => ({ ...current, [key]: event.target.value }))
+              }
             />
           </label>
         ))}

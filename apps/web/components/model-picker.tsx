@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, errorMessage } from '@/lib/api';
-import { displayModelId, filterLlmChoices, llmChoices, selectedLlmLabel } from '@/lib/chat-composer';
+import {
+  displayModelId,
+  filterLlmChoices,
+  llmChoices,
+  selectedLlmLabel,
+} from '@/lib/chat-composer';
 import { settingsHrefFor } from '@/lib/creator-chat-nav';
 import type { ProviderCatalogDTO, ProviderId } from '@/lib/types';
 import { IconCheck, IconChevron } from './nav-icons';
@@ -114,8 +119,7 @@ export function ModelPicker({ projectId }: { projectId?: string | null }) {
                 const showProvider =
                   index === 0 || visible[index - 1]?.provider !== choice.provider;
                 const active =
-                  catalog?.selection.llm === choice.provider &&
-                  catalog.models.llm === choice.model;
+                  catalog?.selection.llm === choice.provider && catalog.models.llm === choice.model;
                 return (
                   <div key={`${choice.provider}:${choice.model}`}>
                     {showProvider ? (
@@ -130,7 +134,9 @@ export function ModelPicker({ projectId }: { projectId?: string | null }) {
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
                       onClick={() => void pick(choice.provider, choice.model)}
                     >
-                      <span className="min-w-0 flex-1 truncate">{displayModelId(choice.model)}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {displayModelId(choice.model)}
+                      </span>
                       {active ? <IconCheck className="size-4 shrink-0 text-zinc-700" /> : null}
                     </button>
                   </div>

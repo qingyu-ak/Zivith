@@ -1,8 +1,4 @@
-import {
-  CHAT_FOCUS_LABEL,
-  type ChatFocus,
-  type ChatFocusKind,
-} from './creator-chat-nav';
+import { CHAT_FOCUS_LABEL, type ChatFocus } from './creator-chat-nav';
 import type { WorldResourcesDTO } from './types';
 
 /** 输入 @ 时弹出的实体候选，选中后作为这一轮 focus。 */
@@ -51,7 +47,7 @@ export function filterFocusableEntities(items: ChatFocus[], query: string): Chat
   const needle = query.trim().toLowerCase();
   const matched = needle
     ? items.filter((item) => {
-        const label = CHAT_FOCUS_LABEL[item.kind as ChatFocusKind] ?? item.kind;
+        const label = CHAT_FOCUS_LABEL[item.kind] ?? item.kind;
         return item.name.toLowerCase().includes(needle) || label.toLowerCase().includes(needle);
       })
     : items;

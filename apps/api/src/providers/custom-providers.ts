@@ -27,7 +27,14 @@ export function isCustomProviderId(id: string): boolean {
 }
 
 export function listCustomProviders(): CustomProviderPublic[] {
-  return customs.map(({ api_key: _key, ...rest }) => rest);
+  return customs.map((item) => ({
+    id: item.id,
+    name: item.name,
+    base_url: item.base_url,
+    api_format: item.api_format,
+    models: item.models,
+    has_key: item.has_key,
+  }));
 }
 
 export function getCustomProvider(id: string): CustomProviderRecord | undefined {

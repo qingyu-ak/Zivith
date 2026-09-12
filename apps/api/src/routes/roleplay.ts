@@ -15,7 +15,11 @@ import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
 import { canReuseLastUser } from '../lib/chat-turn.js';
 import { chunkReply } from '../contexts/world-builder/world-builder-agent.js';
 import type { LLMAdapter } from '../ports/llm.js';
-import { effortDto, resolveAgentEffort, type EffectiveAgentEffort } from '../contexts/agent-effort.js';
+import {
+  effortDto,
+  resolveAgentEffort,
+  type EffectiveAgentEffort,
+} from '../contexts/agent-effort.js';
 import { resolveRuntimeLlm } from '../contexts/llm-runtime.js';
 
 const idSchema = z.string().min(1).max(128);
@@ -48,9 +52,7 @@ export function registerRoleplayRoutes(
   llmModel?: string,
   memory?: MemoryService | null,
 ) {
-  const injectedAgent = llm
-    ? new RoleplayAgent(llm, llmModel)
-    : null;
+  const injectedAgent = llm ? new RoleplayAgent(llm, llmModel) : null;
 
   function currentAgent(): RoleplayAgent {
     if (injectedAgent) return injectedAgent;

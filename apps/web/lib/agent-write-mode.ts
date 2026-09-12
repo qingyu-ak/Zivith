@@ -55,7 +55,7 @@ export function isHighRiskKind(kind: string): boolean {
   return HIGH_RISK_PROPOSAL_KINDS.has(kind) || kind.startsWith('delete_');
 }
 
-export function isImportantKind(kind: ProposalKind | string): boolean {
+export function isImportantKind(kind: string): boolean {
   return IMPORTANT_PROPOSAL_KINDS.has(kind as ProposalKind);
 }
 

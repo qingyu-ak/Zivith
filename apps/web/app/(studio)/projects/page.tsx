@@ -129,7 +129,10 @@ export default function ProjectsPage() {
               {opening ? '正在打开…' : '打开文件夹'}
             </Button>
           ) : null}
-          <Button variant={desktop ? 'secondary' : undefined} onClick={() => setCreating((value) => !value)}>
+          <Button
+            variant={desktop ? 'secondary' : undefined}
+            onClick={() => setCreating((value) => !value)}
+          >
             {creating ? '取消' : '新建项目'}
           </Button>
         </div>

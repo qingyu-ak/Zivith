@@ -9,9 +9,8 @@ export function formatMemoryOps(ops: Record<string, unknown>): string {
   if (updated > 0) parts.push(`合并 ${updated}`);
   if (noop > 0) parts.push(`重复 ${noop}`);
   if (conflicts > 0) {
-    const first = Array.isArray(ops.conflicts) ? ops.conflicts[0] : null;
-    const record =
-      first && typeof first === 'object' ? (first as Record<string, unknown>) : null;
+    const first: unknown = Array.isArray(ops.conflicts) ? ops.conflicts[0] : null;
+    const record = first && typeof first === 'object' ? (first as Record<string, unknown>) : null;
     const hint =
       (typeof record?.content === 'string' && record.content.trim()) ||
       (typeof record?.existing_content === 'string' && record.existing_content.trim()) ||

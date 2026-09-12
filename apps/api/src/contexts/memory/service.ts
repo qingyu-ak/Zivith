@@ -462,10 +462,7 @@ export class MemoryService {
     return { core, sourceAtoms };
   }
 
-  async listConflicts(
-    projectId: string,
-    options?: { status?: string; threadId?: string },
-  ) {
+  async listConflicts(projectId: string, options?: { status?: string; threadId?: string }) {
     return this.deps.store.listConflicts(projectId, options);
   }
 

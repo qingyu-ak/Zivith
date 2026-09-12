@@ -82,7 +82,9 @@ export function unconfirmedProposalCount(
   return threads.find((thread) => thread.id === threadId)?.pending_proposal_count ?? 0;
 }
 
-function nestedError(error: unknown): { code?: string; details?: unknown; message?: string } | null {
+function nestedError(
+  error: unknown,
+): { code?: string; details?: unknown; message?: string } | null {
   if (typeof error !== 'object' || error === null) return null;
   const record = error as { details?: unknown; message?: string };
   const payload = 'details' in record ? record.details : error;
@@ -109,9 +111,7 @@ export function handledProposalState(error: unknown): 'applied' | 'rejected' | n
     typeof error === 'object' && error !== null && 'status' in error
       ? Number((error as { status?: unknown }).status)
       : NaN;
-  const message =
-    nested?.message ??
-    (error instanceof Error ? error.message : '');
+  const message = nested?.message ?? (error instanceof Error ? error.message : '');
   const isHandled =
     nested?.code === 'PROPOSAL_ALREADY_HANDLED' ||
     (status === 409 && message.includes('提案已处理'));

@@ -67,19 +67,13 @@ export function TopBar({
         title="Zivith"
         className="mx-1 size-4 shrink-0 rounded [-webkit-app-region:no-drag]"
       />
-      {menus ? <div className="flex min-w-0 items-center [-webkit-app-region:no-drag]">{menus}</div> : null}
-      <TopBarButton
-        label="上一步"
-        disabled={!canBack}
-        onClick={goBack}
-      >
+      {menus ? (
+        <div className="flex min-w-0 items-center [-webkit-app-region:no-drag]">{menus}</div>
+      ) : null}
+      <TopBarButton label="上一步" disabled={!canBack} onClick={goBack}>
         <IconArrowLeft className="size-4" />
       </TopBarButton>
-      <TopBarButton
-        label="下一步"
-        disabled={!canForward}
-        onClick={goForward}
-      >
+      <TopBarButton label="下一步" disabled={!canForward} onClick={goForward}>
         <IconArrowRight className="size-4" />
       </TopBarButton>
       {onToggleSidebar ? (

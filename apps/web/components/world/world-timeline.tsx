@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import type { WorldLineItem, WorldLineModel, WorldSelection } from '@/lib/types';
 import { createOrderScale, integerTicks, thinByMinGap } from '@/lib/world-scale';
 import {
@@ -233,19 +240,16 @@ export function WorldTimeline({
   const [playheadX, setPlayheadX] = useState<number | null>(null);
   const [draftSpans, setDraftSpans] = useState<Record<string, { start: number; end: number }>>({});
   const [trackOrder, setTrackOrder] = useState<string[]>([]);
-  const dragRef = useRef<
-    | {
-        mode: 'move' | 'start' | 'end' | 'track';
-        id: string;
-        start: number;
-        end: number;
-        originX: number;
-        originY: number;
-        moved: boolean;
-        latest?: { start: number; end: number };
-      }
-    | null
-  >(null);
+  const dragRef = useRef<{
+    mode: 'move' | 'start' | 'end' | 'track';
+    id: string;
+    start: number;
+    end: number;
+    originX: number;
+    originY: number;
+    moved: boolean;
+    latest?: { start: number; end: number };
+  } | null>(null);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -530,7 +534,7 @@ export function WorldTimeline({
     setDraftSpans((current) => ({ ...current, [drag.id]: { start, end } }));
   }
 
-  function finishPointer(event: { clientY: number }) {
+  function finishPointer() {
     const drag = dragRef.current;
     if (!drag) return;
     if (drag.mode === 'track') {
@@ -554,7 +558,9 @@ export function WorldTimeline({
       try {
         const key = `zivith.worldClipSpans.${projectIdRef.current}`;
         const raw = window.localStorage.getItem(key);
-        const stored = raw ? (JSON.parse(raw) as Record<string, { start: number; end: number }>) : {};
+        const stored = raw
+          ? (JSON.parse(raw) as Record<string, { start: number; end: number }>)
+          : {};
         stored[item.id] = span;
         window.localStorage.setItem(key, JSON.stringify(stored));
       } catch {
@@ -588,7 +594,7 @@ export function WorldTimeline({
       panRef.current = null;
       if (scrollRef.current) scrollRef.current.style.cursor = '';
       if (!dragRef.current) return;
-      finishPointer({ clientY: 0 });
+      finishPointer();
     }
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
@@ -670,10 +676,7 @@ export function WorldTimeline({
     const y = clamp(nextY, 0.6, 2.2);
     setZoomX(x);
     setZoomY(y);
-    window.localStorage.setItem(
-      `zivith.worldZoom.${model.projectId}`,
-      JSON.stringify({ x, y }),
-    );
+    window.localStorage.setItem(`zivith.worldZoom.${model.projectId}`, JSON.stringify({ x, y }));
   }
 
   return (
@@ -769,377 +772,384 @@ export function WorldTimeline({
           }}
         >
           <svg
-        ref={svgRef}
-        width={canvasWidth}
-        height={svgHeight}
-        className="block select-none"
-        style={{ touchAction: 'none', pointerEvents: 'none' }}
-        role="img"
-        aria-label="世界线时间轴"
-      >
-        <defs>
-          <filter id="selected-glow" x="-40%" y="-60%" width="180%" height="220%">
-            <feDropShadow
-              dx="0"
-              dy="0"
-              stdDeviation="4"
-              floodColor={selection ? 'currentColor' : '#4d6bfe'}
-              floodOpacity="0.45"
-            />
-          </filter>
-        </defs>
-
-        {/* 事件竖导轨：把呈现主轴落到各轨道 */}
-        <g>
-          {(namedAxis ? model.axisMarks : fallbackTicks.map((tick) => ({ order: tick }))).map(
-            (mark, index) =>
-              guideKeep[index] ? (
-                <line
-                  key={`guide-${mark.order}-${index}`}
-                  x1={scale(mark.order)}
-                  y1={axisY}
-                  x2={scale(mark.order)}
-                  y2={svgHeight - PADDING.bottom}
-                  stroke={
-                    'worldTimeDiverges' in mark && mark.worldTimeDiverges
-                      ? 'rgba(217,119,6,0.28)'
-                      : 'rgba(24,24,27,0.08)'
-                  }
-                  strokeWidth="1"
+            ref={svgRef}
+            width={canvasWidth}
+            height={svgHeight}
+            className="block select-none"
+            style={{ touchAction: 'none', pointerEvents: 'none' }}
+            role="img"
+            aria-label="世界线时间轴"
+          >
+            <defs>
+              <filter id="selected-glow" x="-40%" y="-60%" width="180%" height="220%">
+                <feDropShadow
+                  dx="0"
+                  dy="0"
+                  stdDeviation="4"
+                  floodColor={selection ? 'currentColor' : '#4d6bfe'}
+                  floodOpacity="0.45"
                 />
-              ) : null,
-          )}
-        </g>
-        {playheadX != null && playheadX > plotLeft && playheadX < plotRight ? (
-          <line
-            x1={playheadX}
-            y1={axisY}
-            x2={playheadX}
-            y2={svgHeight - PADDING.bottom}
-            stroke="rgba(24,24,27,0.55)"
-            strokeWidth="1.5"
-            pointerEvents="none"
-          />
-        ) : null}
+              </filter>
+            </defs>
 
-        {/* 关系连线层（条目之下） */}
-        <g style={{ pointerEvents: 'auto' }}>
-          {links.map((link) => {
-            const active = selection?.kind === 'relationship' && selection.id === link.id;
-            return (
-              <g
-                key={link.id}
-                className="cursor-pointer"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelect({ kind: 'relationship', id: link.id });
-                }}
-              >
-                {link.label && <title>{link.label}</title>}
-                <path
-                  d={link.d}
-                  fill="none"
-                  stroke={active ? 'rgba(217,119,6,0.9)' : 'rgba(24,24,27,0.18)'}
-                  strokeWidth={active ? 2.25 : 1.25}
-                  strokeDasharray="4 3"
-                />
-                {link.label && active && (
-                  <text
-                    x={link.midX}
-                    y={link.midY}
-                    fill={active ? '#b45309' : '#71717a'}
-                    fontSize="10"
-                    textAnchor="middle"
-                  >
-                    {link.label}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </g>
-
-        {/* 顶部刻度轴：呈现顺序为主轴，事件标题为刻度名 */}
-        <g>
-          <line
-            x1={plotLeft}
-            y1={axisY}
-            x2={plotRight}
-            y2={axisY}
-            stroke="#d4d4d8"
-            strokeWidth="1"
-          />
-          {namedAxis
-            ? model.axisMarks.map((mark, index) => {
-                const x = scale(mark.order);
-                const diverges = Boolean(mark.worldTimeDiverges);
-                const overlay = mark.worldTimeRelation && mark.worldTimeRelation !== 'follow';
-                const accent = diverges ? '#d97706' : overlay ? '#7c3aed' : '#d4d4d8';
-                const labelFill = diverges ? '#b45309' : overlay ? '#5b21b6' : '#3f3f46';
-                const subFill = diverges ? '#d97706' : overlay ? '#7c3aed' : '#a1a1aa';
-                const showLabel = axisLabelKeep[index];
-                const caption = mark.worldTimeLabel
-                  ? `${mark.label} · ${mark.worldTimeLabel}`
-                  : `${mark.label} · #${mark.order}`;
-                return (
-                  <g key={`axis-${mark.order}-${index}`}>
-                    <title>{caption}</title>
-                    <line x1={x} y1={axisY} x2={x} y2={axisY + 5} stroke={accent} strokeWidth="1" />
-                    {showLabel && (
-                      <>
-                        <text
-                          x={x}
-                          y={PADDING.top + 14}
-                          fill={labelFill}
-                          fontSize="11"
-                          fontWeight="600"
-                          textAnchor="middle"
-                        >
-                          {clipLabel(mark.label, 8)}
-                        </text>
-                        <text
-                          x={x}
-                          y={PADDING.top + 28}
-                          fill={subFill}
-                          fontSize="9"
-                          textAnchor="middle"
-                        >
-                          {mark.worldTimeLabel
-                            ? clipLabel(mark.worldTimeLabel, 10)
-                            : `#${mark.order}`}
-                        </text>
-                      </>
-                    )}
-                    {showLabel && diverges && (
-                      <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#d97706" />
-                    )}
-                    {showLabel && !diverges && overlay && (
-                      <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#7c3aed" />
-                    )}
-                  </g>
-                );
-              })
-            : fallbackTicks.map((tick, index) => (
-                <g key={tick}>
-                  <line
-                    x1={scale(tick)}
-                    y1={axisY}
-                    x2={scale(tick)}
-                    y2={axisY + 5}
-                    stroke="#d4d4d8"
-                    strokeWidth="1"
-                  />
-                  {axisLabelKeep[index] && (
-                    <text
-                      x={scale(tick)}
-                      y={PADDING.top + 12}
-                      fill="#71717a"
-                      fontSize="11"
-                      textAnchor="middle"
-                    >
-                      #{tick}
-                    </text>
-                  )}
-                </g>
-              ))}
-        </g>
-
-        {/* 轨道行 + 条目 */}
-        {layout.tracks.map((track, index) => {
-          const color = TRACK_COLORS[track.kind] ?? TRACK_COLORS.world_event;
-          const source = orderedTracks[index];
-          const trackItems = source?.items ?? [];
-          return (
-            <g key={track.id}>
-              <rect
-                x={TRACK_LABEL_WIDTH}
-                y={track.trackY}
-                width={Math.max(0, plotRight - TRACK_LABEL_WIDTH)}
-                height={track.height}
-                rx="10"
-                fill="rgba(24,24,27,0.03)"
-                stroke="#e5e7eb"
-                strokeWidth="1"
+            {/* 事件竖导轨：把呈现主轴落到各轨道 */}
+            <g>
+              {(namedAxis ? model.axisMarks : fallbackTicks.map((tick) => ({ order: tick }))).map(
+                (mark, index) =>
+                  guideKeep[index] ? (
+                    <line
+                      key={`guide-${mark.order}-${index}`}
+                      x1={scale(mark.order)}
+                      y1={axisY}
+                      x2={scale(mark.order)}
+                      y2={svgHeight - PADDING.bottom}
+                      stroke={
+                        'worldTimeDiverges' in mark && mark.worldTimeDiverges
+                          ? 'rgba(217,119,6,0.28)'
+                          : 'rgba(24,24,27,0.08)'
+                      }
+                      strokeWidth="1"
+                    />
+                  ) : null,
+              )}
+            </g>
+            {playheadX != null && playheadX > plotLeft && playheadX < plotRight ? (
+              <line
+                x1={playheadX}
+                y1={axisY}
+                x2={playheadX}
+                y2={svgHeight - PADDING.bottom}
+                stroke="rgba(24,24,27,0.55)"
+                strokeWidth="1.5"
+                pointerEvents="none"
               />
-              {trackItems.length === 0 && track.kind === 'world_event' ? (
-                <text
-                  x={plotLeft + 12}
-                  y={track.trackY + track.height / 2}
-                  fill="#a1a1aa"
-                  fontSize="11"
-                  dominantBaseline="middle"
-                >
-                  {focusedDimensionLabel && !focusedIsPrimary
-                    ? `「${focusedDimensionLabel}」尚无绑定事件 · 主轴仍按呈现顺序`
-                    : '无事件 · 世界时间绑定写在事件信封上，主轴仍按呈现顺序'}
-                </text>
-              ) : null}
-              {trackItems.length === 0 && track.kind === 'story' ? (
-                <text
-                  x={plotLeft + 12}
-                  y={track.trackY + track.height / 2}
-                  fill="#a1a1aa"
-                  fontSize="11"
-                  dominantBaseline="middle"
-                >
-                  还没有故事
-                </text>
-              ) : null}
-              {trackItems.length === 0 && track.kind === 'scene' ? (
-                <text
-                  x={plotLeft + 12}
-                  y={track.trackY + track.height / 2}
-                  fill="#a1a1aa"
-                  fontSize="11"
-                  dominantBaseline="middle"
-                >
-                  还没有场景
-                </text>
-              ) : null}
-              {trackItems.length === 0 && track.kind === 'shot' ? (
-                <text
-                  x={plotLeft + 12}
-                  y={track.trackY + track.height / 2}
-                  fill="#a1a1aa"
-                  fontSize="11"
-                  dominantBaseline="middle"
-                >
-                  还没有镜头 · 派生轨会跟随镜头出现
-                </text>
-              ) : null}
-              {trackItems.length === 0 && track.kind === 'camera' ? (
-                <text
-                  x={plotLeft + 12}
-                  y={track.trackY + track.height / 2}
-                  fill="#a1a1aa"
-                  fontSize="11"
-                  dominantBaseline="middle"
-                >
-                  机位从镜头状态投影，不另存一份
-                </text>
-              ) : null}
-              {trackItems.length === 0 && track.kind === 'style' ? (
-                <text
-                  x={plotLeft + 12}
-                  y={track.trackY + track.height / 2}
-                  fill="#a1a1aa"
-                  fontSize="11"
-                  dominantBaseline="middle"
-                >
-                  风格从镜头的光线、色彩与渲染设定投影
-                </text>
-              ) : null}
-              {trackItems.length === 0 && track.kind === 'prompt' ? (
-                <text
-                  x={plotLeft + 12}
-                  y={track.trackY + track.height / 2}
-                  fill="#a1a1aa"
-                  fontSize="11"
-                  dominantBaseline="middle"
-                >
-                  提示词轨优先显示已批准版本，否则显示草稿
-                </text>
-              ) : null}
-              {trackItems.length === 0 && track.kind === 'model' ? (
-                <text
-                  x={plotLeft + 12}
-                  y={track.trackY + track.height / 2}
-                  fill="#a1a1aa"
-                  fontSize="11"
-                  dominantBaseline="middle"
-                >
-                  模型轨来自生成 provenance，只读
-                </text>
-              ) : null}
-              {trackItems.map((item) => {
-                const pos = layout.positions.get(item.id);
-                if (!pos) return null;
-                const active = isTimelineItemActive(item, selection);
-                const diverges = itemDiverges(item);
-                const overlay = itemOverlay(item);
-                const crossing = itemRelation(item) === 'crossing';
-                const focus = overlayFocusOfItem(item, focusedDimensionId, focusedIsPrimary);
-                const stroke = active
-                  ? '#ffffff'
-                  : diverges
-                    ? '#d97706'
-                    : crossing
-                      ? '#7c3aed'
-                      : overlay
-                        ? '#8b5cf6'
-                        : 'rgba(255,255,255,0.85)';
-                const span = draftSpans[item.id] ?? clipSpan(item);
-                const spanLabel = spanCaption(span.start, span.end);
-                const pillWidth = Math.max(36, estimateTextWidth(spanLabel) + 12);
+            ) : null}
+
+            {/* 关系连线层（条目之下） */}
+            <g style={{ pointerEvents: 'auto' }}>
+              {links.map((link) => {
+                const active = selection?.kind === 'relationship' && selection.id === link.id;
                 return (
                   <g
-                    key={item.id}
-                    className="pointer-events-none"
-                    opacity={focus === 'other' ? 0.35 : 1}
+                    key={link.id}
+                    className="cursor-pointer"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect({ kind: 'relationship', id: link.id });
+                    }}
                   >
-                    <rect
-                      x={pos.x}
-                      y={pos.y}
-                      width={pos.itemWidth}
-                      height={itemH}
-                      rx="10"
-                      fill={color.fill}
-                      stroke={stroke}
-                      strokeWidth={active ? 2.5 : 1.5}
-                      filter={active ? 'url(#selected-glow)' : undefined}
+                    {link.label && <title>{link.label}</title>}
+                    <path
+                      d={link.d}
+                      fill="none"
+                      stroke={active ? 'rgba(217,119,6,0.9)' : 'rgba(24,24,27,0.18)'}
+                      strokeWidth={active ? 2.25 : 1.25}
+                      strokeDasharray="4 3"
                     />
-                    {pos.itemWidth > pillWidth + 16 ? (
-                      <rect
-                        x={pos.x + 8}
-                        y={pos.y + 6}
-                        width={pillWidth}
-                        height={14}
-                        rx="7"
-                        fill="rgba(24,24,27,0.55)"
-                      />
-                    ) : null}
-                    {pos.itemWidth > pillWidth + 16 ? (
+                    {link.label && active && (
                       <text
-                        x={pos.x + 8 + pillWidth / 2}
-                        y={pos.y + 14}
-                        fill="#fff"
-                        fontSize="9"
+                        x={link.midX}
+                        y={link.midY}
+                        fill={active ? '#b45309' : '#71717a'}
+                        fontSize="10"
                         textAnchor="middle"
-                        dominantBaseline="middle"
-                        style={{ pointerEvents: 'none' }}
                       >
-                        {spanLabel}
+                        {link.label}
                       </text>
-                    ) : null}
-                    <text
-                      x={pos.x + pos.itemWidth / 2}
-                      y={pos.y + itemH / 2 + 6}
-                      fill={color.text}
-                      fontSize="12"
-                      fontWeight="700"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      {pos.itemWidth < 44
-                        ? ''
-                        : clipLabel(item.title, pos.itemWidth < 88 ? 4 : 12)}
-                    </text>
-                    {(diverges || overlay) && (
-                      <circle
-                        cx={pos.x + pos.itemWidth - 16}
-                        cy={pos.y + 10}
-                        r="3"
-                        fill={diverges ? '#d97706' : '#7c3aed'}
-                      />
                     )}
                   </g>
                 );
               })}
             </g>
-          );
-        })}
-      </svg>
+
+            {/* 顶部刻度轴：呈现顺序为主轴，事件标题为刻度名 */}
+            <g>
+              <line
+                x1={plotLeft}
+                y1={axisY}
+                x2={plotRight}
+                y2={axisY}
+                stroke="#d4d4d8"
+                strokeWidth="1"
+              />
+              {namedAxis
+                ? model.axisMarks.map((mark, index) => {
+                    const x = scale(mark.order);
+                    const diverges = Boolean(mark.worldTimeDiverges);
+                    const overlay = mark.worldTimeRelation && mark.worldTimeRelation !== 'follow';
+                    const accent = diverges ? '#d97706' : overlay ? '#7c3aed' : '#d4d4d8';
+                    const labelFill = diverges ? '#b45309' : overlay ? '#5b21b6' : '#3f3f46';
+                    const subFill = diverges ? '#d97706' : overlay ? '#7c3aed' : '#a1a1aa';
+                    const showLabel = axisLabelKeep[index];
+                    const caption = mark.worldTimeLabel
+                      ? `${mark.label} · ${mark.worldTimeLabel}`
+                      : `${mark.label} · #${mark.order}`;
+                    return (
+                      <g key={`axis-${mark.order}-${index}`}>
+                        <title>{caption}</title>
+                        <line
+                          x1={x}
+                          y1={axisY}
+                          x2={x}
+                          y2={axisY + 5}
+                          stroke={accent}
+                          strokeWidth="1"
+                        />
+                        {showLabel && (
+                          <>
+                            <text
+                              x={x}
+                              y={PADDING.top + 14}
+                              fill={labelFill}
+                              fontSize="11"
+                              fontWeight="600"
+                              textAnchor="middle"
+                            >
+                              {clipLabel(mark.label, 8)}
+                            </text>
+                            <text
+                              x={x}
+                              y={PADDING.top + 28}
+                              fill={subFill}
+                              fontSize="9"
+                              textAnchor="middle"
+                            >
+                              {mark.worldTimeLabel
+                                ? clipLabel(mark.worldTimeLabel, 10)
+                                : `#${mark.order}`}
+                            </text>
+                          </>
+                        )}
+                        {showLabel && diverges && (
+                          <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#d97706" />
+                        )}
+                        {showLabel && !diverges && overlay && (
+                          <circle cx={x + 18} cy={PADDING.top + 12} r="3" fill="#7c3aed" />
+                        )}
+                      </g>
+                    );
+                  })
+                : fallbackTicks.map((tick, index) => (
+                    <g key={tick}>
+                      <line
+                        x1={scale(tick)}
+                        y1={axisY}
+                        x2={scale(tick)}
+                        y2={axisY + 5}
+                        stroke="#d4d4d8"
+                        strokeWidth="1"
+                      />
+                      {axisLabelKeep[index] && (
+                        <text
+                          x={scale(tick)}
+                          y={PADDING.top + 12}
+                          fill="#71717a"
+                          fontSize="11"
+                          textAnchor="middle"
+                        >
+                          #{tick}
+                        </text>
+                      )}
+                    </g>
+                  ))}
+            </g>
+
+            {/* 轨道行 + 条目 */}
+            {layout.tracks.map((track, index) => {
+              const color = TRACK_COLORS[track.kind] ?? TRACK_COLORS.world_event;
+              const source = orderedTracks[index];
+              const trackItems = source?.items ?? [];
+              return (
+                <g key={track.id}>
+                  <rect
+                    x={TRACK_LABEL_WIDTH}
+                    y={track.trackY}
+                    width={Math.max(0, plotRight - TRACK_LABEL_WIDTH)}
+                    height={track.height}
+                    rx="10"
+                    fill="rgba(24,24,27,0.03)"
+                    stroke="#e5e7eb"
+                    strokeWidth="1"
+                  />
+                  {trackItems.length === 0 && track.kind === 'world_event' ? (
+                    <text
+                      x={plotLeft + 12}
+                      y={track.trackY + track.height / 2}
+                      fill="#a1a1aa"
+                      fontSize="11"
+                      dominantBaseline="middle"
+                    >
+                      {focusedDimensionLabel && !focusedIsPrimary
+                        ? `「${focusedDimensionLabel}」尚无绑定事件 · 主轴仍按呈现顺序`
+                        : '无事件 · 世界时间绑定写在事件信封上，主轴仍按呈现顺序'}
+                    </text>
+                  ) : null}
+                  {trackItems.length === 0 && track.kind === 'story' ? (
+                    <text
+                      x={plotLeft + 12}
+                      y={track.trackY + track.height / 2}
+                      fill="#a1a1aa"
+                      fontSize="11"
+                      dominantBaseline="middle"
+                    >
+                      还没有故事
+                    </text>
+                  ) : null}
+                  {trackItems.length === 0 && track.kind === 'scene' ? (
+                    <text
+                      x={plotLeft + 12}
+                      y={track.trackY + track.height / 2}
+                      fill="#a1a1aa"
+                      fontSize="11"
+                      dominantBaseline="middle"
+                    >
+                      还没有场景
+                    </text>
+                  ) : null}
+                  {trackItems.length === 0 && track.kind === 'shot' ? (
+                    <text
+                      x={plotLeft + 12}
+                      y={track.trackY + track.height / 2}
+                      fill="#a1a1aa"
+                      fontSize="11"
+                      dominantBaseline="middle"
+                    >
+                      还没有镜头 · 派生轨会跟随镜头出现
+                    </text>
+                  ) : null}
+                  {trackItems.length === 0 && track.kind === 'camera' ? (
+                    <text
+                      x={plotLeft + 12}
+                      y={track.trackY + track.height / 2}
+                      fill="#a1a1aa"
+                      fontSize="11"
+                      dominantBaseline="middle"
+                    >
+                      机位从镜头状态投影，不另存一份
+                    </text>
+                  ) : null}
+                  {trackItems.length === 0 && track.kind === 'style' ? (
+                    <text
+                      x={plotLeft + 12}
+                      y={track.trackY + track.height / 2}
+                      fill="#a1a1aa"
+                      fontSize="11"
+                      dominantBaseline="middle"
+                    >
+                      风格从镜头的光线、色彩与渲染设定投影
+                    </text>
+                  ) : null}
+                  {trackItems.length === 0 && track.kind === 'prompt' ? (
+                    <text
+                      x={plotLeft + 12}
+                      y={track.trackY + track.height / 2}
+                      fill="#a1a1aa"
+                      fontSize="11"
+                      dominantBaseline="middle"
+                    >
+                      提示词轨优先显示已批准版本，否则显示草稿
+                    </text>
+                  ) : null}
+                  {trackItems.length === 0 && track.kind === 'model' ? (
+                    <text
+                      x={plotLeft + 12}
+                      y={track.trackY + track.height / 2}
+                      fill="#a1a1aa"
+                      fontSize="11"
+                      dominantBaseline="middle"
+                    >
+                      模型轨来自生成 provenance，只读
+                    </text>
+                  ) : null}
+                  {trackItems.map((item) => {
+                    const pos = layout.positions.get(item.id);
+                    if (!pos) return null;
+                    const active = isTimelineItemActive(item, selection);
+                    const diverges = itemDiverges(item);
+                    const overlay = itemOverlay(item);
+                    const crossing = itemRelation(item) === 'crossing';
+                    const focus = overlayFocusOfItem(item, focusedDimensionId, focusedIsPrimary);
+                    const stroke = active
+                      ? '#ffffff'
+                      : diverges
+                        ? '#d97706'
+                        : crossing
+                          ? '#7c3aed'
+                          : overlay
+                            ? '#8b5cf6'
+                            : 'rgba(255,255,255,0.85)';
+                    const span = draftSpans[item.id] ?? clipSpan(item);
+                    const spanLabel = spanCaption(span.start, span.end);
+                    const pillWidth = Math.max(36, estimateTextWidth(spanLabel) + 12);
+                    return (
+                      <g
+                        key={item.id}
+                        className="pointer-events-none"
+                        opacity={focus === 'other' ? 0.35 : 1}
+                      >
+                        <rect
+                          x={pos.x}
+                          y={pos.y}
+                          width={pos.itemWidth}
+                          height={itemH}
+                          rx="10"
+                          fill={color.fill}
+                          stroke={stroke}
+                          strokeWidth={active ? 2.5 : 1.5}
+                          filter={active ? 'url(#selected-glow)' : undefined}
+                        />
+                        {pos.itemWidth > pillWidth + 16 ? (
+                          <rect
+                            x={pos.x + 8}
+                            y={pos.y + 6}
+                            width={pillWidth}
+                            height={14}
+                            rx="7"
+                            fill="rgba(24,24,27,0.55)"
+                          />
+                        ) : null}
+                        {pos.itemWidth > pillWidth + 16 ? (
+                          <text
+                            x={pos.x + 8 + pillWidth / 2}
+                            y={pos.y + 14}
+                            fill="#fff"
+                            fontSize="9"
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            style={{ pointerEvents: 'none' }}
+                          >
+                            {spanLabel}
+                          </text>
+                        ) : null}
+                        <text
+                          x={pos.x + pos.itemWidth / 2}
+                          y={pos.y + itemH / 2 + 6}
+                          fill={color.text}
+                          fontSize="12"
+                          fontWeight="700"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          style={{ pointerEvents: 'none' }}
+                        >
+                          {pos.itemWidth < 44
+                            ? ''
+                            : clipLabel(item.title, pos.itemWidth < 88 ? 4 : 12)}
+                        </text>
+                        {(diverges || overlay) && (
+                          <circle
+                            cx={pos.x + pos.itemWidth - 16}
+                            cy={pos.y + 10}
+                            r="3"
+                            fill={diverges ? '#d97706' : '#7c3aed'}
+                          />
+                        )}
+                      </g>
+                    );
+                  })}
+                </g>
+              );
+            })}
+          </svg>
           <div className="pointer-events-none absolute inset-0 z-10">
             {orderedTracks.flatMap((track) =>
               track.items.map((item) => {

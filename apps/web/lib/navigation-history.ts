@@ -31,7 +31,7 @@ export class NavigationHistory {
   back(): string | null {
     if (!this.canBack) return null;
     this.index -= 1;
-    return this.stack[this.index]!;
+    return this.stack[this.index];
   }
 
   /**
@@ -49,7 +49,7 @@ export class NavigationHistory {
   forward(): string | null {
     if (!this.canForward) return null;
     this.index += 1;
-    return this.stack[this.index]!;
+    return this.stack[this.index];
   }
 
   /** 测试与「回首页」类场景用：清空历史。 */

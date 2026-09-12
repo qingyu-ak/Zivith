@@ -1,9 +1,6 @@
 import type { PrismaClient } from '@zivith/database';
 import { createProviderBundle } from '../providers/registry.js';
-import {
-  getRuntimeModelOverride,
-  getRuntimeProviderOverride,
-} from '../routes/providers.js';
+import { getRuntimeModelOverride, getRuntimeProviderOverride } from '../routes/providers.js';
 import { instrumentProviderBundle } from './usage/instrument.js';
 import type { LLMAdapter } from '../ports/llm.js';
 

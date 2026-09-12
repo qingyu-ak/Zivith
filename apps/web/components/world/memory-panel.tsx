@@ -151,9 +151,7 @@ export function MemoryPanel({
   };
 
   const topics = Array.from(new Set(cores.map((core) => core.topic)));
-  const filteredCores = coreFilter
-    ? cores.filter((core) => core.topic === coreFilter)
-    : cores;
+  const filteredCores = coreFilter ? cores.filter((core) => core.topic === coreFilter) : cores;
 
   return (
     <section className={showTitle ? 'rounded-lg border border-line bg-white/70 p-3' : 'px-3 pb-1'}>

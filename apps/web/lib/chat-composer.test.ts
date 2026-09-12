@@ -130,9 +130,9 @@ describe('chat composer helpers', () => {
         { provider: 'mock' as const, model: 'mock-text-v1' },
       ],
     };
-    expect(
-      llmChoices(hidden).map((item) => `${item.provider}:${item.model}`),
-    ).toEqual(['deepseek:deepseek-v4-flash']);
+    expect(llmChoices(hidden).map((item) => `${item.provider}:${item.model}`)).toEqual([
+      'deepseek:deepseek-v4-flash',
+    ]);
     // 当前在用的 deepseek-v4-flash 即使被隐藏也保留；mock 未被隐藏照常出现。
     const currentHidden = {
       ...catalog,

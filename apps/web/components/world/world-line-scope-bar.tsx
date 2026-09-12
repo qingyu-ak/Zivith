@@ -26,7 +26,11 @@ export function WorldLineScopeBar({
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-white px-4 py-2 text-xs text-zinc-600">
       <span className="font-medium text-zinc-800">范围</span>
-      <div className="flex rounded-lg border border-line bg-zinc-100 p-0.5" role="radiogroup" aria-label="世界线范围">
+      <div
+        className="flex rounded-lg border border-line bg-zinc-100 p-0.5"
+        role="radiogroup"
+        aria-label="世界线范围"
+      >
         <button
           type="button"
           role="radio"
@@ -43,7 +47,9 @@ export function WorldLineScopeBar({
           role="radio"
           aria-checked={!view.overview}
           className={`rounded-md px-2.5 py-0.5 transition ${
-            !view.overview ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'
+            !view.overview
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-800'
           }`}
           onClick={() =>
             onChange({
@@ -58,7 +64,9 @@ export function WorldLineScopeBar({
         </button>
       </div>
       {view.overview ? (
-        <span className="text-zinc-400">全轴 #{min}–#{max}</span>
+        <span className="text-zinc-400">
+          全轴 #{min}–#{max}
+        </span>
       ) : (
         <span className="inline-flex items-center gap-1 text-zinc-600">
           第
@@ -104,7 +112,9 @@ export function WorldLineScopeBar({
           role="radio"
           aria-checked={view.density === 'all'}
           className={`rounded-md px-2.5 py-0.5 transition ${
-            view.density === 'all' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'
+            view.density === 'all'
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-800'
           }`}
           onClick={() => onChange({ ...view, density: 'all' })}
         >
@@ -115,7 +125,9 @@ export function WorldLineScopeBar({
           role="radio"
           aria-checked={view.density === 'main'}
           className={`rounded-md px-2.5 py-0.5 transition ${
-            view.density === 'main' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'
+            view.density === 'main'
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-800'
           }`}
           onClick={() => onChange({ ...view, density: 'main' })}
         >
