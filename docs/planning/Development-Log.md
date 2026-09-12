@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-09-12 · pending · fix(ci) · 本地对象存储改用可拉取的 Silo 镜像
+
+GitHub Actions 在 `docker compose up` 拉 `minio/minio` 时 403（上游社区镜像已停发）。改用 MinIO 兼容的 `pgsty/silo` + `pgsty/mc` 固定 tag，健康检查改为 `silo healthcheck ready`。Actions 升到 checkout@v5 / setup-node@v5，去掉 Node 20 弃用警告。
+
+- **fix** `compose.yaml` 对象存储与 mc 初始化镜像
+- **chore** `.github/workflows/ci.yml` action 版本
+- 模块：`compose.yaml`、`.github/workflows/ci.yml`
+
 ## 2026-09-12 · 053788d · feat(web,api) · 对话重试 / @提及 / 思考摘要 / SSE 及时刷出
 
 Creator Chat 与 Studio Agent 对齐 Cursor 式一轮操作：失败可重试且不插重复 user、消息复制、输入 `@` 把实体设为本轮 focus、记忆操作收进「想了一下」、提案确认用 updateMany 抢占避免双击、线程列表带待确认条数。SSE 对 Node HTTP 显式 flush，桌面壳不再只看到 user 事件。浏览器选文件夹改说明文案；`/signup`、`/studio` 做别名重定向。

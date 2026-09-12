@@ -34,7 +34,9 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    # Upstream MinIO stopped publishing community Docker images (Docker Hub now 403).
+    # Silo is a drop-in S3-compatible fork: same MINIO_* env, same /data layout.
+    image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -46,13 +48,14 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      test: ['CMD', 'silo', 'healthcheck', 'ready']
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 5s
 
   minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-03T07-13-05Z
     restart: 'no'
     depends_on:
       minio:
