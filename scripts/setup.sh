@@ -35,6 +35,11 @@ corepack enable
 corepack install
 pnpm install
 
+# ADR-0017 V1: 语音模型尽力而为下载(≈190MB, sha256 校验);失败不阻塞 setup,
+# 语音输入保持禁用(可稍后重跑 `node scripts/voice-model.mjs`)。
+node scripts/voice-model.mjs ||
+  echo 'Voice model download failed; voice input stays disabled (rerun: node scripts/voice-model.mjs).'
+
 docker compose up -d --wait postgres redis minio
 docker compose run --rm minio-init
 

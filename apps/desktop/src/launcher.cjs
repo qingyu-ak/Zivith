@@ -1,10 +1,14 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
+const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
 
 const WEB_URL = process.env.ZIVITH_WEB_URL ?? 'http://127.0.0.1:3100';
 const WEB_PORT = Number(new URL(WEB_URL).port || 80);
+const API_ORIGIN = process.env.ZIVITH_API_URL ?? 'http://127.0.0.1:4000';
+const API_PORT = Number(new URL(API_ORIGIN).port || 80);
+const API_HEALTH = `${API_ORIGIN.replace(/\/$/, '')}/api/v1/projects`;
 const START_TIMEOUT_MS = 180_000;
 
 function isRepoRoot(dir) {
@@ -105,7 +109,22 @@ function probeTcp(port) {
   });
 }
 
-function waitForTcp(timeoutMs, onTick) {
+/** TCP listen is not enough: a wedged Next.js still accepts sockets but never writes HTTP. */
+function probeHttp(url, timeoutMs = 2500) {
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout: timeoutMs }, (res) => {
+      res.resume();
+      resolve(true);
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+function waitForUrl(url, timeoutMs, onTick) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -122,11 +141,11 @@ function waitForTcp(timeoutMs, onTick) {
     const attempt = async () => {
       if (settled) return;
       if (Date.now() - started > timeoutMs) {
-        fail(new Error(`等待 ${WEB_URL} 超时`));
+        fail(new Error(`等待 ${url} 超时`));
         return;
       }
       if (onTick) onTick();
-      if (await probeTcp(WEB_PORT)) {
+      if (await probeHttp(url, 12_000)) {
         succeed();
         return;
       }
@@ -136,6 +155,13 @@ function waitForTcp(timeoutMs, onTick) {
     };
     void attempt();
   });
+}
+
+async function waitForAppServices(timeoutMs, onTick) {
+  await Promise.all([
+    waitForUrl(WEB_URL, timeoutMs, onTick),
+    waitForUrl(API_HEALTH, timeoutMs, onTick),
+  ]);
 }
 
 function spawnHidden(command, args, options) {
@@ -217,25 +243,42 @@ async function prepareApp({ onStatus }) {
   onStatus('正在启动应用…');
   let child = null;
   let keepChild = false;
-  if (!(await probeTcp(WEB_PORT))) {
+  const webReady = await probeHttp(WEB_URL, 2500);
+  const apiReady = await probeHttp(API_HEALTH, 2500);
+  if (webReady && apiReady) {
+    return { repoRoot, child, keepChild, webUrl: WEB_URL, logPath };
+  }
+  const webBusy = await probeTcp(WEB_PORT);
+  const apiBusy = await probeTcp(API_PORT);
+  if (!webBusy && !apiBusy) {
     child = startDevServers(repoRoot);
-    const log = attachLog(child, logPath);
     child.on('error', (error) => {
       onStatus(error instanceof Error ? error.message : '无法启动 pnpm');
     });
-    onStatus('正在编译界面…');
-    try {
-      await waitForTcp(START_TIMEOUT_MS, () => {
-        onStatus('正在编译界面…');
-      });
-    } catch (error) {
-      keepChild = true;
-      const detail = log.tail();
-      const suffix = detail ? `\n${detail}` : '';
-      throw new Error(
-        `${error instanceof Error ? error.message : '启动失败'}。界面还在后台编译，请稍等再打开一次。日志：${logPath}${suffix}`,
-      );
-    }
+  } else {
+    onStatus('正在等待界面与 API…');
+  }
+  const log = child
+    ? attachLog(child, logPath)
+    : {
+        tail() {
+          return '';
+        },
+      };
+  onStatus('正在编译界面与 API…');
+  try {
+    await waitForAppServices(webBusy || apiBusy ? 45_000 : START_TIMEOUT_MS, () => {
+      onStatus('正在编译界面与 API…');
+    });
+  } catch (error) {
+    keepChild = true;
+    const detail = log.tail();
+    const suffix = detail ? `\n${detail}` : '';
+    const message =
+      webBusy || apiBusy
+        ? '界面或 API 端口已占用但无响应，请结束旧的 node/electron 进程后重试。'
+        : `${error instanceof Error ? error.message : '启动失败'}。服务还在后台编译，请稍等再打开一次。`;
+    throw new Error(`${message} 日志：${logPath}${suffix}`);
   }
   return { repoRoot, child, keepChild, webUrl: WEB_URL, logPath };
 }

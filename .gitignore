@@ -24,6 +24,7 @@ Zivith.lnk
 # Local data and logs
 .data/
 apps/api/data/
+.voice-models/
 *.log
 npm-debug.log*
 pnpm-debug.log*

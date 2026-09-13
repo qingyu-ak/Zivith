@@ -567,6 +567,16 @@ Agent 配置指定使用的 LLM 模型。LLM 适配器处理提供商特定格�
 7. Send an SSE event to the frontend.
 ```
 
+## 6.6 本地语音识别（STT）— ADR-0017
+
+语音输入是本地流式听写能力，引擎隔离在能力边界（`ports/stt.ts`）之后：
+
+- **引擎**: `sherpa-onnx-node`（精确锁版 `1.13.8`，N-API 预编译，无 install 脚本）+ 流式双语 zipformer（2023-02-20，int8 全套 ≈190MB）。仅 `adapters/sherpa-stt.ts` 允许 import 该包。
+- **模型供给**: `node scripts/voice-model.mjs`（setup 中尽力而为调用）按 `scripts/voice-model.json` 的固定 URL 下载并逐文件 sha256 校验，存 `.voice-models/`（gitignored，`ZIVITH_VOICE_MODEL_DIR` 可覆盖）。引擎加载前再次校验，失败即禁用语音（fail closed，绝不回退云端）。
+- **API 面**（P3，本地无门禁面内）: `GET /api/v1/voice/status`（引擎可用性探测）；`GET /api/v1/voice/ws`（流式转写，仅回环来源）。协议：`hello`（连接即发，携带引擎可用性——不可用则直接 error+close）→ 客户端 `start{sampleRate}` → `ready` → 二进制 Float32 PCM 帧 → `partial`/`segment` 事件 → `stop` → `final`。
+- **热词**: 启动时从世界词汇表（Asset 名称/别名 + WorldEvent 标题）生成只读热词表注入识别器；生成失败不阻塞引擎。
+- **合规红线**: 音频与转写稿零持久化（内存会话，随结束丢弃，不进导出/版本化）；Electron 侧仅对本应用 origin 放行 `media` 权限；不使用 Web Speech API。
+
 ---
 
 # 7. 前端架构
@@ -737,6 +747,7 @@ Agent 配置指定使用的 LLM 模型。LLM 适配器处理提供商特定格�
 | 提供商成本控制 | 按 Project 与提供商记录消耗；在入队调用前强制执行已配置的按提供商用量与成本限额 |
 | 提供商回调 | 验证签名与时间戳；按提供商 job ID 幂等处理并拒绝重放 |
 | 生成内容 | 存于私有桶；通过签名 URL 访问 |
+| 语音输入 | 仅本地引擎（ADR-0017）：音频经回环 WS 进入本机 API，不出机器、零持久化；模型文件加载前强制 sha256 校验，失败即禁用；Electron 仅对应用 origin 放行麦克风权限 |
 
 ---
 

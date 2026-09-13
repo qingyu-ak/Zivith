@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-09-13 · pending · feat(voice) · 本地流式听写（ADR-0017 Track V）
+
+Creator Chat 与 Studio Agent 输入条增加本机 sherpa-onnx 流式听写：音频经 AudioWorklet → 回环 WebSocket → API 适配器，零持久化、失败不回退云端。V0 实测后改用标准版双语 zipformer（int8 ≈190MB）。纳入工程加固冻结基线。
+
+- **feat(api)** `ports/stt.ts`、`adapters/sherpa-stt.ts`、`contexts/voice/`、`routes/voice.ts`
+- **feat(web)** 麦克风按钮、worklet、转写插入输入框（发送前可编辑）
+- **feat(desktop)** 仅对本应用 origin 放行 `media`
+- **chore** `scripts/voice-model.mjs` sha256 供给；`.voice-models/` gitignore
+- 模块：voice 适配器 / 路由 / chat-composer / studio-agent-panel / main.cjs
+
 ## 2026-09-12 · 243e03a · fix(desktop) · 修复「桌面端打不开」：隐形窗口不再霸占单实例锁
 
 用户桌面端无法打开：屏幕无窗口但残留 4 个 Zivith.exe 持有单实例锁，再次双击时新进程 `app.quit()`、旧实例 `second-instance` 只对 `show:false` 的隐形窗口做 `focus()`，毫无效果。根因是 `mainWindow.loadURL(WEB_URL)` 被 `void` 吞掉：web 编译期加载失败后窗口永不 `ready-to-show`，进程带着隐形窗口常驻。修复：`loadMainWindowUrl` 失败重试（5 次每次 2s），仍失败强制 `show()` + 错误弹窗，保证窗口可见可关闭；`second-instance` 增加对不可见窗口的 `show()`。现场处理：taskkill 僵尸实例后经 Zivith.vbs 重启，窗口正常显示并获焦。

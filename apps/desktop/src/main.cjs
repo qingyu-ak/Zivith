@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, session } = require('electron');
 const path = require('node:path');
 const { prepareApp, stopProcessTree, WEB_URL } = require('./launcher.cjs');
 
@@ -93,10 +93,19 @@ function createWindow() {
  * 开发期 web 可能还在编译，首次 loadURL 会失败。绝不把 show:false 的窗口
  * 永远晾在后台：重试后仍失败就强制显示窗口并报错，保证用户看得见、可关闭。
  */
+function loadUrlWithTimeout(win, url, timeoutMs) {
+  return Promise.race([
+    win.loadURL(url),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`加载 ${url} 超时`)), timeoutMs);
+    }),
+  ]);
+}
+
 async function loadMainWindowUrl(attempt = 0) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
-    await mainWindow.loadURL(WEB_URL);
+    await loadUrlWithTimeout(mainWindow, WEB_URL, 15_000);
   } catch (error) {
     if (attempt >= 4 || !mainWindow || mainWindow.isDestroyed()) {
       mainWindow?.show();
@@ -116,6 +125,9 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  // Clash / 系统代理会劫持 Chromium 对 127.0.0.1:4000 的 fetch，表现为 Failed to fetch。
+  app.commandLine.appendSwitch('proxy-bypass-list', '<local>;127.0.0.1;localhost;::1');
+
   app.on('second-instance', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -125,8 +137,34 @@ if (!gotLock) {
   });
 
   app.whenReady().then(async () => {
+    await session.defaultSession.setProxy({
+      mode: 'direct',
+      proxyBypassRules: '<local>;127.0.0.1;localhost;::1',
+    });
     app.setAppUserModelId('com.zivith.studio');
     Menu.setApplicationMenu(null);
+    // ADR-0017 V4 — 麦克风权限门:仅放行本应用加载面(origin)发起的 media 请求;
+    // 其余权限一律拒绝。识别失败时前端禁用语音入口,绝不回退云端。
+    const webOrigin = new URL(WEB_URL).origin;
+    session.defaultSession.setPermissionRequestHandler(
+      (_webContents, permission, callback, details) => {
+        if (permission === 'media') {
+          try {
+            callback(
+              Boolean(details.requestingUrl) && new URL(details.requestingUrl).origin === webOrigin,
+            );
+          } catch {
+            callback(false);
+          }
+          return;
+        }
+        callback(false);
+      },
+    );
+    session.defaultSession.setPermissionCheckHandler(
+      (_webContents, permission, requestingOrigin) =>
+        permission === 'media' && requestingOrigin === webOrigin,
+    );
     ipcMain.handle('workspace:openDirectory', async () => {
       const result = await dialog.showOpenDialog({
         title: '选择世界文件夹',

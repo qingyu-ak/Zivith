@@ -66,6 +66,9 @@ import {
   IconShieldAlert,
   IconShieldCheck,
 } from '@/components/nav-icons';
+import { insertDictatedText } from '@/lib/voice-transcript';
+import { useVoiceDictation } from '@/lib/use-voice-dictation';
+import { VoiceMicButton } from './creator-chat/voice-mic-button';
 import { useStudioSelection } from './world/studio-selection';
 import { ChatErrorBanner } from './creator-chat/chat-error-banner';
 import { MentionMenu } from './creator-chat/mention-menu';
@@ -132,6 +135,25 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
   const writeMenuRef = useRef<HTMLDivElement | null>(null);
   const threadMenuRef = useRef<HTMLDivElement | null>(null);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
+  const inputRef = useRef(input);
+  inputRef.current = input;
+  const cursorRef = useRef(cursor);
+  cursorRef.current = cursor;
+  const voice = useVoiceDictation({
+    disabled: sending || loading || !threadId,
+    insert: (text) => {
+      const at = areaRef.current?.selectionStart ?? cursorRef.current;
+      const next = insertDictatedText(inputRef.current, at, text);
+      setInput(next.value);
+      setCursor(next.cursor);
+      requestAnimationFrame(() => {
+        const area = areaRef.current;
+        if (!area) return;
+        area.focus();
+        area.setSelectionRange(next.cursor, next.cursor);
+      });
+    },
+  });
   const autoApplyRef = useRef(new Set<string>());
   const [applyingProposalIds, setApplyingProposalIds] = useState<string[]>([]);
   const writeModeRef = useRef<AgentWriteMode>(writeMode);
@@ -784,6 +806,7 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             onChange={(event) => {
               setInput(event.target.value);
               setCursor(event.target.selectionStart);
+              if (voice.notice) voice.setNotice('');
             }}
             onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
             onKeyUp={(event) => setCursor(event.currentTarget.selectionStart)}
@@ -825,6 +848,17 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
               }
             }}
           />
+          {voice.recording && voice.interim ? (
+            <p className="px-1 pb-0.5 text-[11px] leading-4 text-zinc-500" aria-live="polite">
+              {voice.interim}
+              <span className="ml-1 inline-block h-3 w-px animate-pulse bg-zinc-400 align-middle" />
+            </p>
+          ) : null}
+          {voice.notice ? (
+            <p className="px-1 pb-0.5 text-[11px] text-red-500" role="alert">
+              {voice.notice}
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-1 pb-1">
             <div className="relative" ref={writeMenuRef}>
               <button
@@ -871,6 +905,14 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
                 </div>
               ) : null}
             </div>
+            <VoiceMicButton
+              size="sm"
+              recording={voice.recording}
+              voiceState={voice.voiceState}
+              voiceReason={voice.voiceReason}
+              disabled={sending || loading || !threadId}
+              onToggle={voice.toggle}
+            />
             <button
               type="button"
               className="grid size-7 place-items-center rounded-full text-[13px] font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"

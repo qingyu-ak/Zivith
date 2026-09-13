@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
+import websocket from '@fastify/websocket';
 import { S3Client } from '@aws-sdk/client-s3';
 import { prisma, type PrismaClient } from '@zivith/database';
 import { S3StorageAdapter } from './adapters/s3.js';
@@ -36,6 +37,8 @@ import { registerWorldRoutes } from './routes/world.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { registerNovelImportRoutes } from './routes/novel-imports.js';
 import { registerRoleplayRoutes } from './routes/roleplay.js';
+import { registerVoiceRoutes } from './routes/voice.js';
+import type { VoiceService } from './contexts/voice/service.js';
 import type { MemoryService } from './contexts/memory/service.js';
 import type { NovelImportService } from './contexts/novel-import/service.js';
 
@@ -48,6 +51,7 @@ export interface BuildAppOptions {
   queueWork?: QueueWorkBridge;
   memory?: MemoryService;
   novelImport?: NovelImportService;
+  voice?: VoiceService;
 }
 
 function toSnakeCase(value: unknown): unknown {
@@ -109,11 +113,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
       .split(',')
       .map((origin) => origin.trim()),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'Cache-Control'],
   });
   await app.register(multipart, {
     limits: { files: 1, fileSize: 10 * 1024 * 1024, fields: 10 },
   });
+  if (options.voice) {
+    await app.register(websocket);
+  }
   app.addHook('preSerialization', (_request, _reply, payload, done) => {
     done(null, toSnakeCase(payload));
   });
@@ -156,6 +163,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       registerStubRoutes(api);
       // Creator layer (ADR-0013): local single user, no auth on world routes.
       // LLM 每轮按当前 PUT /providers/selection 重建，不闭包启动时的提供商。
+      if (options.voice) {
+        // ADR-0017: 语音输入与 world 路由同为本地无门禁面,路由内自行校验回环来源。
+        registerVoiceRoutes(api, options.voice);
+      }
       api.register(
         (worldApi, _worldOptions, worldDone) => {
           registerWorldRoutes(worldApi, db, undefined, undefined, options.memory);

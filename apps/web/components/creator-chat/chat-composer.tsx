@@ -33,6 +33,9 @@ import {
   IconShieldCheck,
   IconStop,
 } from '@/components/nav-icons';
+import { insertDictatedText } from '@/lib/voice-transcript';
+import { useVoiceDictation } from '@/lib/use-voice-dictation';
+import { VoiceMicButton } from '@/components/creator-chat/voice-mic-button';
 import {
   AGENT_WRITE_MODE_HINT,
   AGENT_WRITE_MODE_LABEL,
@@ -127,6 +130,25 @@ export function ChatComposer({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [cursor, setCursor] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const cursorRef = useRef(0);
+  cursorRef.current = cursor;
+  const voice = useVoiceDictation({
+    disabled: sending || blocked,
+    insert: (text) => {
+      const at = areaRef.current?.selectionStart ?? cursorRef.current;
+      const next = insertDictatedText(valueRef.current, at, text);
+      onChange(next.value);
+      setCursor(next.cursor);
+      requestAnimationFrame(() => {
+        const area = areaRef.current;
+        if (!area) return;
+        area.focus();
+        area.setSelectionRange(next.cursor, next.cursor);
+      });
+    },
+  });
 
   const mention = mentionEnabled ? mentionQueryAt(value, cursor) : null;
   const mentionItems = useMemo(() => {
@@ -356,15 +378,22 @@ export function ChatComposer({
             onChange(event.target.value);
             setCursor(event.target.selectionStart);
             if (notice) setNotice('');
+            if (voice.notice) voice.setNotice('');
           }}
           onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
           onKeyUp={(event) => setCursor(event.currentTarget.selectionStart)}
           onKeyDown={handleKeyDown}
         />
       </div>
-      {notice ? (
+      {voice.recording && voice.interim ? (
+        <p className="px-3 pb-1 text-xs leading-5 text-zinc-500" aria-live="polite">
+          {voice.interim}
+          <span className="ml-1 inline-block h-3 w-px animate-pulse bg-zinc-400 align-middle" />
+        </p>
+      ) : null}
+      {notice || voice.notice ? (
         <p className="px-2 pb-1 text-[11px] text-red-500" role="alert">
-          {notice}
+          {notice || voice.notice}
         </p>
       ) : null}
       <div className="flex items-center gap-1 px-1 pt-1">
@@ -388,6 +417,13 @@ export function ChatComposer({
             @
           </button>
         ) : null}
+        <VoiceMicButton
+          recording={voice.recording}
+          voiceState={voice.voiceState}
+          voiceReason={voice.voiceReason}
+          disabled={sending || blocked}
+          onToggle={voice.toggle}
+        />
         <div className="relative">
           <button
             type="button"

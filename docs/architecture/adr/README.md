@@ -22,6 +22,7 @@
 | [0014](0014-layered-memory-system.md) | 分层记忆系统 | 已接受 | 2026-08-23 |
 | [0015](0015-novel-import-is-batch-memory-ingest.md) | 小说导入即批量记忆摄取（预授权写入 + 整体撤销） | 已接受 | 2026-08-30 |
 | [0016](0016-local-creative-surface-is-electron.md) | 本地创作面是 Electron 窗口；工作区身份是绝对路径 | 已接受 | 2026-09-02 |
+| [0017](0017-voice-input-is-local-streaming-stt.md) | 语音输入是本地流式 STT 能力，引擎隔离在能力边界之后 | 已接受 | 2026-09-13 |
 
 ADR-0001 至 0005 自根目录 `ARCHITECTURE-DECISIONS.md` 迁入，早于
 [架构宪章](../architecture-principles.md)；新 ADR 必须遵循指南中的完整模板。

@@ -290,3 +290,12 @@ export function IconAgent(props: IconProps) {
     </svg>
   );
 }
+
+export function IconMic(props: IconProps) {
+  return (
+    <svg {...base} strokeWidth={2} {...props}>
+      <path d="M12 4a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V7a3 3 0 0 1 3-3Z" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3" />
+    </svg>
+  );
+}

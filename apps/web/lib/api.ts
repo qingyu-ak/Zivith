@@ -311,7 +311,6 @@ async function request(
     if (token) headers.set('Authorization', `Bearer ${token}`);
     if (body && typeof body === 'string') headers.set('Content-Type', 'application/json');
     const streaming = headers.get('Accept')?.includes('text/event-stream');
-    if (streaming) headers.set('Cache-Control', 'no-cache');
     return fetch(`${API_URL}${path}`, {
       ...init,
       headers,
