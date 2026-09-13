@@ -77,6 +77,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 | API 或适配器长什么样 | [Technical Architecture](engineering/Technical-Architecture.md) |
 | 写代码前应遵循的约定 | [Code Agent Design Guide](engineering/Code-Agent-Design-Guide.md) |
 | 现在该做什么 | [Next Tasks](planning/Next-Tasks.md) |
+| 工程加固怎么走、当前版本基线 | [Hardening Roadmap](engineering/hardening-roadmap.md) · [Baseline](engineering/hardening-baseline.md) |
 | 某个界面或路由应落在哪里 | [UI Information Architecture](product/UI-Information-Architecture.md) |
 | 记忆、小说导入、角色扮演如何工作 | [Memory / Novel / Roleplay 设计](planning/Memory-Novel-Roleplay-Design.md) |
 
@@ -104,6 +105,8 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 |----------|-------------|
 | [Technical Architecture](engineering/Technical-Architecture.md) | 系统设计、适配器、API、队列、BYOK 与数据存储 |
 | [Code Agent Design Guide](engineering/Code-Agent-Design-Guide.md) | 面向 AI 代码 Agent 的实现约定 |
+| [Engineering Hardening Roadmap](engineering/hardening-roadmap.md) | 工程加固过程（Stage A→F）；登录/多租户按 ADR-0013 不做 |
+| [Hardening Baseline](engineering/hardening-baseline.md) | Phase 0 冻结快照：这个版本实际是什么状态 |
 
 ### planning/ — 何时
 

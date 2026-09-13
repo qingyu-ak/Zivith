@@ -12,7 +12,13 @@
 
 ---
 
-## 2026-09-13 · pending · feat(web,api) · 导入角色的记忆可改可增
+## 2026-09-13 · pending · docs · 工程加固冻结基线纳入 Track V
+
+用户拍板 Track V 进冻结。基线 HEAD 含 `7900f7e`（语音）与 `c6d2157`（导入记忆可编辑）。Stage A 仍等冻结文档入库后开。
+
+- 模块：`hardening-roadmap.md`、`hardening-baseline.md`、`Next-Tasks.md`
+
+## 2026-09-13 · c6d2157 · feat(web,api) · 导入角色的记忆可改可增
 
 小说导入后右侧「TA 记得什么」短事实原先只能删除。补 PATCH/POST 记忆原子，角色档案与记忆面板可编辑、可新增；角色卡按钮改为「编辑角色卡」，避免和记忆编辑挤在一起。
 

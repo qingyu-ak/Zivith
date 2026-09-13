@@ -4,9 +4,9 @@
 >
 > Status: Active
 >
-> Synced: 2026-09-02
+> Synced: 2026-09-13
 >
-> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。M1–M3 已落地。长篇导入验收已通过（2026-09-01）。当前无默认编码任务，不插队 I3。I3 `Organization` 仍需真实项目晋级证据；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
+> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。M1–M3 已落地。长篇导入验收已通过（2026-09-01）。I3 `Organization` 仍需真实项目晋级证据；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。**2026-09-13 进入工程加固（[hardening-roadmap](../engineering/hardening-roadmap.md)）**：停新功能，先 Stage A；不插队 I3/W2。路线图里的「登录/多租户」按 [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md) **不做**。Track V 已纳入冻结（`7900f7e`），见 [hardening-baseline](../engineering/hardening-baseline.md)。
 >
 > Related: [Product-Positioning.md](../product/Product-Positioning.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [IP World Model Repositioning RFC](../architecture/rfc/IP-World-Model-Repositioning-RFC.md)
 
@@ -278,7 +278,43 @@
 
 ---
 
-**不属于本轨道：** 独立 `/roleplay` 产品路由；完整记忆中心页面；SiliconFlow 真实 embedding（仍 mock / bigram）。
+## Track V — 本地语音输入（ADR-0017）
+
+目标：在 Creator Chat 等文本输入面提供离线、流式、中英听写；引擎隔离在能力边界之后（P4）；音频与转写稿零持久化。权威决策：[ADR-0017](../architecture/adr/0017-voice-input-is-local-streaming-stt.md)。系统听写（Win+H）保持为用户侧兜底，产品不集成。
+
+| ID | 任务 | 备注 | 状态 |
+|----|------|-------|--------|
+| V0 | 引擎验证 spike | **2026-09-13 完成，模型修正**：small（2023-02-16，≈47.5MB）中文不达标（官方测试音频即截断/重复字循环），换**标准版 2023-02-20 int8（≈190MB）**：中英完整成句、RTF≈0.05–0.07（2 线程）、首字 500–1400ms；热词可用（`decodingMethod`/`hotwordsFile` 须放 config 顶层 + `modified_beam_search`，效果温和待真实麦克风实测）；详见 [ADR-0017 附录](../architecture/adr/0017-voice-input-is-local-streaming-stt.md)；脚本/数据在仓库外 `../voice-v0-spike/` | **已完成 2026-09-13** |
+| V1 | 模型供给脚本 | **已完成 2026-09-13**：`scripts/voice-model.mjs` + 规格单一来源 `scripts/voice-model.json`（HF → 镜像 → GitHub 归档回退，逐文件 sha256）；`scripts/setup.ps1/sh` 尽力而为接线（失败不阻塞）；`.voice-models/` 入 gitignore；`ZIVITH_VOICE_MODEL_DIR` 可覆盖 | **已完成 2026-09-13** |
+| V2 | API 能力边界 | **已完成 2026-09-13**：`ports/stt.ts` 端口 + `adapters/sherpa-stt.ts`（仓库内唯一 import sherpa-onnx-node 处；加载前强制 sha256；endpoint 停顿分句 + `reset()` 抑制重复伪影）+ `contexts/voice/service.ts`（会话上限 2、空闲 120s 回收、单会话 96MB 上限、热词取 Asset 名称/别名 + WorldEvent 标题）+ `routes/voice.ts`（`GET /voice/status`、`GET /voice/ws` 仅回环；协议 start→二进制 PCM→partial/segment→stop→final）；引擎缺失走明确 error+关闭，不回退云 | **已完成 2026-09-13** |
+| V3 | Web 麦克风 UI | **已完成 2026-09-13**：`chat-composer.tsx` 麦克风按钮（`/voice/status` 探测可用性，不可用禁用+原因提示）+ `public/voice-capture.worklet.js`（≈100ms 帧，采样率原样上报由引擎重采样）+ `lib/voice-dictation.ts` 会话；实时转写上屏、结束后在光标处插入（中文边界不加空格），发送前可编辑（P6） | **已完成 2026-09-13** |
+| V4 | Electron 麦克风权限门 | **已完成 2026-09-13**：`apps/desktop/src/main.cjs` `setPermissionRequestHandler`/`setPermissionCheckHandler` 仅对应用 origin 放行 `'media'`，其余权限一律拒绝 | **已完成 2026-09-13** |
+| V5 | 测试与文档同步 | **已完成 2026-09-13**：`voice.test.ts` 7 项 fake 引擎合同用例（含真实回环 WS）+ `voice-engine.test.ts` 2 项真实模型用例（CI 无模型自动 skip）；`THIRD-PARTY-NOTICES.md`、Technical-Architecture §6.6/§9、`.env.example`、README；typecheck / 全量 277 测试 / prettier 全绿 | **已完成 2026-09-13** |
+
+**退出标准：** 桌面与浏览器均可在 Creator Chat 离线中英听写；音频零持久化；换引擎只动适配器；模型 sha256 校验失败即拒绝加载（fail closed）。代码侧已达成（2026-09-13）；**真实语音已对运行中的 API 端到端验证通过**（WS 推真实中英 WAV → 正确转写;期间修复客户端/服务端握手死锁,协议定为 hello → start → ready → 音频 → stop → final）。剩余手动验收:Electron 内点麦克风 → 系统权限弹窗 → 实时体验。
+
+**护栏/绊线：** 不新增领域实体；转写稿不进导出/版本化（ADR-0010 同款围栏）；无云端回退；SenseVoice（FunASR 自定义许可、非 OSI）未经法务确认不得随产品分发。
+
+---
+
+## Track Eng — 工程加固（Hardening Roadmap）
+
+权威：[hardening-roadmap.md](../engineering/hardening-roadmap.md)（用户 2026-09-13 提供的过程文档 + 仓库绑定）。基线快照：[hardening-baseline.md](../engineering/hardening-baseline.md)。**不为技术加技术**；不覆盖已接受 ADR。
+
+| ID | 任务 | 备注 | 状态 |
+|----|------|-------|--------|
+| ENG0 | Phase 0 冻结基线 | 冻结 commit `c6d2157`（含 Track V `7900f7e` + 导入记忆可编辑 `c6d2157`） | **已完成 2026-09-13** |
+| ENG1 | Stage A 系统地图（对着代码） | 不重写 Technical-Architecture。走通：Chat 输入 → Agent/上下文 → LLM → Tool/`apply-intent` → Domain → DB → UI | **未开始** |
+| ENG2 | Stage A 核心对象关系 | Project / Character / Scene / Timeline / Memory / Shot / Asset 在代码中的读写边界，能向他人讲解数据流 | **未开始** |
+| ENG3+ | Stage B 起：review 门禁、测试缺口、安全取证… | 按路线图 §16；登录/K8s/微服务不在列 | **未开始** |
+
+**退出（本轨道整体）：** 能交给 3–10 个真实用户试，且具备基本测试、本机安全面、可打包、可观测的最小闭环——不是 Enterprise Grade。
+
+**绊线：** 不把「Authentication 检查清单」实现成登录页；不插队 I3/W2；不启动 Phase 3 生成生产化。
+
+---
+
+**不属于 Track V：** 独立 `/roleplay` 产品路由；完整记忆中心页面；SiliconFlow 真实 embedding（仍 mock / bigram）。
 
 ---
 
@@ -312,6 +348,10 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
          Track M (memory / novel / roleplay): M1 ✓ → M2 ✓ v1 → M3 ✓ v1
               ↓
          Track D (Electron workspace path) D1–D3 ✓ 2026-09-02 → Track W (workspace files) later
+              ↓
+         Track V (voice input, ADR-0017): V0–V5 ✓ 7900f7e — in freeze
+              ↓
+         Track Eng (hardening): ENG0 freeze ✓ → ENG1/ENG2 Stage A → Stage B… — does not preempt I3/W2; no login
               ↓
          Phase 3 (generation productionize) — continues to defer, per ADR-0008
 
