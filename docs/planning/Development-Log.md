@@ -12,7 +12,15 @@
 
 ---
 
-## 2026-09-13 · pending · feat(voice) · 本地流式听写（ADR-0017 Track V）
+## 2026-09-13 · pending · feat(web,api) · 导入角色的记忆可改可增
+
+小说导入后右侧「TA 记得什么」短事实原先只能删除。补 PATCH/POST 记忆原子，角色档案与记忆面板可编辑、可新增；角色卡按钮改为「编辑角色卡」，避免和记忆编辑挤在一起。
+
+- **feat(api)** `PATCH /memory/atoms/:id`、`POST /memory/projects/:id/atoms`
+- **feat(web)** `character-archive.tsx` / `memory-panel.tsx`
+- 模块：memory 路由与服务、Inspector 角色档案
+
+## 2026-09-13 · 7900f7e · feat(voice) · 本地流式听写（ADR-0017 Track V）
 
 Creator Chat 与 Studio Agent 输入条增加本机 sherpa-onnx 流式听写：音频经 AudioWorklet → 回环 WebSocket → API 适配器，零持久化、失败不回退云端。V0 实测后改用标准版双语 zipformer（int8 ≈190MB）。纳入工程加固冻结基线。
 

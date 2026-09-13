@@ -427,6 +427,48 @@ describe('MemoryService.processRefine（深加工）', () => {
     });
   });
 
+  it('patches an imported trait atom in place', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    await store.createAtom({
+      projectId: 'p1',
+      threadId: null,
+      sourceMessageId: null,
+      entityType: 'character',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '出场 34 章',
+      confidence: 0.6,
+      dedupHash: 'old',
+      memoryOp: 'ADD',
+    });
+    const updated = await service.patchAtom('atom-1', '混血种专员，卡塞尔学院执行部。');
+    expect(updated).toMatchObject({
+      id: 'atom-1',
+      content: '混血种专员，卡塞尔学院执行部。',
+      memoryOp: 'UPDATE',
+    });
+    expect(updated.dedupHash).not.toBe('old');
+  });
+
+  it('creates a manual fact on a character', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    const created = await service.createManualAtom('p1', {
+      entityType: 'character',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '路明非是废柴。',
+    });
+    expect(created).toMatchObject({
+      projectId: 'p1',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '路明非是废柴。',
+      memoryOp: 'ADD',
+    });
+  });
+
   it('creates a persona archive when the character has none', async () => {
     const store = new FakeStore();
     const { service } = makeService(store);

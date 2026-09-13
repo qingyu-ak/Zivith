@@ -59,6 +59,9 @@ export function CharacterArchive({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editingAtomId, setEditingAtomId] = useState<string | 'new' | null>(null);
+  const [atomDraft, setAtomDraft] = useState('');
+  const [atomFactType, setAtomFactType] = useState('trait');
 
   const experiences = eventsExperiencedBy(resources, characterId);
   const relations = relationshipsForCharacter(resources, characterId);
@@ -91,6 +94,7 @@ export function CharacterArchive({
   useEffect(() => {
     void load();
     setEditing(false);
+    setEditingAtomId(null);
   }, [load]);
 
   async function save() {
@@ -111,6 +115,38 @@ export function CharacterArchive({
       setCore(saved);
       setDraft(saved.content);
       setEditing(false);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAtom() {
+    const content = atomDraft.trim();
+    if (!content || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (editingAtomId === 'new') {
+        await api<MemoryAtomItem>(`/memory/projects/${projectId}/atoms`, {
+          method: 'POST',
+          body: {
+            entity_type: 'character',
+            entity_id: characterId,
+            fact_type: atomFactType,
+            content,
+          },
+        });
+      } else if (editingAtomId) {
+        await api<MemoryAtomItem>(`/memory/atoms/${editingAtomId}`, {
+          method: 'PATCH',
+          body: { content },
+        });
+      }
+      setEditingAtomId(null);
+      setAtomDraft('');
+      await load();
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -189,29 +225,95 @@ export function CharacterArchive({
         ))}
       </MemoryGroup>
 
-      <MemoryGroup
-        title={`补充事实 · ${atoms.length}`}
-        empty={!loading && atoms.length === 0 ? '还没有从对话或导入抽出的短事实。' : null}
-      >
+      <MemoryGroup title={`补充事实 · ${atoms.length}`} empty={null}>
+        {!loading && atoms.length === 0 && editingAtomId !== 'new' ? (
+          <li className="text-[11px] leading-5 text-zinc-400">
+            还没有短事实。导入的出场统计不是剧情；点「添加事实」写一条 TA 记得的事。
+          </li>
+        ) : null}
         {atoms.map((atom) => (
-          <li key={atom.id} className="flex items-start justify-between gap-2 text-xs">
-            <span className="min-w-0 break-words text-zinc-600">
-              <span className="mr-1 text-[10px] text-zinc-400">
-                {FACT_LABEL[atom.fact_type] ?? atom.fact_type}
-              </span>
-              {atom.content}
-            </span>
+          <li key={atom.id} className="text-xs">
+            {editingAtomId === atom.id ? (
+              <AtomDraft
+                factType={atom.fact_type}
+                draft={atomDraft}
+                busy={busy}
+                allowFactType={false}
+                onDraft={setAtomDraft}
+                onFactType={setAtomFactType}
+                onSave={() => void saveAtom()}
+                onCancel={() => {
+                  setEditingAtomId(null);
+                  setAtomDraft('');
+                }}
+              />
+            ) : (
+              <div className="flex items-start justify-between gap-2">
+                <span className="min-w-0 break-words text-zinc-600">
+                  <span className="mr-1 text-[10px] text-zinc-400">
+                    {FACT_LABEL[atom.fact_type] ?? atom.fact_type}
+                  </span>
+                  {atom.content}
+                </span>
+                <span className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="text-[11px] text-[#4d6bfe] hover:underline disabled:opacity-50"
+                    onClick={() => {
+                      setEditingAtomId(atom.id);
+                      setAtomDraft(atom.content);
+                      setAtomFactType(atom.fact_type);
+                    }}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    title="删除这条事实"
+                    className="text-zinc-400 hover:text-red-500 disabled:opacity-50"
+                    onClick={() => void removeAtom(atom.id)}
+                  >
+                    ✕
+                  </button>
+                </span>
+              </div>
+            )}
+          </li>
+        ))}
+        {editingAtomId === 'new' ? (
+          <li>
+            <AtomDraft
+              factType={atomFactType}
+              draft={atomDraft}
+              busy={busy}
+              allowFactType
+              onDraft={setAtomDraft}
+              onFactType={setAtomFactType}
+              onSave={() => void saveAtom()}
+              onCancel={() => {
+                setEditingAtomId(null);
+                setAtomDraft('');
+              }}
+            />
+          </li>
+        ) : (
+          <li>
             <button
               type="button"
               disabled={busy}
-              title="删除这条事实"
-              className="shrink-0 text-zinc-400 hover:text-red-500"
-              onClick={() => void removeAtom(atom.id)}
+              className="text-[11px] text-accent hover:underline disabled:opacity-50"
+              onClick={() => {
+                setEditingAtomId('new');
+                setAtomDraft('');
+                setAtomFactType('trait');
+              }}
             >
-              ✕
+              添加事实
             </button>
           </li>
-        ))}
+        )}
       </MemoryGroup>
 
       <div className="mt-3">
@@ -267,7 +369,8 @@ export function CharacterArchive({
           <>
             {sparseArchive ? (
               <p className="mb-1.5 text-[11px] leading-5 text-amber-800">
-                这只是导入统计（出场次数），不是剧情记忆。上面的亲历事件才是 TA 全书读完时记得的事。
+                这只是导入统计（出场次数），不是剧情记忆。点「编辑档案」改成 TA
+                真正记得的事；上面的亲历事件仍会进扮演。
               </p>
             ) : null}
             <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-line bg-zinc-50 px-2.5 py-2 text-xs leading-5 text-zinc-700">
@@ -299,6 +402,74 @@ function MemoryGroup({
       ) : (
         <ul className="space-y-1">{children}</ul>
       )}
+    </div>
+  );
+}
+
+const FACT_TYPE_OPTIONS = [
+  { value: 'trait', label: '性格' },
+  { value: 'desire', label: '目标' },
+  { value: 'event', label: '事件' },
+  { value: 'relation', label: '关系' },
+  { value: 'rule', label: '规则' },
+  { value: 'preference', label: '偏好' },
+  { value: 'constraint', label: '约束' },
+  { value: 'episodic', label: '事实' },
+];
+
+function AtomDraft({
+  factType,
+  draft,
+  busy,
+  allowFactType,
+  onDraft,
+  onFactType,
+  onSave,
+  onCancel,
+}: {
+  factType: string;
+  draft: string;
+  busy: boolean;
+  allowFactType: boolean;
+  onDraft: (value: string) => void;
+  onFactType: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {allowFactType ? (
+        <select
+          value={factType}
+          onChange={(event) => onFactType(event.target.value)}
+          className="rounded-md border border-line bg-white px-2 py-1 text-[11px] text-zinc-600"
+        >
+          {FACT_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      <textarea
+        value={draft}
+        onChange={(event) => onDraft(event.target.value)}
+        rows={3}
+        className="w-full rounded-md border border-line bg-white px-2 py-1.5 text-xs text-zinc-700 outline-none focus:border-accent/60"
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy || !draft.trim()}
+          className="rounded-md border border-accent/60 bg-accent/10 px-2 py-0.5 text-[11px] text-accent disabled:opacity-50"
+          onClick={onSave}
+        >
+          {busy ? '…' : '保存'}
+        </button>
+        <button type="button" className="text-[11px] text-zinc-400" onClick={onCancel}>
+          取消
+        </button>
+      </div>
     </div>
   );
 }

@@ -62,6 +62,8 @@ export function MemoryPanel({
   const [coreSourceLoading, setCoreSourceLoading] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editingAtomId, setEditingAtomId] = useState<string | null>(null);
+  const [atomDraft, setAtomDraft] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +89,21 @@ export function MemoryPanel({
   useEffect(() => {
     if (focusTopic) setCoreFilter(focusTopic);
   }, [focusTopic]);
+
+  const saveAtom = async (atomId: string) => {
+    const content = atomDraft.trim();
+    if (!content) return;
+    setBusy(true);
+    try {
+      await api(`/memory/atoms/${atomId}`, { method: 'PATCH', body: { content } });
+      setEditingAtomId(null);
+      await load();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const remove = async (atomId: string) => {
     setBusy(true);
@@ -176,22 +193,65 @@ export function MemoryPanel({
       ) : (
         <ul className="max-h-64 space-y-1.5 overflow-y-auto">
           {atoms.map((atom) => (
-            <li key={atom.id} className="flex items-start justify-between gap-2 text-xs">
-              <div className="min-w-0">
-                <span className="mr-1.5 inline-flex rounded border border-line px-1 py-0.5 text-[10px] text-zinc-500">
-                  {FACT_LABEL[atom.fact_type] ?? atom.fact_type}
-                </span>
-                <span className="break-words text-zinc-700">{atom.content}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => void remove(atom.id)}
-                disabled={busy}
-                className="shrink-0 text-zinc-400 hover:text-red-500 disabled:opacity-50"
-                title="删除该记忆"
-              >
-                ✕
-              </button>
+            <li key={atom.id} className="text-xs">
+              {editingAtomId === atom.id ? (
+                <div className="space-y-1">
+                  <textarea
+                    value={atomDraft}
+                    onChange={(event) => setAtomDraft(event.target.value)}
+                    rows={3}
+                    className="w-full rounded border border-line bg-white px-2 py-1 text-xs text-zinc-700 outline-none focus:border-accent/60"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={busy || !atomDraft.trim()}
+                      className="rounded border border-line px-2 py-0.5 text-[11px] text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                      onClick={() => void saveAtom(atom.id)}
+                    >
+                      {busy ? '…' : '保存'}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[11px] text-zinc-400"
+                      onClick={() => setEditingAtomId(null)}
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="mr-1.5 inline-flex rounded border border-line px-1 py-0.5 text-[10px] text-zinc-500">
+                      {FACT_LABEL[atom.fact_type] ?? atom.fact_type}
+                    </span>
+                    <span className="break-words text-zinc-700">{atom.content}</span>
+                  </div>
+                  <span className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="text-[11px] text-[#4d6bfe] hover:underline disabled:opacity-50"
+                      onClick={() => {
+                        setEditingAtomId(atom.id);
+                        setAtomDraft(atom.content);
+                      }}
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void remove(atom.id)}
+                      disabled={busy}
+                      className="text-zinc-400 hover:text-red-500 disabled:opacity-50"
+                      title="删除该记忆"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </div>
+              )}
             </li>
           ))}
         </ul>

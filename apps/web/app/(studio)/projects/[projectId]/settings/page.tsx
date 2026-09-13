@@ -289,7 +289,8 @@ function MemorySection({ projectId }: { projectId: string }) {
         <li className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
           <p className="font-medium">记忆面板（L1 原子 / L2 核心块）</p>
           <p className="mt-1 text-sm text-zinc-500">
-            选中角色后，右侧「全书档案」可改扮演会读的记忆。下方记忆面板也能编辑 L2。
+            选中角色后，右侧「全书档案」可改扮演会读的记忆（短事实可编辑/新增）。下方记忆面板也能编辑
+            L1/L2。
           </p>
           <Link
             href={`/projects/${projectId}/world`}

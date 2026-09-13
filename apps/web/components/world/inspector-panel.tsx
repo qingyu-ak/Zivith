@@ -623,7 +623,7 @@ export function InspectorPanel({
                 onClick={() => setEditing(true)}
                 className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
               >
-                编辑
+                {selection.kind === 'character' ? '编辑角色卡' : '编辑'}
               </button>
             </div>
           ) : null}
@@ -982,7 +982,8 @@ function renderEditor(
             onChange={(value) => updateDraft('default_outfit', value)}
           />
           <p className="text-[11px] leading-5 text-zinc-500">
-            名称、简介、个性是角色卡：世界构建对话和「与此角色对话」共用这一份。
+            名称、简介、个性是角色卡：世界构建对话和「与此角色对话」共用这一份。导入记忆在下方「TA
+            记得什么」里改或新增。
           </p>
         </>,
       );
@@ -1234,7 +1235,8 @@ function renderReadonly(
             ]}
           />
           <p className="px-4 pb-3 text-[11px] leading-5 text-zinc-500">
-            名称、简介、个性是角色卡：世界构建对话和「与此角色对话」共用这一份。
+            名称、简介、个性是角色卡：点右上角「编辑角色卡」。导入记忆在下方「TA
+            记得什么」里改或新增。
           </p>
         </>
       );

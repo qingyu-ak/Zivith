@@ -521,6 +521,54 @@ export class MemoryService {
     return this.deps.store.invalidateAtom(atomId);
   }
 
+  async patchAtom(atomId: string, content: string): Promise<MemoryAtomRecord> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new ApiError(400, 'EMPTY_ATOM', '记忆内容不能为空');
+    const [existing] = await this.deps.store.findAtomsByIds([atomId]);
+    if (!existing || existing.status !== 'active') {
+      throw new ApiError(404, 'ATOM_NOT_FOUND', '记忆原子不存在或已失效');
+    }
+    await this.deps.store.updateAtom(atomId, {
+      content: trimmed,
+      memoryOp: 'UPDATE',
+      dedupHash: computeDedupHash({
+        entityType: existing.entityType,
+        entityId: existing.entityId,
+        factType: existing.factType,
+        content: trimmed,
+      }),
+    });
+    const [updated] = await this.deps.store.findAtomsByIds([atomId]);
+    if (!updated) throw new ApiError(404, 'ATOM_NOT_FOUND', '记忆原子不存在或已失效');
+    return updated;
+  }
+
+  async createManualAtom(
+    projectId: string,
+    input: { entityType: string; entityId: string; factType: string; content: string },
+  ): Promise<MemoryAtomRecord> {
+    const content = input.content.trim();
+    if (!content) throw new ApiError(400, 'EMPTY_ATOM', '记忆内容不能为空');
+    const entityType = input.entityType.trim();
+    const entityId = input.entityId.trim();
+    const factType = input.factType.trim() || 'episodic';
+    if (!entityType || !entityId) {
+      throw new ApiError(400, 'ATOM_ENTITY_REQUIRED', '必须指定所属实体');
+    }
+    return this.deps.store.createAtom({
+      projectId,
+      threadId: null,
+      sourceMessageId: null,
+      entityType,
+      entityId,
+      factType,
+      content,
+      confidence: 1,
+      dedupHash: computeDedupHash({ entityType, entityId, factType, content }),
+      memoryOp: 'ADD',
+    });
+  }
+
   /** 记忆路由 /search 用：构造项目世界上下文（实体链接召回需要）。 */
   async projectWorld(projectId: string): Promise<WorldContext | null> {
     return this.deps.store.buildWorldContext(projectId);
