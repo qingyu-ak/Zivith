@@ -27,6 +27,8 @@
 ADR-0001 至 0005 自根目录 `ARCHITECTURE-DECISIONS.md` 迁入，早于
 [架构宪章](../architecture-principles.md)；新 ADR 必须遵循指南中的完整模板。
 
+**产品宪法优先（2026-09-16）：** 与 [Product Constitution](../../product/Product-Constitution.md) 冲突的**产品目标 / 完成定义**以产品宪法为准。ADR-0010 / 0014 / 0015 / 0008 已加 overlay。架构围栏（确认后写库、对话不是世界、不新增 `World` 表）仍有效。
+
 ADR-0008 是首份 **宪章修订（Constitutional Amendment）**——这是
 [architecture-principles.md](../architecture-principles.md) 变更的唯一机制。它在记录本决策的同一次变更中修订了 §1、§3、§9 与 §10。ADR-0008、0009 与 0010 均由
 [IP World Model Repositioning RFC](../rfc/IP-World-Model-Repositioning-RFC.md) 催生；ADR-0011 / 0012 / 0013 由 2026-08-04 创造层优先实现计划催生（0011 / 0012 为 RFC §9 登记的落库 ADR，0013 为本地单用户模式决策）。

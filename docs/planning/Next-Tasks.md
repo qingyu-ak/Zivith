@@ -1,14 +1,16 @@
 # 下一步任务
 
-> 当前实施轨道的工程待办
+> 当前实施轨道的**工程待办快照**（不是产品优先级）
 >
-> Status: Active
+> Status: Active — **从属于产品宪法**
 >
-> Synced: 2026-09-13
+> Synced: 2026-09-16（产品宪法优先）
 >
-> Priority policy: **创造层 v1 已闭环**（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。M1–M3 已落地。长篇导入验收已通过（2026-09-01）。I3 `Organization` 仍需真实项目晋级证据；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。**2026-09-13 进入工程加固（[hardening-roadmap](../engineering/hardening-roadmap.md)）**：停新功能，先 Stage A；不插队 I3/W2。路线图里的「登录/多租户」按 [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md) **不做**。Track V 已纳入冻结（`7900f7e`），见 [hardening-baseline](../engineering/hardening-baseline.md)。
+> **优先级：** [产品宪法](../product/Product-Constitution.md) 的 User Journey A–F 高于本表任何 Track。本文件记录已经做过的工程轨道与技术债，供实现时复用，**不得**当作「下一步做什么」的权威。与宪法冲突处以宪法「立宪裁决」为准（例如 M3「扮演不反写世界」不再是完成定义）。
 >
-> Related: [Product-Positioning.md](../product/Product-Positioning.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [IP World Model Repositioning RFC](../architecture/rfc/IP-World-Model-Repositioning-RFC.md)
+> Priority policy（工程史）：创造层 v1 已闭环（2026-08-16 合并进 `main`）。H6 可变世界时间绑定、H7 派生 Track（Camera/Style/Prompt/Model，只读投影）已落地。M1–M3 已落地（扮演写世界仍是 Journey 缺口）。长篇导入验收已通过（2026-09-01）。I3 `Organization` 仍需真实项目晋级证据；Phase 3 生成生产化继续后移（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。**2026-09-13 工程加固冻结推迟**：用户要求先补 Studio 缺口（新建角色、实体编辑、实体轨道），再谈 ENG0。不插队 I3/W2。路线图里的「登录/多租户」按 [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md) **不做**。Track V 已入库（`7900f7e`），见 [hardening-baseline](../engineering/hardening-baseline.md)。上一份 P0 总任务书未再次启用前不按其顺序插队。
+>
+> Related: [Product Constitution](../product/Product-Constitution.md), [Product-Positioning.md](../product/Product-Positioning.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Implementation-Plan.md](Implementation-Plan.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [IP World Model Repositioning RFC](../architecture/rfc/IP-World-Model-Repositioning-RFC.md)
 
 ---
 
@@ -173,7 +175,7 @@
 | H2 | EntityRevision/ChangeEvent 表与基线回填 | Prisma 表 + `backfillEntityBaselines`；无读路径切换 | 已完成 2026-07-30 |
 | H3 | 先影子写再事务性 State 双写 | 功能开关默认 **关**；经 env 按 Entity 使用 `shadow` / `dual` | 已完成 2026-07-30 |
 | H4 | 只读 Presentation Timeline | 导入既有 Scene/Shot 顺序；World Time 默认跟随；**2026-08-04 起以世界线视图优先落地**（非均匀刻度 + 轨道化）；**2026-08-05 世界线 v1 已落地（`/projects/:id/world`）** | **已完成 v1（2026-08-05）** — Production 视图后续 |
-| H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；**2026-08-14** 补地点轨、事件标题刻度、角色按 `character_ids` 锚定事件、地点按场景 `location_id` 锚定、世界时间偏离可见（信封 label 原样展示，不改写呈现主轴）；首发无拖拽编辑 | **已完成 v1（2026-08-05）+ 2026-08-14 细化** — 高级 track/编辑后续 |
+| H5 | 最小 Track UI（世界线优先） | v1 先 event/character/scene 轨道；**2026-08-14** 补地点轨、事件标题刻度、角色按 `character_ids` 锚定事件、地点按场景 `location_id` 锚定、世界时间偏离可见（信封 label 原样展示，不改写呈现主轴）；**2026-09-13** 角色/地点剪辑块拖拽写回事件出场 / 场景地点（不再只进 localStorage） | **已完成 v1（2026-08-05）+ 2026-08-14 细化 + 2026-09-13 拖拽落库** |
 | H6 | 可变 WorldTime 绑定 | 自定义维度、模糊/区间/相对/平行时间；核心只校验信封，不解释历法值 | **已完成（2026-08-16）** |
 | H7 | 高级派生 Track 投影 | Camera/Style/Prompt/Model 只读投影 | **已完成 v1（2026-08-16）** — 制作视图投影，不落库 |
 | H8 | Object/Event/Organization Entity 扩展 | **已被 Track I 取代** — 世界实体扩展现有独立的分片门禁轨道 | 已取代 2026-07-31 |
@@ -252,9 +254,9 @@
 |----|------|-------|--------|
 | M1 | 分层记忆 + 上下文窗口 | L0 原文 / L1 原子 / L2 核心；同步规则归档 + 队列深加工；三路 RRF 检索；ThreadContextState 压缩；世界工作区记忆面板 | **已完成 2026-08-23**（ADR-0014） |
 | M2 | 小说导入 | 上传 txt → 切章 → 规则抽取 → Asset/WorldEvent/Relationship + 记忆卡；UTF-8/GB18030；人名/地点停用词；剥粘连与语气尾巴；虚词残片不进卡；头衔/先生残片不进卡；地点 ≥3 次才入库；轻量卡提及 ≥5；事件标题「谁 · 做了什么」，每章最多 2 条；整体撤销；轻量升级为全量卡；按章 retry；世界层写入失败保留部分报告并可幂等续写，撤销按 importId 扫孤儿 Asset | **已完成 v1 2026-08-23**（ADR-0015）；解码与停用词 **2026-08-30**；抽取质量 **2026-08-31**；虚词残片 **2026-08-31**；轻量升级 **2026-08-31**；按章 retry **2026-08-31**；世界层写入失败可续/可撤 **2026-08-31**；头衔残片 **2026-08-31**；长篇验收 **2026-09-01** |
-| M3 | 时间锚定扮演 | `RoleplayThread` 旁表复用消息层；侧栏「角色」Tab；不反写世界实体。认知边界：锚点前亲历 + 问句命中锚点后事件时此轮强制不知情。扮演与世界构建对话读 Studio 角色卡。用户默认读者，可选已有卡或新建自己；Inspector 与对话顶栏均可切换 | **已完成 v1 2026-08-23**；侧栏分 Tab / 角色卡回灌 / 用户身份 **2026-08-30**；对话顶栏切换身份 **2026-08-31**；防剧透硬约束 **2026-08-31** |
+| M3 | 时间锚定扮演 | `RoleplayThread` 旁表复用消息层；侧栏「角色」Tab。**产品目标（宪法）：** 对话可产生需确认的记忆 / 事件 / 关系 / 世界状态。**实现现状：** 认知边界（锚点前亲历 + 问句命中锚点后事件时此轮强制不知情）；扮演与世界构建读 Studio 角色卡；用户默认可切换身份。尚未把扮演产出提成世界提案。 | **工程 v1 2026-08-23**（写世界仍为 Journey E 缺口） |
 
-**退出标准：** 无密钥时规则记忆 + 导入 + 扮演全链路可跑；导入可整体撤销；扮演不经提案写入世界层。
+**退出标准：** 无密钥时规则记忆 + 导入 + 扮演全链路可跑；导入可整体撤销。扮演产生的世界变化须经用户确认后写入——**尚未达到产品宪法 Journey E。**
 
 **当前下一刀（2026-09-05）：** Track W1 标记已落地。**W2（IP Core / 实体 / 聊天目录布局）未做**，须另开计划并先拍板库 vs 文件权威。不插队 I3。
 
@@ -303,8 +305,8 @@
 
 | ID | 任务 | 备注 | 状态 |
 |----|------|-------|--------|
-| ENG0 | Phase 0 冻结基线 | 冻结 commit `c6d2157`（含 Track V `7900f7e` + 导入记忆可编辑 `c6d2157`） | **已完成 2026-09-13** |
-| ENG1 | Stage A 系统地图（对着代码） | 不重写 Technical-Architecture。走通：Chat 输入 → Agent/上下文 → LLM → Tool/`apply-intent` → Domain → DB → UI | **未开始** |
+| ENG0 | Phase 0 冻结基线 | 用户 2026-09-13 改口：先不冻结，补 Studio 实体缺口。Track V `7900f7e` 与记忆编辑 `c6d2157` 已在产品分支，但不作为冻结截止 | **推迟** |
+| ENG1 | Stage A 系统地图（对着代码） | 不重写 Technical-Architecture。走通：Chat 输入 → Agent/上下文 → LLM → Tool/`apply-intent` → Domain → DB → UI | **未开始**（等 Studio 缺口补完后再开） |
 | ENG2 | Stage A 核心对象关系 | Project / Character / Scene / Timeline / Memory / Shot / Asset 在代码中的读写边界，能向他人讲解数据流 | **未开始** |
 | ENG3+ | Stage B 起：review 门禁、测试缺口、安全取证… | 按路线图 §16；登录/K8s/微服务不在列 | **未开始** |
 
@@ -314,11 +316,26 @@
 
 ---
 
+## Studio 实体完善（冻结推迟期间）
+
+用户 2026-09-13：先不冻结，补新建角色、实体编辑、实体轨道。不做 I3 Organization 轨、不把派生轨落库成独立 TimelineTrack。
+
+| ID | 任务 | 备注 | 状态 |
+|----|------|-------|--------|
+| S1 | 新建角色可发现 | 资源树「+ 角色」行内填名；空态「新建角色」；Inspector 空态也可建 | **已完成 2026-09-13** |
+| S2 | Inspector 编辑补全 | 事件参与角色/关联场景；关系 kind/两端/方向；角色外观细项；场景地点 | **已完成 2026-09-13** |
+| S3 | 实体轨道拖拽落库 | 角色跨度 → 事件 `character_ids`；地点跨度 → 场景 `location_id`；无事件/场景时提示，不静默 localStorage | **已完成 2026-09-13** |
+
+---
+
 **不属于 Track V：** 独立 `/roleplay` 产品路由；完整记忆中心页面；SiliconFlow 真实 embedding（仍 mock / bigram）。
 
 ---
 
 ## 建议工作顺序
+
+> 以下是**已经发生的工程史**，不是 2026-09-16 之后的产品优先级。当前先走产品宪法 Journey，再按缺口开 §25 任务。
+
 ```text
 A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓
@@ -349,9 +366,11 @@ A1 → A2 → A5 → A3 → A4 → A6 → A7
               ↓
          Track D (Electron workspace path) D1–D3 ✓ 2026-09-02 → Track W (workspace files) later
               ↓
-         Track V (voice input, ADR-0017): V0–V5 ✓ 7900f7e — in freeze
+         Track V (voice input, ADR-0017): V0–V5 ✓ 7900f7e
               ↓
-         Track Eng (hardening): ENG0 freeze ✓ → ENG1/ENG2 Stage A → Stage B… — does not preempt I3/W2; no login
+         Studio 实体完善 S1–S3 ✓ — freeze postponed
+              ↓
+         Track Eng (hardening): ENG0 postponed → ENG1/ENG2 Stage A → Stage B… — does not preempt I3/W2; no login
               ↓
          Phase 3 (generation productionize) — continues to defer, per ADR-0008
 

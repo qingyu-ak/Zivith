@@ -7,6 +7,10 @@
 - **Reversibility:** Costly
 - **Source RFC:** [IP World Model Repositioning RFC](../rfc/IP-World-Model-Repositioning-RFC.md)
 
+## Product Constitution overlay（2026-09-16）
+
+用户与产品宪法口中的「世界」就是本 ADR 的 `Project`。Journey 文案可以分「创建项目 / 创建世界」两步，数据上仍是一个 `Project`。禁止新增顶层 `World` 或 `IP` 实体。电影制作仍是表达层，不是 V0.x 的第一验收单位——第一阶段听产品宪法 Journey A–F。
+
 ## Context
 
 Zivith 当前的对外表述是「AI-native Film Production Studio」，宪法 §1 也以 filmmaking 为锚点。这个表述准确描述了已经建成的东西——`Story → Scene → Visual Prep → Shot → PromptVersion → Output` 的完整制作链路已经跑通——但它没有描述这套系统真正的长期价值所在。

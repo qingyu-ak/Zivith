@@ -26,12 +26,13 @@
 
 | 优先级 | 文档 | 目的 |
 |----------|----------|---------|
+| 0 | [`product/Product-Constitution.md`](../product/Product-Constitution.md) | **产品宪法**：Journey 验收、任务流程、§25 模板。未填模板并经确认不得写代码 |
 | 1 | [`product/Design-Philosophy.md`](../product/Design-Philosophy.md) | 理解产品愿景与设计原则 |
 | 2 | [`domain/Core-Domain-Model.md`](../domain/Core-Domain-Model.md) | 理解创作层级与所有权模型 |
 | 3 | [`domain/Shot-Specification.md`](../domain/Shot-Specification.md) | 理解核心领域对象 schema |
 | 4 | [`domain/Asset-Model.md`](../domain/Asset-Model.md) | 理解可复用资源分类 |
 | 5 | [`domain/AI-Agent-Collaboration.md`](../domain/AI-Agent-Collaboration.md) | 理解 Agent 架构与工作流 |
-| 6 | [`architecture/architecture-principles.md`](../architecture/architecture-principles.md) | 理解约束一切决策的架构宪章 |
+| 6 | [`architecture/architecture-principles.md`](../architecture/architecture-principles.md) | 理解约束领域契约的架构宪章 |
 | 7 | [`engineering/Technical-Architecture.md`](Technical-Architecture.md) | 理解系统边界与数据流 |
 | 8 | [`planning/Implementation-Plan.md`](../planning/Implementation-Plan.md) | 理解分阶段路线图与各阶段范围 |
 | 9 | [`planning/Memory-Novel-Roleplay-Design.md`](../planning/Memory-Novel-Roleplay-Design.md) | 分层记忆、小说导入、扮演（ADR-0014 / 0015） |
@@ -39,6 +40,8 @@
 
 具有架构重要性的变更还必须遵循
 `architecture/adr-guide.md` 与 `architecture/rfc-guide.md`：不可逆决策记录为 ADR，跨上下文或带迁移的变更在实现前需要 RFC。
+
+**文档冲突：** 产品目标与完成定义以产品宪法为准（含「扮演不反写世界」等旧句）。用户说的世界 = `Project`。不得为对齐文案新建领域实体。
 
 ---
 

@@ -6,7 +6,7 @@
 >
 > Status: Active — 已于 2026-08-31 同步（创造层 v1 + 分层记忆 / 小说导入抽取质量 / 角色扮演用户身份）
 >
-> Related: [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md), [Shot-Specification.md](../domain/Shot-Specification.md), [Asset-Model.md](../domain/Asset-Model.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0014](../architecture/adr/0014-layered-memory-system.md), [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md)
+> Related: [Product Constitution](../product/Product-Constitution.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md), [Shot-Specification.md](../domain/Shot-Specification.md), [Asset-Model.md](../domain/Asset-Model.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0014](../architecture/adr/0014-layered-memory-system.md), [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md)
 
 ---
 
@@ -313,7 +313,7 @@
 
 ### Roleplay（时间锚定扮演）
 
-免登录。实现见 [`apps/api/src/routes/roleplay.ts`](../../apps/api/src/routes/roleplay.ts)。消息落在 `CreatorChatMessage`；`RoleplayThread` 旁表指向同一线程。`userCharacterAssetId` 为空表示用户是读者；非空则用户以该角色卡发言，且不得与 AI 角色相同。不反写 Asset / WorldEvent / Relationship。对话顶栏与 Inspector 均可切换「你是谁」。有时间锚点时，用户问句若与锚点之后事件的标题/摘要重叠，此轮不调用生成模型，直接以角色口吻表示不知情（不把未来事件列表写入提示词）。
+免登录。实现见 [`apps/api/src/routes/roleplay.ts`](../../apps/api/src/routes/roleplay.ts)。消息落在 `CreatorChatMessage`；`RoleplayThread` 旁表指向同一线程。`userCharacterAssetId` 为空表示用户是读者；非空则用户以该角色卡发言，且不得与 AI 角色相同。**实现现状：** 本路由不直接写 Asset / WorldEvent / Relationship。**产品目标（宪法 Journey E）：** 扮演可发出待确认的世界提案，确认后经既有写入通道落库，禁止静默反写。对话顶栏与 Inspector 均可切换「你是谁」。有时间锚点时，用户问句若与锚点之后事件的标题/摘要重叠，此轮不调用生成模型，直接以角色口吻表示不知情（不把未来事件列表写入提示词）。
 
 | 方法 | 路径 | 说明 |
 |--------|------|-------------|

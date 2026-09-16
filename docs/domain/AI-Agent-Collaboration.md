@@ -6,7 +6,7 @@
 >
 > Status: Active（生效）— 已于 2026-07-28 同步（prompt-draft Visual Prep + 延后 generate）；Agent 角色已于 2026-07-31 按 IP 世界模型重组（[ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）；2026-08-30 增补 Roleplay Agent（非流水线角色）
 >
-> Related: [Product-Positioning.md](../product/Product-Positioning.md), [Core-Domain-Model.md](Core-Domain-Model.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Shot-Specification.md](Shot-Specification.md), [Asset-Model.md](Asset-Model.md), [Next-Tasks.md](../planning/Next-Tasks.md), [ADR-0009](../architecture/adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0014](../architecture/adr/0014-layered-memory-system.md), [ADR-0015](../architecture/adr/0015-novel-import-is-batch-memory-ingest.md), [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md)
+> Related: [Product Constitution](../product/Product-Constitution.md), [Product-Positioning.md](../product/Product-Positioning.md), [Core-Domain-Model.md](Core-Domain-Model.md), [UI-Information-Architecture.md](../product/UI-Information-Architecture.md), [Shot-Specification.md](Shot-Specification.md), [Asset-Model.md](Asset-Model.md), [Next-Tasks.md](../planning/Next-Tasks.md), [ADR-0009](../architecture/adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0014](../architecture/adr/0014-layered-memory-system.md), [ADR-0015](../architecture/adr/0015-novel-import-is-batch-memory-ingest.md), [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md)
 
 ---
 
@@ -124,9 +124,9 @@ User provides world lore → asset stage structures Knowledge → User reviews
 | 方面 | 详情 |
 |---|---|
 | 输入 | Studio 角色卡（Asset 名称/简介/个性/别名）+ 用户身份（默认读者，或另一张角色卡）+ MemoryCore 档案补充、锚点 T 之前该角色亲历 WorldEvent、关系快照、用户对白 |
-| 输出 | 扮演回复（SSE）；可选 episodic `MemoryAtom`（链接该角色） |
+| 输出 | 扮演回复（SSE）；可选 episodic `MemoryAtom`（链接该角色）；**产品目标：** 可产出待确认的 `WorldEvent` / `Relationship` / 角色状态提案 |
 | 执行阶段 | 无 — 不在 Story→Video DAG 中 |
-| 硬约束 | **不创建或修改** `Asset` / `WorldEvent` / `Relationship` / `Project.worldview`。反写世界层必须走 World Builder 提案确认（ADR-0010）。Studio「在对话中继续」不得打开扮演线程。有时间锚点时不得用外部作品知识确认尚未亲历的事件 |
+| 硬约束 | **禁止静默**创建或修改 `Asset` / `WorldEvent` / `Relationship` / `Project.worldview`。世界变化必须走与 World Builder 相同的提案确认（ADR-0010 + 产品宪法 Journey E）。**实现现状（缺口）：** 扮演尚未发出世界提案。Studio「在对话中继续」不得打开扮演线程。有时间锚点时不得用外部作品知识确认尚未亲历的事件 |
 
 设计见 [Memory-Novel-Roleplay-Design.md](../planning/Memory-Novel-Roleplay-Design.md) §6。
 

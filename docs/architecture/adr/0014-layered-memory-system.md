@@ -19,6 +19,10 @@ Creator Chat 每轮只携带近期消息 + 世界状态快照：跨会话遗忘�
 7. 检索三路混合（实体链接 + 向量 + bigram 关键词）RRF 融合；无密钥轨全功能可用（Mock embedding = bigram 哈希向量）。
 8. 上下文窗口（ThreadContextState）：滚动摘要 + 最近 K 条原文按预算分配；压缩只作用于 prompt，事实已在 L1/L2 无损保存。
 
+## Product Constitution overlay（2026-09-16）
+
+存储结构（L0 / L1 / L2）不变。产品验收口径改为宪法中的分类：事实、事件、关系、用户偏好、角色经历、临时上下文。对照表见 [产品宪法 · 立宪裁决](../../product/Product-Constitution.md)。用户必须能查看、修改，并理解角色为什么记得；Chat 必须用改过的记忆。不要另建一套记忆表来「对齐分类」。
+
 ## 后果
 
 - Creator Chat 获得跨会话长期记忆与自动压缩；M2 小说导入、M3 角色扮演直接复用该管线。

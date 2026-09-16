@@ -1,12 +1,12 @@
 # Zivith Engineering Hardening Roadmap
 
-> Status: Active — Stage A（理解 / 冻结）
+> Status: Active — 冻结推迟；先补 Studio 缺口
 >
 > Synced: 2026-09-13
 >
 > Source: 用户提供的 `Zivith_Engineering_Hardening_Roadmap(2).md`（仓库外原稿）
 >
-> Binding: 本文是**工程流程**，不是新宪法。与 ADR / 架构宪章冲突时，以 ADR 为准。当前基线见 [hardening-baseline.md](hardening-baseline.md)；待办见 [Next-Tasks.md](../planning/Next-Tasks.md) Track Eng。
+> Binding: 本文是**工程流程**，不是宪法。与 [产品宪法](../product/Product-Constitution.md) 冲突时，**产品目标与完成定义听产品宪法**。与 ADR / 架构宪章冲突时，领域契约仍以 ADR 为准。当前基线见 [hardening-baseline.md](hardening-baseline.md)；工程待办快照见 [Next-Tasks.md](../planning/Next-Tasks.md) Track Eng。
 
 ### 与现行决策的绑定（读正文前先看）
 
@@ -17,9 +17,9 @@
 | Phase 5 Agent Tool 不得直连 SQL | 已有端口/适配器 + 提案确认（P4/P6）。加固 = 查绕过，不是重做编排器 | **不要**另起一套 Tool Registry |
 | Phase 8 CI/CD | CI 已有（[ADR-0005](../architecture/adr/0005-single-portable-ci-quality-gate.md)：format/lint/typecheck/test/build） | 下一刀是 **CD / 打包 / 干净机器安装**，不是再写一套 CI |
 | Phase 9–11 发布 | Electron 桌面壳已有（[ADR-0016](../architecture/adr/0016-local-creative-surface-is-electron.md)） | 不引入 K8s / Service Mesh / 云 staging |
-| 继续加功能 | 本阶段**冻结新功能**。I3 / W2 / Phase 3 生成生产化仍不插队 | Track V 已入库 `7900f7e`，纳入冻结 |
+| 继续加功能 | 用户 2026-09-13 改口：**冻结推迟**，先补 Studio 新建角色 / 实体编辑 / 实体轨道。I3 / W2 / Phase 3 生成生产化仍不插队 | Track V 已入库 `7900f7e`，不作为冻结截止 |
 
-执行顺序以文末 **§16 Stage A→F** 为准。ENG0 已冻结（`c6d2157`）。当前做 Stage A：整理系统地图、理解核心数据流与 Agent 调用链。
+执行顺序以文末 **§16 Stage A→F** 为准。ENG0 冻结推迟。当前先补 Studio 产品缺口，再回到 Stage A：整理系统地图、理解核心数据流与 Agent 调用链。
 
 ---
 
