@@ -16,6 +16,7 @@ export default tseslint.config(
       'apps/api/scripts/**',
       'apps/api/vitest.config.ts',
       'apps/web/vitest.config.ts',
+      'experiments/cosmos/vite.config.ts',
     ],
   },
   eslint.configs.recommended,

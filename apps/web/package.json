@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@zivith/cosmos": "workspace:*",
+    "@zivith/domain": "workspace:*",
     "@zivith/ui": "workspace:*",
     "next": "^16.2.10",
     "react": "19.2.7",

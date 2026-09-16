@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/src/index.js"
+    },
+    "./space": {
+      "types": "./src/space.ts",
+      "default": "./src/space.ts"
     }
   },
   "scripts": {
