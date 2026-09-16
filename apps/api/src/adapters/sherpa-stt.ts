@@ -3,6 +3,7 @@
 // fail closed:模型文件缺失/大小或 sha256 不符/原生绑定加载失败 → 引擎不可用,绝不回退云端。
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import type { OnlineRecognizer } from 'sherpa-onnx-node';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -118,7 +119,7 @@ class SherpaSttEngine implements SttEngine {
   readonly info: SttEngineInfo;
 
   constructor(
-    private readonly recognizer: import('sherpa-onnx-node').OnlineRecognizer,
+    private readonly recognizer: OnlineRecognizer,
     info: SttEngineInfo,
   ) {
     this.info = info;

@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AddressInfo } from 'node:net';
 import type { FastifyInstance } from 'fastify';
-import { WebSocket } from 'ws';
+import { WebSocket, type RawData } from 'ws';
 import { buildApp } from '../src/app.js';
 import { VoiceService } from '../src/contexts/voice/service.js';
 import {
@@ -74,8 +74,13 @@ function connectClient(url: string): VoiceTestClient {
     timer: NodeJS.Timeout;
     resolve: (value: Record<string, unknown>) => void;
   }> = [];
-  ws.on('message', (data) => {
-    const parsed = JSON.parse(String(data)) as Record<string, unknown>;
+  ws.on('message', (data: RawData) => {
+    const text = Buffer.isBuffer(data)
+      ? data.toString('utf8')
+      : Array.isArray(data)
+        ? Buffer.concat(data).toString('utf8')
+        : Buffer.from(data).toString('utf8');
+    const parsed = JSON.parse(text) as Record<string, unknown>;
     const waiter = waiters.shift();
     if (waiter) {
       clearTimeout(waiter.timer);

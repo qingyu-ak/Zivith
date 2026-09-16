@@ -14,7 +14,7 @@ interface VoiceSocket {
 }
 
 export function registerVoiceRoutes(app: FastifyInstance, voice: VoiceService): void {
-  app.get('/voice/status', async () => voice.status);
+  app.get('/voice/status', () => voice.status);
 
   app.get('/voice/ws', { websocket: true }, (socket: VoiceSocket, request: FastifyRequest) => {
     const remote = request.raw.socket.remoteAddress ?? '';

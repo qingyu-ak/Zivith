@@ -6,6 +6,7 @@
 // 全部失败再回退 GitHub 发布归档(≈511MB)解包。
 // 模型规格(文件、sha256、镜像 URL)单一来源:scripts/voice-model.json。
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   copyFileSync,
   createReadStream,
