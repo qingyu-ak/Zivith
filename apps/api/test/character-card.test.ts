@@ -4,6 +4,7 @@ import {
   worldContextToPrompt,
 } from '../src/contexts/world-builder/world-context.js';
 import {
+  cardFromAssetSnapshot,
   composeCharacterPersona,
   formatCharacterCard,
   formatUserSpeakerPrompt,
@@ -28,6 +29,27 @@ describe('formatCharacterCard', () => {
         '个性：表面废柴，关键时刻清醒',
       ].join('\n'),
     );
+  });
+});
+
+describe('cardFromAssetSnapshot', () => {
+  it('reads name / description / personality from a character revision snapshot', () => {
+    expect(
+      cardFromAssetSnapshot(
+        {
+          name: '林夜',
+          description: '普通学生',
+          aliases: ['夜哥'],
+          data: { personality: '内向' },
+        },
+        '未命名',
+      ),
+    ).toEqual({
+      name: '林夜',
+      description: '普通学生',
+      personality: '内向',
+      aliases: ['夜哥'],
+    });
   });
 });
 

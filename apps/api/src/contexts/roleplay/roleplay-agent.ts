@@ -5,12 +5,16 @@ import type { PrismaClient } from '@zivith/database';
 import type { LLMAdapter } from '../../ports/llm.js';
 import { estimateTokens } from '../memory/context-window.js';
 import type { EffectiveAgentEffort } from '../agent-effort.js';
+import { pickAssetRevisionAtOrder } from '@zivith/domain';
 import {
+  cardFromAssetSnapshot,
   composeCharacterPersona,
   formatCharacterCard,
   formatUserSpeakerPrompt,
   personalityFromAssetData,
+  type CharacterCardInput,
 } from '../world/character-card.js';
+import { entityRevisionDto } from '../history/entity-revisions.js';
 
 export interface RoleplayChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -31,6 +35,8 @@ export interface CharacterState {
   traits: string[];
   userLabel: string;
   userSection: string;
+  /** Inspector 阶段名；无锚点或无绑定时为 null。 */
+  stageLabel: string | null;
 }
 
 /** 用户问句与锚点之后事件标题/摘要共享足够连续字时，视为在问尚未发生的事。 */
@@ -147,16 +153,23 @@ export async function buildCharacterState(
     })
     .slice(0, 12);
 
-  const card = formatCharacterCard({
+  const currentCard: CharacterCardInput = {
     name: asset.name,
     description: asset.description,
     personality: personalityFromAssetData(asset.data),
     aliases: asset.aliases,
-  });
-  const userSpeaker = await loadUserSpeaker(db, projectId, userCharacterAssetId ?? null);
+  };
+  const asOf = await resolveAssetCardAtAnchor(db, asset.id, currentCard, anchorOrder);
+  const card = formatCharacterCard(asOf.card);
+  const userSpeaker = await loadUserSpeaker(
+    db,
+    projectId,
+    userCharacterAssetId ?? null,
+    anchorOrder,
+  );
   return {
-    name: asset.name,
-    description: asset.description,
+    name: asOf.card.name,
+    description: asOf.card.description ?? '',
     persona: composeCharacterPersona(card, core?.content),
     experiences,
     relations,
@@ -166,6 +179,32 @@ export async function buildCharacterState(
     traits: atoms.map((atom) => atom.content).slice(0, 8),
     userLabel: userSpeaker.label,
     userSection: userSpeaker.section,
+    stageLabel: asOf.stageLabel,
+  };
+}
+
+export async function resolveAssetCardAtAnchor(
+  db: PrismaClient,
+  assetId: string,
+  current: CharacterCardInput,
+  presentationOrder: number | null,
+): Promise<{ card: CharacterCardInput; stageLabel: string | null; revision: number | null }> {
+  if (presentationOrder === null) {
+    return { card: current, stageLabel: null, revision: null };
+  }
+  const rows = await db.entityRevision.findMany({
+    where: { entityId: assetId, entityType: 'character', branchId: null },
+    orderBy: { revision: 'asc' },
+  });
+  if (rows.length === 0) {
+    return { card: current, stageLabel: null, revision: null };
+  }
+  const picked = pickAssetRevisionAtOrder(rows.map(entityRevisionDto), presentationOrder);
+  if (!picked) return { card: current, stageLabel: null, revision: null };
+  return {
+    card: cardFromAssetSnapshot(picked.snapshot, current.name),
+    stageLabel: picked.stage_label,
+    revision: picked.revision,
   };
 }
 
@@ -173,6 +212,7 @@ async function loadUserSpeaker(
   db: PrismaClient,
   projectId: string,
   userCharacterAssetId: string | null,
+  presentationOrder: number | null,
 ) {
   if (!userCharacterAssetId) return formatUserSpeakerPrompt(null);
   const userAsset = await db.asset.findFirst({
@@ -183,14 +223,16 @@ async function loadUserSpeaker(
     where: { projectId, kind: 'persona', topic: userAsset.name },
     orderBy: { version: 'desc' },
   });
-  const userCard = formatCharacterCard({
+  const current: CharacterCardInput = {
     name: userAsset.name,
     description: userAsset.description,
     personality: personalityFromAssetData(userAsset.data),
     aliases: userAsset.aliases,
-  });
+  };
+  const asOf = await resolveAssetCardAtAnchor(db, userAsset.id, current, presentationOrder);
+  const userCard = formatCharacterCard(asOf.card);
   return formatUserSpeakerPrompt({
-    name: userAsset.name,
+    name: asOf.card.name,
     card: composeCharacterPersona(userCard, userCore?.content),
   });
 }
@@ -216,7 +258,11 @@ export function buildRoleplaySystemPrompt(
       : '',
     state.relations.length > 0 ? `\n## 你认识的人\n${state.relations.join('\n')}` : '',
     experienceBlock,
-    `\n## 当前时间点\n${state.anchorLabel}`,
+    `\n## 当前时间点\n${state.anchorLabel}${
+      state.stageLabel
+        ? `\n角色处于「${state.stageLabel}」阶段；档案是这一刻的卡，不是最终形态。`
+        : ''
+    }`,
     memoryDigest ? `\n## 与这位用户的过往交流记忆\n${memoryDigest}` : '',
     spoilerLocked
       ? '\n## 此轮硬约束\n用户问起的事不在你的亲历里，属于当前时间点之后。你必须表示不知情或听不懂，禁止确认、禁止描述任何细节。'

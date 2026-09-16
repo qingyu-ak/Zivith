@@ -362,9 +362,11 @@ describe('creator chat schemas (ADR-0010 revised)', () => {
 });
 
 describe('HISTORY_ENTITY_TYPES extension (B3)', () => {
-  it('includes world_event and relationship', () => {
+  it('includes world_event, relationship, character and location', () => {
     expect(HISTORY_ENTITY_TYPES).toContain('world_event');
     expect(HISTORY_ENTITY_TYPES).toContain('relationship');
+    expect(HISTORY_ENTITY_TYPES).toContain('character');
+    expect(HISTORY_ENTITY_TYPES).toContain('location');
   });
 });
 
@@ -472,6 +474,27 @@ describe('world snapshot serializers', () => {
     });
     expect(rel.entity_type).toBe('relationship');
     expect(rel.snapshot.source_type).toBe('character');
+
+    const character = serializeHistorySnapshot('character', {
+      id: 'c1',
+      projectId: 'project-1',
+      type: 'character',
+      name: '林夜',
+      description: '学生',
+      data: { personality: '内向' },
+      asOfWorldEventId: 'evt-1',
+      asOfPresentationOrder: 3,
+      stageLabel: '普通学生',
+      createdAt: created,
+      updatedAt: updated,
+    });
+    expect(character.entity_type).toBe('character');
+    expect(character.snapshot).toMatchObject({
+      name: '林夜',
+      stage_label: '普通学生',
+      as_of_world_event_id: 'evt-1',
+      as_of_presentation_order: 3,
+    });
   });
 });
 

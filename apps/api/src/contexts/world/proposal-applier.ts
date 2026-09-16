@@ -9,6 +9,7 @@ import {
 } from '@zivith/domain';
 import { ApiError } from '../../errors.js';
 import { claimWorkspaceSeed, createWorldProject, isWorkspaceSeed } from './workspace.js';
+import { ensureAssetBaseline, recordAssetHistory } from '../history/record-asset-change.js';
 
 /**
  * ADR-0010 fence: the agent NEVER writes to the world directly.
@@ -192,6 +193,15 @@ async function applyCreateAsset(
       tags,
       data,
     },
+  });
+  await recordAssetHistory(db, {
+    asset,
+    changeKind: 'create',
+    eventType: 'entity.created',
+    idempotencyKey: `proposal:create:${asset.id}`,
+    actorType: 'user',
+    sourceType: 'proposal',
+    sourceId: proposal.kind,
   });
   return {
     kind: proposal.kind,
@@ -396,7 +406,25 @@ async function applyUpdateEntity(
       if (fields.data && typeof fields.data === 'object') {
         data.data = fields.data;
       }
+      await ensureAssetBaseline(db, entity, { sourceType: 'proposal' });
       await db.asset.update({ where: { id }, data });
+      const updated = await db.asset.findFirst({ where: { id } });
+      if (updated) {
+        const asOf =
+          typeof fields.as_of_world_event_id === 'string' ? fields.as_of_world_event_id : undefined;
+        const stageLabel = typeof fields.stage_label === 'string' ? fields.stage_label : undefined;
+        await recordAssetHistory(db, {
+          asset: updated,
+          changeKind: 'update',
+          eventType: 'entity.changed',
+          idempotencyKey: `proposal:update:${updated.id}:${updated.updatedAt.toISOString()}`,
+          actorType: 'user',
+          sourceType: 'proposal',
+          sourceId: proposal.kind,
+          asOfWorldEventId: asOf ?? null,
+          stageLabel: stageLabel ?? null,
+        });
+      }
       return { kind: proposal.kind, projectId, entityType: 'asset', entityId: id, title };
     }
     case 'scene': {

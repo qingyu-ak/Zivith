@@ -9,11 +9,17 @@ import {
 afterEach(() => {
   delete process.env.HISTORY_WRITE_DEFAULT;
   delete process.env.HISTORY_ENTITY_SHOT;
+  delete process.env.HISTORY_ENTITY_CHARACTER;
 });
 
 describe('historyWriteModeFor', () => {
   it('defaults to off', () => {
     expect(historyWriteModeFor('shot')).toBe('off');
+  });
+
+  it('defaults character and location history to dual', () => {
+    expect(historyWriteModeFor('character')).toBe('dual');
+    expect(historyWriteModeFor('location')).toBe('dual');
   });
 
   it('uses HISTORY_WRITE_DEFAULT then per-entity override', () => {

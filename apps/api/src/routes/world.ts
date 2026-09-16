@@ -46,6 +46,7 @@ import {
 import { detectWorldConflicts } from '../contexts/world-builder/conflict-detector.js';
 import { formatMemoryDigest } from '../contexts/memory/retrieval.js';
 import type { MemoryService } from '../contexts/memory/service.js';
+import { getEntityRevision, listEntityRevisions } from '../contexts/history/entity-revisions.js';
 import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
 import { canReuseLastUser, isOpenProposalState } from '../lib/chat-turn.js';
 import type { LLMAdapter } from '../ports/llm.js';
@@ -171,6 +172,7 @@ export function registerWorldRoutes(
   registerWorldEventRoutes(app, db);
   registerRelationshipRoutes(app, db);
   registerTimelineRoutes(app, db);
+  registerEntityRevisionRoutes(app, db);
   registerCreatorChatRoutes(app, db, llm, llmModel, memory);
 }
 
@@ -345,6 +347,50 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
       },
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// EntityRevision 只读面（角色/地点阶段状态；不是第二条时间线）
+// ---------------------------------------------------------------------------
+
+function registerEntityRevisionRoutes(app: FastifyInstance, db: PrismaClient) {
+  const revisionParams = z
+    .object({
+      projectId: idSchema,
+      entityType: z.string().min(1).max(64),
+      entityId: idSchema,
+    })
+    .strict();
+  const revisionOneParams = revisionParams.extend({
+    revision: z.coerce.number().int().positive(),
+  });
+  const revisionQuery = z
+    .object({
+      as_of_world_event_id: idSchema.optional(),
+      presentation_order: z.coerce.number().int().optional(),
+    })
+    .strict();
+
+  app.get('/projects/:projectId/entities/:entityType/:entityId/revisions', async (request) => {
+    const { projectId, entityType, entityId } = revisionParams.parse(request.params);
+    await requireProject(db, projectId);
+    const query = revisionQuery.parse(request.query);
+    return listEntityRevisions(db, projectId, entityType, entityId, {
+      ...(query.as_of_world_event_id ? { asOfWorldEventId: query.as_of_world_event_id } : {}),
+      ...(query.presentation_order !== undefined
+        ? { presentationOrder: query.presentation_order }
+        : {}),
+    });
+  });
+
+  app.get(
+    '/projects/:projectId/entities/:entityType/:entityId/revisions/:revision',
+    async (request) => {
+      const { projectId, entityType, entityId, revision } = revisionOneParams.parse(request.params);
+      await requireProject(db, projectId);
+      return getEntityRevision(db, projectId, entityType, entityId, revision);
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------

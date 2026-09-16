@@ -18,6 +18,7 @@ function state(partial: Partial<CharacterState> = {}): CharacterState {
     traits: [],
     userLabel: '读者',
     userSection: '用户是读者。',
+    stageLabel: null,
     ...partial,
   };
 }
@@ -60,5 +61,11 @@ describe('buildRoleplaySystemPrompt', () => {
     const prompt = buildRoleplaySystemPrompt(state(), null, true);
     expect(prompt).toContain('此轮硬约束');
     expect(prompt).toContain('禁止确认、禁止描述任何细节');
+  });
+
+  it('names the bound stage when the card is as-of a world event', () => {
+    const prompt = buildRoleplaySystemPrompt(state({ stageLabel: '普通学生' }), null);
+    expect(prompt).toContain('普通学生');
+    expect(prompt).toContain('不是最终形态');
   });
 });

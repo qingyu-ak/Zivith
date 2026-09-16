@@ -26,7 +26,12 @@ import {
   MEMORY_REFINE_SYSTEM_PROMPT,
   memoryRefineSchema,
 } from './pipeline.js';
-import type { MemoryConflictRecord, MemoryCoreRecord, MemoryStore } from './store.js';
+import type {
+  MemoryAtomRecord,
+  MemoryConflictRecord,
+  MemoryCoreRecord,
+  MemoryStore,
+} from './store.js';
 
 export interface MemoryServiceDeps {
   store: MemoryStore;

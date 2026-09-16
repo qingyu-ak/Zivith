@@ -209,6 +209,40 @@ export function serializeRelationshipSnapshot(row: Row): CanonicalSnapshotEnvelo
   });
 }
 
+function serializeWorldAssetSnapshot(
+  entityType: 'character' | 'location',
+  row: Row,
+): CanonicalSnapshotEnvelope {
+  return envelope(entityType, {
+    id: asString(pick(row, 'id')),
+    project_id: asString(pick(row, 'project_id', 'projectId')),
+    type: asString(pick(row, 'type')) ?? entityType,
+    state: asString(pick(row, 'state')),
+    name: asString(pick(row, 'name')),
+    description: asString(pick(row, 'description')),
+    aliases: asStringArray(pick(row, 'aliases')),
+    appearance: asJson(pick(row, 'appearance')),
+    data: asJson(pick(row, 'data')),
+    tags: asStringArray(pick(row, 'tags')),
+    as_of_world_event_id: asString(pick(row, 'as_of_world_event_id', 'asOfWorldEventId')),
+    as_of_presentation_order: asNumber(
+      pick(row, 'as_of_presentation_order', 'asOfPresentationOrder'),
+    ),
+    stage_label: asString(pick(row, 'stage_label', 'stageLabel')),
+    created_at: asIso(pick(row, 'created_at', 'createdAt')),
+    updated_at: asIso(pick(row, 'updated_at', 'updatedAt')),
+    deleted_at: asIso(pick(row, 'deleted_at', 'deletedAt')),
+  });
+}
+
+export function serializeCharacterSnapshot(row: Row): CanonicalSnapshotEnvelope {
+  return serializeWorldAssetSnapshot('character', row);
+}
+
+export function serializeLocationSnapshot(row: Row): CanonicalSnapshotEnvelope {
+  return serializeWorldAssetSnapshot('location', row);
+}
+
 export function serializeHistorySnapshot(
   entityType: HistoryEntityType,
   row: Row,
@@ -228,6 +262,10 @@ export function serializeHistorySnapshot(
       return serializeWorldEventSnapshot(row);
     case 'relationship':
       return serializeRelationshipSnapshot(row);
+    case 'character':
+      return serializeCharacterSnapshot(row);
+    case 'location':
+      return serializeLocationSnapshot(row);
     default: {
       const _exhaustive: never = entityType;
       throw new Error(`Unsupported history entity type: ${String(_exhaustive)}`);
