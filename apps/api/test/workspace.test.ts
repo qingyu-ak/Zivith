@@ -572,7 +572,42 @@ describe('openWorldFolder', () => {
       // 「当前位置」漂移需要用户显式选择，不静默改绑到副本。
       await expect(openWorldFolder(db, copy)).rejects.toMatchObject({
         code: 'WORLD_IDENTITY_CONFLICT',
+        details: { reason: 'duplicate_folder' },
       });
+    } finally {
+      fs.rmSync(original, { recursive: true, force: true });
+      fs.rmSync(copy, { recursive: true, force: true });
+    }
+  });
+
+  it('switches to the copy via explicit rebind while the original still exists', async () => {
+    const original = makeTempFolder('zivith-copy-a-');
+    const copy = makeTempFolder('zivith-copy-b-');
+    try {
+      writeWorkspaceMarker(original, { id: 'p1', name: '雾城' });
+      writeWorkspaceMarker(copy, { id: 'p1', name: '雾城' });
+      const normalizedCopy = normalizeWorkspacePath(copy);
+      const update = vi.fn().mockImplementation(async ({ where, data }) => ({
+        id: where.id,
+        name: '雾城',
+        workspacePath: data.workspacePath,
+      }));
+      const db = openDb({
+        findById: (id) =>
+          id === 'p1' ? { id: 'p1', name: '雾城', workspacePath: original } : null,
+        update,
+      });
+
+      await expect(openWorldFolder(db, copy)).rejects.toMatchObject({
+        code: 'WORLD_IDENTITY_CONFLICT',
+      });
+      const { project } = await openWorldFolder(db, copy, { rebindProjectId: 'p1' });
+      expect(update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { workspacePath: normalizedCopy },
+      });
+      expect(project.workspacePath).toBe(normalizedCopy);
+      expect(readWorkspaceMarker(copy)).toMatchObject({ worldId: 'p1' });
     } finally {
       fs.rmSync(original, { recursive: true, force: true });
       fs.rmSync(copy, { recursive: true, force: true });

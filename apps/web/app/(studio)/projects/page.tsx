@@ -70,7 +70,10 @@ export default function ProjectsPage() {
     try {
       if (folderPath) {
         // §7 选文件夹新建世界：.zivith/ + 基础目录 + 数据库 World 同 worldId。
-        const created = await createWorldInFolderRequest(folderPath, getFormText(form, 'name'));
+        const created = await createWorldInFolderRequest(folderPath, {
+          name: getFormText(form, 'name'),
+          description: getFormText(form, 'description') || null,
+        });
         const thread = normalizeThread(created);
         const projectId = thread?.project_id;
         formElement.reset();
@@ -336,6 +339,18 @@ export default function ProjectsPage() {
                     }}
                   >
                     绑定文件夹
+                  </Button>
+                </div>
+              ) : null}
+              {project.workspace_path && project.workspace_exists !== false && desktop ? (
+                <div className="mx-1 mb-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      void bindFolder(project, true);
+                    }}
+                  >
+                    重新定位
                   </Button>
                 </div>
               ) : null}

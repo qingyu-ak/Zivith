@@ -37,6 +37,16 @@ export function apiErrorCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null;
 }
 
+/** Nested `error.details.reason` from a backend ApiError payload. */
+export function apiErrorConflictReason(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const payload = error.details as { error?: { details?: unknown } } | undefined;
+  const details = payload?.error?.details;
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) return null;
+  const reason = (details as { reason?: unknown }).reason;
+  return typeof reason === 'string' ? reason : null;
+}
+
 export async function inspectWorldFolder(path: string): Promise<FolderInspect> {
   return api<FolderInspect>('/world/folders/inspect', { method: 'POST', body: { path } });
 }
@@ -51,11 +61,19 @@ export async function openWorldFolderRequest(
   });
 }
 
-export async function createWorldInFolderRequest(path: string, name?: string): Promise<unknown> {
-  const trimmed = name?.trim();
+export async function createWorldInFolderRequest(
+  path: string,
+  input: { name?: string; description?: string | null } = {},
+): Promise<unknown> {
+  const name = input.name?.trim();
+  const description = input.description?.trim();
   return api<unknown>('/world/folders/create', {
     method: 'POST',
-    body: trimmed ? { path, name: trimmed } : { path },
+    body: {
+      path,
+      ...(name ? { name } : {}),
+      ...(description ? { description } : {}),
+    },
   });
 }
 
@@ -113,11 +131,27 @@ export async function openWorldFromFolder(
   try {
     return await openWorldFolderRequest(folderPath);
   } catch (error) {
-    if (apiErrorCode(error) !== 'WORLD_NOT_FOUND') throw error;
-    const confirmed = await dialogs.confirm(
-      '这个世界文件存在，但当前本机没有对应的运行数据。\n\n要创建一个运行副本吗？（沿用文件中的世界身份）',
-    );
-    if (!confirmed) throw new FolderFlowCancelled();
-    return openWorldFolderRequest(folderPath, { on_orphan: 'create' });
+    const code = apiErrorCode(error);
+    if (code === 'WORLD_NOT_FOUND') {
+      const confirmed = await dialogs.confirm(
+        '这个世界文件存在，但当前本机没有对应的运行数据。\n\n要创建一个运行副本吗？（沿用文件中的世界身份）',
+      );
+      if (!confirmed) throw new FolderFlowCancelled();
+      return openWorldFolderRequest(folderPath, { on_orphan: 'create' });
+    }
+    // 复制冲突：原路径仍在。打开流程里可直接确认改用当前文件夹，
+    // 不必先回到项目卡再点「重新定位」（项目卡上也始终露出该按钮）。
+    if (
+      code === 'WORLD_IDENTITY_CONFLICT' &&
+      apiErrorConflictReason(error) === 'duplicate_folder' &&
+      inspect.world_id
+    ) {
+      const confirmed = await dialogs.confirm(
+        `${error instanceof Error ? error.message : '检测到两个文件夹包含同一个世界。'}\n\n要把当前位置改到这个文件夹吗？`,
+      );
+      if (!confirmed) throw new FolderFlowCancelled();
+      return openWorldFolderRequest(folderPath, { rebind_project_id: inspect.world_id });
+    }
+    throw error;
   }
 }

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from './api';
 import {
   apiErrorCode,
+  apiErrorConflictReason,
+  createWorldInFolderRequest,
   FolderFlowCancelled,
   openWorldFolderRequest,
   openWorldFromFolder,
@@ -31,8 +33,8 @@ function makeDialogs(confirm: boolean): FolderFlowDialogs {
   };
 }
 
-function errorWithCode(code: string): ApiError {
-  return new ApiError('x', 409, { error: { code } });
+function errorWithCode(code: string, details?: unknown): ApiError {
+  return new ApiError('x', 409, { error: { code, ...(details !== undefined ? { details } : {}) } });
 }
 
 beforeEach(() => {
@@ -43,6 +45,15 @@ describe('apiErrorCode', () => {
   it('extracts the backend code and ignores other errors', () => {
     expect(apiErrorCode(errorWithCode('WORLD_NOT_FOUND'))).toBe('WORLD_NOT_FOUND');
     expect(apiErrorCode(new Error('boom'))).toBeNull();
+  });
+
+  it('reads duplicate_folder from error details', () => {
+    expect(
+      apiErrorConflictReason(
+        errorWithCode('WORLD_IDENTITY_CONFLICT', { reason: 'duplicate_folder' }),
+      ),
+    ).toBe('duplicate_folder');
+    expect(apiErrorConflictReason(errorWithCode('WORLD_IDENTITY_CONFLICT'))).toBeNull();
   });
 });
 
@@ -122,7 +133,7 @@ describe('openWorldFromFolder', () => {
     );
   });
 
-  it('rethrows errors it does not handle instead of showing a dialog', async () => {
+  it('rethrows path-owner identity conflicts instead of showing a dialog', async () => {
     apiMock
       .mockResolvedValueOnce({ path: 'D:\\W', state: 'ok', world_id: 'p1', name: 'x' })
       .mockRejectedValueOnce(errorWithCode('WORLD_IDENTITY_CONFLICT'));
@@ -131,6 +142,48 @@ describe('openWorldFromFolder', () => {
       message: 'x',
     });
     expect(dialogs.confirm).not.toHaveBeenCalled();
+  });
+
+  it('offers to switch currentPath when opening a duplicate folder copy', async () => {
+    apiMock
+      .mockResolvedValueOnce({ path: 'D:\\W', state: 'ok', world_id: 'p1', name: '雾城' })
+      .mockRejectedValueOnce(
+        errorWithCode('WORLD_IDENTITY_CONFLICT', { reason: 'duplicate_folder' }),
+      )
+      .mockResolvedValueOnce({ id: 't1', project_id: 'p1' });
+    const dialogs = makeDialogs(true);
+    await openWorldFromFolder('D:\\W', { dialogs });
+    expect(dialogs.confirm).toHaveBeenCalledOnce();
+    expect(apiMock).toHaveBeenLastCalledWith(
+      '/world/folders/open',
+      expect.objectContaining({
+        body: { path: 'D:\\W', rebind_project_id: 'p1' },
+      }),
+    );
+  });
+
+  it('cancels switching to a duplicate folder copy', async () => {
+    apiMock
+      .mockResolvedValueOnce({ path: 'D:\\W', state: 'ok', world_id: 'p1', name: '雾城' })
+      .mockRejectedValueOnce(
+        errorWithCode('WORLD_IDENTITY_CONFLICT', { reason: 'duplicate_folder' }),
+      );
+    const dialogs = makeDialogs(false);
+    await expect(openWorldFromFolder('D:\\W', { dialogs })).rejects.toBeInstanceOf(
+      FolderFlowCancelled,
+    );
+    expect(apiMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends name and description when creating a world in a folder', async () => {
+    apiMock.mockResolvedValue({ id: 't1' });
+    await createWorldInFolderRequest('D:\\W', { name: '龙族', description: '现代与龙族共存' });
+    expect(apiMock).toHaveBeenCalledWith(
+      '/world/folders/create',
+      expect.objectContaining({
+        body: { path: 'D:\\W', name: '龙族', description: '现代与龙族共存' },
+      }),
+    );
   });
 
   it('passes rebind straight through for 重新定位', async () => {

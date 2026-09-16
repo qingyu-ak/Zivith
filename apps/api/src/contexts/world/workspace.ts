@@ -445,6 +445,7 @@ export async function openWorldFolder(
         409,
         'WORLD_IDENTITY_CONFLICT',
         `检测到两个文件夹包含同一个世界：${project.workspacePath} 与当前文件夹。请在项目列表对该世界使用「重新定位」选择要使用的位置。`,
+        { reason: 'duplicate_folder' },
       );
     }
     if (project.workspacePath !== workspacePath) {
