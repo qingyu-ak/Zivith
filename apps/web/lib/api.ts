@@ -178,11 +178,17 @@ export async function sendRoleplayTurn(
   onEvent: (event: string, data: unknown) => void,
   effort?: 'fast' | 'balanced' | 'deep',
   signal?: AbortSignal,
-  options?: { retry?: boolean },
+  options?: { retry?: boolean; speakerAssetId?: string; mutedAssetIds?: string[] },
 ): Promise<void> {
   await postChatTurn(
     `/roleplay/threads/${roleplayThreadId}/messages`,
-    { content, ...(effort ? { effort } : {}), ...(options?.retry ? { retry: true } : {}) },
+    {
+      content,
+      ...(effort ? { effort } : {}),
+      ...(options?.retry ? { retry: true } : {}),
+      ...(options?.speakerAssetId ? { speaker_asset_id: options.speakerAssetId } : {}),
+      ...(options?.mutedAssetIds?.length ? { muted_asset_ids: options.mutedAssetIds } : {}),
+    },
     onEvent,
     signal,
   );
@@ -261,6 +267,9 @@ export interface RoleplayThreadDTO {
   character_name: string;
   user_character_asset_id?: string | null;
   user_character_name?: string | null;
+  participant_asset_ids?: string[];
+  participant_names?: string[];
+  is_group?: boolean;
   anchored_world_event_id: string | null;
   anchor_title: string | null;
   updated_at: string;
@@ -271,6 +280,7 @@ export async function createRoleplayThread(
   characterAssetId: string,
   anchoredWorldEventId?: string | null,
   userCharacterAssetId?: string | null,
+  participantAssetIds?: string[],
 ): Promise<{ id: string; thread_id: string; reused: boolean }> {
   return api<{ id: string; thread_id: string; reused: boolean }>('/roleplay/threads', {
     method: 'POST',
@@ -279,7 +289,26 @@ export async function createRoleplayThread(
       character_asset_id: characterAssetId,
       ...(anchoredWorldEventId ? { anchored_world_event_id: anchoredWorldEventId } : {}),
       ...(userCharacterAssetId ? { user_character_asset_id: userCharacterAssetId } : {}),
+      ...(participantAssetIds && participantAssetIds.length >= 2
+        ? { participant_asset_ids: participantAssetIds }
+        : {}),
     },
+  });
+}
+
+export async function rollbackCreatorChat(
+  threadId: string,
+  messageId: string,
+  mode: 'keep' | 'withdraw' = 'keep',
+): Promise<{
+  head_message_id: string | null;
+  suppressed_ids: string[];
+  reverted: Array<{ entity_id: string; title: string; kind: string }>;
+  skipped: Array<{ entity_id: string; title: string; reason: string }>;
+}> {
+  return api(`/world/creator-chats/${threadId}/rollback`, {
+    method: 'POST',
+    body: { message_id: messageId, mode },
   });
 }
 

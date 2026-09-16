@@ -29,6 +29,17 @@ export class FolderFlowCancelled extends Error {
   }
 }
 
+export const NOT_A_ZIVITH_WORLD_MESSAGE =
+  '这不是一个 Zivith 世界。请选择含 .zivith 文件夹的目录，或改用从零开始。';
+
+/** 新建世界「导入 Zivith 世界」只接受已有工程文件夹，不把普通目录建成新世界。 */
+export class NotAZivithWorldError extends Error {
+  constructor() {
+    super(NOT_A_ZIVITH_WORLD_MESSAGE);
+    this.name = 'NotAZivithWorldError';
+  }
+}
+
 /** 从 web ApiError.details（{error:{code}}）里提取后端错误码。 */
 export function apiErrorCode(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
@@ -116,6 +127,29 @@ export async function openWorldFromFolder(
     return openWorldFolderRequest(folderPath, { on_missing: 'import' });
   }
 
+  return continueOpenAfterInspect(folderPath, inspect, dialogs);
+}
+
+/**
+ * 新建世界中心第三张卡片：必须已有 `.zivith/`。普通文件夹拒绝，不询问「作为新世界打开」。
+ */
+export async function openExistingZivithWorldFolder(
+  folderPath: string,
+  options: { dialogs?: FolderFlowDialogs } = {},
+): Promise<unknown> {
+  const dialogs = options.dialogs ?? browserDialogs;
+  const inspect = await inspectWorldFolder(folderPath);
+  if (inspect.state === 'not_a_world') {
+    throw new NotAZivithWorldError();
+  }
+  return continueOpenAfterInspect(folderPath, inspect, dialogs);
+}
+
+async function continueOpenAfterInspect(
+  folderPath: string,
+  inspect: FolderInspect,
+  dialogs: FolderFlowDialogs,
+): Promise<unknown> {
   // §18.2 workspace.json 损坏：[恢复] / [取消]。
   if (inspect.state === 'corrupt') {
     const confirmed = await dialogs.confirm(

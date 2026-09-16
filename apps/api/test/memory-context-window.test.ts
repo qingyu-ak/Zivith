@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBudgetedHistory,
+  clipRollingSummary,
   estimateTokens,
   ruleSummarize,
 } from '../src/contexts/memory/context-window.js';
@@ -30,6 +31,19 @@ describe('buildBudgetedHistory', () => {
     expect(result.window[result.window.length - 1]?.id).toBe('m11');
   });
 
+  it('does not re-evict messages already folded into the rolling summary', () => {
+    const history = Array.from({ length: 12 }, (_, i) => msg(`m${i}`, `第${i}条。`));
+    const result = buildBudgetedHistory({
+      history,
+      previousSummary: '此前说过怕黑。',
+      tokenBudget: 10_000,
+      keepRecentMessages: 4,
+      summarizedUntilMessageId: 'm7',
+    });
+    expect(result.window.map((item) => item.id)).toEqual(['m8', 'm9', 'm10', 'm11']);
+    expect(result.evicted).toHaveLength(0);
+  });
+
   it('everything fits when budget is large', () => {
     const history = [msg('m0', '第一句。'), msg('m1', '第二句。')];
     const result = buildBudgetedHistory({
@@ -54,5 +68,15 @@ describe('ruleSummarize', () => {
     expect(summary).toContain('他渴望成仙。');
     expect(summary.match(/林澈性格冷静。/g)).toHaveLength(1);
     expect(summary).not.toContain('好的。');
+  });
+});
+
+describe('clipRollingSummary', () => {
+  it('keeps a short summary intact and trims an oversized one', () => {
+    expect(clipRollingSummary('此前说过怕黑。')).toBe('此前说过怕黑。');
+    const bulky = Array.from({ length: 80 }, (_, index) => `第${index}行很长的摘要内容。`).join('\n');
+    const clipped = clipRollingSummary(bulky, 40);
+    expect(estimateTokens(clipped)).toBeLessThanOrEqual(40);
+    expect(clipped.length).toBeLessThan(bulky.length);
   });
 });

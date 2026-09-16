@@ -4,13 +4,36 @@ import type { Prisma, PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { buildWorldContext } from '../contexts/world-builder/world-context.js';
-import { formatMemoryDigest } from '../contexts/memory/retrieval.js';
 import type { MemoryService } from '../contexts/memory/service.js';
 import {
   RoleplayAgent,
   buildCharacterState,
+  loadRoleplayTimeIndex,
   type RoleplayChatMessage,
 } from '../contexts/roleplay/roleplay-agent.js';
+import { filterRetrievedChatCatalog } from '../contexts/roleplay/character-cognition.js';
+import {
+  assembleRoleplayRecall,
+  formatRoleplayRecall,
+  roleplayThreadVisibleAtAnchor,
+} from '../contexts/roleplay/chat-recall.js';
+import {
+  groupChatTitle,
+  isGroupChat,
+  lastAssistantSpeakerId,
+  normalizeGroupParticipants,
+  parseParticipantIds,
+  pickNextSpeaker,
+  sameParticipantSet,
+} from '../contexts/roleplay/group-chat.js';
+import {
+  buildGroupContinueCue,
+  collapseRepeatedAssistantBeats,
+  isGroupContinueBeat,
+  looksStuckRepeating,
+  pickContinueTopicSeed,
+  resolveContinueRetrieveQuery,
+} from '../contexts/roleplay/group-continue.js';
 import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
 import { canReuseLastUser } from '../lib/chat-turn.js';
 import { chunkReply } from '../contexts/world-builder/world-builder-agent.js';
@@ -32,11 +55,13 @@ type RoleplayMessageRow = {
   proposal?: unknown;
   proposalKey?: string | null;
   proposalState?: string | null;
+  speakerAssetId?: string | null;
+  suppressed?: boolean;
   createdAt: Date;
 };
 
 /** 与 world.ts 的 chatMessageDto 同形：扮演消息也可携带待确认提案（task-s25）。 */
-function messageDto(message: RoleplayMessageRow) {
+function messageDto(message: RoleplayMessageRow, speakerName?: string | null) {
   return {
     id: message.id,
     thread_id: message.threadId,
@@ -45,6 +70,9 @@ function messageDto(message: RoleplayMessageRow) {
     proposal: message.proposal ?? null,
     proposal_key: message.proposalKey ?? null,
     proposal_state: message.proposalState ?? null,
+    speaker_asset_id: message.speakerAssetId ?? null,
+    speaker_name: speakerName ?? null,
+    suppressed: Boolean(message.suppressed),
     created_at: message.createdAt.toISOString(),
   };
 }
@@ -54,9 +82,27 @@ type RoleplayRecord = {
   projectId: string;
   characterAssetId: string;
   userCharacterAssetId: string | null;
+  participantAssetIds: unknown;
   threadId: string;
   anchoredWorldEventId: string | null;
 };
+
+function rosterIds(roleplay: RoleplayRecord): string[] {
+  return parseParticipantIds(roleplay.participantAssetIds, roleplay.characterAssetId);
+}
+
+async function loadNameMap(
+  db: PrismaClient,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return new Map();
+  const assets = await db.asset.findMany({
+    where: { id: { in: unique } },
+    select: { id: true, name: true },
+  });
+  return new Map(assets.map((item) => [item.id, item.name]));
+}
 
 function wantsEventStream(request: FastifyRequest): boolean {
   const accept = typeof request.headers.accept === 'string' ? request.headers.accept : '';
@@ -85,22 +131,35 @@ export function registerRoleplayRoutes(
         character_asset_id: idSchema,
         user_character_asset_id: idSchema.nullish(),
         anchored_world_event_id: idSchema.nullish(),
+        participant_asset_ids: z.array(idSchema).max(4).optional(),
       })
       .strict()
       .parse(request.body ?? {});
-    const asset = await db.asset.findFirst({
+
+    const requestedParticipants = normalizeGroupParticipants(body.participant_asset_ids ?? []);
+    const isGroup = requestedParticipants.length >= 2;
+    const roster = isGroup ? requestedParticipants : [body.character_asset_id];
+    const leadId = roster[0] ?? body.character_asset_id;
+
+    const assets = await db.asset.findMany({
       where: {
-        id: body.character_asset_id,
+        id: { in: roster },
         projectId: body.project_id,
         type: 'character',
         deletedAt: null,
       },
+      select: { id: true, name: true },
     });
-    if (!asset) throw new ApiError(404, 'CHARACTER_NOT_FOUND', '角色不存在');
+    if (assets.length !== roster.length) {
+      throw new ApiError(404, 'CHARACTER_NOT_FOUND', isGroup ? '有的角色不在这个世界里' : '角色不存在');
+    }
+    const nameById = new Map(assets.map((item) => [item.id, item.name]));
+    const lead = assets.find((item) => item.id === leadId);
+    if (!lead) throw new ApiError(404, 'CHARACTER_NOT_FOUND', '角色不存在');
 
     const userCharacterAssetId = body.user_character_asset_id ?? null;
-    if (userCharacterAssetId === asset.id) {
-      throw new ApiError(400, 'USER_IS_AI_CHARACTER', '不能同时扮演对话双方');
+    if (userCharacterAssetId && roster.includes(userCharacterAssetId)) {
+      throw new ApiError(400, 'USER_IS_AI_CHARACTER', '你是谁不能和正在开口的角色重复');
     }
     let userName: string | null = null;
     if (userCharacterAssetId) {
@@ -118,29 +177,36 @@ export function registerRoleplayRoutes(
     }
 
     const anchorId = body.anchored_world_event_id ?? null;
-    const existing = await db.roleplayThread.findFirst({
+    const candidates = await db.roleplayThread.findMany({
       where: {
         projectId: body.project_id,
-        characterAssetId: asset.id,
         userCharacterAssetId,
         anchoredWorldEventId: anchorId,
         status: 'active',
       },
     });
+    const existing = candidates.find((item) => {
+      const ids = parseParticipantIds(item.participantAssetIds, item.characterAssetId);
+      if (isGroup) return sameParticipantSet(ids, roster);
+      return item.characterAssetId === leadId && !isGroupChat(ids);
+    });
     if (existing) {
       return { id: existing.id, thread_id: existing.threadId, reused: true };
     }
-    const title = userName
-      ? `与「${asset.name}」对话 · 你是${userName}`
-      : `与「${asset.name}」对话`;
+    const title = isGroup
+      ? groupChatTitle(roster.map((id) => nameById.get(id) ?? id))
+      : userName
+        ? `与「${lead.name}」对话 · 你是${userName}`
+        : `与「${lead.name}」对话`;
     const thread = await db.creatorChatThread.create({
       data: { projectId: body.project_id, title },
     });
     const roleplay = await db.roleplayThread.create({
       data: {
         projectId: body.project_id,
-        characterAssetId: asset.id,
+        characterAssetId: leadId,
         userCharacterAssetId,
+        participantAssetIds: isGroup ? roster : [],
         threadId: thread.id,
         anchoredWorldEventId: anchorId,
       },
@@ -160,11 +226,12 @@ export function registerRoleplayRoutes(
     });
     const assetIds = [
       ...new Set(
-        threads.flatMap((t) =>
-          t.userCharacterAssetId
-            ? [t.characterAssetId, t.userCharacterAssetId]
-            : [t.characterAssetId],
-        ),
+        threads.flatMap((thread) => {
+          const participants = parseParticipantIds(thread.participantAssetIds, thread.characterAssetId);
+          return thread.userCharacterAssetId
+            ? [...participants, thread.userCharacterAssetId]
+            : participants;
+        }),
       ),
     ];
     const assets = assetIds.length
@@ -185,7 +252,9 @@ export function registerRoleplayRoutes(
         })
       : [];
     return {
-      items: threads.map((thread) => ({
+      items: threads.map((thread) => {
+        const participants = parseParticipantIds(thread.participantAssetIds, thread.characterAssetId);
+        return {
         id: thread.id,
         thread_id: thread.threadId,
         character_asset_id: thread.characterAssetId,
@@ -196,10 +265,16 @@ export function registerRoleplayRoutes(
         user_character_name: thread.userCharacterAssetId
           ? (assets.find((a) => a.id === thread.userCharacterAssetId)?.name ?? null)
           : null,
+        participant_asset_ids: participants,
+        participant_names: participants.map(
+          (id) => assets.find((asset) => asset.id === id)?.name ?? id,
+        ),
+        is_group: isGroupChat(participants),
         anchored_world_event_id: thread.anchoredWorldEventId,
         anchor_title: anchors.find((a) => a.id === thread.anchoredWorldEventId)?.title ?? null,
         updated_at: thread.updatedAt.toISOString(),
-      })),
+      };
+      }),
     };
   });
 
@@ -208,18 +283,36 @@ export function registerRoleplayRoutes(
     const roleplay = await db.roleplayThread.findUnique({ where: { id } });
     if (!roleplay) throw new ApiError(404, 'THREAD_NOT_FOUND', '扮演线程不存在');
     const messages = await db.creatorChatMessage.findMany({
-      where: { threadId: roleplay.threadId },
+      where: { threadId: roleplay.threadId, suppressed: false },
       orderBy: { createdAt: 'asc' },
       take: 200,
     });
-    return { items: messages.map(messageDto) };
+    const speakerIds = [
+      ...new Set(
+        messages
+          .map((item) => item.speakerAssetId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const names = await loadNameMap(db, [
+      ...speakerIds,
+      ...rosterIds(roleplay),
+      roleplay.userCharacterAssetId ?? '',
+    ]);
+    return {
+      items: messages.map((item) =>
+        messageDto(item, item.speakerAssetId ? (names.get(item.speakerAssetId) ?? null) : null),
+      ),
+    };
   });
 
   app.post('/roleplay/threads/:id/messages', async (request, reply) => {
     const { id } = z.object({ id: idSchema }).strict().parse(request.params);
     const body = z
       .object({
-        content: z.string().trim().min(1).max(8_000),
+        content: z.string().max(8_000).optional().default(''),
+        speaker_asset_id: idSchema.optional(),
+        muted_asset_ids: z.array(idSchema).max(3).optional(),
         effort: z
           .union([
             z.enum(['fast', 'balanced', 'deep']),
@@ -234,32 +327,93 @@ export function registerRoleplayRoutes(
     if (!roleplay || roleplay.status !== 'active') {
       throw new ApiError(404, 'THREAD_NOT_FOUND', '扮演线程不存在或已关闭');
     }
+    const participants = rosterIds(roleplay);
+    const names = await loadNameMap(db, [
+      ...participants,
+      roleplay.userCharacterAssetId ?? '',
+    ]);
+    const namesById = Object.fromEntries(names);
+    const text = body.content.trim();
+    if (!text && !body.speaker_asset_id) {
+      throw new ApiError(400, 'CONTENT_REQUIRED', '请先说一句，或指定谁开口');
+    }
+    if (body.speaker_asset_id && !participants.includes(body.speaker_asset_id)) {
+      throw new ApiError(400, 'SPEAKER_NOT_IN_GROUP', '这个人不在这场对话里');
+    }
+
     const lastMessage = body.retry
       ? await db.creatorChatMessage.findFirst({
-          where: { threadId: roleplay.threadId },
+          where: { threadId: roleplay.threadId, suppressed: false },
           orderBy: { createdAt: 'desc' },
         })
       : null;
+    const liveRows = await db.creatorChatMessage.findMany({
+      where: { threadId: roleplay.threadId, suppressed: false },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
     const userMessage =
-      canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
-        ? lastMessage
-        : await db.creatorChatMessage.create({
-            data: { threadId: roleplay.threadId, role: 'user', content: body.content },
-          });
+      text.length === 0
+        ? null
+        : canReuseLastUser(lastMessage, text, body.retry) && lastMessage
+          ? lastMessage
+          : await db.creatorChatMessage.create({
+              data: {
+                threadId: roleplay.threadId,
+                role: 'user',
+                content: text,
+                speakerAssetId: roleplay.userCharacterAssetId,
+              },
+            });
+
+    const speakerAssetId =
+      body.speaker_asset_id ||
+      pickNextSpeaker({
+        participantIds: participants,
+        namesById,
+        userText: text || liveRows.filter((row) => row.role === 'user').at(-1)?.content || '',
+        lastSpeakerId: lastAssistantSpeakerId(liveRows),
+        ...(body.muted_asset_ids ? { mutedIds: body.muted_asset_ids } : {}),
+      });
+    if (!speakerAssetId) {
+      throw new ApiError(400, 'SPEAKER_REQUIRED', '这场对话里没有能开口的角色');
+    }
 
     const effort = resolveAgentEffort(body.effort);
     const agent = currentAgent();
+    const turn = {
+      userMessage,
+      speakerAssetId,
+      namesById,
+      participants,
+    };
 
     if (wantsEventStream(request)) {
-      await pipeRoleplaySse(request, reply, db, agent, roleplay, userMessage, memory, effort);
+      await pipeRoleplaySse(request, reply, db, agent, roleplay, turn, memory, effort);
       return;
     }
 
-    const result = await createRoleplayReply(db, agent, roleplay, userMessage, memory, effort);
+    const result = await createRoleplayReply(db, agent, roleplay, turn, memory, effort);
+    if (!result.assistantMessage) {
+      return reply.status(200).send({
+        user_message: userMessage
+          ? messageDto(
+              userMessage,
+              roleplay.userCharacterAssetId
+                ? (namesById[roleplay.userCharacterAssetId] ?? null)
+                : null,
+            )
+          : null,
+        assistant_message: null,
+        cancelled: true,
+        effort: effortDto(effort),
+      });
+    }
     const finalMessage = await attachWorldChangeProposals(db, agent, roleplay, {
-      userText: userMessage.content,
+      userText: result.worldChangeUserText,
       assistantMessage: result.assistantMessage,
       world: result.world,
+      speakerAssetId,
       effort,
       log: (error) => request.log.warn({ err: error }, 'roleplay world-change draft failed'),
     });
@@ -268,8 +422,10 @@ export function registerRoleplayRoutes(
       data: { updatedAt: new Date() },
     });
     return reply.status(201).send({
-      user_message: messageDto(userMessage),
-      assistant_message: messageDto(finalMessage),
+      user_message: userMessage
+        ? messageDto(userMessage, roleplay.userCharacterAssetId ? namesById[roleplay.userCharacterAssetId] ?? null : null)
+        : null,
+      assistant_message: messageDto(finalMessage, namesById[speakerAssetId] ?? null),
       memory_ops: result.memoryOps,
       world_change: { mode: finalMessage.draftMode },
       effort: effortDto(effort),
@@ -289,13 +445,14 @@ async function attachWorldChangeProposals(
     userText: string;
     assistantMessage: RoleplayMessageRow;
     world: Awaited<ReturnType<typeof buildWorldContext>>;
+    speakerAssetId: string;
     effort: EffectiveAgentEffort;
     log: (error: unknown) => void;
   },
 ): Promise<RoleplayMessageRow & { draftMode: 'none' | 'rule' | 'llm' }> {
   const world = input.world;
   if (!world) return { ...input.assistantMessage, draftMode: 'none' };
-  const character = world.characters.find((item) => item.id === roleplay.characterAssetId);
+  const character = world.characters.find((item) => item.id === input.speakerAssetId);
   if (!character) return { ...input.assistantMessage, draftMode: 'none' };
   const userCharacter = roleplay.userCharacterAssetId
     ? (world.characters.find((item) => item.id === roleplay.userCharacterAssetId) ?? null)
@@ -336,47 +493,185 @@ async function createRoleplayReply(
   db: PrismaClient,
   agent: RoleplayAgent,
   roleplay: RoleplayRecord,
-  userMessage: { id: string; content: string },
+  turn: {
+    userMessage: RoleplayMessageRow | null;
+    speakerAssetId: string;
+    namesById: Record<string, string>;
+    participants: string[];
+    aborted?: () => boolean;
+  },
   memory?: MemoryService | null,
   effort?: EffectiveAgentEffort,
 ) {
   const resolved = effort ?? resolveAgentEffort();
+  const speakerAssetId = turn.speakerAssetId;
+  const companionNames = turn.participants
+    .filter((id) => id !== speakerAssetId)
+    .map((id) => turn.namesById[id] ?? id);
   const state = await buildCharacterState(
     db,
     roleplay.projectId,
-    roleplay.characterAssetId,
+    speakerAssetId,
     roleplay.anchoredWorldEventId,
     roleplay.userCharacterAssetId,
+    companionNames,
   );
   if (!state) throw new ApiError(404, 'CHARACTER_NOT_FOUND', '角色不存在');
 
   const rows = await db.creatorChatMessage.findMany({
-    where: { threadId: roleplay.threadId },
+    where: { threadId: roleplay.threadId, suppressed: false },
     orderBy: { createdAt: 'asc' },
     take: 200,
   });
-  const historyRows = rows.filter((row) => row.id !== userMessage.id);
+  const historyRows = turn.userMessage
+    ? rows.filter((row) => row.id !== turn.userMessage?.id)
+    : rows;
+  const lastUserText =
+    turn.userMessage?.content ||
+    [...historyRows].reverse().find((row) => row.role === 'user')?.content ||
+    '';
+  const group = isGroupChat(turn.participants);
+  const continueBeat = isGroupContinueBeat({
+    isGroup: group,
+    userMessageContent: turn.userMessage?.content ?? null,
+  });
+  const recentAssistants = historyRows
+    .filter((row) => row.role === 'assistant')
+    .map((row) => row.content);
+  const lastAssistantText = recentAssistants.at(-1) ?? null;
+  const stuckRepeating = continueBeat && looksStuckRepeating(recentAssistants);
+  const topicSeed = continueBeat
+    ? pickContinueTopicSeed({
+        relations: state.relations,
+        experiences: state.experiences,
+        traits: state.traits,
+        companions: state.companions ?? [],
+        recentAssistantTexts: recentAssistants.slice(-8),
+        beatSalt: historyRows.length,
+      })
+    : null;
+  const cueText = continueBeat
+    ? buildGroupContinueCue({
+        speakerName: state.name,
+        userLabel: state.userLabel,
+        companions: state.companions ?? [],
+        topicSeed,
+        stuckRepeating,
+      })
+    : lastUserText.trim() || '请用角色身份接着说一句。';
+  const retrieveQuery = continueBeat
+    ? resolveContinueRetrieveQuery({
+        lastAssistantText,
+        topicSeed,
+        stuckRepeating,
+        fallback: cueText,
+      })
+    : cueText;
+  const worldChangeUserText = continueBeat ? '' : cueText;
 
-  // 世界上下文同时供记忆归档与世界变化起草使用。
   const world = await buildWorldContext(db, roleplay.projectId);
   let memoryOps = null;
-  let memoryDigest: string | null = null;
+  let chatCatalog: string | null = null;
+  let evicted: Array<{ id: string; role: string; content: string }> = [];
   if (memory) {
-    memoryOps = await memory.ingest({
-      messageId: userMessage.id,
-      threadId: roleplay.threadId,
-      projectId: roleplay.projectId,
-      content: userMessage.content,
-      world,
-    });
+    if (turn.userMessage && !group) {
+      memoryOps = await memory.ingest({
+        messageId: turn.userMessage.id,
+        threadId: roleplay.threadId,
+        projectId: roleplay.projectId,
+        content: turn.userMessage.content,
+        world,
+        ingestMode: 'roleplay',
+        defaultEntity: { entityType: 'character', entityId: speakerAssetId },
+      });
+    }
     const retrieved = await memory.retrieve({
       projectId: roleplay.projectId,
-      text: userMessage.content,
+      text: retrieveQuery,
       world,
       topK: resolved.schedule.retrieve_top_k,
     });
-    memoryDigest = formatMemoryDigest(retrieved) || null;
+    const allRoleplays = await db.roleplayThread.findMany({
+      where: { projectId: roleplay.projectId, status: 'active' },
+      select: {
+        threadId: true,
+        anchoredWorldEventId: true,
+        characterAssetId: true,
+        participantAssetIds: true,
+      },
+    });
+    const siblingThreads = allRoleplays.filter((item) =>
+      parseParticipantIds(item.participantAssetIds, item.characterAssetId).includes(speakerAssetId),
+    );
+    const atomIds = retrieved.filter((item) => item.source === 'atom').map((item) => item.id);
+    const atomRows = await memory.atomsByIds(atomIds);
+    const indexThreadIds = [
+      ...new Set([
+        ...atomRows.map((atom) => atom.threadId).filter((id): id is string => Boolean(id)),
+        ...siblingThreads.map((thread) => thread.threadId),
+      ]),
+    ];
+    const { roleplayByThreadId, eventOrderById } = await loadRoleplayTimeIndex(db, indexThreadIds);
+    const catalog = filterRetrievedChatCatalog({
+      items: retrieved,
+      atoms: atomRows,
+      characterAssetId: speakerAssetId,
+      currentAnchorOrder: state.anchorOrder,
+      roleplayByThreadId,
+      eventOrderById,
+    });
+    const visibleAtomIds = new Set(catalog.map((item) => item.id));
+    const visibleThreadIds = siblingThreads
+      .filter((thread) =>
+        roleplayThreadVisibleAtAnchor({
+          anchoredWorldEventId: thread.anchoredWorldEventId,
+          eventOrderById,
+          currentAnchorOrder: state.anchorOrder,
+        }),
+      )
+      .map((thread) => thread.threadId);
+    const cores =
+      visibleAtomIds.size > 0 || retrieved.some((item) => item.source === 'core')
+        ? await memory.listCores(roleplay.projectId)
+        : [];
+    const logs =
+      visibleThreadIds.length > 0
+        ? await db.creatorChatMessage.findMany({
+            where: { threadId: { in: visibleThreadIds }, suppressed: false },
+            orderBy: { createdAt: 'desc' },
+            take: 300,
+            select: { id: true, content: true },
+          })
+        : [];
+    const recentMessageIds = new Set(
+      historyRows.slice(-resolved.schedule.keep_recent_messages).map((row) => row.id),
+    );
+    if (turn.userMessage) recentMessageIds.add(turn.userMessage.id);
+    chatCatalog = formatRoleplayRecall(
+      assembleRoleplayRecall({
+        retrieved,
+        cores,
+        atoms: atomRows,
+        visibleAtomIds,
+        characterName: state.name,
+        query: retrieveQuery,
+        logs,
+        recentMessageIds,
+      }),
+    );
   }
+
+  const speakerOf = (row: { role: string; speakerAssetId?: string | null }): string => {
+    if (row.role === 'user') {
+      return roleplay.userCharacterAssetId
+        ? (turn.namesById[roleplay.userCharacterAssetId] ?? state.userLabel)
+        : state.userLabel;
+    }
+    if (row.speakerAssetId && turn.namesById[row.speakerAssetId]) {
+      return turn.namesById[row.speakerAssetId] ?? state.name;
+    }
+    return state.name;
+  };
 
   let history: RoleplayChatMessage[];
   if (memory) {
@@ -388,26 +683,61 @@ async function createRoleplayReply(
         keepRecentMessages: resolved.schedule.keep_recent_messages,
       },
     );
-    history = window.window.map((message) => ({ role: message.role, content: message.content }));
+    const byId = new Map(historyRows.map((row) => [row.id, row]));
+    history = window.window.map((message) => {
+      const row = byId.get(message.id);
+      const speakerName = row ? speakerOf(row) : '';
+      return speakerName
+        ? { role: message.role, content: message.content, speakerName }
+        : { role: message.role, content: message.content };
+    });
+    evicted = window.evicted;
   } else {
     history = historyRows.slice(-resolved.schedule.history_turns).map((row) => ({
       role: row.role === 'user' || row.role === 'assistant' ? row.role : 'system',
       content: row.content,
+      speakerName: speakerOf(row),
     }));
+  }
+  if (continueBeat) {
+    history = collapseRepeatedAssistantBeats(history);
   }
 
   const response = await agent.respond({
-    text: userMessage.content,
+    text: cueText,
     history,
     state,
-    memoryDigest,
+    chatCatalog,
     effort: resolved,
+    ...(continueBeat ? { continueBeat: true } : {}),
   });
+  if (turn.aborted?.()) {
+    return { assistantMessage: null, memoryOps, world, cueText, worldChangeUserText };
+  }
   const assistantMessage = await db.creatorChatMessage.create({
-    data: { threadId: roleplay.threadId, role: 'assistant', content: response.reply },
+    data: {
+      threadId: roleplay.threadId,
+      role: 'assistant',
+      content: response.reply,
+      speakerAssetId,
+    },
   });
+  if (memory) {
+    await memory.ingest({
+      messageId: assistantMessage.id,
+      threadId: roleplay.threadId,
+      projectId: roleplay.projectId,
+      content: response.reply,
+      world,
+      ingestMode: 'roleplay',
+      defaultEntity: { entityType: 'character', entityId: speakerAssetId },
+    });
+    if (evicted.length > 0) {
+      await memory.updateThreadSummary(roleplay.threadId, evicted);
+    }
+  }
   await db.roleplayThread.update({ where: { id: roleplay.id }, data: { updatedAt: new Date() } });
-  return { assistantMessage, memoryOps, world };
+  return { assistantMessage, memoryOps, world, cueText, worldChangeUserText };
 }
 
 async function pipeRoleplaySse(
@@ -416,7 +746,12 @@ async function pipeRoleplaySse(
   db: PrismaClient,
   agent: RoleplayAgent,
   roleplay: RoleplayRecord,
-  userMessage: RoleplayMessageRow,
+  turn: {
+    userMessage: RoleplayMessageRow | null;
+    speakerAssetId: string;
+    namesById: Record<string, string>;
+    participants: string[];
+  },
   memory?: MemoryService | null,
   effort?: EffectiveAgentEffort,
 ): Promise<void> {
@@ -449,19 +784,30 @@ async function pipeRoleplaySse(
   };
   request.raw.on('close', cleanup);
 
-  writeEvent('user', { user_message: messageDto(userMessage) });
-  writeEvent('status', { phase: 'thinking' });
+  const speakerName = turn.namesById[turn.speakerAssetId] ?? null;
+  const userName = roleplay.userCharacterAssetId
+    ? (turn.namesById[roleplay.userCharacterAssetId] ?? null)
+    : null;
+  if (turn.userMessage) {
+    writeEvent('user', { user_message: messageDto(turn.userMessage, userName) });
+  }
+  writeEvent('status', {
+    phase: 'thinking',
+    speaker_asset_id: turn.speakerAssetId,
+    speaker_name: speakerName,
+  });
 
   const resolvedEffort = effort ?? resolveAgentEffort();
   try {
-    const { assistantMessage, memoryOps, world } = await createRoleplayReply(
+    const { assistantMessage, memoryOps, world, worldChangeUserText } = await createRoleplayReply(
       db,
       agent,
       roleplay,
-      { id: userMessage.id, content: userMessage.content },
+      { ...turn, aborted: () => closed },
       memory,
       resolvedEffort,
     );
+    if (!assistantMessage) return;
     if (memoryOps) {
       writeEvent('memory', { ops: memoryOps });
     }
@@ -469,25 +815,34 @@ async function pipeRoleplaySse(
       writeEvent('delta', { text: chunk });
       if (!closed) await new Promise((resolve) => setTimeout(resolve, 16));
     }
-    // 对白先到；提案在对白结束后一次给出（不边说边改世界）。
-    // 用户在对白期间点了停止（连接已关）：对白已按现有消息保存，未发出的提案不落库。
-    if (closed) return;
-    writeEvent('status', { phase: 'drafting_world_change' });
+    if (closed) {
+      await db.creatorChatMessage.update({
+        where: { id: assistantMessage.id },
+        data: {
+          suppressed: true,
+          proposalState:
+            assistantMessage.proposalState === 'pending' ? 'rejected' : assistantMessage.proposalState,
+        },
+      });
+      return;
+    }
+    writeEvent('status', { phase: 'drafting_world_change', speaker_name: speakerName });
     const finalMessage = await attachWorldChangeProposals(db, agent, roleplay, {
-      userText: userMessage.content,
+      userText: worldChangeUserText,
       assistantMessage,
       world,
+      speakerAssetId: turn.speakerAssetId,
       effort: resolvedEffort,
       log: (err) => request.log.warn({ err }, 'roleplay world-change draft failed'),
     });
     writeEvent('done', {
-      assistant_message: messageDto(finalMessage),
+      assistant_message: messageDto(finalMessage, speakerName),
       world_change: { mode: finalMessage.draftMode },
       effort: effortDto(resolvedEffort),
     });
   } catch (error) {
     writeEvent('error', {
-      message: error instanceof Error ? error.message : '角色扮演回复失败',
+      message: error instanceof Error ? error.message : '没能让角色开口。对白没写进世界。',
     });
   } finally {
     cleanup();

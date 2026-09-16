@@ -6,13 +6,12 @@ import { ApiError } from '../../errors.js';
 import { computeDedupHash } from '../memory/fingerprint.js';
 import { splitChapters, type ChapterText } from './chapter-splitter.js';
 import {
-  aggregateCharacters,
-  extractFromChapter,
-  mergeLocationMentions,
-  selectImportEvents,
-  formatEventTitle,
-  type ChapterExtraction,
-} from './novel-extract.js';
+  buildImportPlan,
+  serializeImportPreview,
+  suggestedWorldName,
+  type NovelImportPreview,
+} from './import-plan.js';
+import { extractFromChapter, type ChapterExtraction } from './novel-extract.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -134,6 +133,35 @@ export class NovelImportService {
       }
       throw error;
     }
+  }
+
+  /** Rule extract only. Does not create Project, NovelImport, assets, or memory. */
+  previewFromText(params: {
+    filename: string;
+    text: string;
+    config?: NovelImportConfig;
+  }): NovelImportPreview {
+    const config = { ...DEFAULTS, ...(params.config ?? {}) };
+    const chapters = splitChapters(params.text);
+    if (chapters.length === 0) {
+      throw new ApiError(400, 'NOVEL_EMPTY', '文本没有可用章节');
+    }
+    const plan = buildImportPlan(this.extractInMemory(chapters), config);
+    return serializeImportPreview(plan, {
+      suggestedName: suggestedWorldName(params.filename, chapters[0]?.title),
+      chapterCount: chapters.length,
+    });
+  }
+
+  private extractInMemory(chapters: ChapterText[]): ChapterExtraction[] {
+    const known = new Set<string>();
+    const extractions: ChapterExtraction[] = [];
+    for (const chapter of chapters) {
+      const extraction = this.extractChapter(chapter.index, chapter.content, known);
+      extractions.push(extraction);
+      for (const name of extraction.characterMentions.keys()) known.add(name);
+    }
+    return extractions;
   }
 
   /** 从首个未完成章继续提取；需要 config.sourceText（本次上传时写入）。 */
@@ -358,24 +386,9 @@ export class NovelImportService {
     extractions: ChapterExtraction[],
     config: Required<NovelImportConfig>,
   ): Promise<NovelImportReport> {
-    // ② 跨章消歧聚合 + 重要性分层
-    const characters = aggregateCharacters(extractions).sort((a, b) => b.mentions - a.mentions);
-    const full = characters.slice(0, config.maxFullCards);
-    const light = characters
-      .slice(config.maxFullCards)
-      .filter((character) => character.mentions >= 5)
-      .slice(0, 25);
-    const locationTotal = new Map<string, number>();
-    for (const extraction of extractions) {
-      const folded = mergeLocationMentions(extraction.locationMentions);
-      for (const [location, count] of folded) {
-        locationTotal.set(location, (locationTotal.get(location) ?? 0) + count);
-      }
-    }
-    const locations = [...mergeLocationMentions(locationTotal).entries()]
-      .filter(([, count]) => count >= 3)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, config.maxLocations);
+    const plan = buildImportPlan(extractions, config);
+    const full = plan.full;
+    const light = plan.light;
 
     const stored = await this.db.novelImport.findUnique({
       where: { id: importId },
@@ -506,7 +519,7 @@ export class NovelImportService {
       }
 
       // ④ 场景 Asset
-      for (const [name] of locations) {
+      for (const name of plan.locations) {
         const existing =
           report.locations.find((location) => location.name === name) ??
           (await this.findImportAsset(projectId, importId, 'location', name));
@@ -531,16 +544,9 @@ export class NovelImportService {
       }
 
       // ⑤ 主线事件：每章最多 2 条，优先多名主要角色同场的强情节句。
-      const fullNames = new Set(full.map((c) => c.name));
-      const selectedEvents = selectImportEvents(
-        extractions.flatMap((extraction) => extraction.events),
-        fullNames,
-        config.maxEvents,
-      );
       let presentationOrder = report.events.length;
-      for (const event of selectedEvents) {
-        const who = event.characters.filter((name) => fullNames.has(name));
-        const title = formatEventTitle(event.text, who.length > 0 ? who : event.characters);
+      for (const event of plan.events) {
+        const title = event.title;
         if (
           report.events.some(
             (entry) => entry.chapterIndex === event.chapterIndex && entry.title === title,
@@ -569,29 +575,15 @@ export class NovelImportService {
       }
 
       // ⑥ 共现关系 Relationship（主要角色间共现 ≥3 次）
-      const cooccurrence = new Map<string, number>();
-      for (const extraction of extractions) {
-        for (const [pair, count] of extraction.cooccurrences) {
-          cooccurrence.set(pair, (cooccurrence.get(pair) ?? 0) + count);
-        }
-      }
-      const relations = [...cooccurrence.entries()]
-        .filter(([pair, count]) => {
-          const [a, b] = pair.split('|');
-          return count >= 3 && fullNames.has(a ?? '') && fullNames.has(b ?? '');
-        })
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 30);
-      for (const [pair] of relations) {
-        const [a, b] = pair.split('|');
-        const sourceId = assetIdByName.get(a ?? '');
-        const targetId = assetIdByName.get(b ?? '');
+      for (const relation of plan.relationships) {
+        const sourceId = assetIdByName.get(relation.source);
+        const targetId = assetIdByName.get(relation.target);
         if (!sourceId || !targetId) continue;
         if (
           report.relationships.some(
             (entry) =>
-              (entry.source === a && entry.target === b) ||
-              (entry.source === b && entry.target === a),
+              (entry.source === relation.source && entry.target === relation.target) ||
+              (entry.source === relation.target && entry.target === relation.source),
           )
         ) {
           continue;
@@ -609,18 +601,17 @@ export class NovelImportService {
             state: 'approved',
           },
         });
-        report.relationships.push({ id: relationship.id, source: a ?? '', target: b ?? '' });
+        report.relationships.push({
+          id: relationship.id,
+          source: relation.source,
+          target: relation.target,
+        });
         await this.saveReport(importId, report);
       }
 
       // ⑦ 世界观要点：高频 trait 句中的规则类句子进报告（不直接覆盖 Project.worldview）
-      report.worldviewHighlights = extractions
-        .flatMap((extraction) => extraction.traits.map((t) => t.text))
-        .slice(0, 8);
-
-      report.skipped = characters
-        .slice(config.maxFullCards + 25)
-        .map((c) => `${c.name}（提及 ${c.mentions} 次，超出规模上限）`);
+      report.worldviewHighlights = plan.worldviewHighlights;
+      report.skipped = plan.skipped;
 
       await this.saveReport(importId, report);
       return report;

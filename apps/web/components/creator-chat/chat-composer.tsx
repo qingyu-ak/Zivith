@@ -95,6 +95,7 @@ export function ChatComposer({
   mentionEnabled = false,
   onMentionPick,
   blocked = false,
+  interruptLabel = '插话',
 }: {
   value: string;
   placeholder: string;
@@ -117,6 +118,8 @@ export function ChatComposer({
   onMentionPick?: (entity: ChatFocus) => void;
   /** 还没有选中世界时锁定输入，避免发送后才报错。 */
   blocked?: boolean;
+  /** 生成中且输入框有字时，发送按钮文案（扮演=插话，世界构建=补充）。 */
+  interruptLabel?: string;
 }) {
   const rootRef = useRef<HTMLFormElement | null>(null);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -135,7 +138,7 @@ export function ChatComposer({
   const cursorRef = useRef(0);
   cursorRef.current = cursor;
   const voice = useVoiceDictation({
-    disabled: sending || blocked,
+    disabled: blocked,
     insert: (text) => {
       const at = areaRef.current?.selectionStart ?? cursorRef.current;
       const next = insertDictatedText(valueRef.current, at, text);
@@ -309,7 +312,12 @@ export function ChatComposer({
       setNotice(mentionHint);
       return;
     }
-    if (blocked || !canSend) return;
+    if (blocked) return;
+    if (sending && value.trim()) {
+      onSubmit();
+      return;
+    }
+    if (!canSend) return;
     onSubmit();
   }
 
@@ -370,7 +378,7 @@ export function ChatComposer({
           placeholder={placeholder}
           value={value}
           rows={2}
-          readOnly={sending || blocked}
+          readOnly={blocked}
           aria-autocomplete={mentionEnabled ? 'list' : undefined}
           aria-expanded={mentionMenuOpen}
           aria-controls={mentionMenuOpen ? 'chat-mention-list' : undefined}
@@ -660,11 +668,12 @@ export function ChatComposer({
             </div>
           ) : null}
         </div>
-        {sending && onStop ? (
+        {sending && !value.trim() && onStop ? (
           <button
             type="button"
             className="grid size-8 place-items-center rounded-lg bg-zinc-900 text-white transition hover:bg-zinc-800"
-            aria-label="停止生成"
+            aria-label="暂停思考"
+            title="取消这一轮思考"
             onClick={onStop}
           >
             <IconStop className="size-3.5" />
@@ -672,12 +681,21 @@ export function ChatComposer({
         ) : (
           <button
             type="submit"
-            disabled={!canSend || Boolean(mentionHint) || blocked}
+            disabled={
+              Boolean(mentionHint) ||
+              blocked ||
+              (!value.trim() && !sending) ||
+              (!canSend && !sending)
+            }
             className="grid size-8 place-items-center rounded-lg bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
-            aria-label="发送"
-            title={mentionHint ?? '发送'}
+            aria-label={sending && value.trim() ? interruptLabel : '发送'}
+            title={mentionHint ?? (sending && value.trim() ? interruptLabel : '发送')}
           >
-            <IconSend className="size-4" />
+            {sending && value.trim() ? (
+              <span className="px-0.5 text-[10px] font-medium leading-none">{interruptLabel}</span>
+            ) : (
+              <IconSend className="size-4" />
+            )}
           </button>
         )}
       </div>

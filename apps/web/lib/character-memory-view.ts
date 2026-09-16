@@ -54,9 +54,14 @@ export function isSparseImportArchive(content: string): boolean {
 export function eventsExperiencedBy(
   resources: WorldResourcesDTO,
   characterId: string,
+  asOfPresentationOrder?: number,
 ): WorldEventDTO[] {
   return resources.entities.world_events
     .filter((event) => worldEventCharacterIds(event).includes(characterId))
+    .filter(
+      (event) =>
+        asOfPresentationOrder === undefined || worldEventOrder(event) <= asOfPresentationOrder,
+    )
     .slice()
     .sort(
       (a, b) =>
@@ -129,4 +134,12 @@ export function relationshipsForCharacter(
 
 export function characterIdsWithout(event: WorldEventDTO, characterId: string): string[] {
   return worldEventCharacterIds(event).filter((id) => id !== characterId);
+}
+
+/** 「调整记忆」里的重要聊天：一行短句，不是对白复读。 */
+export function compactMemoryLine(text: string, maxChars = 80): string {
+  const trimmed = text.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return '';
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, maxChars).replace(/[，。；、,.!?！？\s]*$/, '')}…`;
 }

@@ -160,11 +160,13 @@ export function filterThreadsByQuery(
     const project = (thread.project_name ?? '').toLowerCase();
     const character = (thread.character_name ?? '').toLowerCase();
     const workspace = (thread.workspace_path ?? '').toLowerCase();
+    const participants = (thread.participant_names ?? []).join(' ').toLowerCase();
     return (
       title.includes(needle) ||
       project.includes(needle) ||
       character.includes(needle) ||
-      workspace.includes(needle)
+      workspace.includes(needle) ||
+      participants.includes(needle)
     );
   });
 }

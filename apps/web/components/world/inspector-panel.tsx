@@ -37,6 +37,8 @@ import { ContinueInChatButton } from './continue-in-chat';
 import { EntityStages } from './entity-stages';
 import { conflictsForSelection } from '@/lib/world-conflicts';
 import { createStudioEntity, type StudioCreateKind } from '@/lib/studio-entity-create';
+import { CreateCharacterForm } from '@/components/create-character-form';
+import { playableCharacters } from '@/lib/create-world-character';
 import {
   characterName,
   locationName,
@@ -593,26 +595,32 @@ function EmptyWorldActions({ resources }: { resources: WorldResourcesDTO }) {
   }
 
   return (
-    <div className="mb-4 space-y-2">
+    <div className="mb-4 space-y-3">
       <p className="text-xs text-zinc-500">还没选中实体时，可以直接在这里建：</p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => void create('character')}
-          className="rounded-md border border-line px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
-        >
-          {busy === 'character' ? '创建中…' : '新建角色'}
-        </button>
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => void create('world_event')}
-          className="rounded-md border border-line px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
-        >
-          {busy === 'world_event' ? '创建中…' : '新建事件'}
-        </button>
-      </div>
+      {playableCharacters(resources.entities.characters).length === 0 ? (
+        <CreateCharacterForm
+          projectId={resources.project.id}
+          existingNames={resources.entities.characters.map((item) => item.name)}
+          allowTalk={false}
+          compact
+          onCreated={async (character) => {
+            await reload({ silent: true });
+            const next = { kind: 'character' as const, id: character.id };
+            setSelection(next);
+            requestEdit(next);
+          }}
+        />
+      ) : (
+        <p className="text-xs text-zinc-500">再添加角色请用左侧「+ 角色」，需要先填写名字。</p>
+      )}
+      <button
+        type="button"
+        disabled={busy !== null}
+        onClick={() => void create('world_event')}
+        className="rounded-md border border-line px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+      >
+        {busy === 'world_event' ? '创建中…' : '新建事件'}
+      </button>
       {error ? <p className="text-xs text-red-500">{error}</p> : null}
     </div>
   );
@@ -1175,8 +1183,8 @@ function renderEditor(
             ]}
           />
           <p className="text-[11px] leading-5 text-zinc-500">
-            名称、简介、个性是角色卡：世界构建对话和「与此角色对话」共用这一份。导入记忆在下方「TA
-            记得什么」里改：亲历、认识谁、短事实、档案都可以改或忘掉。保存时可选锚定到世界事件，扮演会读那一刻的卡。
+            名称、简介、个性是角色卡：世界构建对话和「与此角色对话」共用这一份。下方「TA
+            记得什么」是这个角色在世界里的经历，不是助手的任务笔记。亲历、认识谁、短事实、档案都可以改或忘掉。保存时可选锚定到世界事件，扮演会读那一刻的卡。
           </p>
         </>,
       );
@@ -1523,8 +1531,8 @@ function renderReadonly(
             ]}
           />
           <p className="px-4 pb-3 text-[11px] leading-5 text-zinc-500">
-            名称、简介、个性是角色卡：点右上角「编辑角色卡」。导入记忆在下方「TA
-            记得什么」里改：亲历、认识谁、短事实、档案都可以改或忘掉。
+            名称、简介、个性是角色卡：点右上角「编辑角色卡」。下方「TA
+            记得什么」是这个角色的经历，不是助手的任务笔记。亲历、认识谁、短事实、档案都可以改或忘掉。
           </p>
           <EntityStages
             projectId={resources.project.id}

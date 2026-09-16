@@ -86,8 +86,8 @@ export function StudioMenuBar({
     >
       <Menu label="文件" id="file" open={open} setOpen={setOpen}>
         {desktop ? <MenuButton onClick={() => void openFolder()}>打开文件夹</MenuButton> : null}
-        <MenuLink href="/projects?new=1" onClick={() => setOpen(null)}>
-          新建项目
+        <MenuLink href="/projects/new" onClick={() => setOpen(null)}>
+          新建世界
         </MenuLink>
         <MenuLink href="/projects" onClick={() => setOpen(null)}>
           打开项目…

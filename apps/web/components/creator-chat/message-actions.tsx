@@ -14,12 +14,14 @@ export function MessageActions({
   retryBlocked,
   busy = false,
   align = 'start',
+  onWithdraw,
 }: {
   copyText: string;
   retry?: () => void;
   retryBlocked?: RetryBlocked | null;
   busy?: boolean;
   align?: 'start' | 'end';
+  onWithdraw?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [copyHint, setCopyHint] = useState('');
@@ -81,6 +83,18 @@ export function MessageActions({
         >
           <IconRetry className="size-3.5" />
           重试
+        </button>
+      ) : null}
+      {onWithdraw ? (
+        <button
+          type="button"
+          className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="撤回"
+          title="当作你没发过这一句"
+          disabled={busy}
+          onClick={onWithdraw}
+        >
+          撤回
         </button>
       ) : null}
       {copyHint ? <span className="px-1 text-[11px] text-red-500">{copyHint}</span> : null}

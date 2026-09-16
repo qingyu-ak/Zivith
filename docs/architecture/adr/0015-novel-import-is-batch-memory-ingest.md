@@ -33,7 +33,13 @@
 
 - **仍有效：** 已有世界内的 TXT 导入是批量预授权，用报告 + 整体撤销，不逐条提案。
 - **覆盖：** 「扮演永远不是世界写入通道」不再是产品完成定义。扮演若写入 `WorldEvent` / `Relationship` / 角色状态，必须走提案确认（[ADR-0010](0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 围栏），不得静默落库。
-- **未覆盖：** 不得把导入路径改成「上传 TXT 即自动新建世界且无确认」。从 TXT **新建**世界的预览确认流，若要做，须单独设计并确认，不自动扩大本 ADR。
+- **未覆盖：** 不得把 Dock「导入小说」改成「上传 TXT 即自动新建世界且无确认」。从 TXT **新建**世界已另走预览确认，见下方 Scope note。
+
+## Scope note: creating a world from TXT (2026-09-16)
+
+本 ADR 只覆盖**已有 Project** 上的 Dock「导入小说」：上传即预授权本批，报告 + 整体撤销。
+
+从「新建世界」用 TXT 创建新 Project 不走本 ADR 的预授权直写：必须先 `POST /novel-imports/preview`（不写世界），用户确认后再 `createWorldProject` + 既有 `POST /novel-imports`。确认前不得出现新 Project / Asset / WorldEvent。
 
 ## Alternatives Considered
 
@@ -51,7 +57,7 @@
 
 ## Consequences
 
-- API：`POST/GET/DELETE /api/v1/novel-imports`，以及 `POST /novel-imports/:id/retry`、`POST /novel-imports/:id/upgrade`。世界工作区提供导入面板。原文存在 `NovelImport.config.sourceText`，列表与详情不回传。
+- API：`POST /api/v1/novel-imports/preview`（只分析）、`POST/GET/DELETE /api/v1/novel-imports`，以及 `POST /novel-imports/:id/retry`、`POST /novel-imports/:id/upgrade`。世界工作区提供导入面板。原文存在 `NovelImport.config.sourceText`，列表与详情与预览均不回传全文。
 - 数据：`NovelImport` / `NovelImportChapter`；报告 JSON 为撤销的权威 ID 清单。
 - 合规：CI 与本地均须从 `@zivith/database` 进口 Prisma 类型（与实现文件一致）。
 - 再议触发：导入产物被制作层引用后撤销会破坏 Shot；或用户要求导入写入 `approved` 且不可撤销。

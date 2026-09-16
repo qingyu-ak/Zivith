@@ -11,11 +11,17 @@ import type { LLMAdapter } from '../../ports/llm.js';
 import type { LocalVectorStore } from '../../adapters/memory/local-vector-store.js';
 import type { WorldContext } from '../world-builder/world-context.js';
 import { computeDedupHash } from './fingerprint.js';
-import { extractCandidateAtoms, resolveEntityByName, linkEntities } from './extract.js';
+import {
+  extractCandidateAtoms,
+  extractRoleplayImportantAtoms,
+  resolveEntityByName,
+  linkEntities,
+} from './extract.js';
 import { decideAtomAction } from './cleaning.js';
 import { dedupeRetrieved, keywordRank, rrfFuse } from './retrieval.js';
 import {
   buildBudgetedHistory,
+  clipRollingSummary,
   compressHistory,
   contextTokenBudget,
   estimateTokens,
@@ -67,12 +73,18 @@ export class MemoryService {
     projectId: string;
     content: string;
     world: WorldContext | null;
+    /** roleplay = 精简重要聊天；默认 world，World Builder 抽取不变。 */
+    ingestMode?: 'roleplay' | 'world';
+    defaultEntity?: { entityType: string; entityId: string };
   }): Promise<MemoryIngestOps> {
     const ops: MemoryIngestOps = { added: 0, updated: 0, noop: 0, conflicts: [] };
-    const candidates = extractCandidateAtoms(params.content, params.world);
+    const candidates =
+      params.ingestMode === 'roleplay'
+        ? extractRoleplayImportantAtoms(params.content, params.world)
+        : extractCandidateAtoms(params.content, params.world);
     for (const candidate of candidates) {
-      const entityType = candidate.linked?.entityType ?? null;
-      const entityId = candidate.linked?.entityId ?? null;
+      const entityType = candidate.linked?.entityType ?? params.defaultEntity?.entityType ?? null;
+      const entityId = candidate.linked?.entityId ?? params.defaultEntity?.entityId ?? null;
       const dedupHash = computeDedupHash({
         entityType,
         entityId,
@@ -420,6 +432,11 @@ export class MemoryService {
     return this.deps.store.listAtoms(projectId, options);
   }
 
+  async atomsByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    return this.deps.store.findAtomsByIds(ids);
+  }
+
   async listCores(projectId: string) {
     return this.deps.store.listCores(projectId);
   }
@@ -526,6 +543,18 @@ export class MemoryService {
     return this.deps.store.invalidateAtom(atomId);
   }
 
+  async invalidateAtomsFromMessages(messageIds: string[]): Promise<number> {
+    let count = 0;
+    for (const messageId of messageIds) {
+      const atoms = await this.deps.store.findAtomsByMessage(messageId);
+      for (const atom of atoms) {
+        if (atom.status !== 'active') continue;
+        if (await this.deps.store.invalidateAtom(atom.id)) count += 1;
+      }
+    }
+    return count;
+  }
+
   async patchAtom(atomId: string, content: string): Promise<MemoryAtomRecord> {
     const trimmed = content.trim();
     if (!trimmed) throw new ApiError(400, 'EMPTY_ATOM', '记忆内容不能为空');
@@ -590,7 +619,7 @@ export class MemoryService {
     options: { tokenBudget?: number; keepRecentMessages?: number } = {},
   ): Promise<{ window: ContextMessage[]; evicted: ContextMessage[]; tokenEstimate: number }> {
     const state = await this.deps.store.findContextState(threadId);
-    const summary = state?.rollingSummary ?? '';
+    const summary = clipRollingSummary(state?.rollingSummary ?? '');
     const messages: ContextMessage[] = history.map((message) => ({
       id: message.id,
       role: message.role === 'user' || message.role === 'assistant' ? message.role : 'system',
@@ -601,6 +630,7 @@ export class MemoryService {
       previousSummary: summary,
       tokenBudget: options.tokenBudget ?? contextTokenBudget(),
       keepRecentMessages: options.keepRecentMessages ?? 8,
+      summarizedUntilMessageId: state?.summarizedUntilMessageId ?? null,
     });
     const window = summary
       ? [

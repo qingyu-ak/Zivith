@@ -22,6 +22,9 @@ import {
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { applyProposal } from '../contexts/world/proposal-applier.js';
+import { applyConversationRollback } from '../contexts/chat/apply-conversation-rollback.js';
+import { stampAppliedEntityIds } from '../contexts/chat/conversation-rollback.js';
+import { isGroupChat, parseParticipantIds } from '../contexts/roleplay/group-chat.js';
 import {
   archiveCreatorChat,
   createWorldInFolder,
@@ -846,11 +849,17 @@ type ChatThreadRecord = {
   projectId: string | null;
   title: string | null;
   state: string;
+  activeHeadMessageId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
-type RoleplayMeta = { characterName: string; userCharacterName: string | null };
+type RoleplayMeta = {
+  characterName: string;
+  userCharacterName: string | null;
+  participantNames: string[];
+  isGroup: boolean;
+};
 
 async function loadRoleplayMeta(
   db: PrismaClient,
@@ -860,16 +869,22 @@ async function loadRoleplayMeta(
   if (threadIds.length === 0) return meta;
   const roleplays = await db.roleplayThread.findMany({
     where: { threadId: { in: threadIds }, status: 'active' },
-    select: { threadId: true, characterAssetId: true, userCharacterAssetId: true },
+    select: {
+      threadId: true,
+      characterAssetId: true,
+      userCharacterAssetId: true,
+      participantAssetIds: true,
+    },
   });
   if (roleplays.length === 0) return meta;
   const assetIds = [
     ...new Set(
-      roleplays.flatMap((item) =>
-        item.userCharacterAssetId
-          ? [item.characterAssetId, item.userCharacterAssetId]
-          : [item.characterAssetId],
-      ),
+      roleplays.flatMap((item) => {
+        const participants = parseParticipantIds(item.participantAssetIds, item.characterAssetId);
+        return item.userCharacterAssetId
+          ? [...participants, item.userCharacterAssetId]
+          : participants;
+      }),
     ),
   ];
   const assets =
@@ -881,11 +896,14 @@ async function loadRoleplayMeta(
       : [];
   const nameById = new Map(assets.map((asset) => [asset.id, asset.name]));
   for (const roleplay of roleplays) {
+    const participants = parseParticipantIds(roleplay.participantAssetIds, roleplay.characterAssetId);
     meta.set(roleplay.threadId, {
       characterName: nameById.get(roleplay.characterAssetId) ?? '',
       userCharacterName: roleplay.userCharacterAssetId
         ? (nameById.get(roleplay.userCharacterAssetId) ?? null)
         : null,
+      participantNames: participants.map((id) => nameById.get(id) ?? id),
+      isGroup: isGroupChat(participants),
     });
   }
   return meta;
@@ -911,6 +929,9 @@ function chatThreadDto(
     kind: roleplay ? ('roleplay' as const) : ('world' as const),
     character_name: roleplay?.characterName ? roleplay.characterName : null,
     user_character_name: roleplay?.userCharacterName ?? null,
+    is_group: roleplay?.isGroup ?? false,
+    participant_names: roleplay?.participantNames ?? [],
+    active_head_message_id: thread.activeHeadMessageId ?? null,
     pending_proposal_count: extras?.pendingProposalCount ?? 0,
     created_at: thread.createdAt.toISOString(),
     updated_at: thread.updatedAt.toISOString(),
@@ -925,7 +946,7 @@ async function loadPendingProposalCounts(
   if (threadIds.length === 0) return counts;
   const rows = await db.creatorChatMessage.groupBy({
     by: ['threadId'],
-    where: { threadId: { in: threadIds }, proposalState: 'pending' },
+    where: { threadId: { in: threadIds }, proposalState: 'pending', suppressed: false },
     _count: { id: true },
   });
   for (const row of rows) {
@@ -1003,16 +1024,21 @@ function summarizeProposals(raw: unknown): string {
   return parts.join(' · ');
 }
 
-function chatMessageDto(message: {
-  id: string;
-  threadId: string;
-  role: string;
-  content: string;
-  proposal: unknown;
-  proposalKey: string | null;
-  proposalState: string | null;
-  createdAt: Date;
-}) {
+function chatMessageDto(
+  message: {
+    id: string;
+    threadId: string;
+    role: string;
+    content: string;
+    proposal: unknown;
+    proposalKey: string | null;
+    proposalState: string | null;
+    speakerAssetId?: string | null;
+    suppressed?: boolean;
+    createdAt: Date;
+  },
+  speakerName?: string | null,
+) {
   return {
     id: message.id,
     thread_id: message.threadId,
@@ -1021,6 +1047,9 @@ function chatMessageDto(message: {
     proposal: message.proposal,
     proposal_key: message.proposalKey,
     proposal_state: message.proposalState,
+    speaker_asset_id: message.speakerAssetId ?? null,
+    speaker_name: speakerName ?? null,
+    suppressed: Boolean(message.suppressed),
     created_at: message.createdAt.toISOString(),
   };
 }
@@ -1036,7 +1065,7 @@ async function createAssistantReply(
 ) {
   const resolved = effort ?? resolveAgentEffort();
   const rows = await db.creatorChatMessage.findMany({
-    where: { threadId: thread.id },
+    where: { threadId: thread.id, suppressed: false },
     orderBy: { createdAt: 'asc' },
     take: 200,
   });
@@ -1204,6 +1233,13 @@ async function pipeCreatorChatSse(
       },
       { delayMs: closed ? 0 : 16 },
     );
+    if (closed) {
+      await db.creatorChatMessage.update({
+        where: { id: assistantMessage.id },
+        data: { suppressed: true, proposalState: assistantMessage.proposalState === 'pending' ? 'rejected' : assistantMessage.proposalState },
+      });
+      return;
+    }
     writeEvent('done', {
       assistant_message: chatMessageDto(assistantMessage),
       effort: effort ? effortDto(effort) : effortDto(resolveAgentEffort()),
@@ -1408,17 +1444,30 @@ function registerCreatorChatRoutes(
     const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
     const { thread, projectName, workspacePath } = await requireOpenThread(db, threadId);
     const messages = await db.creatorChatMessage.findMany({
-      where: { threadId },
+      where: { threadId, suppressed: false },
       orderBy: { createdAt: 'asc' },
     });
     const roleplayMeta = await loadRoleplayMeta(db, [thread.id]);
+    const speakerIds = [
+      ...new Set(
+        messages
+          .map((item) => item.speakerAssetId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const speakers = speakerIds.length
+      ? await db.asset.findMany({ where: { id: { in: speakerIds } }, select: { id: true, name: true } })
+      : [];
+    const speakerName = new Map(speakers.map((item) => [item.id, item.name]));
     return {
       thread: chatThreadDto(thread, {
         projectName,
         workspacePath,
         roleplay: roleplayMeta.get(thread.id) ?? null,
       }),
-      messages: messages.map(chatMessageDto),
+      messages: messages.map((item) =>
+        chatMessageDto(item, item.speakerAssetId ? (speakerName.get(item.speakerAssetId) ?? null) : null),
+      ),
     };
   });
 
@@ -1432,7 +1481,7 @@ function registerCreatorChatRoutes(
     const { thread } = await requireOpenThread(db, threadId);
     const effort = resolveAgentEffort(query.effort);
     const messages = await db.creatorChatMessage.findMany({
-      where: { threadId },
+      where: { threadId, suppressed: false },
       orderBy: { createdAt: 'asc' },
     });
     let tokenEstimate = messages.reduce(
@@ -1496,7 +1545,7 @@ function registerCreatorChatRoutes(
 
     const lastMessage = body.retry
       ? await db.creatorChatMessage.findFirst({
-          where: { threadId },
+          where: { threadId, suppressed: false },
           orderBy: { createdAt: 'desc' },
         })
       : null;
@@ -1578,7 +1627,7 @@ function registerCreatorChatRoutes(
 
     const lastMessage = body.retry
       ? await db.creatorChatMessage.findFirst({
-          where: { threadId },
+          where: { threadId, suppressed: false },
           orderBy: { createdAt: 'desc' },
         })
       : null;
@@ -1714,6 +1763,12 @@ function registerCreatorChatRoutes(
       if (results.length === 0 && skipped.length > 0) {
         throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
       }
+      await tx.creatorChatMessage.update({
+        where: { id: messageId },
+        data: {
+          proposal: stampAppliedEntityIds(rawProposals, results) as Prisma.InputJsonValue,
+        },
+      });
       return { results, skipped };
     });
     return { applied: results, skipped };
@@ -1758,5 +1813,30 @@ function registerCreatorChatRoutes(
       });
     }
     return { rejected: true };
+  });
+
+  app.post('/creator-chats/:threadId/rollback', async (request) => {
+    const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
+    const body = z
+      .object({
+        message_id: idSchema,
+        mode: z.enum(['withdraw', 'keep']).default('keep'),
+      })
+      .strict()
+      .parse(request.body ?? {});
+    await requireOpenThread(db, threadId);
+    const target = await db.creatorChatMessage.findFirst({
+      where: { id: body.message_id, threadId, suppressed: false },
+    });
+    if (!target) throw new ApiError(404, 'MESSAGE_NOT_FOUND', '找不到这条对话');
+    if (target.role !== 'user') {
+      throw new ApiError(400, 'ROLLBACK_USER_ONLY', '只能回退到你发出的那一句');
+    }
+    return applyConversationRollback(db, {
+      threadId,
+      targetMessageId: body.message_id,
+      mode: body.mode,
+      ...(memory ? { memory } : {}),
+    });
   });
 }

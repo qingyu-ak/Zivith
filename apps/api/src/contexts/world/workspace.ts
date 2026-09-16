@@ -239,6 +239,7 @@ export async function createWorldProject(
     seed?: boolean;
     workspacePath?: string | null;
     worldview?: Prisma.InputJsonValue;
+    defaults?: Prisma.InputJsonValue;
   } = {},
 ) {
   const ownerId = await resolveLocalOwner(db);
@@ -251,7 +252,7 @@ export async function createWorldProject(
       description: input.description ?? null,
       workspacePath: input.workspacePath ?? null,
       ...(input.worldview ? { worldview: input.worldview } : {}),
-      defaults: { language: 'zh-CN' },
+      defaults: input.defaults ?? { language: 'zh-CN' },
       settings: seed ? { creator_layer: true, workspace_seed: true } : { creator_layer: true },
       members: { create: { userId: input.memberUserId ?? ownerId, role: 'owner' } },
     },

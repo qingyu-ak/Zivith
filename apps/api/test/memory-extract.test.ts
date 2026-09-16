@@ -3,6 +3,7 @@ import type { WorldContext } from '../src/contexts/world-builder/world-context.j
 import {
   detectFactType,
   extractCandidateAtoms,
+  extractRoleplayImportantAtoms,
   linkEntities,
   splitStatements,
 } from '../src/contexts/memory/extract.js';
@@ -63,5 +64,17 @@ describe('extractCandidateAtoms', () => {
     expect(atoms).toHaveLength(2);
     expect(atoms[0]).toMatchObject({ factType: 'trait', linked: { entityId: 'c1' } });
     expect(atoms[1]).toMatchObject({ factType: 'desire' });
+  });
+});
+
+describe('extractRoleplayImportantAtoms', () => {
+  it('keeps important character facts and drops filler / unlinked chatter', () => {
+    const atoms = extractRoleplayImportantAtoms(
+      '好的。然后呢。林澈性格冷静。今天随便聊聊天气。',
+      world,
+    );
+    expect(atoms).toHaveLength(1);
+    expect(atoms[0]).toMatchObject({ factType: 'trait', linked: { entityId: 'c1' } });
+    expect(atoms[0]?.content.length).toBeLessThanOrEqual(80);
   });
 });

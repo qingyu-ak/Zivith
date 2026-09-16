@@ -1,6 +1,10 @@
 import { api } from './api';
+import { createWorldCharacter } from './create-world-character';
 import type { WorldResourcesDTO, WorldSelection } from './types';
+import { nextUntitledName, resolveCreateName } from './unique-name';
 import { resolveDisplayDimensions } from './world-line';
+
+export { nextUntitledName, resolveCreateName } from './unique-name';
 
 export type StudioCreateKind =
   'character' | 'location' | 'scene' | 'story' | 'world_event' | 'relationship' | 'dimension';
@@ -15,24 +19,6 @@ export interface RelationshipCreateInput {
 export interface StudioCreateExtras {
   relationship?: RelationshipCreateInput;
   name?: string;
-}
-
-export function nextUntitledName(existing: string[], base: string): string {
-  const names = new Set(existing.map((name) => name.trim()).filter(Boolean));
-  if (!names.has(base)) return base;
-  let index = 2;
-  while (names.has(`${base} ${index}`)) index += 1;
-  return `${base} ${index}`;
-}
-
-export function resolveCreateName(
-  existing: string[],
-  requested: string | undefined,
-  untitled: string,
-): string {
-  const trimmed = requested?.trim();
-  if (!trimmed) return nextUntitledName(existing, untitled);
-  return nextUntitledName(existing, trimmed);
 }
 
 function createdId(value: unknown, fallbackMessage: string): string {
@@ -51,21 +37,12 @@ export async function createStudioEntity(
 ): Promise<Exclude<WorldSelection, null>> {
   switch (kind) {
     case 'character': {
-      const name = resolveCreateName(
-        resources.entities.characters.map((item) => item.name),
-        extras?.name,
-        '未命名角色',
-      );
-      const created = await api(`/projects/${projectId}/assets`, {
-        method: 'POST',
-        body: {
-          asset_type: 'character',
-          name,
-          description: '（待补充）',
-          state: 'draft',
-        },
+      const created = await createWorldCharacter({
+        projectId,
+        name: extras?.name ?? '',
+        existingNames: resources.entities.characters.map((item) => item.name),
       });
-      return { kind: 'character', id: createdId(created, '角色已创建，但未返回编号') };
+      return { kind: 'character', id: created.id };
     }
     case 'location': {
       const name = resolveCreateName(

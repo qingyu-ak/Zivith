@@ -5,6 +5,7 @@ import { api, errorMessage } from '@/lib/api';
 import type { WorldEventDTO, WorldResourcesDTO, WorldSelection } from '@/lib/types';
 import {
   characterIdsWithout,
+  compactMemoryLine,
   eventsExperiencedBy,
   isSparseImportArchive,
   relationshipsForCharacter,
@@ -47,6 +48,9 @@ export function CharacterArchive({
   onSelect,
   onUpdated,
   compact = false,
+  asOfPresentationOrder,
+  worldTimeLabel,
+  reloadToken,
 }: {
   projectId: string;
   characterId: string;
@@ -55,6 +59,12 @@ export function CharacterArchive({
   onSelect?: (selection: Exclude<WorldSelection, null>) => void;
   onUpdated?: () => void;
   compact?: boolean;
+  /** When set, only events at or before this world-time order are “remembered”. */
+  asOfPresentationOrder?: number;
+  /** Current play anchor label, e.g. 全书读完 or an event title. */
+  worldTimeLabel?: string;
+  /** 扮演新消息落库后刷新重要聊天，不必先收起再打开。 */
+  reloadToken?: string;
 }) {
   const [core, setCore] = useState<MemoryCoreItem | null>(null);
   const [atoms, setAtoms] = useState<MemoryAtomItem[]>([]);
@@ -75,9 +85,9 @@ export function CharacterArchive({
   const [relName, setRelName] = useState('');
   const [relDescription, setRelDescription] = useState('');
   const [archiveOpen, setArchiveOpen] = useState(true);
-  const [coreOpen, setCoreOpen] = useState(true);
+  const [coreOpen, setCoreOpen] = useState(!compact);
 
-  const experiences = eventsExperiencedBy(resources, characterId);
+  const experiences = eventsExperiencedBy(resources, characterId, asOfPresentationOrder);
   const relations = relationshipsForCharacter(resources, characterId);
   const sparseArchive = Boolean(core && isSparseImportArchive(core.content));
 
@@ -112,8 +122,8 @@ export function CharacterArchive({
     setEditingEventId(null);
     setEditingRelId(null);
     setArchiveOpen(true);
-    setCoreOpen(true);
-  }, [load]);
+    setCoreOpen(!compact);
+  }, [load, compact, reloadToken]);
 
   async function save() {
     const content = draft.trim();
@@ -269,11 +279,13 @@ export function CharacterArchive({
       />
       {archiveOpen ? (
         <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-          扮演会读这些记忆。每条都能改或忘掉；和上面角色卡冲突时以角色卡为准。
+          {worldTimeLabel
+            ? `这是「${characterName}」在「${worldTimeLabel}」记得的世界经历，以及精简后的重要聊天。全文在这次对话记录里；问还记得时会先查目录再答。换时间锚点后列表会变。世界事件要确认才进时间线。`
+            : '扮演会读这些记忆。每条都能改或忘掉；和上面角色卡冲突时以角色卡为准。'}
         </p>
       ) : (
         <p className="mt-1 text-[11px] leading-5 text-zinc-400">
-          亲历 {experiences.length} · 认识谁 {relations.length} · 事实 {atoms.length}
+          亲历 {experiences.length} · 认识谁 {relations.length} · 重要聊天 {atoms.length}
         </p>
       )}
       {error ? (
@@ -292,7 +304,9 @@ export function CharacterArchive({
             title={`亲历 · ${experiences.length} 件`}
             empty={
               experiences.length === 0
-                ? '时间线上还没有把这个角色绑到事件。导入的「出场章数」不算记得剧情。'
+                ? asOfPresentationOrder !== undefined
+                  ? '在这个时间点，还没有把这个角色绑到已经发生的事件。导入的「出场章数」不算记得剧情。'
+                  : '时间线上还没有把这个角色绑到事件。导入的「出场章数」不算记得剧情。'
                 : null
             }
             defaultOpen={experiences.length <= 6}
@@ -337,7 +351,9 @@ export function CharacterArchive({
                       {worldEventTitle(event)}
                     </span>
                     {summary ? (
-                      <span className="mt-1 line-clamp-3 block text-[11px] leading-5 text-zinc-500">
+                      <span
+                        className={`mt-1 block text-[11px] leading-5 text-zinc-500 ${compact ? 'line-clamp-1' : 'line-clamp-3'}`}
+                      >
                         {summary}
                       </span>
                     ) : null}
@@ -422,13 +438,13 @@ export function CharacterArchive({
 
           <MemoryGroup
             key={`${characterId}-atoms`}
-            title={`补充事实 · ${atoms.length}`}
+            title={`重要聊天 · ${atoms.length}`}
             empty={null}
             defaultOpen
           >
             {!loading && atoms.length === 0 && editingAtomId !== 'new' ? (
               <li className="px-3 py-2.5 text-[11px] leading-5 text-zinc-400">
-                还没有短事实。导入的出场统计不是剧情；点「添加事实」写一条 TA 记得的事。
+                还没有精简过的重要聊天。全文在这次对话记录里；聊到重要的事会出现在这里。
               </li>
             ) : null}
             {atoms.map((atom) => (
@@ -449,11 +465,11 @@ export function CharacterArchive({
                   />
                 ) : (
                   <>
-                    <p className="min-w-0 break-words text-zinc-600">
+                    <p className="min-w-0 break-words text-zinc-600" title={atom.content}>
                       <span className="mr-1 text-[10px] text-zinc-400">
                         {FACT_LABEL[atom.fact_type] ?? atom.fact_type}
                       </span>
-                      {atom.content}
+                      {compactMemoryLine(atom.content)}
                     </p>
                     <MemoryActions
                       busy={busy}

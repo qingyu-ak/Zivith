@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { api, errorMessage, sendCreatorChatTurn, unwrapList } from '@/lib/api';
+import { api, errorMessage, rollbackCreatorChat, sendCreatorChatTurn, unwrapList } from '@/lib/api';
 import type { CreatorChatMessageDTO, WorldSelection } from '@/lib/types';
 import {
   CHAT_FOCUS_LABEL,
@@ -35,6 +35,7 @@ import {
   writeStoredEffort,
   type ChatEffort,
 } from '@/lib/chat-composer';
+import { rollbackPreview, rollbackSlice, userTicks } from '@/lib/conversation-ticks';
 import {
   handledProposalState,
   parseProposals,
@@ -125,6 +126,8 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
   const [pinnedFocus, setPinnedFocus] = useState<ChatFocus | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [cursor, setCursor] = useState(0);
+  const [rollbackTickId, setRollbackTickId] = useState<string | null>(null);
+  const [rollbackBusy, setRollbackBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
   const lastSentRef = useRef('');
@@ -421,7 +424,8 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
   const sendContent = useCallback(
     async (content: string, options?: { retry?: boolean }) => {
       const trimmed = content.trim();
-      if (!threadId || sendingRef.current || !trimmed) return;
+      if (!threadId || !trimmed) return;
+      abortRef.current?.abort();
       sendingRef.current = true;
       lastSentRef.current = trimmed;
       const generation = ++generationIdRef.current;
@@ -535,7 +539,7 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
 
   const send = useCallback(async () => {
     const content = input.trim();
-    if (!content || !threadId || sendingRef.current) return;
+    if (!content || !threadId) return;
     const hint = incompleteMentionHint(input, cursor, mentionItems.length);
     if (hint) {
       setError(hint);
@@ -782,6 +786,59 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             />
           </div>
         ) : null}
+        {userTicks(messages).length > 0 ? (
+          <div className="mb-2 flex flex-wrap items-center gap-1">
+            <span className="text-[10px] text-zinc-400">刻度</span>
+            {userTicks(messages).map((tick, index) => (
+              <button
+                key={tick.id}
+                type="button"
+                className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-[#eef2ff]"
+                title={tick.content.slice(0, 80)}
+                onClick={() => setRollbackTickId(tick.id)}
+              >
+                {index + 1}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {rollbackTickId ? (
+          <div className="mb-2 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-[11px] text-zinc-600">
+            <p>
+              回退到这句之后：拿掉{' '}
+              {rollbackPreview(rollbackSlice(messages, rollbackTickId, 'keep').drop).dialogueCount}{' '}
+              句。本场因此写入的事件/关系会尽量撤回。
+            </p>
+            <div className="mt-1 flex gap-2">
+              <button
+                type="button"
+                className="text-zinc-400"
+                disabled={rollbackBusy}
+                onClick={() => setRollbackTickId(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="text-[#1e3a8a]"
+                disabled={rollbackBusy || !threadId}
+                onClick={() => {
+                  if (!threadId) return;
+                  setRollbackBusy(true);
+                  void rollbackCreatorChat(threadId, rollbackTickId, 'keep')
+                    .then(() => {
+                      setRollbackTickId(null);
+                      return loadHistory(threadId);
+                    })
+                    .catch((reason) => setError(errorMessage(reason)))
+                    .finally(() => setRollbackBusy(false));
+                }}
+              >
+                {rollbackBusy ? '回退中…' : '确认回退'}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {/* Cursor 式输入框：模型 / 努力程度 / 发送都在框内下沿 */}
         <div className="relative rounded-xl border border-zinc-200 bg-zinc-50 px-2 pt-1.5 transition focus-within:border-zinc-400 focus-within:bg-white">
           {mentionOpen ? (
@@ -799,7 +856,7 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             placeholder="改设定、补角色，或 @ 引用实体…"
             value={input}
             rows={2}
-            readOnly={busy}
+            readOnly={loading}
             aria-autocomplete="list"
             aria-expanded={mentionOpen}
             aria-controls={mentionOpen ? 'studio-mention-list' : undefined}
@@ -953,11 +1010,12 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
               ))}
             </select>
             <span className="flex-1" />
-            {sending ? (
+            {sending && !input.trim() ? (
               <button
                 type="button"
                 className="grid size-7 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800"
-                aria-label="停止生成"
+                aria-label="暂停思考"
+                title="取消这一轮思考"
                 onClick={() => abortRef.current?.abort()}
               >
                 <span className="block size-2.5 rounded-[2px] bg-current" />
@@ -965,12 +1023,16 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             ) : (
               <button
                 type="submit"
-                disabled={!input.trim() || !threadId || Boolean(mentionHint)}
-                aria-label="发送"
-                title={mentionHint ?? '发送'}
+                disabled={!input.trim() || !threadId || Boolean(mentionHint) || loading}
+                aria-label={sending ? '补充' : '发送'}
+                title={mentionHint ?? (sending ? '补充' : '发送')}
                 className="grid size-7 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400"
               >
-                <IconArrowRight className="size-4 -rotate-90" />
+                {sending ? (
+                  <span className="px-0.5 text-[9px] font-medium">补充</span>
+                ) : (
+                  <IconArrowRight className="size-4 -rotate-90" />
+                )}
               </button>
             )}
           </div>

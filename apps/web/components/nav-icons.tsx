@@ -247,6 +247,17 @@ export function IconRetry(props: IconProps) {
   );
 }
 
+export function IconGroup(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="10" r="3.2" />
+      <circle cx="15.5" cy="10.5" r="2.7" />
+      <path d="M4.2 17.2c.6-2.2 2.4-3.4 4.8-3.4s4.2 1.2 4.8 3.4" />
+      <path d="M13.4 17.4c.4-1.5 1.6-2.5 3.4-2.5 1.8 0 3 .9 3.4 2.4" />
+    </svg>
+  );
+}
+
 export function IconClose(props: IconProps) {
   return (
     <svg {...base} {...props}>

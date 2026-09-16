@@ -11,6 +11,7 @@ import {
   listMemoryConflicts,
   listRoleplayThreads,
   resolveMemoryConflict,
+  rollbackCreatorChat,
   sendCreatorChatTurn,
   sendRoleplayTurn,
   unwrapList,
@@ -25,8 +26,11 @@ import {
 } from '@/lib/memory-conflicts';
 import { formatMemoryOps } from '@/lib/memory-ops';
 import { FolderFlowCancelled, openWorldFromFolder } from '@/lib/world-folder';
+import { NEW_WORLD_HREF } from '@/lib/create-scratch-world';
+import { playableCharacters } from '@/lib/create-world-character';
 import { ThoughtSummary } from '@/components/creator-chat/thought-summary';
 import { ChatComposer } from '@/components/creator-chat/chat-composer';
+import { CreateCharacterForm } from '@/components/create-character-form';
 import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
 import {
   readStoredEffort,
@@ -79,6 +83,7 @@ import { ChatErrorBanner } from './chat-error-banner';
 import { MessageActions } from './message-actions';
 import { ProposalCard } from './proposal-card';
 import { CharacterArchive } from '@/components/world/character-archive';
+import { worldEventOrder } from '@/lib/character-memory-view';
 import {
   appendUniqueById,
   errorRetryContent,
@@ -87,6 +92,15 @@ import {
 } from '@/lib/message-actions';
 import { ChatChoiceMenu, CharacterCardPeek } from './chat-choice-menu';
 import { RoleplayLaunchButton } from './roleplay-launch';
+import { GroupChatLaunch } from './group-chat-launch';
+import { rollbackPreview, rollbackSlice, userTicks } from '@/lib/conversation-ticks';
+import {
+  GROUP_BEAT_MS,
+  KEEP_TALKING_CAP,
+  canTakeNaturalBeat,
+  naturalBeatCap,
+  pickNaturalFollowSpeaker,
+} from '@/lib/group-chat-rhythm';
 import { characterCardPreview } from '@/lib/character-card-preview';
 import { handledProposalState, parseProposals } from '@/lib/chat-proposals';
 
@@ -147,8 +161,10 @@ export function ChatPanel() {
   const [worldEvents, setWorldEvents] = useState<WorldEventDTO[]>([]);
   const [catalog, setCatalog] = useState<ProviderCatalogDTO | null>(null);
   const [roleplayPicker, setRoleplayPicker] = useState<string | null>(null);
+  const [groupPicker, setGroupPicker] = useState<string | null>(null);
   const [pickerAssets, setPickerAssets] = useState<AssetDTO[]>([]);
   const [pickerEvents, setPickerEvents] = useState<WorldEventDTO[]>([]);
+  const [pickerReady, setPickerReady] = useState(false);
   const [stopped, setStopped] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [creatingSelf, setCreatingSelf] = useState(false);
@@ -159,11 +175,22 @@ export function ChatPanel() {
   const [writeMode, setWriteMode] = useState<AgentWriteMode>('confirm');
   // 扮演回合：对白已到、服务端正在整理世界变化提案。
   const [draftingWorldChange, setDraftingWorldChange] = useState(false);
+  const [streamingSpeaker, setStreamingSpeaker] = useState('');
+  const [mutedIds, setMutedIds] = useState<string[]>([]);
+  const [talkPaused, setTalkPaused] = useState(false);
+  const [keepTalking, setKeepTalking] = useState(false);
+  const [rollbackTarget, setRollbackTarget] = useState<{
+    messageId: string;
+    mode: 'keep' | 'withdraw';
+  } | null>(null);
+  const [rollbackBusy, setRollbackBusy] = useState(false);
+  const [rollbackNote, setRollbackNote] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
   const lastSentRef = useRef('');
   const generationIdRef = useRef(0);
+  const speakRoundRef = useRef(0);
   const pendingConsumed = useRef(false);
   const focusHandoff = useRef<ChatFocus | null>(null);
   const focusRef = useRef<ChatFocus | null>(null);
@@ -172,6 +199,15 @@ export function ChatPanel() {
   effortRef.current = effort;
   const writeModeRef = useRef<AgentWriteMode>(writeMode);
   writeModeRef.current = writeMode;
+  const mutedIdsRef = useRef<string[]>([]);
+  mutedIdsRef.current = mutedIds;
+  const talkPausedRef = useRef(false);
+  talkPausedRef.current = talkPaused;
+  const keepTalkingRunRef = useRef(0);
+  const inputRef = useRef('');
+  inputRef.current = input;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const autoApplyRef = useRef(new Set<string>());
   const [applyingProposalIds, setApplyingProposalIds] = useState<string[]>([]);
 
@@ -245,6 +281,13 @@ export function ChatPanel() {
     loadThreads();
   }, [loadThreads, threadId]);
 
+  useEffect(() => {
+    setTalkPaused(false);
+    talkPausedRef.current = false;
+    setKeepTalking(false);
+    keepTalkingRunRef.current += 1;
+  }, [threadId]);
+
   const hydrateWorldResources = useCallback((resources: WorldResourcesDTO) => {
     setWorldResources(resources);
     const assets = (resources.entities?.characters ?? []).filter(
@@ -313,15 +356,18 @@ export function ChatPanel() {
   }, [hydrateWorldResources, thread?.project_id]);
 
   useEffect(() => {
-    if (!roleplayPicker) {
+    const pickerId = roleplayPicker ?? groupPicker;
+    if (!pickerId) {
       setPickerAssets([]);
       setPickerEvents([]);
+      setPickerReady(false);
       return;
     }
     let cancelled = false;
+    setPickerReady(false);
     void api<{
       entities?: { characters?: AssetDTO[]; world_events?: WorldEventDTO[] };
-    }>(`/world/projects/${roleplayPicker}/resources`)
+    }>(`/world/projects/${pickerId}/resources`)
       .then((resources) => {
         if (cancelled) return;
         setPickerAssets(
@@ -336,17 +382,19 @@ export function ChatPanel() {
               typeof event.id === 'string' && typeof event.title === 'string',
           ),
         );
+        setPickerReady(true);
       })
       .catch(() => {
         if (!cancelled) {
           setPickerAssets([]);
           setPickerEvents([]);
+          setPickerReady(true);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [roleplayPicker]);
+  }, [roleplayPicker, groupPicker]);
 
   useEffect(() => {
     pendingConsumed.current = false;
@@ -358,6 +406,10 @@ export function ChatPanel() {
     setSending(false);
     setStopped(false);
     setStreamText('');
+    setStreamingSpeaker('');
+    setMutedIds([]);
+    setRollbackTarget(null);
+    setRollbackNote('');
     setMemoryNote('');
     setError('');
     setMessages([]);
@@ -482,23 +534,37 @@ export function ChatPanel() {
   );
 
   const sendContent = useCallback(
-    async (content: string, options?: { retry?: boolean }) => {
+    async (
+      content: string,
+      options?: { retry?: boolean; speakerAssetId?: string },
+    ): Promise<{
+      ok: boolean;
+      aborted: boolean;
+      speakerAssetId: string | null;
+      pendingProposal: boolean;
+    }> => {
+      const empty = { ok: false, aborted: false, speakerAssetId: null, pendingProposal: false };
       const trimmed = content.trim();
-      if (!threadId || sendingRef.current || !trimmed) return;
+      if (!threadId) return empty;
+      if (!trimmed && !options?.speakerAssetId) return empty;
+      abortRef.current?.abort();
       sendingRef.current = true;
-      lastSentRef.current = trimmed;
+      if (trimmed) lastSentRef.current = trimmed;
       const generation = ++generationIdRef.current;
       setError('');
       setSending(true);
       setStopped(false);
       setStreamText('');
+      setStreamingSpeaker('');
       setMemoryNote('');
-      abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
       const stillCurrent = () => generation === generationIdRef.current;
       let acceptedUser = false;
       let sawDone = false;
+      let aborted = false;
+      let speakerAssetId: string | null = options?.speakerAssetId ?? null;
+      let pendingProposal = false;
       try {
         let sawError = '';
         const onEvent = (event: string, data: unknown) => {
@@ -531,6 +597,9 @@ export function ChatPanel() {
           if (event === 'status') {
             // 扮演：对白说完后服务端再整理世界变化，这一步要有可见反馈（task-s25）。
             setDraftingWorldChange(record?.phase === 'drafting_world_change');
+            if (typeof record?.speaker_name === 'string' && record.speaker_name.trim()) {
+              setStreamingSpeaker(record.speaker_name.trim());
+            }
             return;
           }
           if (event === 'done') {
@@ -538,6 +607,8 @@ export function ChatPanel() {
             setDraftingWorldChange(false);
             const assistantMessage = asChatMessage(record?.assistant_message);
             if (assistantMessage) {
+              speakerAssetId = assistantMessage.speaker_asset_id ?? speakerAssetId;
+              pendingProposal = assistantMessage.proposal_state === 'pending';
               setMessages((current) => appendUniqueById(current, assistantMessage));
               void autoApplyIfAllowed(assistantMessage);
             }
@@ -563,7 +634,11 @@ export function ChatPanel() {
             onEvent,
             effortRef.current,
             controller.signal,
-            retryOpts,
+            {
+              ...(retryOpts ?? {}),
+              speakerAssetId: options?.speakerAssetId,
+              mutedAssetIds: mutedIdsRef.current,
+            },
           );
         } else {
           await sendCreatorChatTurn(
@@ -577,7 +652,7 @@ export function ChatPanel() {
           );
         }
         if (sawError) throw new Error(sawError);
-        if (!stillCurrent()) return;
+        if (!stillCurrent()) return { ok: false, aborted: true, speakerAssetId, pendingProposal };
         setThreads((current) => {
           const target = current.find((item) => item.id === threadId);
           if (!target) return current;
@@ -587,9 +662,9 @@ export function ChatPanel() {
           ];
         });
       } catch (reason) {
-        if (!stillCurrent()) return;
+        if (!stillCurrent()) return { ok: false, aborted: true, speakerAssetId, pendingProposal };
         setDraftingWorldChange(false);
-        const aborted =
+        aborted =
           (reason instanceof DOMException && reason.name === 'AbortError') ||
           (reason instanceof Error && reason.name === 'AbortError');
         if (aborted) {
@@ -602,17 +677,184 @@ export function ChatPanel() {
           setStreamText('');
         }
       }
-      if (!stillCurrent()) return;
+      if (!stillCurrent()) return { ok: false, aborted: true, speakerAssetId, pendingProposal };
       if (abortRef.current === controller) abortRef.current = null;
       sendingRef.current = false;
       setSending(false);
       if (!sawDone) void load();
+      return { ok: sawDone && !aborted, aborted, speakerAssetId, pendingProposal };
     },
     [threadId, autoApplyIfAllowed, load],
   );
 
   function stopGeneration() {
+    speakRoundRef.current += 1;
     abortRef.current?.abort();
+  }
+
+  function waitGroupBeat(round: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const started = Date.now();
+      const timer = window.setInterval(() => {
+        if (
+          speakRoundRef.current !== round ||
+          talkPausedRef.current ||
+          inputRef.current.trim()
+        ) {
+          window.clearInterval(timer);
+          resolve(false);
+          return;
+        }
+        if (Date.now() - started >= GROUP_BEAT_MS) {
+          window.clearInterval(timer);
+          resolve(true);
+        }
+      }, 80);
+    });
+  }
+
+  async function maybeContinueGroup(
+    result: {
+      ok: boolean;
+      aborted: boolean;
+      speakerAssetId: string | null;
+      pendingProposal: boolean;
+    },
+    opts: { fromUser: boolean; round: number },
+  ) {
+    const roleplay = activeRoleplayRef.current;
+    if (!result.ok || result.aborted) return;
+    if (!canTakeNaturalBeat({ talkPaused: talkPausedRef.current, pendingProposal: result.pendingProposal })) {
+      return;
+    }
+    if (!roleplay?.is_group) return;
+    if (speakRoundRef.current !== opts.round) return;
+    const participants = roleplay.participant_asset_ids ?? [];
+    if (participants.length < 2) return;
+    const unmutedCount = participants.filter((id) => !mutedIdsRef.current.includes(id)).length;
+    const cap = naturalBeatCap(unmutedCount, opts.fromUser);
+    let beats = 1;
+    let lastId = result.speakerAssetId;
+    while (beats < cap) {
+      const proceeded = await waitGroupBeat(opts.round);
+      if (!proceeded) return;
+      if (!canTakeNaturalBeat({ talkPaused: talkPausedRef.current })) return;
+      const latest = messagesRef.current.at(-1);
+      if (latest?.proposal_state === 'pending') return;
+      const next = pickNaturalFollowSpeaker({
+        participantIds: participants,
+        lastSpeakerId: lastId,
+        mutedIds: mutedIdsRef.current,
+      });
+      if (!next) return;
+      const follow = await sendContent('', { speakerAssetId: next });
+      if (!follow.ok || follow.aborted || follow.pendingProposal) return;
+      if (speakRoundRef.current !== opts.round) return;
+      beats += 1;
+      lastId = follow.speakerAssetId ?? next;
+    }
+  }
+
+  function pauseGroupTalk() {
+    talkPausedRef.current = true;
+    setTalkPaused(true);
+    setKeepTalking(false);
+    keepTalkingRunRef.current += 1;
+    speakRoundRef.current += 1;
+  }
+
+  function stopKeepTalking() {
+    setKeepTalking(false);
+    keepTalkingRunRef.current += 1;
+    speakRoundRef.current += 1;
+  }
+
+  async function keepGroupTalking() {
+    const roleplay = activeRoleplayRef.current;
+    if (!roleplay?.is_group) return;
+    talkPausedRef.current = false;
+    setTalkPaused(false);
+    const round = ++speakRoundRef.current;
+    const run = ++keepTalkingRunRef.current;
+    setKeepTalking(true);
+    const participants = roleplay.participant_asset_ids ?? [];
+    let lastId =
+      [...messagesRef.current].reverse().find((item) => item.role === 'assistant')?.speaker_asset_id ??
+      null;
+    let beats = 0;
+    try {
+      while (beats < KEEP_TALKING_CAP) {
+        if (keepTalkingRunRef.current !== run || speakRoundRef.current !== round) break;
+        if (talkPausedRef.current) break;
+        if (beats > 0) {
+          const proceeded = await waitGroupBeat(round);
+          if (!proceeded) break;
+        }
+        if (keepTalkingRunRef.current !== run || talkPausedRef.current) break;
+        const latest = messagesRef.current.at(-1);
+        if (latest?.proposal_state === 'pending') {
+          setRollbackNote('有待确认的世界变化，互聊先停在这里。');
+          break;
+        }
+        const next = pickNaturalFollowSpeaker({
+          participantIds: participants,
+          lastSpeakerId: lastId,
+          mutedIds: mutedIdsRef.current,
+        });
+        if (!next) break;
+        const follow = await sendContent('', { speakerAssetId: next });
+        if (!follow.ok || follow.aborted) break;
+        if (keepTalkingRunRef.current !== run || speakRoundRef.current !== round) break;
+        beats += 1;
+        lastId = follow.speakerAssetId ?? next;
+        if (follow.pendingProposal) {
+          setRollbackNote('有待确认的世界变化，互聊先停在这里。');
+          break;
+        }
+      }
+      if (keepTalkingRunRef.current === run && beats >= KEEP_TALKING_CAP) {
+        setRollbackNote(`已经互聊 ${KEEP_TALKING_CAP} 句。要再继续，再点一次「让他们一直说」。`);
+      }
+    } finally {
+      if (keepTalkingRunRef.current === run) setKeepTalking(false);
+    }
+  }
+
+  async function resumeGroupTalk() {
+    talkPausedRef.current = false;
+    setTalkPaused(false);
+    const roleplay = activeRoleplayRef.current;
+    if (!roleplay?.is_group || sendingRef.current) return;
+    const round = ++speakRoundRef.current;
+    const last = messagesRef.current.at(-1);
+    if (!last || last.proposal_state === 'pending') return;
+    const participants = roleplay.participant_asset_ids ?? [];
+    if (last.role === 'assistant') {
+      await maybeContinueGroup(
+        {
+          ok: true,
+          aborted: false,
+          speakerAssetId: last.speaker_asset_id ?? null,
+          pendingProposal: false,
+        },
+        { fromUser: false, round },
+      );
+      return;
+    }
+    const next = pickNaturalFollowSpeaker({
+      participantIds: participants,
+      lastSpeakerId: null,
+      mutedIds: mutedIdsRef.current,
+    });
+    if (!next) return;
+    const result = await sendContent('', { speakerAssetId: next });
+    await maybeContinueGroup(result, { fromUser: true, round });
+  }
+
+  async function speakOne(speakerAssetId: string) {
+    const round = ++speakRoundRef.current;
+    const result = await sendContent('', { speakerAssetId });
+    if (!talkPausedRef.current) await maybeContinueGroup(result, { fromUser: false, round });
   }
 
   async function changeAnchor(eventId: string) {
@@ -623,6 +865,8 @@ export function ChatPanel() {
       activeRoleplay.character_asset_id,
       activeRoleplay.user_character_asset_id ?? null,
       eventId === '' ? null : eventId,
+      false,
+      activeRoleplay.is_group ? (activeRoleplay.participant_asset_ids ?? []) : undefined,
     );
   }
 
@@ -668,17 +912,28 @@ export function ChatPanel() {
     userCharacterAssetId: string | null,
     anchoredWorldEventId?: string | null,
     alreadySwitching = false,
+    participantAssetIds?: string[],
   ) {
     if (switching && !alreadySwitching) return;
     if (!alreadySwitching) setSwitching(true);
     setError('');
     try {
-      const existing = roleplayThreads.find(
-        (item) =>
-          item.character_asset_id === characterAssetId &&
-          (item.user_character_asset_id ?? null) === (userCharacterAssetId ?? null) &&
-          (item.anchored_world_event_id ?? null) === (anchoredWorldEventId ?? null),
-      );
+      const group = (participantAssetIds ?? []).length >= 2;
+      const existing = roleplayThreads.find((item) => {
+        const sameUser = (item.user_character_asset_id ?? null) === (userCharacterAssetId ?? null);
+        const sameAnchor =
+          (item.anchored_world_event_id ?? null) === (anchoredWorldEventId ?? null);
+        if (!sameUser || !sameAnchor) return false;
+        if (group) {
+          const ids = item.participant_asset_ids ?? [];
+          return (
+            Boolean(item.is_group) &&
+            ids.length === participantAssetIds!.length &&
+            participantAssetIds!.every((id) => ids.includes(id))
+          );
+        }
+        return !item.is_group && item.character_asset_id === characterAssetId;
+      });
       const created = existing
         ? { thread_id: existing.thread_id }
         : await createRoleplayThread(
@@ -686,6 +941,7 @@ export function ChatPanel() {
             characterAssetId,
             anchoredWorldEventId,
             userCharacterAssetId,
+            group ? participantAssetIds : undefined,
           );
       const next = await listRoleplayThreads(projectId);
       setRoleplayThreads(next);
@@ -701,8 +957,8 @@ export function ChatPanel() {
     const projectId = thread?.project_id;
     if (!projectId || !activeRoleplay || switching) return;
     setCreatingSelf(false);
-    if (value && value === activeRoleplay.character_asset_id) {
-      setError('不能同时扮演对话双方');
+    if (value && (activeRoleplay.participant_asset_ids ?? [activeRoleplay.character_asset_id]).includes(value)) {
+      setError('你是谁不能和正在开口的角色重复');
       return;
     }
     await openRoleplay(
@@ -710,6 +966,8 @@ export function ChatPanel() {
       activeRoleplay.character_asset_id,
       value,
       activeRoleplay.anchored_world_event_id,
+      false,
+      activeRoleplay.is_group ? (activeRoleplay.participant_asset_ids ?? []) : undefined,
     );
   }
 
@@ -748,6 +1006,7 @@ export function ChatPanel() {
         created.id,
         activeRoleplay.anchored_world_event_id,
         true,
+        activeRoleplay.is_group ? (activeRoleplay.participant_asset_ids ?? []) : undefined,
       );
     } catch (reason) {
       setError(errorMessage(reason));
@@ -762,7 +1021,11 @@ export function ChatPanel() {
     if (!pending) return;
     pendingConsumed.current = true;
     sessionStorage.removeItem(PENDING_CHAT_TURN_KEY);
-    void sendContent(pending);
+    void (async () => {
+      const round = ++speakRoundRef.current;
+      const result = await sendContent(pending);
+      if (!talkPausedRef.current) await maybeContinueGroup(result, { fromUser: true, round });
+    })();
   }, [loading, sendContent, threadId]);
 
   useEffect(() => {
@@ -777,13 +1040,16 @@ export function ChatPanel() {
 
   async function send() {
     const content = input.trim();
-    if (!content || sending || busy) return;
+    if (!content || busy) return;
     if (!threadId) {
       await startThread(content);
       return;
     }
+    speakRoundRef.current += 1;
     setInput('');
-    await sendContent(content);
+    const round = speakRoundRef.current;
+    const result = await sendContent(content);
+    if (!talkPausedRef.current) await maybeContinueGroup(result, { fromUser: true, round });
   }
 
   async function startThread(firstMessage?: string, projectId?: string) {
@@ -848,22 +1114,8 @@ export function ChatPanel() {
     }
   }
 
-  async function createBareWorld() {
-    setError('');
-    setBusy(true);
-    try {
-      const created = await api<{ id?: string }>('/projects', {
-        method: 'POST',
-        body: { name: '未命名世界' },
-      });
-      const id = typeof created.id === 'string' ? created.id : null;
-      if (!id) throw new Error('无法创建世界');
-      setBusy(false);
-      await startThread(undefined, id);
-    } catch (reason) {
-      setError(errorMessage(reason));
-      setBusy(false);
-    }
+  function goToNewWorld() {
+    router.push(NEW_WORLD_HREF);
   }
 
   function selectProject(projectId: string) {
@@ -940,6 +1192,19 @@ export function ChatPanel() {
     return names;
   }, [characterAssets, worldResources, worldEvents]);
 
+  const playAsOfPresentationOrder = useMemo(() => {
+    const id = activeRoleplay?.anchored_world_event_id;
+    if (!id) return undefined;
+    const event =
+      worldEvents.find((item) => item.id === id) ??
+      worldResources?.entities.world_events.find((item) => item.id === id);
+    return event ? worldEventOrder(event) : Number.NEGATIVE_INFINITY;
+  }, [activeRoleplay?.anchored_world_event_id, worldEvents, worldResources]);
+
+  const playWorldTimeLabel = activeRoleplay
+    ? (activeRoleplay.anchor_title?.trim() || '全书读完')
+    : undefined;
+
   /** 扮演线程带时间锚点时，新确认的事件排在时间线末尾，当前锚点下的角色还「没经历」。 */
   const roleplayAppliedHint = activeRoleplay?.anchored_world_event_id
     ? `当前时间锚点在《${activeRoleplay.anchor_title ?? '所选事件'}》之后；切换锚点到更晚的位置，角色才会经历这件事。`
@@ -963,13 +1228,27 @@ export function ChatPanel() {
   const settingsHref = settingsHrefFor(settingsProjectId);
   const empty = (!threadId || messages.length === 0) && !sending && !streamText && !loading;
   const worldBound = Boolean(threadId);
-  const canSend = worldBound && input.trim().length > 0 && !sending && !busy;
+  const canSend = worldBound && input.trim().length > 0 && !busy;
+  const groupIds = activeRoleplay?.participant_asset_ids?.length
+    ? activeRoleplay.participant_asset_ids
+    : activeRoleplay
+      ? [activeRoleplay.character_asset_id]
+      : [];
+  const isGroup = Boolean(activeRoleplay?.is_group);
+  const groupNames = activeRoleplay?.participant_names?.length
+    ? activeRoleplay.participant_names
+    : groupIds.map((id) => characterAssets.find((item) => item.id === id)?.name ?? id);
+  const ticks = userTicks(messages);
+  const rollbackDrop = rollbackTarget
+    ? rollbackSlice(messages, rollbackTarget.messageId, rollbackTarget.mode).drop
+    : [];
+  const rollbackSummary = rollbackTarget ? rollbackPreview(rollbackDrop) : null;
   const speakerOptions = characters
-    .filter((item) => item.id !== activeRoleplay?.character_asset_id)
+    .filter((item) => !groupIds.includes(item.id))
     .slice()
     .sort((a, b) => {
-      const aSelf = a.tags.includes('user_self') ? 0 : 1;
-      const bSelf = b.tags.includes('user_self') ? 0 : 1;
+      const aSelf = a.tags.includes('user_self') ? 1 : 0;
+      const bSelf = b.tags.includes('user_self') ? 1 : 0;
       if (aSelf !== bSelf) return aSelf - bSelf;
       return a.name.localeCompare(b.name, 'zh');
     });
@@ -981,6 +1260,50 @@ export function ChatPanel() {
   const userSpeakerValue = creatingSelf
     ? NEW_SELF
     : (activeRoleplay?.user_character_asset_id ?? '');
+
+  async function confirmRollback() {
+    if (!threadId || !rollbackTarget || rollbackBusy) return;
+    setRollbackBusy(true);
+    setError('');
+    try {
+      const result = await rollbackCreatorChat(
+        threadId,
+        rollbackTarget.messageId,
+        rollbackTarget.mode,
+      );
+      setRollbackTarget(null);
+      const skipped = result.skipped
+        .map((item) => `${item.title}（${item.reason}）`)
+        .join('、');
+      setRollbackNote(
+        skipped
+          ? `已回退。有些没能撤回：${skipped}`
+          : result.reverted.length > 0
+            ? `已回退，本场因此写入的 ${result.reverted.length} 条已从世界拿掉。`
+            : '已回退。',
+      );
+      await load();
+      loadThreads();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setRollbackBusy(false);
+    }
+  }
+
+  async function speakAll() {
+    if (!isGroup) return;
+    const round = ++speakRoundRef.current;
+    const ids = groupIds.filter((id) => !mutedIdsRef.current.includes(id));
+    for (const [index, id] of ids.entries()) {
+      if (speakRoundRef.current !== round) break;
+      if (index > 0) {
+        const proceeded = await waitGroupBeat(round);
+        if (!proceeded) break;
+      }
+      await sendContent('', { speakerAssetId: id });
+    }
+  }
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-white text-zinc-900 [color-scheme:light]">
@@ -999,13 +1322,7 @@ export function ChatPanel() {
       />
       <div className="flex min-h-0 flex-1">
         {collapsed ? (
-          <ChatSidebarRail
-            onToggle={toggleCollapsed}
-            onOpenFolder={() => {
-              if (collapsed) toggleCollapsed();
-              void pickFolder();
-            }}
-          />
+          <ChatSidebarRail onToggle={toggleCollapsed} onCreateWorld={goToNewWorld} />
         ) : (
           <ChatSidebar
             threads={threads}
@@ -1018,9 +1335,16 @@ export function ChatPanel() {
             onPickerOpenChange={setFolderPickerOpen}
             onSelectProject={selectProject}
             onOpenFolder={() => void pickFolder()}
-            onCreateWorld={() => void createBareWorld()}
+            onCreateWorld={goToNewWorld}
             onNewInProject={(projectId) => void startThread(undefined, projectId)}
-            onNewRoleplay={(projectId) => setRoleplayPicker(projectId)}
+            onNewRoleplay={(projectId) => {
+              setGroupPicker(null);
+              setRoleplayPicker(projectId);
+            }}
+            onNewGroupChat={(projectId) => {
+              setRoleplayPicker(null);
+              setGroupPicker(projectId);
+            }}
             onRenameProject={(projectId, name) => void renameProject(projectId, name)}
             onRenameThread={(id, name) => void renameThread(id, name)}
             onDeleteThread={(id, name) => void deleteThread(id, name)}
@@ -1044,7 +1368,9 @@ export function ChatPanel() {
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <h1 className="min-w-0 truncate text-[15px] font-medium text-zinc-800">
                     {activeRoleplay
-                      ? `与「${activeRoleplay.character_name}」对话`
+                      ? isGroup
+                        ? `群聊 · ${groupNames.join('、')}`
+                        : `与「${activeRoleplay.character_name}」对话`
                       : thread
                         ? threadDisplayTitle(thread)
                         : '新世界对话'}
@@ -1076,7 +1402,7 @@ export function ChatPanel() {
                   )}
                   {activeRoleplay && thread?.project_id && (
                     <ChatChoiceMenu
-                      label="你是谁"
+                      label={isGroup ? '你扮演' : '你是谁'}
                       value={userSpeakerValue}
                       disabled={switching || sending}
                       onChange={(next) => {
@@ -1090,12 +1416,14 @@ export function ChatPanel() {
                       options={[
                         {
                           value: '',
-                          label: '你是：读者',
-                          description: '旁观提问，不代入某个角色',
+                          label: isGroup ? '你扮演：读者' : '你是：读者',
+                          description: isGroup
+                            ? '旁观提问。也可以选一个书中角色来接话'
+                            : '旁观提问，不代入某个角色',
                         },
                         ...speakerOptions.map((character) => ({
                           value: character.id,
-                          label: `你是：${character.name}`,
+                          label: isGroup ? `你扮演：${character.name}` : `你是：${character.name}`,
                           description:
                             characterCardPreview(assetById.get(character.id)) || undefined,
                           href: studioHrefForEntity(thread.project_id!, {
@@ -1205,7 +1533,8 @@ export function ChatPanel() {
                   {activeRoleplay && (
                     <div className="mx-auto flex flex-wrap items-center justify-center gap-2">
                       <label className="inline-flex items-center gap-1 rounded-full bg-[#eef2ff] px-3 py-1 text-xs text-[#1e3a8a]">
-                        正在扮演「{activeRoleplay.character_name}」· 时间锚点
+                        正在扮演「{isGroup ? groupNames.join('、') : activeRoleplay.character_name}」·
+                        时间锚点
                         <select
                           className="max-w-[12rem] bg-transparent font-medium outline-none"
                           value={activeRoleplay.anchored_world_event_id ?? ''}
@@ -1249,6 +1578,9 @@ export function ChatPanel() {
                             characterId={activeRoleplay.character_asset_id}
                             characterName={activeRoleplay.character_name}
                             resources={worldResources}
+                            asOfPresentationOrder={playAsOfPresentationOrder}
+                            worldTimeLabel={playWorldTimeLabel}
+                            reloadToken={messages.at(-1)?.id}
                             onUpdated={() => void reloadWorldResources()}
                           />
                         </div>
@@ -1263,12 +1595,14 @@ export function ChatPanel() {
                   {empty && activeRoleplay && (
                     <div className="mx-auto w-full max-w-xl rounded-2xl bg-[#f3f4f6] px-8 py-10 text-center">
                       <p className="text-lg font-medium text-zinc-900">
-                        与「{activeRoleplay.character_name}」开启对话
+                        {isGroup
+                          ? `群聊 · ${groupNames.join('、')}`
+                          : `与「${activeRoleplay.character_name}」开启对话`}
                       </p>
                       <p className="mt-2 text-sm leading-6 text-zinc-500">
-                        你现在是{activeRoleplay.user_character_name?.trim() || '读者'}。TA
-                        只记得时间锚点{activeRoleplay.anchor_title ?? '全书读完'}之前亲历的事。
-                        点「调整记忆」可改亲历、关系和档案，下一句扮演就会用。
+                        {isGroup
+                          ? `他们都在。你现在是${activeRoleplay.user_character_name?.trim() || '读者'}。你先开口，他们会自己接着说。点「暂停交流」他们就会等你；顶栏「你扮演」可以换成书中角色。每人只用自己记得的事来答。`
+                          : `你现在是${activeRoleplay.user_character_name?.trim() || '读者'}。TA 只记得时间锚点「${activeRoleplay.anchor_title ?? '全书读完'}」之前亲历的事。聊天全文会留在这次对话里；重要的会收成精简记录。问还记得时，TA 会先查目录再答。点「调整记忆」看这个时间点记得什么。世界事件仍要确认才进时间线。`}
                       </p>
                     </div>
                   )}
@@ -1297,6 +1631,20 @@ export function ChatPanel() {
                               </button>
                             ))}
                           </div>
+                          {worldResources && playableCharacters(characterAssets).length === 0 ? (
+                            <div className="mt-8 text-left">
+                              <CreateCharacterForm
+                                projectId={thread.project_id}
+                                existingNames={characterAssets.map((item) => item.name)}
+                                onCreated={() => {
+                                  void reloadWorldResources();
+                                }}
+                                onOpenTalk={(talkId) => {
+                                  router.push(`/creator-chats/${talkId}`);
+                                }}
+                              />
+                            </div>
+                          ) : null}
                         </>
                       ) : projects.length > 0 ? (
                         <>
@@ -1310,28 +1658,17 @@ export function ChatPanel() {
                           <p className="text-lg font-medium text-zinc-900">先打开一个世界</p>
                           <p className="mt-2 text-sm leading-6 text-zinc-500">
                             {desktop
-                              ? '点「选择文件夹」打开一个已有目录作为世界。'
+                              ? '点「新建世界」从零开始，或在侧栏项目旁的加号打开已有文件夹。'
                               : WEB_FOLDER_HINT}
                           </p>
                           <div className="mt-6 flex flex-wrap justify-center gap-2">
-                            {desktop ? (
-                              <button
-                                type="button"
-                                className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
-                                onClick={() => void pickFolder()}
-                              >
-                                选择文件夹
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-                                onClick={() => void createBareWorld()}
-                              >
-                                新建一个世界
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              className="inline-flex rounded-full bg-[#4d6bfe] px-4 py-2 text-sm font-medium text-white"
+                              onClick={goToNewWorld}
+                            >
+                              新建世界
+                            </button>
                           </div>
                         </>
                       )}
@@ -1353,7 +1690,9 @@ export function ChatPanel() {
                           <div className="max-w-[80%]">
                             {activeRoleplay && (
                               <p className="mb-1 text-right text-xs font-medium text-zinc-400">
-                                {activeRoleplay.user_character_name?.trim() || '读者'}
+                                {message.speaker_name?.trim() ||
+                                  activeRoleplay.user_character_name?.trim() ||
+                                  '读者'}
                               </p>
                             )}
                             <div className="rounded-2xl bg-[#eef0f4] px-4 py-2.5 text-sm leading-6 text-zinc-800">
@@ -1369,6 +1708,9 @@ export function ChatPanel() {
                               retryBlocked={
                                 retry && !retry.ok ? retry.blocked : retry ? null : 'empty'
                               }
+                              onWithdraw={() =>
+                                setRollbackTarget({ messageId: message.id, mode: 'withdraw' })
+                              }
                             />
                           </div>
                         </div>
@@ -1378,7 +1720,7 @@ export function ChatPanel() {
                       <div key={message.id} className="group min-w-0">
                         {activeRoleplay && (
                           <p className="mb-1 text-xs font-medium text-[#4d6bfe]">
-                            {activeRoleplay.character_name}
+                            {message.speaker_name?.trim() || activeRoleplay.character_name}
                           </p>
                         )}
                         <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
@@ -1438,10 +1780,13 @@ export function ChatPanel() {
                   })}
                   {(sending || stopped) && streamText && (
                     <div className="group">
+                      {streamingSpeaker ? (
+                        <p className="mb-1 text-xs font-medium text-[#4d6bfe]">{streamingSpeaker}</p>
+                      ) : null}
                       <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
                         {streamText}
                       </p>
-                      {stopped ? <p className="mt-1 text-xs text-zinc-400">已停止生成</p> : null}
+                      {stopped ? <p className="mt-1 text-xs text-zinc-400">已暂停思考</p> : null}
                       {sending && draftingWorldChange ? (
                         <p className="mt-1 text-xs text-zinc-400" role="status">
                           正在整理这一轮对世界的影响…（没有变化就不会出提案）
@@ -1460,7 +1805,11 @@ export function ChatPanel() {
                       />
                     </div>
                   )}
-                  {sending && !streamText && <p className="text-sm text-zinc-400">正在思考…</p>}
+                  {sending && !streamText && (
+                    <p className="text-sm text-zinc-400">
+                      {streamingSpeaker ? `${streamingSpeaker}正在说…` : '正在思考…'}
+                    </p>
+                  )}
                   {memoryNote && !sending ? <ThoughtSummary note={memoryNote} /> : null}
                   {!sending && memoryConflicts.length > 0 && (
                     <ul className="space-y-2 pb-1">
@@ -1511,6 +1860,120 @@ export function ChatPanel() {
                     </button>
                   </div>
                 )}
+                {rollbackNote ? (
+                  <p className="mx-auto mb-2 max-w-2xl text-center text-[11px] text-zinc-500">
+                    {rollbackNote}
+                  </p>
+                ) : null}
+                {ticks.length > 0 ? (
+                  <div className="mx-auto mb-2 flex max-w-2xl flex-wrap items-center gap-1">
+                    <span className="text-[10px] text-zinc-400">刻度</span>
+                    {ticks.map((tick, index) => (
+                      <button
+                        key={tick.id}
+                        type="button"
+                        title={tick.content.slice(0, 80)}
+                        className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-[#eef2ff] hover:text-[#1e3a8a]"
+                        onClick={() => setRollbackTarget({ messageId: tick.id, mode: 'keep' })}
+                      >
+                        {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {isGroup && keepTalking ? (
+                  <p className="mx-auto mb-2 max-w-2xl text-center text-[11px] text-[#1e3a8a]">
+                    他们正在自己聊。暂停交流或插话就会停；发送键上的停止才是取消这一句思考。
+                  </p>
+                ) : null}
+                {isGroup && talkPaused ? (
+                  <p className="mx-auto mb-2 max-w-2xl text-center text-[11px] text-amber-700">
+                    交流已暂停，他们不会自己接着说。输入框发送即可接话；这不是取消思考。
+                  </p>
+                ) : null}
+                {isGroup ? (
+                  <div className="mx-auto mb-2 flex max-w-2xl flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      title={
+                        talkPaused
+                          ? '让他们继续自己聊。不会取消正在生成的那一句。'
+                          : '暂停他们互聊，方便你接话或想一想。不会取消正在生成的那一句。'
+                      }
+                      className={`rounded-full px-2 py-0.5 text-[11px] ${
+                        talkPaused
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-100'
+                      }`}
+                      onClick={() => {
+                        if (talkPaused) void resumeGroupTalk();
+                        else pauseGroupTalk();
+                      }}
+                    >
+                      {talkPaused ? '继续交流' : '暂停交流'}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={keepTalking ? '停下来' : '让他们一直说'}
+                      title="他们按拍一直互聊，直到你暂停交流或插话。"
+                      className={`rounded-full px-2 py-0.5 text-[11px] ${
+                        keepTalking
+                          ? 'bg-[#eef2ff] text-[#1e3a8a]'
+                          : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-100'
+                      }`}
+                      onClick={() => {
+                        if (keepTalking) stopKeepTalking();
+                        else void keepGroupTalking();
+                      }}
+                    >
+                      {keepTalking ? '停下来' : '让他们一直说'}
+                    </button>
+                    {groupIds.map((id, index) => {
+                      const name = groupNames[index] ?? id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          disabled={sending}
+                          className="rounded-full bg-[#eef2ff] px-2 py-0.5 text-[11px] text-[#1e3a8a] disabled:opacity-40"
+                          onClick={() => void speakOne(id)}
+                        >
+                          让{name}说
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      disabled={sending}
+                      className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-600 disabled:opacity-40"
+                      onClick={() => void speakAll()}
+                    >
+                      让他们各说一句
+                    </button>
+                    {groupIds.map((id, index) => {
+                      const name = groupNames[index] ?? id;
+                      const muted = mutedIds.includes(id);
+                      return (
+                        <button
+                          key={`mute-${id}`}
+                          type="button"
+                          className={`rounded-full px-2 py-0.5 text-[11px] ${
+                            muted ? 'bg-zinc-200 text-zinc-500' : 'text-zinc-400 hover:bg-zinc-100'
+                          }`}
+                          onClick={() =>
+                            setMutedIds((current) =>
+                              current.includes(id)
+                                ? current.filter((item) => item !== id)
+                                : [...current, id],
+                            )
+                          }
+                        >
+                          {muted ? `已静音 ${name}` : `先别让${name}说`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 <ChatComposer
                   value={input}
                   placeholder={
@@ -1520,15 +1983,20 @@ export function ChatPanel() {
                         : WEB_CHAT_NEEDS_WORLD_EMPTY
                       : focus
                         ? `继续完善「${focus.name}」…`
-                        : activeRoleplay
-                          ? `对「${activeRoleplay.character_name}」说…`
-                          : worldResources
-                            ? '发给世界构建者，或输入 @ 引用实体…'
-                            : '发给世界构建者…'
+                        : isGroup
+                          ? talkPaused
+                            ? `交流已暂停。以「${activeRoleplay?.user_character_name?.trim() || '读者'}」接话…`
+                            : `以「${activeRoleplay?.user_character_name?.trim() || '读者'}」说话。他们会自己聊…`
+                          : activeRoleplay
+                            ? `对「${activeRoleplay.character_name}」说…`
+                            : worldResources
+                              ? '发给世界构建者，或输入 @ 引用实体…'
+                              : '发给世界构建者…'
                   }
                   sending={sending}
                   canSend={canSend}
                   blocked={!threadId}
+                  interruptLabel={activeRoleplay ? '插话' : '补充'}
                   projectId={thread?.project_id}
                   settingsProjectId={settingsProjectId}
                   threadId={threadId}
@@ -1565,29 +2033,67 @@ export function ChatPanel() {
           )}
         </div>
       </div>
-      {roleplayPicker ? (
+      {(roleplayPicker || groupPicker) ? (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-zinc-900/30 p-4"
-          onClick={() => setRoleplayPicker(null)}
+          onClick={() => {
+            setRoleplayPicker(null);
+            setGroupPicker(null);
+          }}
         >
           <div
             className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-medium text-zinc-800">开始扮演</h2>
+              <h2 className="text-sm font-medium text-zinc-800">
+                {groupPicker ? '开始群聊' : '开始扮演'}
+              </h2>
               <button
                 type="button"
                 className="text-xs text-zinc-400 hover:text-zinc-700"
-                onClick={() => setRoleplayPicker(null)}
+                onClick={() => {
+                  setRoleplayPicker(null);
+                  setGroupPicker(null);
+                }}
               >
                 关闭
               </button>
             </div>
-            {pickerAssets.filter((item) => !item.tags?.includes('user_self')).length === 0 ? (
-              <p className="text-sm text-zinc-500">
-                这个世界还没有角色。先在对话里创建，或到 Studio 左侧树点「+ 新建」。
-              </p>
+            {!pickerReady ? (
+              <p className="text-sm text-zinc-500">正在查看这个世界的角色…</p>
+            ) : groupPicker ? (
+              <GroupChatLaunch
+                projectId={groupPicker}
+                characters={pickerAssets}
+                worldEvents={pickerEvents}
+                onNeedCharacter={() => {
+                  setGroupPicker(null);
+                  setRoleplayPicker(groupPicker);
+                }}
+                onCreated={(talkId) => {
+                  setGroupPicker(null);
+                  router.push(`/creator-chats/${talkId}`);
+                }}
+              />
+            ) : playableCharacters(pickerAssets).length === 0 ? (
+              <CreateCharacterForm
+                projectId={roleplayPicker!}
+                existingNames={pickerAssets.map((item) => item.name)}
+                onCreated={(character) => {
+                  setPickerAssets((current) =>
+                    current.some((item) => item.id === character.id)
+                      ? current
+                      : [character, ...current],
+                  );
+                  if (thread?.project_id === roleplayPicker) void reloadWorldResources();
+                }}
+                onOpenTalk={(talkId) => {
+                  setRoleplayPicker(null);
+                  router.push(`/creator-chats/${talkId}`);
+                }}
+                onCancel={() => setRoleplayPicker(null)}
+              />
             ) : (
               <ul className="grid max-h-[60vh] gap-3 overflow-y-auto">
                 {pickerAssets
@@ -1602,7 +2108,7 @@ export function ChatPanel() {
                           </p>
                         </div>
                         <Link
-                          href={studioHrefForEntity(roleplayPicker, {
+                          href={studioHrefForEntity(roleplayPicker!, {
                             kind: 'character',
                             id: character.id,
                           })}
@@ -1612,7 +2118,7 @@ export function ChatPanel() {
                         </Link>
                       </div>
                       <RoleplayLaunchButton
-                        projectId={roleplayPicker}
+                        projectId={roleplayPicker!}
                         characterAssetId={character.id}
                         characterName={character.name}
                         characters={pickerAssets}
@@ -1623,6 +2129,58 @@ export function ChatPanel() {
                   ))}
               </ul>
             )}
+          </div>
+        </div>
+      ) : null}
+      {rollbackTarget ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-zinc-900/30 p-4"
+          onClick={() => !rollbackBusy && setRollbackTarget(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-sm font-medium text-zinc-800">
+              {rollbackTarget.mode === 'withdraw' ? '撤回这一句' : '回退到这里'}
+            </h2>
+            <p className="mt-2 text-xs leading-5 text-zinc-500">
+              {rollbackTarget.mode === 'withdraw'
+                ? '当作你没发过：这一句和后面的对白都会拿掉。'
+                : '这一句还在，它后面的对白当作没发生过。'}
+            </p>
+            {rollbackSummary ? (
+              <ul className="mt-3 grid gap-1 text-xs text-zinc-600">
+                <li>将拿掉 {rollbackSummary.dialogueCount} 句对白</li>
+                {rollbackSummary.pendingCount > 0 ? (
+                  <li>丢弃 {rollbackSummary.pendingCount} 张未确认提案</li>
+                ) : null}
+                {rollbackSummary.appliedTitles.length > 0 ? (
+                  <li>尝试撤回本场写入：{rollbackSummary.appliedTitles.join('、')}</li>
+                ) : null}
+              </ul>
+            ) : null}
+            <p className="mt-2 text-[11px] text-zinc-400">
+              后来在 Studio 里手改过的，或别的扮演还锚着的，会跳过并说明。不会删掉整个世界。
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={rollbackBusy}
+                className="rounded-lg px-3 py-1.5 text-sm text-zinc-500"
+                onClick={() => setRollbackTarget(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={rollbackBusy}
+                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+                onClick={() => void confirmRollback()}
+              >
+                {rollbackBusy ? '回退中…' : '确认回退'}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -72,6 +72,14 @@ export function normalizeThread(value: unknown): CreatorChatThreadDTO | null {
     kind: asChatKind(record.kind),
     character_name: asString(record.character_name) ?? asString(record.characterName),
     user_character_name: asString(record.user_character_name) ?? asString(record.userCharacterName),
+    is_group: record.is_group === true || record.isGroup === true,
+    participant_names: Array.isArray(record.participant_names)
+      ? record.participant_names.filter((item): item is string => typeof item === 'string')
+      : Array.isArray(record.participantNames)
+        ? record.participantNames.filter((item): item is string => typeof item === 'string')
+        : [],
+    active_head_message_id:
+      asString(record.active_head_message_id) ?? asString(record.activeHeadMessageId),
     created_at: asString(record.created_at) ?? asString(record.createdAt) ?? '',
     updated_at: asString(record.updated_at) ?? asString(record.updatedAt) ?? '',
     pending_proposal_count: asPendingCount(record),

@@ -174,7 +174,7 @@ export function MemoryPanel({
     <section className={showTitle ? 'rounded-lg border border-line bg-white/70 p-3' : 'px-3 pb-1'}>
       <div className={`mb-2 flex items-center ${showTitle ? 'justify-between' : 'justify-end'}`}>
         {showTitle ? (
-          <h3 className="text-sm font-medium text-zinc-700">长期记忆（L1 原子）</h3>
+          <h3 className="text-sm font-medium text-zinc-700">记下的短事实</h3>
         ) : null}
         <button
           type="button"
@@ -188,7 +188,7 @@ export function MemoryPanel({
       {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
       {atoms.length === 0 ? (
         <p className="text-xs text-zinc-400">
-          还没有归档的短事实。全书档案在右侧属性里改；对话沉淀也会出现在这里。
+          还没有归档的短事实。角色在某一时刻记得什么，请在右侧「TA 记得什么」里改。这里是世界构建时记下的设定笔记。
         </p>
       ) : (
         <ul className="max-h-64 space-y-1.5 overflow-y-auto">
@@ -262,7 +262,7 @@ export function MemoryPanel({
 
       <div className="mt-3 border-t border-line pt-2.5">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h4 className="text-xs font-medium text-zinc-600">核心记忆（L2）</h4>
+          <h4 className="text-xs font-medium text-zinc-600">主题摘要</h4>
           {topics.length > 1 ? (
             <select
               value={coreFilter}

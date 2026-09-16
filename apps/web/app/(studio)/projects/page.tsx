@@ -1,16 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Button, Card, EmptyState, Field, Input, Spinner, Textarea } from '@zivith/ui';
+import { Button, Card, EmptyState, Spinner } from '@zivith/ui';
 import { api, errorMessage, unwrapList } from '@/lib/api';
 import { isDesktopApp, pickWorkspaceDirectory, WEB_FOLDER_HINT } from '@/lib/desktop';
+import { NEW_WORLD_HREF } from '@/lib/create-scratch-world';
 import { normalizeThread } from '@/lib/creator-chat-nav';
-import { getFormText } from '@/lib/form-data';
 import {
-  createWorldInFolderRequest,
   FolderFlowCancelled,
   openWorldFromFolder,
   unbindProjectWorkspace,
@@ -22,11 +20,9 @@ export default function ProjectsPage() {
   const searchParams = useSearchParams();
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
   const [desktop, setDesktop] = useState(false);
-  const [worldFolder, setWorldFolder] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -58,56 +54,8 @@ export default function ProjectsPage() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('new') === '1') setCreating(true);
-  }, [searchParams]);
-
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError('');
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const folderPath = worldFolder.trim();
-    try {
-      if (folderPath) {
-        // §7 选文件夹新建世界：.zivith/ + 基础目录 + 数据库 World 同 worldId。
-        const created = await createWorldInFolderRequest(folderPath, {
-          name: getFormText(form, 'name'),
-          description: getFormText(form, 'description') || null,
-        });
-        const thread = normalizeThread(created);
-        const projectId = thread?.project_id;
-        formElement.reset();
-        setWorldFolder('');
-        setCreating(false);
-        await load();
-        if (projectId) router.push(`/projects/${projectId}/world`);
-        return;
-      }
-      await api('/projects', {
-        method: 'POST',
-        body: {
-          name: getFormText(form, 'name'),
-          description: getFormText(form, 'description'),
-        },
-      });
-      formElement.reset();
-      setCreating(false);
-      await load();
-    } catch (reason) {
-      setError(errorMessage(reason));
-    }
-  }
-
-  async function pickWorldFolder() {
-    try {
-      const folderPath = await pickWorkspaceDirectory();
-      if (!folderPath) return;
-      setWorldFolder(folderPath);
-      setError('');
-    } catch (reason) {
-      setError(errorMessage(reason));
-    }
-  }
+    if (searchParams.get('new') === '1') router.replace(NEW_WORLD_HREF);
+  }, [searchParams, router]);
 
   async function openLocalFolder() {
     try {
@@ -180,11 +128,11 @@ export default function ProjectsPage() {
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-accent">创作中心</p>
-          <h1 className="mt-1 text-3xl font-semibold">你的项目</h1>
+          <h1 className="mt-1 text-3xl font-semibold">你的世界</h1>
           <p className="mt-2 text-zinc-400">
             {desktop
               ? '一个文件夹是一个世界工作区。用桌面应用选择真实路径；Chat 里可新建聊天、改名、删除对话。'
-              : '在网页里可以新建世界并继续已有项目。绑定磁盘文件夹需要 Zivith 桌面应用。'}
+              : '在网页里可以新建世界并继续已有世界。绑定磁盘文件夹需要 Zivith 桌面应用。'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -200,9 +148,9 @@ export default function ProjectsPage() {
           ) : null}
           <Button
             variant={desktop ? 'secondary' : undefined}
-            onClick={() => setCreating((value) => !value)}
+            onClick={() => router.push(NEW_WORLD_HREF)}
           >
-            {creating ? '取消' : '新建项目'}
+            新建世界
           </Button>
         </div>
       </header>
@@ -213,63 +161,12 @@ export default function ProjectsPage() {
         </p>
       )}
 
-      {creating && (
-        <Card className="mb-8">
-          <form
-            className="grid gap-4 md:grid-cols-2"
-            onSubmit={(event) => {
-              void create(event);
-            }}
-          >
-            <Field label="项目名称">
-              <Input name="name" required autoFocus placeholder="例如：雾城来信" />
-            </Field>
-            <Field label="项目简介">
-              <Textarea
-                name="description"
-                className="min-h-11"
-                placeholder="一句话描述你的创意宇宙"
-              />
-            </Field>
-            {desktop ? (
-              <div className="md:col-span-2">
-                <Field label="世界文件夹（可选，选中后拥有可搬运的文件身份）">
-                  <div className="flex gap-2">
-                    <Input
-                      value={worldFolder}
-                      readOnly
-                      placeholder="不选择则创建无文件夹的世界"
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => void pickWorldFolder()}
-                    >
-                      选择…
-                    </Button>
-                    {worldFolder ? (
-                      <Button type="button" variant="secondary" onClick={() => setWorldFolder('')}>
-                        清除
-                      </Button>
-                    ) : null}
-                  </div>
-                </Field>
-              </div>
-            ) : null}
-            <div className="md:col-span-2">
-              <Button type="submit">{worldFolder ? '创建世界' : '创建项目'}</Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
       {loading ? (
-        <Spinner label="正在加载项目…" />
+        <Spinner label="正在加载世界…" />
       ) : projects.length === 0 ? (
         <EmptyState
-          title="还没有项目"
-          description={desktop ? '选择一个已有文件夹作为世界工作区。' : WEB_FOLDER_HINT}
+          title="还没有世界"
+          description={desktop ? '新建一个世界，或打开已有的 .zivith 文件夹。' : WEB_FOLDER_HINT}
           action={
             <div className="flex flex-wrap gap-2">
               {desktop ? (
@@ -282,8 +179,11 @@ export default function ProjectsPage() {
                   {opening ? '正在打开…' : '打开文件夹'}
                 </Button>
               ) : null}
-              <Button variant={desktop ? 'secondary' : undefined} onClick={() => setCreating(true)}>
-                新建项目
+              <Button
+                variant={desktop ? 'secondary' : undefined}
+                onClick={() => router.push(NEW_WORLD_HREF)}
+              >
+                新建世界
               </Button>
             </div>
           }

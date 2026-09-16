@@ -23,7 +23,11 @@ import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
 import { ApiError } from '../errors.js';
 import { ensureProjectMember } from '../contexts/world/local-user.js';
-import { archiveWorldWorkspace, syncWorkspaceMarkerName } from '../contexts/world/workspace.js';
+import {
+  archiveWorldWorkspace,
+  createWorldProject,
+  syncWorkspaceMarkerName,
+} from '../contexts/world/workspace.js';
 import type { StoragePort } from '../ports/index.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 import { maybeRecordEntityChange } from '../contexts/history/index.js';
@@ -474,15 +478,13 @@ export function registerResourceRoutes(
   });
   app.post('/projects', async (request, reply) => {
     const body = projectBody.parse(request.body);
-    const project = await db.project.create({
-      data: clean({
-        ownerId: request.user.sub,
-        name: body.name,
-        description: body.description,
-        defaults: json(body.defaults ?? {}),
-        worldview: body.worldview ? json(parseWorldview(body.worldview)) : undefined,
-        members: { create: { userId: request.user.sub, role: 'owner' as const } },
-      }),
+    const project = await createWorldProject(db, {
+      name: body.name,
+      description: body.description ?? null,
+      memberUserId: request.user.sub,
+      seed: false,
+      ...(body.worldview ? { worldview: json(parseWorldview(body.worldview)) } : {}),
+      ...(body.defaults ? { defaults: json({ language: 'zh-CN', ...body.defaults }) } : {}),
     });
     return reply.status(201).send(project);
   });

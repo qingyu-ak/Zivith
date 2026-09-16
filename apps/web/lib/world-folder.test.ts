@@ -6,6 +6,8 @@ import {
   apiErrorConflictReason,
   createWorldInFolderRequest,
   FolderFlowCancelled,
+  NotAZivithWorldError,
+  openExistingZivithWorldFolder,
   openWorldFolderRequest,
   openWorldFromFolder,
   type FolderFlowDialogs,
@@ -205,5 +207,42 @@ describe('openWorldFromFolder', () => {
       '/world/folders/open',
       expect.objectContaining({ body: { path: 'D:\\W', on_missing: 'import' } }),
     );
+  });
+});
+
+describe('openExistingZivithWorldFolder', () => {
+  it('rejects a folder without .zivith/ and does not import it as a new world', async () => {
+    apiMock.mockResolvedValueOnce({
+      path: 'D:\\Notes',
+      state: 'not_a_world',
+      world_id: null,
+      name: null,
+    });
+    const dialogs = makeDialogs(true);
+    await expect(openExistingZivithWorldFolder('D:\\Notes', { dialogs })).rejects.toBeInstanceOf(
+      NotAZivithWorldError,
+    );
+    expect(apiMock).toHaveBeenCalledTimes(1);
+    expect(dialogs.confirm).not.toHaveBeenCalled();
+  });
+
+  it('opens a valid .zivith world without extra dialogs', async () => {
+    apiMock
+      .mockResolvedValueOnce({
+        path: 'D:\\Worlds\\雾城',
+        state: 'ok',
+        world_id: 'p1',
+        name: '雾城',
+      })
+      .mockResolvedValueOnce({ id: 't1', project_id: 'p1' });
+    const dialogs = makeDialogs(false);
+    const opened = await openExistingZivithWorldFolder('D:\\Worlds\\雾城', { dialogs });
+    expect(opened).toMatchObject({ project_id: 'p1' });
+    expect(apiMock).toHaveBeenNthCalledWith(
+      2,
+      '/world/folders/open',
+      expect.objectContaining({ body: { path: 'D:\\Worlds\\雾城' } }),
+    );
+    expect(dialogs.confirm).not.toHaveBeenCalled();
   });
 });

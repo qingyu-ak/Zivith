@@ -277,7 +277,7 @@ function MemorySection({ projectId }: { projectId: string }) {
     <div>
       <h2 className="text-base font-semibold text-zinc-900">记忆</h2>
       <p className="mt-1 text-sm text-zinc-500">
-        对话中的事实会自动归档为记忆。与已有设定矛盾的内容不会自动写入，会以内联确认卡出现在对话里。
+            世界构建对话里，助手可以归档设定笔记。和角色交谈会留下全文日志，重要的收成精简记录，问还记得时先查目录再答；世界事件仍须确认才写入。与已有设定矛盾的内容不会自动写入，会以内联确认卡出现在对话里。
       </p>
       <ul className="mt-4 grid gap-2 text-sm text-zinc-700">
         <li className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
@@ -287,10 +287,9 @@ function MemorySection({ projectId }: { projectId: string }) {
           </p>
         </li>
         <li className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-          <p className="font-medium">记忆面板（L1 原子 / L2 核心块）</p>
+          <p className="font-medium">世界笔记与角色记忆</p>
           <p className="mt-1 text-sm text-zinc-500">
-            选中角色后，右侧「全书档案」可改扮演会读的记忆（短事实可编辑/新增）。下方记忆面板也能编辑
-            L1/L2。
+            选中角色后，右侧「TA 记得什么」是这个角色的经历和精简后的重要聊天。下方「世界笔记」是世界级短事实和主题摘要，不是某一时刻的人生。
           </p>
           <Link
             href={`/projects/${projectId}/world`}

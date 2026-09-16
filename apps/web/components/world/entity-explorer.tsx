@@ -49,6 +49,7 @@ function TreeFolder({
   creating,
   createLabel,
   namePlaceholder,
+  nameRequired,
   emptyActionLabel,
   children,
 }: {
@@ -59,18 +60,21 @@ function TreeFolder({
   creating?: boolean;
   createLabel?: string;
   namePlaceholder?: string;
+  nameRequired?: boolean;
   emptyActionLabel?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [naming, setNaming] = useState(false);
   const [draftName, setDraftName] = useState('');
+  const [nameError, setNameError] = useState('');
 
   function beginCreate() {
     setOpen(true);
     if (namePlaceholder) {
       setNaming(true);
       setDraftName('');
+      setNameError('');
       return;
     }
     onCreate?.();
@@ -111,8 +115,13 @@ function TreeFolder({
               onSubmit={(event) => {
                 event.preventDefault();
                 const next = draftName.trim();
+                if (nameRequired && !next) {
+                  setNameError('请填写角色名称');
+                  return;
+                }
                 setNaming(false);
                 setDraftName('');
+                setNameError('');
                 onCreate?.(next || undefined);
               }}
             >
@@ -122,8 +131,16 @@ function TreeFolder({
                 disabled={creating}
                 placeholder={namePlaceholder}
                 className="w-full rounded border border-zinc-200 px-1.5 py-1 text-[11px] outline-none focus:border-[#4d6bfe]"
-                onChange={(event) => setDraftName(event.target.value)}
+                onChange={(event) => {
+                  setDraftName(event.target.value);
+                  if (nameError) setNameError('');
+                }}
               />
+              {nameError ? (
+                <p className="text-[11px] text-red-600" role="alert">
+                  {nameError}
+                </p>
+              ) : null}
               <div className="flex justify-end gap-1">
                 <button
                   type="button"
@@ -131,13 +148,14 @@ function TreeFolder({
                   onClick={() => {
                     setNaming(false);
                     setDraftName('');
+                    setNameError('');
                   }}
                 >
                   取消
                 </button>
                 <button
                   type="submit"
-                  disabled={creating}
+                  disabled={creating || (nameRequired && !draftName.trim())}
                   className="rounded bg-zinc-900 px-1.5 py-0.5 text-[11px] text-white disabled:opacity-40"
                 >
                   {creating ? '…' : '创建'}
@@ -343,6 +361,7 @@ export function EntityExplorer({
           creating={creatingKind === 'character'}
           createLabel="+ 角色"
           namePlaceholder="角色名，如韩立"
+          nameRequired
           emptyActionLabel="新建角色"
         >
           {characterItems.map((item) => (

@@ -377,7 +377,7 @@ export function WorldWorkspace() {
                     <CoPilotPanel resources={resources} onSelect={setSelection} showTitle={false} />
                   </DockSection>
                 )}
-                <DockSection title="长期记忆" open={memoryOpen} onToggle={toggleMemory}>
+                <DockSection title="世界笔记" open={memoryOpen} onToggle={toggleMemory}>
                   <MemoryPanel
                     projectId={projectId}
                     showTitle={false}
