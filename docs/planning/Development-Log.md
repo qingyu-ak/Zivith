@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-09-16 · 927b49b · feat(studio) · 新建世界到群聊一直说入库；实测积压留到下次
+
+从扮演世界变化之后的工作区一次入库：新建世界 / TXT / 第一个角色、按世界时间记得与交谈三层、群聊 v1（分人认知、暂停/插话/用户句回退）以及互聊节奏、「让他们一直说」、空拍自己找话题。产品所有者实测问题（互聊太快、角色句回退与侧面竖条、扮演中途 AI 接管、角色感）记在 [next-session-2026-09-16.md](next-session-2026-09-16.md)，下次先出修改计划。人工 Journey D/E 走查仍缺。
+
+- **feat(api,web)** 群聊、回退、记忆窗口、新建世界与角色
+- **docs** `task-s25-*`、`next-session-2026-09-16.md`
+- 模块：roleplay / creator-chat / memory / novel-import / prisma group_chat_rollback
+
 ## 2026-09-13 · 23b0c7e · docs · 工程加固冻结基线纳入 Track V
 
 用户拍板 Track V 进冻结。基线 HEAD 含 `7900f7e`（语音）与 `c6d2157`（导入记忆可编辑）。Stage A 仍等冻结文档入库后开。
