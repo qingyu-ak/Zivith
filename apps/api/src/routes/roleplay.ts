@@ -1,6 +1,6 @@
 // M3 角色扮演路由（设计 §7）——镜像 Creator Chat 的 SSE 协议与消息模型。
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { PrismaClient } from '@zivith/database';
+import type { Prisma, PrismaClient } from '@zivith/database';
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { buildWorldContext } from '../contexts/world-builder/world-context.js';
@@ -24,21 +24,39 @@ import { resolveRuntimeLlm } from '../contexts/llm-runtime.js';
 
 const idSchema = z.string().min(1).max(128);
 
-function messageDto(message: {
+type RoleplayMessageRow = {
   id: string;
   threadId: string;
   role: string;
   content: string;
+  proposal?: unknown;
+  proposalKey?: string | null;
+  proposalState?: string | null;
   createdAt: Date;
-}) {
+};
+
+/** 与 world.ts 的 chatMessageDto 同形：扮演消息也可携带待确认提案（task-s25）。 */
+function messageDto(message: RoleplayMessageRow) {
   return {
     id: message.id,
     thread_id: message.threadId,
     role: message.role,
     content: message.content,
+    proposal: message.proposal ?? null,
+    proposal_key: message.proposalKey ?? null,
+    proposal_state: message.proposalState ?? null,
     created_at: message.createdAt.toISOString(),
   };
 }
+
+type RoleplayRecord = {
+  id: string;
+  projectId: string;
+  characterAssetId: string;
+  userCharacterAssetId: string | null;
+  threadId: string;
+  anchoredWorldEventId: string | null;
+};
 
 function wantsEventStream(request: FastifyRequest): boolean {
   const accept = typeof request.headers.accept === 'string' ? request.headers.accept : '';
@@ -238,30 +256,86 @@ export function registerRoleplayRoutes(
     }
 
     const result = await createRoleplayReply(db, agent, roleplay, userMessage, memory, effort);
+    const finalMessage = await attachWorldChangeProposals(db, agent, roleplay, {
+      userText: userMessage.content,
+      assistantMessage: result.assistantMessage,
+      world: result.world,
+      effort,
+      log: (error) => request.log.warn({ err: error }, 'roleplay world-change draft failed'),
+    });
     await db.creatorChatThread.update({
       where: { id: roleplay.threadId },
       data: { updatedAt: new Date() },
     });
     return reply.status(201).send({
       user_message: messageDto(userMessage),
-      assistant_message: messageDto(result.assistantMessage),
+      assistant_message: messageDto(finalMessage),
       memory_ops: result.memoryOps,
+      world_change: { mode: finalMessage.draftMode },
       effort: effortDto(effort),
     });
   });
 }
 
+/**
+ * 对白落库后起草世界变化提案并挂到同一条 assistant 消息上（task-s25）。
+ * 起草失败只记日志，不影响已保存的对白；无提案时消息保持原样，不假装「已记录」。
+ */
+async function attachWorldChangeProposals(
+  db: PrismaClient,
+  agent: RoleplayAgent,
+  roleplay: RoleplayRecord,
+  input: {
+    userText: string;
+    assistantMessage: RoleplayMessageRow;
+    world: Awaited<ReturnType<typeof buildWorldContext>>;
+    effort: EffectiveAgentEffort;
+    log: (error: unknown) => void;
+  },
+): Promise<RoleplayMessageRow & { draftMode: 'none' | 'rule' | 'llm' }> {
+  const world = input.world;
+  if (!world) return { ...input.assistantMessage, draftMode: 'none' };
+  const character = world.characters.find((item) => item.id === roleplay.characterAssetId);
+  if (!character) return { ...input.assistantMessage, draftMode: 'none' };
+  const userCharacter = roleplay.userCharacterAssetId
+    ? (world.characters.find((item) => item.id === roleplay.userCharacterAssetId) ?? null)
+    : null;
+
+  let draft: Awaited<ReturnType<RoleplayAgent['draftWorldChanges']>>;
+  try {
+    draft = await agent.draftWorldChanges(
+      {
+        text: input.userText,
+        reply: input.assistantMessage.content,
+        world,
+        character: { id: character.id, name: character.name },
+        userCharacter: userCharacter ? { id: userCharacter.id, name: userCharacter.name } : null,
+        effort: input.effort,
+      },
+      { onLlmError: input.log },
+    );
+  } catch (error) {
+    input.log(error);
+    return { ...input.assistantMessage, draftMode: 'none' };
+  }
+  if (draft.proposals.length === 0) return { ...input.assistantMessage, draftMode: draft.mode };
+
+  const proposalKey = `p_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const updated = await db.creatorChatMessage.update({
+    where: { id: input.assistantMessage.id },
+    data: {
+      proposal: draft.proposals as unknown as Prisma.InputJsonValue,
+      proposalKey,
+      proposalState: 'pending',
+    },
+  });
+  return { ...updated, draftMode: draft.mode };
+}
+
 async function createRoleplayReply(
   db: PrismaClient,
   agent: RoleplayAgent,
-  roleplay: {
-    id: string;
-    projectId: string;
-    characterAssetId: string;
-    userCharacterAssetId: string | null;
-    threadId: string;
-    anchoredWorldEventId: string | null;
-  },
+  roleplay: RoleplayRecord,
   userMessage: { id: string; content: string },
   memory?: MemoryService | null,
   effort?: EffectiveAgentEffort,
@@ -283,10 +357,11 @@ async function createRoleplayReply(
   });
   const historyRows = rows.filter((row) => row.id !== userMessage.id);
 
+  // 世界上下文同时供记忆归档与世界变化起草使用。
+  const world = await buildWorldContext(db, roleplay.projectId);
   let memoryOps = null;
   let memoryDigest: string | null = null;
   if (memory) {
-    const world = await buildWorldContext(db, roleplay.projectId);
     memoryOps = await memory.ingest({
       messageId: userMessage.id,
       threadId: roleplay.threadId,
@@ -332,7 +407,7 @@ async function createRoleplayReply(
     data: { threadId: roleplay.threadId, role: 'assistant', content: response.reply },
   });
   await db.roleplayThread.update({ where: { id: roleplay.id }, data: { updatedAt: new Date() } });
-  return { assistantMessage, memoryOps };
+  return { assistantMessage, memoryOps, world };
 }
 
 async function pipeRoleplaySse(
@@ -340,15 +415,8 @@ async function pipeRoleplaySse(
   reply: FastifyReply,
   db: PrismaClient,
   agent: RoleplayAgent,
-  roleplay: {
-    id: string;
-    projectId: string;
-    characterAssetId: string;
-    userCharacterAssetId: string | null;
-    threadId: string;
-    anchoredWorldEventId: string | null;
-  },
-  userMessage: { id: string; threadId: string; role: string; content: string; createdAt: Date },
+  roleplay: RoleplayRecord,
+  userMessage: RoleplayMessageRow,
   memory?: MemoryService | null,
   effort?: EffectiveAgentEffort,
 ): Promise<void> {
@@ -384,14 +452,15 @@ async function pipeRoleplaySse(
   writeEvent('user', { user_message: messageDto(userMessage) });
   writeEvent('status', { phase: 'thinking' });
 
+  const resolvedEffort = effort ?? resolveAgentEffort();
   try {
-    const { assistantMessage, memoryOps } = await createRoleplayReply(
+    const { assistantMessage, memoryOps, world } = await createRoleplayReply(
       db,
       agent,
       roleplay,
       { id: userMessage.id, content: userMessage.content },
       memory,
-      effort,
+      resolvedEffort,
     );
     if (memoryOps) {
       writeEvent('memory', { ops: memoryOps });
@@ -400,9 +469,21 @@ async function pipeRoleplaySse(
       writeEvent('delta', { text: chunk });
       if (!closed) await new Promise((resolve) => setTimeout(resolve, 16));
     }
+    // 对白先到；提案在对白结束后一次给出（不边说边改世界）。
+    // 用户在对白期间点了停止（连接已关）：对白已按现有消息保存，未发出的提案不落库。
+    if (closed) return;
+    writeEvent('status', { phase: 'drafting_world_change' });
+    const finalMessage = await attachWorldChangeProposals(db, agent, roleplay, {
+      userText: userMessage.content,
+      assistantMessage,
+      world,
+      effort: resolvedEffort,
+      log: (err) => request.log.warn({ err }, 'roleplay world-change draft failed'),
+    });
     writeEvent('done', {
-      assistant_message: messageDto(assistantMessage),
-      effort: effort ? effortDto(effort) : effortDto(resolveAgentEffort()),
+      assistant_message: messageDto(finalMessage),
+      world_change: { mode: finalMessage.draftMode },
+      effort: effortDto(resolvedEffort),
     });
   } catch (error) {
     writeEvent('error', {

@@ -15,6 +15,11 @@ import {
   type CharacterCardInput,
 } from '../world/character-card.js';
 import { entityRevisionDto } from '../history/entity-revisions.js';
+import {
+  draftRoleplayWorldChanges,
+  type RoleplayDraftInput,
+  type RoleplayDraftResult,
+} from './world-change-drafter.js';
 
 export interface RoleplayChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -347,5 +352,16 @@ export class RoleplayAgent {
       reply: completion.text.trim() || mockRoleplayReply(input.state, input.text, spoilerLocked),
       promptTokens,
     };
+  }
+
+  /**
+   * 对白结束后起草「这一轮让世界发生了什么」。只提议不写库；
+   * 产物挂在 assistant 消息上，等用户在提案卡确认（task-s25）。
+   */
+  draftWorldChanges(
+    input: RoleplayDraftInput,
+    options?: { onLlmError?: (error: unknown) => void },
+  ): Promise<RoleplayDraftResult> {
+    return draftRoleplayWorldChanges(this.llm, this.model, input, options);
   }
 }

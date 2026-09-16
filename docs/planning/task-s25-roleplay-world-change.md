@@ -2,7 +2,7 @@
 
 功能名称：扮演对话的世界变化确认
 
-> Status: **Draft — 待产品确认**
+> Status: **Implemented — 2026-09-16 已按「实现约束」8–13 落地；待产品所有者人工走一遍 Journey E（Acceptance 最后一项）**
 >
 > 日期：2026-09-16
 >
@@ -233,3 +233,29 @@ Studio 时间线、关系、角色卡可看到
 5. 用户文案称「世界」，存贮仍是 `Project`。
 6. 不改 Prisma schema。若必须改字段，停下来报告。
 7. 测试至少：正常、无变化闲聊、拒绝、确认、确认失败重试、再进入扮演、无密钥。
+
+### 确认时补充的修订（2026-09-16，依据 [架构审计](../../ZIVITH_ARCHITECTURE_AUDIT.md) P0-3 / P0-4 / P1-1）
+
+8. **前置修复 `update_entity` 的 `data` 整体替换**（审计 P0-3）：`proposal-applier.ts` 对角色 / 地点 `fields.data` 改为浅合并，否则任何经提案的角色更新都会抹掉 personality 等其它字段。本任务顺带修，附测试。
+9. **起草范围 v1 = 事件 + 关系**：扮演起草器只产出 `create_world_event` / `create_relationship`。「角色状态变化」在 v1 通过事件参与（`character_ids`）与既有阶段修订表达；`update_entity` 由 applier 支持但扮演不主动起草，避免用一句对白整段覆盖角色描述。与 Acceptance「事件和/或关系」一致。
+10. **提案卡必须列出内容**（审计 P1-1 的最小版）：事件显示标题 + 描述 + 参与角色；关系显示双方 + 关系；若出现 `update_entity`，列出 `fields` 的字段名与新值。不做 before / after diff。
+11. **扮演线程恒为「每步确认」**：`chat-panel.tsx` 的自动写入判定对扮演线程恒返回 `ask`，卡片上标明「每步确认」。世界构建线程的写模式另议（已裁定改为可撤销的自动确认，独立任务）。
+12. **起草分级**：无密钥 / `fast` 走规则起草；`balanced` / `deep` 在对白结束后再调一次结构化 LLM 起草，失败回落规则，不影响对白。规则起草复用世界构建的名字抽取，但**不得**产出自指关系或「未命名」实体（审计 P0-4，同处修复世界构建 mock）。
+13. **锚点提示**：线程带时间锚点时，确认成功后提示「当前锚点在《X》之后，切换锚点后角色才会经历此事」。
+
+## 实现记录（2026-09-16）
+
+| 层 | 文件 | 说明 |
+|----|------|------|
+| API | `contexts/roleplay/world-change-drafter.ts` | 起草器：规则（`draftWorldChangesByRule`）/ LLM 结构化（`roleplayWorldChangeSchema` + `sanitizeLlmChanges`）；只产 `create_world_event` / `create_relationship`；未知 id、自指、已有关系一律丢弃；上限跟 effort |
+| API | `contexts/world-builder/text-extract.ts` | 规则抽取共用：认已存在角色、关系词 → kind、事件动作信号、疑问/闲聊过滤、句子 → 标题 |
+| API | `routes/roleplay.ts` | 对白落库并流出后再 `status: drafting_world_change` → 起草 → 挂到同一条 assistant 消息（`proposal` / `proposal_key` / `proposal_state=pending`）；客户端已断开则不落提案；`messageDto` 带提案字段 |
+| API | `contexts/world/proposal-applier.ts` | `update_entity` 的 `data` 浅合并（`mergeAssetData`） |
+| API | `contexts/world-builder/world-builder-agent.ts` | mock 不再产出自指关系 / 「未命名」实体（`isNamePlaceholder`、双角色识别） |
+| Web | `lib/agent-write-mode.ts` | `decideWriteAction(..., { roleplay: true })` 恒 `ask` |
+| Web | `components/creator-chat/chat-panel.tsx` | 扮演线程不自动写入；`status` 事件显示「正在整理这一轮对世界的影响…」；确认后刷新世界资源；锚点提示 |
+| Web | `lib/chat-proposals.ts` / `components/creator-chat/proposal-card.tsx` | `describeProposal`：事件列标题 / 描述 / 参与角色，关系列双方，更新列字段；单条待确认提案默认展开；错误文案分开说「对白已保留 / 可重试确认 / 拒绝则世界不变」 |
+
+测试：`test/roleplay-world-change.test.ts`（起草规则、LLM 清洗、回落、上限、世界构建 mock 守卫）、`test/roleplay-world-change-flow.test.ts`（内存 Prisma 走完 闲聊无提案 → 事件提案 → 拒绝不写 → 确认落 draft 且 resources 可见 → 重复确认 409 → 下一轮角色亲历）、`test/proposal-applier.test.ts`（`data` 合并）、web `agent-write-mode` / `chat-proposals` 测试。
+
+未做（按 Out of Scope）：多角色、`update_entity` 起草、30 秒撤销、Studio 即时广播刷新（回 Studio 重挂即重拉）。

@@ -59,11 +59,21 @@ export function isImportantKind(kind: string): boolean {
   return IMPORTANT_PROPOSAL_KINDS.has(kind as ProposalKind);
 }
 
+export interface WriteDecisionContext {
+  /**
+   * 扮演线程恒为「每步确认」：扮演产生的事件 / 关系提案不受写模式影响，
+   * 永远由用户点确认（task-s25 修订 11）。
+   */
+  roleplay?: boolean;
+}
+
 export function decideWriteAction(
   mode: AgentWriteMode,
   kinds: ReadonlyArray<string>,
+  context: WriteDecisionContext = {},
 ): WriteDecision {
   if (kinds.length === 0) return 'ask';
+  if (context.roleplay) return 'ask';
   if (kinds.some(isHighRiskKind)) return 'ask';
   if (mode === 'plan') return 'plan';
   if (mode === 'confirm') return 'ask';

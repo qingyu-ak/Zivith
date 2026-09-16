@@ -4,45 +4,16 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '@zivith/ui';
 import { api, errorMessage } from '@/lib/api';
-import type { ApplyProposalResultDTO, ProposalKind } from '@/lib/types';
-import { handledProposalState, proposalBarLabel, type ChatProposal } from '@/lib/chat-proposals';
+import type { ApplyProposalResultDTO } from '@/lib/types';
+import {
+  describeProposal,
+  handledProposalState,
+  proposalBarLabel,
+  type ChatProposal,
+  type EntityNameLookup,
+} from '@/lib/chat-proposals';
 
 export type { ChatProposal };
-
-const KIND_LABEL: Record<ProposalKind, string> = {
-  create_project: '项目',
-  create_world_event: '事件',
-  create_character: '角色',
-  create_location: '地点',
-  create_scene: '场景',
-  create_relationship: '关系',
-  update_entity: '更新',
-};
-
-function pick(payload: Record<string, unknown>, key: string): string | null {
-  const value = payload[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function entityName(payload: Record<string, unknown>): string {
-  const fields = payload.fields;
-  const fromFields =
-    typeof fields === 'object' && fields !== null
-      ? (pick(fields as Record<string, unknown>, 'name') ??
-        pick(fields as Record<string, unknown>, 'title'))
-      : null;
-  return (
-    pick(payload, 'name') ??
-    pick(payload, 'title') ??
-    pick(payload, 'label') ??
-    fromFields ??
-    '未命名'
-  );
-}
-
-function lineFor(kind: ProposalKind, payload: Record<string, unknown>): string {
-  return `${KIND_LABEL[kind] ?? kind}「${entityName(payload)}」`;
-}
 
 export function ProposalCard({
   threadId,
@@ -54,6 +25,9 @@ export function ProposalCard({
   plan = false,
   studioLink = true,
   applying = false,
+  pendingHint,
+  doneHint,
+  entityNames,
   onApplied,
   onRejected,
 }: {
@@ -66,6 +40,12 @@ export function ProposalCard({
   plan?: boolean;
   studioLink?: boolean;
   applying?: boolean;
+  /** 未确认时显示在卡片顶部的说明（例如扮演线程的「每步确认」）。 */
+  pendingHint?: string;
+  /** 写入成功后显示的说明（例如时间锚点提示）。 */
+  doneHint?: string;
+  /** id → 名称，让「谁和谁」「参与角色」显示成人名而不是 uuid。 */
+  entityNames?: EntityNameLookup;
   onApplied?: (results: ApplyProposalResultDTO[]) => void;
   onRejected?: () => void;
 }) {
@@ -77,13 +57,13 @@ export function ProposalCard({
   const [dismissed, setDismissed] = useState(Boolean(rejected));
   const [localApplied, setLocalApplied] = useState(false);
 
-  const details = useMemo(
-    () => proposals.map((proposal) => lineFor(proposal.kind, proposal.payload)),
-    [proposals],
+  const described = useMemo(
+    () => proposals.map((proposal) => describeProposal(proposal, entityNames)),
+    [proposals, entityNames],
   );
   const headline = useMemo(
-    () => proposalBarLabel(proposals.length, details[0]),
-    [proposals.length, details],
+    () => proposalBarLabel(proposals.length, described[0]?.headline),
+    [proposals.length, described],
   );
   const applyLabel = executeLabel ?? (proposals.length > 1 ? '确认全部' : '确认');
 
@@ -152,16 +132,20 @@ export function ProposalCard({
   const skippedProposal = dismissed || Boolean(rejected);
   const studioId = results[0]?.project_id;
   const locked = busy || applying;
+  const showDetails = open || (!done && !skippedProposal && proposals.length === 1);
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1.5">
       {plan && !done && !skippedProposal ? (
         <p className="pb-1 text-[11px] text-zinc-500">计划不会自动写入。确认后再落到世界。</p>
       ) : null}
+      {pendingHint && !done && !skippedProposal ? (
+        <p className="pb-1 text-[11px] text-zinc-500">{pendingHint}</p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <p
           className="min-w-0 flex-1 truncate text-[13px] text-zinc-700"
-          title={details.join(' · ')}
+          title={described.map((item) => item.headline).join(' · ')}
         >
           <span className="mr-1 text-zinc-400">&gt;</span>
           {headline}
@@ -190,33 +174,38 @@ export function ProposalCard({
           </>
         )}
         {done && <Badge tone="success">已写入</Badge>}
-        {skippedProposal && !done && <Badge>已拒绝</Badge>}
+        {skippedProposal && !done && <Badge>已拒绝 · 世界未改变</Badge>}
         <button
           type="button"
           className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700"
           onClick={() => setOpen((value) => !value)}
         >
-          {open ? '收起' : '查看'}
+          {showDetails ? '收起' : '查看'}
         </button>
       </div>
 
-      {open && (
-        <ul className="mt-2 grid gap-1 border-t border-zinc-200 pt-2 text-xs leading-5 text-zinc-500">
-          {proposals.map((proposal, index) => (
-            <li key={`${proposal.kind}-${index}`}>
-              {lineFor(proposal.kind, proposal.payload)}
-              {pick(proposal.payload, 'description')
-                ? ` · ${pick(proposal.payload, 'description')}`
-                : ''}
+      {showDetails && (
+        <ul className="mt-2 grid gap-2 border-t border-zinc-200 pt-2 text-xs leading-5 text-zinc-600">
+          {described.map((item, index) => (
+            <li key={`${proposals[index]?.kind ?? 'p'}-${index}`}>
+              {proposals.length > 1 ? (
+                <p className="font-medium text-zinc-700">{item.headline}</p>
+              ) : null}
+              {item.details.map((line, lineIndex) => (
+                <p key={lineIndex} className="whitespace-pre-wrap">
+                  {line}
+                </p>
+              ))}
             </li>
           ))}
         </ul>
       )}
 
       {error && (
-        <p className="mt-2 text-xs text-red-500" role="alert">
-          {error}
-        </p>
+        <div className="mt-2 text-xs text-red-500" role="alert">
+          <p>没能写入世界：{error}</p>
+          <p className="text-zinc-500">对白已保留。可以重试确认；拒绝则世界不变。</p>
+        </div>
       )}
 
       {skipped.length > 0 && (
@@ -224,6 +213,12 @@ export function ProposalCard({
           已跳过重复的创建项目提案。
         </p>
       )}
+
+      {done && doneHint ? (
+        <p className="mt-2 text-xs text-zinc-500" role="status">
+          {doneHint}
+        </p>
+      ) : null}
 
       {done && studioLink && studioId && (
         <Link

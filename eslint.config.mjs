@@ -45,7 +45,7 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    files: ['**/*.{test,spec}.{ts,tsx}'],
+    files: ['**/*.{test,spec}.{ts,tsx}', '**/test/helpers/**/*.ts'],
     languageOptions: {
       globals: globals.vitest,
     },

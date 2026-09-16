@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Spinner } from '@zivith/ui';
@@ -157,6 +157,8 @@ export function ChatPanel() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [effort, setEffort] = useState<ChatEffort>('balanced');
   const [writeMode, setWriteMode] = useState<AgentWriteMode>('confirm');
+  // 扮演回合：对白已到、服务端正在整理世界变化提案。
+  const [draftingWorldChange, setDraftingWorldChange] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
@@ -429,6 +431,7 @@ export function ChatPanel() {
       const action = decideWriteAction(
         writeModeRef.current,
         parsed.proposals.map((item) => item.kind),
+        { roleplay: Boolean(activeRoleplayRef.current) },
       );
       if (action !== 'auto') return;
       const targetThread = message.thread_id;
@@ -525,8 +528,14 @@ export function ChatPanel() {
             setStreamText((current) => current + chunk);
             return;
           }
+          if (event === 'status') {
+            // 扮演：对白说完后服务端再整理世界变化，这一步要有可见反馈（task-s25）。
+            setDraftingWorldChange(record?.phase === 'drafting_world_change');
+            return;
+          }
           if (event === 'done') {
             sawDone = true;
+            setDraftingWorldChange(false);
             const assistantMessage = asChatMessage(record?.assistant_message);
             if (assistantMessage) {
               setMessages((current) => appendUniqueById(current, assistantMessage));
@@ -536,6 +545,7 @@ export function ChatPanel() {
             return;
           }
           if (event === 'error') {
+            setDraftingWorldChange(false);
             sawError =
               typeof record?.message === 'string'
                 ? record.message
@@ -578,6 +588,7 @@ export function ChatPanel() {
         });
       } catch (reason) {
         if (!stillCurrent()) return;
+        setDraftingWorldChange(false);
         const aborted =
           (reason instanceof DOMException && reason.name === 'AbortError') ||
           (reason instanceof Error && reason.name === 'AbortError');
@@ -912,7 +923,27 @@ export function ChatPanel() {
   function handleApplied() {
     void load();
     loadThreads();
+    // 扮演里确认的事件 / 关系要立刻反映到锚点列表与角色档案（task-s25 跨模块同步）。
+    if (activeRoleplayRef.current) void reloadWorldResources().catch(() => undefined);
   }
+
+  /** 提案卡把 id 翻成人名 / 地名 / 事件名，用户确认的是「谁和谁」，不是 uuid。 */
+  const proposalEntityNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const character of characterAssets) names.set(character.id, character.name);
+    for (const location of worldResources?.entities?.locations ?? []) {
+      if (typeof location.id === 'string' && typeof location.name === 'string') {
+        names.set(location.id, location.name);
+      }
+    }
+    for (const event of worldEvents) names.set(event.id, event.title);
+    return names;
+  }, [characterAssets, worldResources, worldEvents]);
+
+  /** 扮演线程带时间锚点时，新确认的事件排在时间线末尾，当前锚点下的角色还「没经历」。 */
+  const roleplayAppliedHint = activeRoleplay?.anchored_world_event_id
+    ? `当前时间锚点在《${activeRoleplay.anchor_title ?? '所选事件'}》之后；切换锚点到更晚的位置，角色才会经历这件事。`
+    : null;
 
   function dismissFocus() {
     setFocus(null);
@@ -1365,16 +1396,31 @@ export function ChatPanel() {
                               decideWriteAction(
                                 writeMode,
                                 proposals.map((item) => item.kind),
+                                {
+                                  roleplay: Boolean(activeRoleplay),
+                                },
                               ) === 'plan'
                             }
                             executeLabel={
                               decideWriteAction(
                                 writeMode,
                                 proposals.map((item) => item.kind),
+                                {
+                                  roleplay: Boolean(activeRoleplay),
+                                },
                               ) === 'plan'
                                 ? '按此计划写入'
                                 : undefined
                             }
+                            pendingHint={
+                              activeRoleplay
+                                ? '这一轮对话可能让世界发生变化。每步确认：确认后才写入世界，拒绝则世界不变。'
+                                : undefined
+                            }
+                            doneHint={
+                              activeRoleplay ? (roleplayAppliedHint ?? undefined) : undefined
+                            }
+                            entityNames={proposalEntityNames}
                             onApplied={handleApplied}
                             onRejected={handleApplied}
                           />
@@ -1396,6 +1442,11 @@ export function ChatPanel() {
                         {streamText}
                       </p>
                       {stopped ? <p className="mt-1 text-xs text-zinc-400">已停止生成</p> : null}
+                      {sending && draftingWorldChange ? (
+                        <p className="mt-1 text-xs text-zinc-400" role="status">
+                          正在整理这一轮对世界的影响…（没有变化就不会出提案）
+                        </p>
+                      ) : null}
                       <MessageActions
                         copyText={streamText}
                         busy={sending}
