@@ -74,6 +74,7 @@ export function StudioMenuBar({
   }
 
   const worldHref = projectId ? `/projects/${projectId}/world` : '/projects';
+  const spaceHref = projectId ? `/projects/${projectId}/world?view=space` : '/projects';
   const assetsHref = projectId ? `/projects/${projectId}/assets` : '/projects';
   const storiesHref = projectId ? `/projects/${projectId}` : '/projects';
 
@@ -123,6 +124,9 @@ export function StudioMenuBar({
         </MenuButton>
         <MenuLink href={worldHref} onClick={() => setOpen(null)}>
           世界工作区
+        </MenuLink>
+        <MenuLink href={spaceHref} onClick={() => setOpen(null)}>
+          空间浏览器
         </MenuLink>
         <MenuLink href={assetsHref} onClick={() => setOpen(null)}>
           实体库

@@ -467,6 +467,24 @@ export interface WorldEventDTO {
   created_at: string;
 }
 
+export interface EntityRevisionDTO {
+  id: string;
+  revision: number;
+  change_kind: string;
+  created_at: string;
+  stage_label: string | null;
+  as_of_world_event_id: string | null;
+  as_of_presentation_order: number | null;
+  snapshot: Record<string, unknown>;
+}
+
+export interface EntityRevisionListDTO {
+  entity_type: string;
+  entity_id: string;
+  revisions: EntityRevisionDTO[];
+  at: EntityRevisionDTO | null;
+}
+
 export interface TemporalDimensionDTO {
   id: string;
   label: string;

@@ -34,7 +34,18 @@ import {
   worldTimeRelation,
 } from '@/lib/world-line';
 import { ContinueInChatButton } from './continue-in-chat';
+import { EntityStages } from './entity-stages';
 import { conflictsForSelection } from '@/lib/world-conflicts';
+import { createStudioEntity, type StudioCreateKind } from '@/lib/studio-entity-create';
+import {
+  characterName,
+  locationName,
+  namedRefLabel,
+  parseDraftRef,
+  refKey,
+  relationshipRefOptions,
+  sceneTitle,
+} from '@/lib/entity-refs';
 
 const KIND_COLOR: Record<string, string> = {
   character: 'text-[#4d6bfe] border-[#4d6bfe]/30 bg-[#4d6bfe]/10',
@@ -242,6 +253,56 @@ function SelectField({
   );
 }
 
+function ChecklistField({
+  label,
+  options,
+  selected,
+  onChange,
+  emptyHint,
+}: {
+  label: string;
+  options: Array<{ id: string; label: string }>;
+  selected: string[];
+  onChange: (ids: string[]) => void;
+  emptyHint?: string;
+}) {
+  return (
+    <fieldset className="block">
+      <legend className="mb-1 block text-xs text-zinc-500">{label}</legend>
+      {options.length === 0 ? (
+        <p className="text-[11px] leading-5 text-zinc-500">{emptyHint ?? '还没有可选项。'}</p>
+      ) : (
+        <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-line bg-white px-2.5 py-1.5">
+          {options.map((option) => {
+            const checked = selected.includes(option.id);
+            return (
+              <label key={option.id} className="flex items-center gap-2 text-sm text-zinc-800">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() =>
+                    onChange(
+                      checked
+                        ? selected.filter((id) => id !== option.id)
+                        : [...selected, option.id],
+                    )
+                  }
+                />
+                <span className="min-w-0 truncate">{option.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+function emptyToNull(value: string | undefined): string | null {
+  const trimmed = (value ?? '').trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function SaveActions({
   saving,
   error,
@@ -318,9 +379,17 @@ function characterDraft(asset: AssetDTO): EntityDraft {
     tags: joinList(asset.tags),
     gender: appearance.gender ?? '',
     age_range: appearance.age_range ?? '',
+    height: appearance.height ?? '',
     build: appearance.build ?? '',
+    skin_tone: appearance.skin_tone ?? '',
+    hair: appearance.hair ?? '',
+    eyes: appearance.eyes ?? '',
+    distinguishing_features: appearance.distinguishing_features ?? '',
+    custom: appearance.custom ?? '',
     personality: asset.personality ?? '',
     default_outfit: asset.default_outfit ?? '',
+    stage_label: '',
+    as_of_world_event_id: '',
   };
 }
 
@@ -333,6 +402,8 @@ function locationDraft(asset: AssetDTO): EntityDraft {
     weather_default: asset.weather_default ?? '',
     lighting_default: asset.lighting_default ?? '',
     mood_default: asset.mood_default ?? '',
+    stage_label: '',
+    as_of_world_event_id: '',
   };
 }
 
@@ -351,13 +422,19 @@ function eventDraft(event: WorldEventDTO): EntityDraft {
     world_time_end: opaqueField(envelope.end),
     world_time_relation: typeof envelope.relation === 'string' ? envelope.relation : 'before',
     anchor_item_id: typeof envelope.anchor_item_id === 'string' ? envelope.anchor_item_id : '',
+    character_ids: joinList(event.character_ids),
+    scene_ids: joinList(event.scene_ids),
   };
 }
 
 function relationshipDraft(relationship: WorldRelationshipDTO): EntityDraft {
   return {
+    kind: relationship.kind ?? '',
     label: relationship.label ?? '',
     description: relationship.description ?? '',
+    direction: relationship.direction ?? 'directed',
+    source_key: refKey({ type: relationship.source_type, id: relationship.source_id }),
+    target_key: refKey({ type: relationship.target_type, id: relationship.target_id }),
   };
 }
 
@@ -368,6 +445,7 @@ function sceneDraft(scene: SceneDTO): EntityDraft {
     time_of_day: sceneTime(scene),
     weather: scene.weather ?? '',
     mood: scene.mood ?? '',
+    location_id: scene.location_id ?? '',
   };
 }
 
@@ -493,6 +571,53 @@ function draftForSelection(
   }
 }
 
+function EmptyWorldActions({ resources }: { resources: WorldResourcesDTO }) {
+  const { reload, setSelection, requestEdit } = useStudioSelection();
+  const [busy, setBusy] = useState<StudioCreateKind | null>(null);
+  const [error, setError] = useState('');
+
+  async function create(kind: StudioCreateKind) {
+    if (busy) return;
+    setBusy(kind);
+    setError('');
+    try {
+      const next = await createStudioEntity(resources.project.id, resources, kind);
+      await reload({ silent: true });
+      setSelection(next);
+      requestEdit(next);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="mb-4 space-y-2">
+      <p className="text-xs text-zinc-500">还没选中实体时，可以直接在这里建：</p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void create('character')}
+          className="rounded-md border border-line px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+        >
+          {busy === 'character' ? '创建中…' : '新建角色'}
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void create('world_event')}
+          className="rounded-md border border-line px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+        >
+          {busy === 'world_event' ? '创建中…' : '新建事件'}
+        </button>
+      </div>
+      {error ? <p className="text-xs text-red-500">{error}</p> : null}
+    </div>
+  );
+}
+
 export function InspectorPanel({
   resources,
   selection,
@@ -502,7 +627,7 @@ export function InspectorPanel({
 }: {
   resources: WorldResourcesDTO;
   selection: WorldSelection;
-  view?: 'world' | 'production';
+  view?: 'world' | 'production' | 'space';
   onSelect?: (selection: Exclude<WorldSelection, null>) => void;
   onUpdated?: () => void;
 }) {
@@ -569,7 +694,7 @@ export function InspectorPanel({
             setEditing(false);
           },
         )
-      : renderReadonly(selection, resources);
+      : renderReadonly(selection, resources, onSelect);
     if (!detail) {
       detail = (
         <div className="px-4 py-6 text-sm text-zinc-500">
@@ -582,10 +707,12 @@ export function InspectorPanel({
   const relatedConflicts = conflictsForSelection(resources.conflicts, selection);
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto">
+    <div className="flex h-full min-w-0 flex-col overflow-x-hidden overflow-y-auto">
       <section className="border-b border-line">
-        <header className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
-          <h2 className="text-xs font-semibold tracking-wider text-zinc-500">世界线属性</h2>
+        <header className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 pb-2">
+          <h2 className="text-xs font-semibold tracking-wider text-zinc-500">
+            {view === 'space' ? '空间属性' : '世界线属性'}
+          </h2>
           {selection &&
           !editing &&
           selection.kind !== 'shot' &&
@@ -648,9 +775,20 @@ export function InspectorPanel({
                 }
                 resources={resources}
                 onSelect={onSelect}
+                onUpdated={onUpdated}
               />
             ) : null}
           </>
+        ) : view === 'space' ? (
+          <div className="px-4 pb-6">
+            <p className="text-sm leading-6 text-zinc-600">
+              中间是空间浏览器：恒星系 → 世界星球 → 地点 Pin →
+              场景。点左侧地点或星球上的标记，这里编辑同一份资产。
+            </p>
+            <p className="mt-3 text-xs leading-5 text-zinc-500">
+              地点简介写在地点描述里，不是另一份空间数据。没有地点时先在树里新建，或回「世界」时间线补条目。
+            </p>
+          </div>
         ) : view === 'production' ? (
           <div className="px-4 pb-6">
             <p className="text-sm leading-6 text-zinc-600">
@@ -663,6 +801,7 @@ export function InspectorPanel({
           </div>
         ) : (
           <div className="px-4 pb-6">
+            <EmptyWorldActions resources={resources} />
             <p className="text-sm leading-6 text-zinc-600">
               世界时间默认跟随呈现顺序。点左侧「IP
               Core」可改世界观与规则；点时间维度芯片可增改梦境、历法、平行世界。
@@ -692,13 +831,17 @@ export function InspectorPanel({
 
       <section className="flex-1">
         <header className="px-4 pt-4 pb-2">
-          <h2 className="text-xs font-semibold tracking-wider text-zinc-500">创作线属性</h2>
+          <h2 className="text-xs font-semibold tracking-wider text-zinc-500">
+            {view === 'space' ? '空间导航' : '创作线属性'}
+          </h2>
         </header>
         <div className="px-4 pb-6">
           <p className="text-sm leading-relaxed text-zinc-600">
-            {view === 'production'
-              ? '机位、风格、提示词、模型已经在中间时间线投影，不另存一份。选中条目后属性显示在上方。'
-              : '点右上角「创作线」可看到机位 / 风格 / 提示词 / 模型派生轨。它们跟随镜头状态，不另存 TimelineItem。'}
+            {view === 'space'
+              ? '球体只表示世界这一天体尺度。地点和场景是同一颗星球上的标记；右侧编辑的是世界资源，不是第二套空间表。'
+              : view === 'production'
+                ? '机位、风格、提示词、模型已经在中间时间线投影，不另存一份。选中条目后属性显示在上方。'
+                : '点右上角「创作线」可看到机位 / 风格 / 提示词 / 模型派生轨。它们跟随镜头状态，不另存 TimelineItem。'}
           </p>
         </div>
       </section>
@@ -971,6 +1114,38 @@ function renderEditor(
             onChange={(value) => updateDraft('build', value)}
           />
           <Field
+            label="身高"
+            value={draft.height ?? ''}
+            onChange={(value) => updateDraft('height', value)}
+          />
+          <Field
+            label="肤色"
+            value={draft.skin_tone ?? ''}
+            onChange={(value) => updateDraft('skin_tone', value)}
+          />
+          <Field
+            label="发型发色"
+            value={draft.hair ?? ''}
+            onChange={(value) => updateDraft('hair', value)}
+          />
+          <Field
+            label="眼睛"
+            value={draft.eyes ?? ''}
+            onChange={(value) => updateDraft('eyes', value)}
+          />
+          <Field
+            label="辨识特征"
+            value={draft.distinguishing_features ?? ''}
+            onChange={(value) => updateDraft('distinguishing_features', value)}
+            rows={2}
+          />
+          <Field
+            label="补充外形"
+            value={draft.custom ?? ''}
+            onChange={(value) => updateDraft('custom', value)}
+            rows={2}
+          />
+          <Field
             label="个性"
             value={draft.personality ?? ''}
             onChange={(value) => updateDraft('personality', value)}
@@ -981,9 +1156,27 @@ function renderEditor(
             value={draft.default_outfit ?? ''}
             onChange={(value) => updateDraft('default_outfit', value)}
           />
+          <Field
+            label="阶段名"
+            value={draft.stage_label ?? ''}
+            onChange={(value) => updateDraft('stage_label', value)}
+            placeholder="如：普通学生 / 觉醒 / 领袖"
+          />
+          <SelectField
+            label="此阶段始于"
+            value={draft.as_of_world_event_id ?? ''}
+            onChange={(value) => updateDraft('as_of_world_event_id', value)}
+            options={[
+              { value: '', label: '不锚定（只更新当前卡）' },
+              ...resources.entities.world_events.map((event) => ({
+                value: event.id,
+                label: event.title?.trim() || '未命名事件',
+              })),
+            ]}
+          />
           <p className="text-[11px] leading-5 text-zinc-500">
             名称、简介、个性是角色卡：世界构建对话和「与此角色对话」共用这一份。导入记忆在下方「TA
-            记得什么」里改或新增。
+            记得什么」里改：亲历、认识谁、短事实、档案都可以改或忘掉。保存时可选锚定到世界事件，扮演会读那一刻的卡。
           </p>
         </>,
       );
@@ -1026,6 +1219,24 @@ function renderEditor(
             value={draft.mood_default ?? ''}
             onChange={(value) => updateDraft('mood_default', value)}
           />
+          <Field
+            label="阶段名"
+            value={draft.stage_label ?? ''}
+            onChange={(value) => updateDraft('stage_label', value)}
+            placeholder="如：废港时期 / 重建后"
+          />
+          <SelectField
+            label="此阶段始于"
+            value={draft.as_of_world_event_id ?? ''}
+            onChange={(value) => updateDraft('as_of_world_event_id', value)}
+            options={[
+              { value: '', label: '不锚定（只更新当前卡）' },
+              ...resources.entities.world_events.map((event) => ({
+                value: event.id,
+                label: event.title?.trim() || '未命名事件',
+              })),
+            ]}
+          />
         </>,
       );
     case 'world_event':
@@ -1041,6 +1252,26 @@ function renderEditor(
             value={draft.description ?? ''}
             onChange={(value) => updateDraft('description', value)}
             rows={4}
+          />
+          <ChecklistField
+            label="参与角色"
+            options={resources.entities.characters.map((item) => ({
+              id: item.id,
+              label: item.name,
+            }))}
+            selected={splitList(draft.character_ids ?? '')}
+            onChange={(ids) => updateDraft('character_ids', joinList(ids))}
+            emptyHint="还没有角色。先在左侧点「+ 角色」。"
+          />
+          <ChecklistField
+            label="关联场景"
+            options={resources.entities.scenes.map((item) => ({
+              id: item.id,
+              label: item.title,
+            }))}
+            selected={splitList(draft.scene_ids ?? '')}
+            onChange={(ids) => updateDraft('scene_ids', joinList(ids))}
+            emptyHint="还没有场景。先在左侧点「+ 场景」。"
           />
           <SelectField
             label="世界时间"
@@ -1117,14 +1348,31 @@ function renderEditor(
           ) : null}
         </>,
       );
-    case 'relationship':
+    case 'relationship': {
+      const relOptions = relationshipRefOptions(resources);
+      const selectOptions = relOptions.map((item) => ({
+        value: refKey(item),
+        label: item.label,
+      }));
+      if (draft.source_key && !selectOptions.some((option) => option.value === draft.source_key)) {
+        selectOptions.unshift({ value: draft.source_key, label: draft.source_key });
+      }
+      if (draft.target_key && !selectOptions.some((option) => option.value === draft.target_key)) {
+        selectOptions.push({ value: draft.target_key, label: draft.target_key });
+      }
       return shell(
         <>
+          <Field
+            label="类型"
+            value={draft.kind ?? ''}
+            onChange={(value) => updateDraft('kind', value)}
+            placeholder="如：师徒"
+          />
           <Field
             label="标签"
             value={draft.label ?? ''}
             onChange={(value) => updateDraft('label', value)}
-            placeholder="如：师徒"
+            placeholder="显示名（可选）"
           />
           <Field
             label="描述"
@@ -1132,9 +1380,30 @@ function renderEditor(
             onChange={(value) => updateDraft('description', value)}
             rows={3}
           />
-          <p className="text-xs text-zinc-600">关系两端与类型请在创作聊天中调整，避免误改引用。</p>
+          <SelectField
+            label="方向"
+            value={draft.direction ?? 'directed'}
+            onChange={(value) => updateDraft('direction', value)}
+            options={[
+              { value: 'directed', label: '有向' },
+              { value: 'undirected', label: '无向' },
+            ]}
+          />
+          <SelectField
+            label="起点"
+            value={draft.source_key ?? ''}
+            onChange={(value) => updateDraft('source_key', value)}
+            options={selectOptions}
+          />
+          <SelectField
+            label="终点"
+            value={draft.target_key ?? ''}
+            onChange={(value) => updateDraft('target_key', value)}
+            options={selectOptions}
+          />
         </>,
       );
+    }
     case 'scene':
       return shell(
         <>
@@ -1148,6 +1417,18 @@ function renderEditor(
             value={draft.summary ?? ''}
             onChange={(value) => updateDraft('summary', value)}
             rows={3}
+          />
+          <SelectField
+            label="地点"
+            value={draft.location_id ?? ''}
+            onChange={(value) => updateDraft('location_id', value)}
+            options={[
+              { value: '', label: '未指定' },
+              ...resources.entities.locations.map((item) => ({
+                value: item.id,
+                label: item.name,
+              })),
+            ]}
           />
           <Field
             label="时间段"
@@ -1210,6 +1491,7 @@ function renderEditor(
 function renderReadonly(
   selection: Exclude<WorldSelection, null>,
   resources: WorldResourcesDTO,
+  onSelect?: (selection: Exclude<WorldSelection, null>) => void,
 ): React.ReactNode {
   const entities = resources.entities;
   switch (selection.kind) {
@@ -1230,14 +1512,27 @@ function renderReadonly(
               { label: '性别', value: appearance?.gender },
               { label: '年龄', value: appearance?.age_range },
               { label: '身形', value: appearance?.build },
+              { label: '身高', value: appearance?.height },
+              { label: '肤色', value: appearance?.skin_tone },
+              { label: '发型发色', value: appearance?.hair },
+              { label: '眼睛', value: appearance?.eyes },
+              { label: '辨识特征', value: appearance?.distinguishing_features },
+              { label: '补充外形', value: appearance?.custom },
               { label: '个性', value: asset.personality },
               { label: '常服', value: asset.default_outfit },
             ]}
           />
           <p className="px-4 pb-3 text-[11px] leading-5 text-zinc-500">
             名称、简介、个性是角色卡：点右上角「编辑角色卡」。导入记忆在下方「TA
-            记得什么」里改或新增。
+            记得什么」里改：亲历、认识谁、短事实、档案都可以改或忘掉。
           </p>
+          <EntityStages
+            projectId={resources.project.id}
+            entityType="character"
+            entityId={selection.id}
+            events={resources.entities.world_events}
+            onSelect={onSelect}
+          />
         </>
       );
     }
@@ -1245,19 +1540,28 @@ function renderReadonly(
       const asset = entities.locations.find((item) => item.id === selection.id);
       if (!asset) return null;
       return (
-        <EntityDetail
-          kind="location"
-          label="地点"
-          fields={[
-            { label: '名称', value: asset.name },
-            { label: '描述', value: asset.description },
-            { label: '标签', value: tagsOf(asset.tags) },
-            { label: '时代', value: asset.time_period },
-            { label: '默认天气', value: asset.weather_default },
-            { label: '默认光线', value: asset.lighting_default },
-            { label: '默认氛围', value: asset.mood_default },
-          ]}
-        />
+        <>
+          <EntityDetail
+            kind="location"
+            label="地点"
+            fields={[
+              { label: '名称', value: asset.name },
+              { label: '描述', value: asset.description },
+              { label: '标签', value: tagsOf(asset.tags) },
+              { label: '时代', value: asset.time_period },
+              { label: '默认天气', value: asset.weather_default },
+              { label: '默认光线', value: asset.lighting_default },
+              { label: '默认氛围', value: asset.mood_default },
+            ]}
+          />
+          <EntityStages
+            projectId={resources.project.id}
+            entityType="location"
+            entityId={selection.id}
+            events={resources.entities.world_events}
+            onSelect={onSelect}
+          />
+        </>
       );
     }
     case 'scene': {
@@ -1270,6 +1574,10 @@ function renderReadonly(
           fields={[
             { label: '标题', value: scene.title },
             { label: '摘要', value: sceneSummary(scene) },
+            {
+              label: '地点',
+              value: scene.location_id ? locationName(resources, scene.location_id) : '',
+            },
             { label: '时间段', value: sceneTime(scene) },
             { label: '天气', value: scene.weather },
             { label: '氛围', value: scene.mood },
@@ -1305,8 +1613,16 @@ function renderReadonly(
             { label: '描述', value: event.description },
             { label: '呈现顺序', value: presentation },
             { label: '状态', value: event.state },
-            { label: '参与角色', value: (event.character_ids ?? []).length },
-            { label: '关联场景', value: (event.scene_ids ?? []).length },
+            {
+              label: '参与角色',
+              value: (event.character_ids ?? [])
+                .map((id) => characterName(resources, id))
+                .join(' · '),
+            },
+            {
+              label: '关联场景',
+              value: (event.scene_ids ?? []).map((id) => sceneTitle(resources, id)).join(' · '),
+            },
             {
               label: '世界时间',
               value: worldTimeCaption(event.world_time_envelope) ?? '跟随呈现顺序',
@@ -1332,8 +1648,14 @@ function renderReadonly(
             { label: '标签', value: relationship.label },
             { label: '描述', value: relationship.description },
             { label: '方向', value: relationship.direction },
-            { label: '起点', value: `${relationship.source_type}:${relationship.source_id}` },
-            { label: '终点', value: `${relationship.target_type}:${relationship.target_id}` },
+            {
+              label: '起点',
+              value: namedRefLabel(resources, relationship.source_type, relationship.source_id),
+            },
+            {
+              label: '终点',
+              value: namedRefLabel(resources, relationship.target_type, relationship.target_id),
+            },
             { label: '状态', value: relationship.state },
           ]}
         />
@@ -1588,12 +1910,20 @@ async function persistSelection(
           tags: splitList(draft.tags ?? ''),
           appearance: {
             ...(existing?.appearance ?? {}),
-            gender: (draft.gender ?? '').trim() || null,
-            age_range: (draft.age_range ?? '').trim() || null,
-            build: (draft.build ?? '').trim() || null,
+            gender: emptyToNull(draft.gender),
+            age_range: emptyToNull(draft.age_range),
+            height: emptyToNull(draft.height),
+            build: emptyToNull(draft.build),
+            skin_tone: emptyToNull(draft.skin_tone),
+            hair: emptyToNull(draft.hair),
+            eyes: emptyToNull(draft.eyes),
+            distinguishing_features: emptyToNull(draft.distinguishing_features),
+            custom: emptyToNull(draft.custom),
           },
           personality: (draft.personality ?? '').trim() || null,
           default_outfit: (draft.default_outfit ?? '').trim() || null,
+          stage_label: (draft.stage_label ?? '').trim() || null,
+          as_of_world_event_id: (draft.as_of_world_event_id ?? '').trim() || null,
         },
       });
       return;
@@ -1610,6 +1940,8 @@ async function persistSelection(
           weather_default: (draft.weather_default ?? '').trim() || null,
           lighting_default: (draft.lighting_default ?? '').trim() || null,
           mood_default: (draft.mood_default ?? '').trim() || null,
+          stage_label: (draft.stage_label ?? '').trim() || null,
+          as_of_world_event_id: (draft.as_of_world_event_id ?? '').trim() || null,
         },
       });
       return;
@@ -1621,18 +1953,33 @@ async function persistSelection(
           title: requiredText(draft.title ?? '', '未命名事件'),
           description: (draft.description ?? '').trim() || null,
           world_time_envelope: envelopeFromDraft(draft),
+          character_ids: splitList(draft.character_ids ?? ''),
+          scene_ids: splitList(draft.scene_ids ?? ''),
         },
       });
       return;
-    case 'relationship':
+    case 'relationship': {
+      const existing = resources.entities.relationships.find((item) => item.id === selection.id);
+      const options = relationshipRefOptions(resources);
+      const source = parseDraftRef(draft.source_key ?? '', options);
+      const target = parseDraftRef(draft.target_key ?? '', options);
+      if (!source || !target) throw new Error('请选择关系的两端');
+      if (source.id === target.id && source.type === target.type) {
+        throw new Error('关系的两端不能是同一个实体');
+      }
       await api(`/world/relationships/${selection.id}`, {
         method: 'PATCH',
         body: {
-          label: (draft.label ?? '').trim() || null,
-          description: (draft.description ?? '').trim() || null,
+          kind: requiredText(draft.kind ?? '', existing?.kind ?? 'related'),
+          label: emptyToNull(draft.label),
+          description: emptyToNull(draft.description),
+          direction: draft.direction === 'undirected' ? 'undirected' : 'directed',
+          source: { type: source.type, id: source.id },
+          target: { type: target.type, id: target.id },
         },
       });
       return;
+    }
     case 'scene':
       await api(`/scenes/${selection.id}`, {
         method: 'PATCH',
@@ -1642,6 +1989,7 @@ async function persistSelection(
           time_of_day: (draft.time_of_day ?? '').trim() || null,
           weather: (draft.weather ?? '').trim() || null,
           mood: (draft.mood ?? '').trim() || null,
+          location_id: (draft.location_id ?? '').trim() || null,
         },
       });
       return;

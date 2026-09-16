@@ -12,12 +12,27 @@ export interface RelationshipCreateInput {
   label?: string;
 }
 
+export interface StudioCreateExtras {
+  relationship?: RelationshipCreateInput;
+  name?: string;
+}
+
 export function nextUntitledName(existing: string[], base: string): string {
   const names = new Set(existing.map((name) => name.trim()).filter(Boolean));
   if (!names.has(base)) return base;
   let index = 2;
   while (names.has(`${base} ${index}`)) index += 1;
   return `${base} ${index}`;
+}
+
+export function resolveCreateName(
+  existing: string[],
+  requested: string | undefined,
+  untitled: string,
+): string {
+  const trimmed = requested?.trim();
+  if (!trimmed) return nextUntitledName(existing, untitled);
+  return nextUntitledName(existing, trimmed);
 }
 
 function createdId(value: unknown, fallbackMessage: string): string {
@@ -32,12 +47,13 @@ export async function createStudioEntity(
   projectId: string,
   resources: WorldResourcesDTO,
   kind: StudioCreateKind,
-  extras?: { relationship?: RelationshipCreateInput },
+  extras?: StudioCreateExtras,
 ): Promise<Exclude<WorldSelection, null>> {
   switch (kind) {
     case 'character': {
-      const name = nextUntitledName(
+      const name = resolveCreateName(
         resources.entities.characters.map((item) => item.name),
+        extras?.name,
         '未命名角色',
       );
       const created = await api(`/projects/${projectId}/assets`, {
@@ -52,8 +68,9 @@ export async function createStudioEntity(
       return { kind: 'character', id: createdId(created, '角色已创建，但未返回编号') };
     }
     case 'location': {
-      const name = nextUntitledName(
+      const name = resolveCreateName(
         resources.entities.locations.map((item) => item.name),
+        extras?.name,
         '未命名地点',
       );
       const created = await api(`/projects/${projectId}/assets`, {
@@ -68,8 +85,9 @@ export async function createStudioEntity(
       return { kind: 'location', id: createdId(created, '地点已创建，但未返回编号') };
     }
     case 'story': {
-      const title = nextUntitledName(
+      const title = resolveCreateName(
         resources.entities.stories.map((item) => item.title),
+        extras?.name,
         '未命名故事',
       );
       const created = await api(`/projects/${projectId}/stories`, {
@@ -87,8 +105,9 @@ export async function createStudioEntity(
         });
         storyId = createdId(story, '需要先有一个故事才能建场景');
       }
-      const title = nextUntitledName(
+      const title = resolveCreateName(
         resources.entities.scenes.map((item) => item.title),
+        extras?.name,
         '未命名场景',
       );
       const created = await api(`/stories/${storyId}/scenes`, {
@@ -98,8 +117,9 @@ export async function createStudioEntity(
       return { kind: 'scene', id: createdId(created, '场景已创建，但未返回编号') };
     }
     case 'world_event': {
-      const title = nextUntitledName(
+      const title = resolveCreateName(
         resources.entities.world_events.map((item) => item.title),
+        extras?.name,
         '未命名事件',
       );
       const created = await api(`/world/projects/${projectId}/world-events`, {
@@ -130,8 +150,9 @@ export async function createStudioEntity(
       const dimensions = resolveDisplayDimensions(resources);
       const created = {
         id: `dim-${Date.now()}`,
-        label: nextUntitledName(
+        label: resolveCreateName(
           dimensions.map((item) => item.label),
+          extras?.name,
           '未命名维度',
         ),
         kind: 'custom' as const,

@@ -92,22 +92,41 @@ function entityName(resources: WorldResourcesDTO, id: string): string {
   return '某人';
 }
 
+export interface CharacterRelationView {
+  id: string;
+  otherName: string;
+  kind: string;
+  name: string;
+  description: string;
+  label: string;
+}
+
 export function relationshipsForCharacter(
   resources: WorldResourcesDTO,
   characterId: string,
-): Array<{ id: string; label: string }> {
+): CharacterRelationView[] {
   return resources.entities.relationships
     .map((relationship) => {
       const { sourceId, targetId } = relationshipEnds(relationship);
       if (sourceId !== characterId && targetId !== characterId) return null;
       const otherId = sourceId === characterId ? targetId : sourceId;
       const other = entityName(resources, otherId);
-      const kind = relationship.label?.trim() || relationship.kind || '关系';
-      const extra = relationship.description?.trim();
+      const kind = relationship.kind?.trim() || 'related';
+      const name = relationship.label?.trim() ?? '';
+      const extra = relationship.description?.trim() ?? '';
+      const shown = name || kind;
       return {
         id: relationship.id,
-        label: extra ? `与「${other}」：${kind}（${extra}）` : `与「${other}」：${kind}`,
+        otherName: other,
+        kind,
+        name,
+        description: extra,
+        label: extra ? `与「${other}」：${shown}（${extra}）` : `与「${other}」：${shown}`,
       };
     })
-    .filter((item): item is { id: string; label: string } => Boolean(item));
+    .filter((item): item is CharacterRelationView => Boolean(item));
+}
+
+export function characterIdsWithout(event: WorldEventDTO, characterId: string): string[] {
+  return worldEventCharacterIds(event).filter((id) => id !== characterId);
 }

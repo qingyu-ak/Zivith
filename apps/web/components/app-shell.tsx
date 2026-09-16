@@ -17,6 +17,7 @@ import { IconAgent, IconPanelRight } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
 import { StudioMenuBar } from '@/components/studio-menu-bar';
 import { StudioAgentPanel } from '@/components/studio-agent-panel';
+import { parseWorldCanvasView, worldCanvasHref } from '@/lib/world-canvas';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import { isDesktopApp, pickWorkspaceDirectory } from '@/lib/desktop';
 import { EntityExplorer } from './world/entity-explorer';
@@ -281,9 +282,10 @@ function StudioModeCluster({
   onToggleRight: () => void;
 }) {
   const searchParams = useSearchParams();
-  const line = searchParams.get('line');
-  const worldHref = `/projects/${projectId}/world`;
-  const creationHref = `${worldHref}?line=production`;
+  const canvas = parseWorldCanvasView(searchParams);
+  const worldHref = worldCanvasHref(projectId, 'world', searchParams);
+  const creationHref = worldCanvasHref(projectId, 'production', searchParams);
+  const spaceHref = worldCanvasHref(projectId, 'space', searchParams);
 
   return (
     <div className="flex items-center gap-1">
@@ -295,9 +297,9 @@ function StudioModeCluster({
         <Link
           href={worldHref}
           role="tab"
-          aria-selected={onWorld && line !== 'production'}
+          aria-selected={onWorld && canvas === 'world'}
           className={`rounded-md px-2.5 py-0.5 text-xs transition ${
-            onWorld && line !== 'production'
+            onWorld && canvas === 'world'
               ? 'bg-white text-zinc-900 shadow-sm'
               : 'text-zinc-500 hover:text-zinc-700'
           }`}
@@ -307,14 +309,26 @@ function StudioModeCluster({
         <Link
           href={creationHref}
           role="tab"
-          aria-selected={onWorld && line === 'production'}
+          aria-selected={onWorld && canvas === 'production'}
           className={`rounded-md px-2.5 py-0.5 text-xs transition ${
-            onWorld && line === 'production'
+            onWorld && canvas === 'production'
               ? 'bg-white text-zinc-900 shadow-sm'
               : 'text-zinc-500 hover:text-zinc-700'
           }`}
         >
           创作线
+        </Link>
+        <Link
+          href={spaceHref}
+          role="tab"
+          aria-selected={onWorld && canvas === 'space'}
+          className={`rounded-md px-2.5 py-0.5 text-xs transition ${
+            onWorld && canvas === 'space'
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-700'
+          }`}
+        >
+          空间
         </Link>
       </div>
       <TopBarLink href={productionHref} label="制作" active={pathname.includes('/production')} />

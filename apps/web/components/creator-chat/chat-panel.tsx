@@ -78,6 +78,7 @@ import { ChatSidebar, ChatSidebarRail } from './chat-sidebar';
 import { ChatErrorBanner } from './chat-error-banner';
 import { MessageActions } from './message-actions';
 import { ProposalCard } from './proposal-card';
+import { CharacterArchive } from '@/components/world/character-archive';
 import {
   appendUniqueById,
   errorRetryContent,
@@ -153,6 +154,7 @@ export function ChatPanel() {
   const [creatingSelf, setCreatingSelf] = useState(false);
   const [selfName, setSelfName] = useState('');
   const [selfPersonality, setSelfPersonality] = useState('');
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [effort, setEffort] = useState<ChatEffort>('balanced');
   const [writeMode, setWriteMode] = useState<AgentWriteMode>('confirm');
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -241,6 +243,37 @@ export function ChatPanel() {
     loadThreads();
   }, [loadThreads, threadId]);
 
+  const hydrateWorldResources = useCallback((resources: WorldResourcesDTO) => {
+    setWorldResources(resources);
+    const assets = (resources.entities?.characters ?? []).filter(
+      (character): character is AssetDTO =>
+        typeof character.id === 'string' && typeof character.name === 'string',
+    );
+    setCharacterAssets(assets);
+    setWorldEvents(
+      (resources.entities?.world_events ?? []).filter(
+        (event): event is WorldEventDTO =>
+          typeof event.id === 'string' && typeof event.title === 'string',
+      ),
+    );
+    setCharacters(
+      assets.map((character) => ({
+        id: character.id,
+        name: character.name,
+        tags: Array.isArray(character.tags)
+          ? character.tags.filter((tag): tag is string => typeof tag === 'string')
+          : [],
+      })),
+    );
+  }, []);
+
+  const reloadWorldResources = useCallback(async () => {
+    const projectId = thread?.project_id;
+    if (!projectId) return;
+    const resources = await api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`);
+    hydrateWorldResources(resources);
+  }, [hydrateWorldResources, thread?.project_id]);
+
   // Agent 切换数据：项目角色列表 + 已有扮演线程（线程加载后按 project_id 拉取）。
   useEffect(() => {
     const projectId = thread?.project_id;
@@ -261,27 +294,7 @@ export function ChatPanel() {
         ]);
         if (cancelled) return;
         setRoleplayThreads(roleplay);
-        setWorldResources(resources);
-        const assets = (resources.entities?.characters ?? []).filter(
-          (character): character is AssetDTO =>
-            typeof character.id === 'string' && typeof character.name === 'string',
-        );
-        setCharacterAssets(assets);
-        setWorldEvents(
-          (resources.entities?.world_events ?? []).filter(
-            (event): event is WorldEventDTO =>
-              typeof event.id === 'string' && typeof event.title === 'string',
-          ),
-        );
-        setCharacters(
-          assets.map((character) => ({
-            id: character.id,
-            name: character.name,
-            tags: Array.isArray(character.tags)
-              ? character.tags.filter((tag): tag is string => typeof tag === 'string')
-              : [],
-          })),
-        );
+        hydrateWorldResources(resources);
       } catch {
         if (!cancelled) {
           setRoleplayThreads([]);
@@ -295,7 +308,7 @@ export function ChatPanel() {
     return () => {
       cancelled = true;
     };
-  }, [thread?.project_id]);
+  }, [hydrateWorldResources, thread?.project_id]);
 
   useEffect(() => {
     if (!roleplayPicker) {
@@ -1112,6 +1125,17 @@ export function ChatPanel() {
                     characterId={activeRoleplay.character_asset_id}
                     name={activeRoleplay.character_name}
                     preview={characterCardPreview(playingCharacter)}
+                    extra={
+                      worldResources ? (
+                        <button
+                          type="button"
+                          className="shrink-0 text-[#4d6bfe] hover:underline"
+                          onClick={() => setMemoryOpen(true)}
+                        >
+                          调整记忆
+                        </button>
+                      ) : null
+                    }
                   />
                 ) : null}
               </div>
@@ -1175,6 +1199,31 @@ export function ChatPanel() {
                       ) : null}
                     </div>
                   )}
+                  {activeRoleplay && thread?.project_id && worldResources ? (
+                    <div className="mx-auto w-full max-w-2xl">
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          className="rounded-full bg-[#eef2ff] px-3 py-1 text-xs text-[#1e3a8a] hover:bg-[#dbe4ff]"
+                          onClick={() => setMemoryOpen((value) => !value)}
+                        >
+                          {memoryOpen ? '收起记忆' : '调整记忆'}
+                        </button>
+                      </div>
+                      {memoryOpen ? (
+                        <div className="mt-2 max-h-[min(28rem,50vh)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white">
+                          <CharacterArchive
+                            compact
+                            projectId={thread.project_id}
+                            characterId={activeRoleplay.character_asset_id}
+                            characterName={activeRoleplay.character_name}
+                            resources={worldResources}
+                            onUpdated={() => void reloadWorldResources()}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {loading && (
                     <div className="grid min-h-[40vh] place-items-center">
                       <Spinner label="正在加载对话…" />
@@ -1188,7 +1237,7 @@ export function ChatPanel() {
                       <p className="mt-2 text-sm leading-6 text-zinc-500">
                         你现在是{activeRoleplay.user_character_name?.trim() || '读者'}。TA
                         只记得时间锚点{activeRoleplay.anchor_title ?? '全书读完'}之前亲历的事。
-                        角色卡只读，改简介和个性请到 Studio。
+                        点「调整记忆」可改亲历、关系和档案，下一句扮演就会用。
                       </p>
                     </div>
                   )}

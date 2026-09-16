@@ -16,6 +16,13 @@ import { createRoleplayThread } from '@/lib/api';
 import { DIMENSION_KIND_LABEL, resolveDisplayDimensions, worldTimeCaption } from '@/lib/world-line';
 import { useState, type ReactNode } from 'react';
 import type { RelationshipCreateInput, StudioCreateKind } from '@/lib/studio-entity-create';
+import {
+  namedRefLabel,
+  parseRefKey,
+  refKey,
+  relationshipRefOptions,
+  type NamedEntityRef,
+} from '@/lib/entity-refs';
 
 interface FileItem {
   id: string;
@@ -40,16 +47,35 @@ function TreeFolder({
   defaultOpen,
   onCreate,
   creating,
+  createLabel,
+  namePlaceholder,
+  emptyActionLabel,
   children,
 }: {
   label: string;
   count: number;
   defaultOpen: boolean;
-  onCreate?: () => void;
+  onCreate?: (name?: string) => void;
   creating?: boolean;
+  createLabel?: string;
+  namePlaceholder?: string;
+  emptyActionLabel?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [naming, setNaming] = useState(false);
+  const [draftName, setDraftName] = useState('');
+
+  function beginCreate() {
+    setOpen(true);
+    if (namePlaceholder) {
+      setNaming(true);
+      setDraftName('');
+      return;
+    }
+    onCreate?.();
+  }
+
   return (
     <section className="min-w-0">
       <div className="flex w-full items-center gap-1 px-1">
@@ -68,16 +94,71 @@ function TreeFolder({
             type="button"
             disabled={creating}
             className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:opacity-50"
-            onClick={() => {
-              setOpen(true);
-              onCreate();
+            onClick={(event) => {
+              event.stopPropagation();
+              beginCreate();
             }}
           >
-            {creating ? '…' : '+ 新建'}
+            {creating ? '…' : (createLabel ?? '+ 新建')}
           </button>
         ) : null}
       </div>
-      {open ? <div className="ml-2 border-l border-zinc-200/80 pl-1">{children}</div> : null}
+      {open ? (
+        <div className="ml-2 border-l border-zinc-200/80 pl-1">
+          {naming ? (
+            <form
+              className="mx-1 mb-1 space-y-1 rounded-md border border-zinc-200 bg-white p-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const next = draftName.trim();
+                setNaming(false);
+                setDraftName('');
+                onCreate?.(next || undefined);
+              }}
+            >
+              <input
+                autoFocus
+                value={draftName}
+                disabled={creating}
+                placeholder={namePlaceholder}
+                className="w-full rounded border border-zinc-200 px-1.5 py-1 text-[11px] outline-none focus:border-[#4d6bfe]"
+                onChange={(event) => setDraftName(event.target.value)}
+              />
+              <div className="flex justify-end gap-1">
+                <button
+                  type="button"
+                  className="px-1.5 py-0.5 text-[11px] text-zinc-400"
+                  onClick={() => {
+                    setNaming(false);
+                    setDraftName('');
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="rounded bg-zinc-900 px-1.5 py-0.5 text-[11px] text-white disabled:opacity-40"
+                >
+                  {creating ? '…' : '创建'}
+                </button>
+              </div>
+            </form>
+          ) : null}
+          {count === 0 && !naming && emptyActionLabel && onCreate ? (
+            <button
+              type="button"
+              disabled={creating}
+              className="w-full rounded-md px-2 py-1 text-left text-[12px] text-[#1e3a8a] hover:bg-zinc-100 disabled:opacity-50"
+              onClick={beginCreate}
+            >
+              {emptyActionLabel}
+            </button>
+          ) : (
+            children
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -146,7 +227,7 @@ export function EntityExplorer({
   onNewChat?: () => void;
   onCreate?: (
     kind: StudioCreateKind,
-    extras?: { relationship?: RelationshipCreateInput },
+    extras?: { relationship?: RelationshipCreateInput; name?: string },
   ) => void | Promise<void>;
   creatingKind?: StudioCreateKind | null;
   createError?: string;
@@ -184,7 +265,7 @@ export function EntityExplorer({
   const relationshipItems: FileItem[] = relationships.map((item: WorldRelationshipDTO) => ({
     id: item.id,
     title: item.label || item.kind,
-    subtitle: `${item.source_type} → ${item.target_type}`,
+    subtitle: `${namedRefLabel(resources, item.source_type, item.source_id)} → ${namedRefLabel(resources, item.target_type, item.target_id)}`,
   }));
   const dimensionItems: FileItem[] = resolveDisplayDimensions(resources).map((dimension) => ({
     id: dimension.id,
@@ -256,118 +337,125 @@ export function EntityExplorer({
           label="角色"
           count={characterItems.length}
           defaultOpen
-          onCreate={onCreate ? () => void onCreate('character') : undefined}
+          onCreate={
+            onCreate ? (name) => void onCreate('character', name ? { name } : undefined) : undefined
+          }
           creating={creatingKind === 'character'}
+          createLabel="+ 角色"
+          namePlaceholder="角色名，如韩立"
+          emptyActionLabel="新建角色"
         >
-          {characterItems.length === 0 ? (
-            <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
-          ) : (
-            characterItems.map((item) => (
-              <TreeFile
-                key={item.id}
-                active={selection?.kind === 'character' && selection.id === item.id}
-                title={item.title}
-                subtitle={item.subtitle}
-                actionLabel="对话"
-                onClick={() => onSelect({ kind: 'character', id: item.id })}
-                onAction={() => {
-                  void createRoleplayThread(resources.project.id, item.id)
-                    .then((created) => {
-                      router.push(`/creator-chats/${created.thread_id}`);
-                    })
-                    .catch(() => undefined);
-                }}
-              />
-            ))
-          )}
+          {characterItems.map((item) => (
+            <TreeFile
+              key={item.id}
+              active={selection?.kind === 'character' && selection.id === item.id}
+              title={item.title}
+              subtitle={item.subtitle}
+              actionLabel="对话"
+              onClick={() => onSelect({ kind: 'character', id: item.id })}
+              onAction={() => {
+                void createRoleplayThread(resources.project.id, item.id)
+                  .then((created) => {
+                    router.push(`/creator-chats/${created.thread_id}`);
+                  })
+                  .catch(() => undefined);
+              }}
+            />
+          ))}
         </TreeFolder>
 
         <TreeFolder
           label="地点"
           count={locationItems.length}
           defaultOpen={locationItems.length > 0}
-          onCreate={onCreate ? () => void onCreate('location') : undefined}
+          onCreate={
+            onCreate ? (name) => void onCreate('location', name ? { name } : undefined) : undefined
+          }
           creating={creatingKind === 'location'}
+          createLabel="+ 地点"
+          namePlaceholder="地点名"
+          emptyActionLabel="新建地点"
         >
-          {locationItems.length === 0 ? (
-            <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
-          ) : (
-            locationItems.map((item) => (
-              <TreeFile
-                key={item.id}
-                active={selection?.kind === 'location' && selection.id === item.id}
-                title={item.title}
-                subtitle={item.subtitle}
-                onClick={() => onSelect({ kind: 'location', id: item.id })}
-              />
-            ))
-          )}
+          {locationItems.map((item) => (
+            <TreeFile
+              key={item.id}
+              active={selection?.kind === 'location' && selection.id === item.id}
+              title={item.title}
+              subtitle={item.subtitle}
+              onClick={() => onSelect({ kind: 'location', id: item.id })}
+            />
+          ))}
         </TreeFolder>
 
         <TreeFolder
           label="事件"
           count={eventItems.length}
           defaultOpen={eventItems.length > 0}
-          onCreate={onCreate ? () => void onCreate('world_event') : undefined}
+          onCreate={
+            onCreate
+              ? (name) => void onCreate('world_event', name ? { name } : undefined)
+              : undefined
+          }
           creating={creatingKind === 'world_event'}
+          createLabel="+ 事件"
+          namePlaceholder="事件标题"
+          emptyActionLabel="新建事件"
         >
-          {eventItems.length === 0 ? (
-            <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
-          ) : (
-            eventItems.map((item) => (
-              <TreeFile
-                key={item.id}
-                active={selection?.kind === 'world_event' && selection.id === item.id}
-                title={item.title}
-                subtitle={item.subtitle}
-                onClick={() => onSelect({ kind: 'world_event', id: item.id })}
-              />
-            ))
-          )}
+          {eventItems.map((item) => (
+            <TreeFile
+              key={item.id}
+              active={selection?.kind === 'world_event' && selection.id === item.id}
+              title={item.title}
+              subtitle={item.subtitle}
+              onClick={() => onSelect({ kind: 'world_event', id: item.id })}
+            />
+          ))}
         </TreeFolder>
 
         <TreeFolder
           label="故事"
           count={storyItems.length}
           defaultOpen={storyItems.length > 0}
-          onCreate={onCreate ? () => void onCreate('story') : undefined}
+          onCreate={
+            onCreate ? (name) => void onCreate('story', name ? { name } : undefined) : undefined
+          }
           creating={creatingKind === 'story'}
+          createLabel="+ 故事"
+          namePlaceholder="故事名"
+          emptyActionLabel="新建故事"
         >
-          {storyItems.length === 0 ? (
-            <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
-          ) : (
-            storyItems.map((item) => (
-              <TreeFile
-                key={item.id}
-                active={selection?.kind === 'story' && selection.id === item.id}
-                title={item.title}
-                subtitle={item.subtitle}
-                onClick={() => onSelect({ kind: 'story', id: item.id })}
-              />
-            ))
-          )}
+          {storyItems.map((item) => (
+            <TreeFile
+              key={item.id}
+              active={selection?.kind === 'story' && selection.id === item.id}
+              title={item.title}
+              subtitle={item.subtitle}
+              onClick={() => onSelect({ kind: 'story', id: item.id })}
+            />
+          ))}
         </TreeFolder>
 
         <TreeFolder
           label="场景"
           count={sceneItems.length}
           defaultOpen={sceneItems.length > 0 || creatingKind === 'scene'}
-          onCreate={onCreate ? () => void onCreate('scene') : undefined}
+          onCreate={
+            onCreate ? (name) => void onCreate('scene', name ? { name } : undefined) : undefined
+          }
           creating={creatingKind === 'scene'}
+          createLabel="+ 场景"
+          namePlaceholder="场景标题"
+          emptyActionLabel="新建场景"
         >
-          {sceneItems.length === 0 ? (
-            <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
-          ) : (
-            sceneItems.map((item) => (
-              <TreeFile
-                key={item.id}
-                active={selection?.kind === 'scene' && selection.id === item.id}
-                title={item.title}
-                subtitle={item.subtitle}
-                onClick={() => onSelect({ kind: 'scene', id: item.id })}
-              />
-            ))
-          )}
+          {sceneItems.map((item) => (
+            <TreeFile
+              key={item.id}
+              active={selection?.kind === 'scene' && selection.id === item.id}
+              title={item.title}
+              subtitle={item.subtitle}
+              onClick={() => onSelect({ kind: 'scene', id: item.id })}
+            />
+          ))}
         </TreeFolder>
 
         <TreeFolder
@@ -376,6 +464,7 @@ export function EntityExplorer({
           defaultOpen={relationshipItems.length > 0 || relationshipOpen}
           onCreate={onCreate ? () => setRelationshipOpen(true) : undefined}
           creating={creatingKind === 'relationship'}
+          createLabel="+ 关系"
         >
           {relationshipOpen && onCreate ? (
             <RelationshipCreateForm
@@ -390,7 +479,17 @@ export function EntityExplorer({
             />
           ) : null}
           {relationshipItems.length === 0 && !relationshipOpen ? (
-            <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
+            onCreate ? (
+              <button
+                type="button"
+                className="w-full rounded-md px-2 py-1 text-left text-[12px] text-[#1e3a8a] hover:bg-zinc-100"
+                onClick={() => setRelationshipOpen(true)}
+              >
+                新建关系
+              </button>
+            ) : (
+              <p className="px-2 py-1 text-[11px] text-zinc-400">（空）</p>
+            )
           ) : (
             relationshipItems.map((item) => (
               <TreeFile
@@ -408,8 +507,12 @@ export function EntityExplorer({
           label="时间维度"
           count={dimensionItems.length}
           defaultOpen={false}
-          onCreate={onCreate ? () => void onCreate('dimension') : undefined}
+          onCreate={
+            onCreate ? (name) => void onCreate('dimension', name ? { name } : undefined) : undefined
+          }
           creating={creatingKind === 'dimension'}
+          createLabel="+ 维度"
+          namePlaceholder="维度名，如梦境"
         >
           {dimensionItems.map((item) => (
             <TreeFile
@@ -426,38 +529,6 @@ export function EntityExplorer({
   );
 }
 
-type RelRef = RelationshipCreateInput['source'] & { label: string };
-
-function relationshipRefOptions(resources: WorldResourcesDTO): RelRef[] {
-  return [
-    ...resources.entities.characters.map((item) => ({
-      type: 'asset' as const,
-      id: item.id,
-      label: `角色 · ${item.name}`,
-    })),
-    ...resources.entities.locations.map((item) => ({
-      type: 'asset' as const,
-      id: item.id,
-      label: `地点 · ${item.name}`,
-    })),
-    ...resources.entities.scenes.map((item) => ({
-      type: 'scene' as const,
-      id: item.id,
-      label: `场景 · ${item.title}`,
-    })),
-    ...resources.entities.world_events.map((item) => ({
-      type: 'world_event' as const,
-      id: item.id,
-      label: `事件 · ${item.title}`,
-    })),
-    ...resources.entities.stories.map((item) => ({
-      type: 'story' as const,
-      id: item.id,
-      label: `故事 · ${item.title}`,
-    })),
-  ];
-}
-
 function RelationshipCreateForm({
   resources,
   busy,
@@ -472,15 +543,11 @@ function RelationshipCreateForm({
   const options = relationshipRefOptions(resources);
   const [kind, setKind] = useState('related');
   const [label, setLabel] = useState('');
-  const [sourceKey, setSourceKey] = useState(
-    options[0] ? `${options[0].type}:${options[0].id}` : '',
-  );
-  const [targetKey, setTargetKey] = useState(
-    options[1] ? `${options[1].type}:${options[1].id}` : '',
-  );
+  const [sourceKey, setSourceKey] = useState(options[0] ? refKey(options[0]) : '');
+  const [targetKey, setTargetKey] = useState(options[1] ? refKey(options[1]) : '');
 
-  function parseKey(key: string): RelRef | undefined {
-    return options.find((item) => `${item.type}:${item.id}` === key);
+  function parseKey(key: string): NamedEntityRef | undefined {
+    return parseRefKey(key, options);
   }
 
   if (options.length < 2) {
@@ -528,7 +595,7 @@ function RelationshipCreateForm({
         className="w-full rounded border border-zinc-200 bg-white px-1.5 py-1 text-[11px]"
       >
         {options.map((item) => (
-          <option key={`s-${item.type}-${item.id}`} value={`${item.type}:${item.id}`}>
+          <option key={`s-${item.type}-${item.id}`} value={refKey(item)}>
             从 {item.label}
           </option>
         ))}
@@ -539,7 +606,7 @@ function RelationshipCreateForm({
         className="w-full rounded border border-zinc-200 bg-white px-1.5 py-1 text-[11px]"
       >
         {options.map((item) => (
-          <option key={`t-${item.type}-${item.id}`} value={`${item.type}:${item.id}`}>
+          <option key={`t-${item.type}-${item.id}`} value={refKey(item)}>
             到 {item.label}
           </option>
         ))}

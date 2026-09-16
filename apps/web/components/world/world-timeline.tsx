@@ -18,6 +18,7 @@ import {
   clipSpan,
   canEditClip,
 } from '@/lib/world-line';
+import { persistClipWrites } from '@/lib/world-track-edit';
 
 const TRACK_LABEL_WIDTH = 92;
 const TRACK_HEIGHT = 72;
@@ -113,7 +114,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function persistWrites(kind: string): boolean {
-  return kind === 'world_event' || kind === 'scene';
+  return persistClipWrites(kind);
 }
 
 function HorizontalNav({
@@ -290,7 +291,17 @@ export function WorldTimeline({
       const spans = window.localStorage.getItem(spanKey);
       if (spans) {
         const parsed = JSON.parse(spans) as Record<string, { start: number; end: number }>;
-        if (parsed && typeof parsed === 'object') setDraftSpans(parsed);
+        if (parsed && typeof parsed === 'object') {
+          const persistedIds = new Set(
+            model.tracks.flatMap((track) =>
+              track.items.filter((item) => persistWrites(item.entityType)).map((item) => item.id),
+            ),
+          );
+          const kept = Object.fromEntries(
+            Object.entries(parsed).filter(([id]) => !persistedIds.has(id)),
+          );
+          setDraftSpans(kept);
+        }
       }
       const zoom = window.localStorage.getItem(zoomKey);
       if (zoom) {
@@ -680,7 +691,10 @@ export function WorldTimeline({
   }
 
   return (
-    <div ref={containerRef} className="relative flex h-full min-h-64 w-full flex-col">
+    <div
+      ref={containerRef}
+      className="relative isolate flex h-full min-h-64 w-full flex-col overflow-hidden"
+    >
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-white px-1 py-1 text-[11px] text-zinc-500">
         <span>左键拖块移动 · 边缘左右拉长短 · 右键拖动画布 · 拖轨名换上下</span>
         <span className="inline-flex items-center gap-1.5 text-violet-700">
@@ -1240,8 +1254,11 @@ export function WorldTimeline({
       />
       {hover && (
         <div
-          className="pointer-events-none absolute z-30 max-w-xs rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-md"
-          style={{ left: hover.x, top: hover.y }}
+          className="pointer-events-none absolute z-20 max-w-[16rem] rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-md"
+          style={{
+            left: Math.min(Math.max(8, hover.x), Math.max(8, width - 272)),
+            top: Math.max(8, hover.y),
+          }}
           role="tooltip"
         >
           <p className="font-medium text-zinc-900">{hover.title}</p>

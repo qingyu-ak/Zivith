@@ -73,7 +73,13 @@ function extractMessage(payload: unknown): string {
     const details = (error as Record<string, unknown>).details;
     if (Array.isArray(details) && details[0] && typeof details[0] === 'object') {
       const first = details[0] as Record<string, unknown>;
-      if (typeof first.message === 'string' && first.message.trim()) return first.message;
+      if (typeof first.message === 'string' && first.message.trim()) {
+        const detail = first.message.trim();
+        const parent = typeof message === 'string' ? message.trim() : '';
+        // Zod 默认英文；有中文摘要时不要把 Number must be… 铺到界面上
+        if (/^[A-Za-z]/.test(detail) && parent) return parent;
+        return detail;
+      }
     }
     if (typeof message === 'string') return message;
   }

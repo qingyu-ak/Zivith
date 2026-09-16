@@ -1,5 +1,6 @@
 /// <reference types="vitest/globals" />
 import {
+  characterIdsWithout,
   eventsExperiencedBy,
   isSparseImportArchive,
   relationshipsForCharacter,
@@ -83,9 +84,21 @@ describe('character memory inventory', () => {
     ]);
   });
 
+  it('drops a character from an event without touching others', () => {
+    const [event] = resources().entities.world_events;
+    expect(characterIdsWithout(event!, 'c1')).toEqual(['c2']);
+  });
+
   it('lists relationships in readable form', () => {
     expect(relationshipsForCharacter(resources(), 'c1')).toEqual([
-      { id: 'r1', label: '与「路明非」：师徒' },
+      {
+        id: 'r1',
+        otherName: '路明非',
+        kind: 'mentor',
+        name: '师徒',
+        description: '',
+        label: '与「路明非」：师徒',
+      },
     ]);
   });
 });
