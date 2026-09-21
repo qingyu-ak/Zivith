@@ -93,13 +93,16 @@ import {
 import { ChatChoiceMenu, CharacterCardPeek } from './chat-choice-menu';
 import { RoleplayLaunchButton } from './roleplay-launch';
 import { GroupChatLaunch } from './group-chat-launch';
-import { rollbackPreview, rollbackSlice, userTicks } from '@/lib/conversation-ticks';
+import { ConversationTicksRail } from './conversation-ticks-rail';
+import { dialogueTicks, rollbackPreview, rollbackSlice, userTicks } from '@/lib/conversation-ticks';
 import {
   GROUP_BEAT_MS,
   KEEP_TALKING_CAP,
   canTakeNaturalBeat,
   naturalBeatCap,
   pickNaturalFollowSpeaker,
+  takeoverSpeakerIds,
+  lastSpokenSpeakerId,
 } from '@/lib/group-chat-rhythm';
 import { characterCardPreview } from '@/lib/character-card-preview';
 import { handledProposalState, parseProposals } from '@/lib/chat-proposals';
@@ -179,6 +182,7 @@ export function ChatPanel() {
   const [mutedIds, setMutedIds] = useState<string[]>([]);
   const [talkPaused, setTalkPaused] = useState(false);
   const [keepTalking, setKeepTalking] = useState(false);
+  const [aiTakeover, setAiTakeover] = useState(false);
   const [rollbackTarget, setRollbackTarget] = useState<{
     messageId: string;
     mode: 'keep' | 'withdraw';
@@ -204,6 +208,7 @@ export function ChatPanel() {
   const talkPausedRef = useRef(false);
   talkPausedRef.current = talkPaused;
   const keepTalkingRunRef = useRef(0);
+  const takeoverRunRef = useRef(0);
   const inputRef = useRef('');
   inputRef.current = input;
   const messagesRef = useRef(messages);
@@ -536,7 +541,7 @@ export function ChatPanel() {
   const sendContent = useCallback(
     async (
       content: string,
-      options?: { retry?: boolean; speakerAssetId?: string },
+      options?: { retry?: boolean; speakerAssetId?: string; ghostwrite?: boolean },
     ): Promise<{
       ok: boolean;
       aborted: boolean;
@@ -546,7 +551,11 @@ export function ChatPanel() {
       const empty = { ok: false, aborted: false, speakerAssetId: null, pendingProposal: false };
       const trimmed = content.trim();
       if (!threadId) return empty;
-      if (!trimmed && !options?.speakerAssetId) return empty;
+      if (!trimmed && !options?.speakerAssetId && !options?.ghostwrite) return empty;
+      if (trimmed) {
+        takeoverRunRef.current += 1;
+        setAiTakeover(false);
+      }
       abortRef.current?.abort();
       sendingRef.current = true;
       if (trimmed) lastSentRef.current = trimmed;
@@ -574,6 +583,7 @@ export function ChatPanel() {
             const userMessage = asChatMessage(record?.user_message);
             if (userMessage) {
               acceptedUser = true;
+              speakerAssetId = userMessage.speaker_asset_id ?? speakerAssetId;
               setMessages((current) => appendUniqueById(current, userMessage));
             }
             return;
@@ -638,6 +648,7 @@ export function ChatPanel() {
               ...(retryOpts ?? {}),
               speakerAssetId: options?.speakerAssetId,
               mutedAssetIds: mutedIdsRef.current,
+              ...(options?.ghostwrite ? { ghostwrite: true } : {}),
             },
           );
         } else {
@@ -759,14 +770,89 @@ export function ChatPanel() {
     talkPausedRef.current = true;
     setTalkPaused(true);
     setKeepTalking(false);
+    setAiTakeover(false);
     keepTalkingRunRef.current += 1;
+    takeoverRunRef.current += 1;
     speakRoundRef.current += 1;
   }
 
   function stopKeepTalking() {
     setKeepTalking(false);
+    setAiTakeover(false);
     keepTalkingRunRef.current += 1;
+    takeoverRunRef.current += 1;
     speakRoundRef.current += 1;
+  }
+
+  function stopTakeover() {
+    setAiTakeover(false);
+    takeoverRunRef.current += 1;
+    speakRoundRef.current += 1;
+    abortRef.current?.abort();
+  }
+
+  async function startTakeoverTalk() {
+    const roleplay = activeRoleplayRef.current;
+    const userId = roleplay?.user_character_asset_id ?? null;
+    if (!roleplay || !userId) return;
+    talkPausedRef.current = false;
+    setTalkPaused(false);
+    setKeepTalking(false);
+    keepTalkingRunRef.current += 1;
+    const round = ++speakRoundRef.current;
+    const run = ++takeoverRunRef.current;
+    setAiTakeover(true);
+    const participants = roleplay.participant_asset_ids?.length
+      ? roleplay.participant_asset_ids
+      : [roleplay.character_asset_id];
+    const roster = takeoverSpeakerIds({
+      userCharacterAssetId: userId,
+      participantIds: participants,
+    });
+    let lastId = lastSpokenSpeakerId(messagesRef.current);
+    let beats = 0;
+    try {
+      while (beats < KEEP_TALKING_CAP) {
+        if (takeoverRunRef.current !== run || speakRoundRef.current !== round) break;
+        if (talkPausedRef.current) break;
+        if (beats > 0) {
+          const proceeded = await waitGroupBeat(round);
+          if (!proceeded) break;
+        }
+        if (takeoverRunRef.current !== run || talkPausedRef.current) break;
+        const latest = messagesRef.current.at(-1);
+        if (latest?.proposal_state === 'pending') {
+          setRollbackNote('有待确认的世界变化，接管先停在这里。');
+          break;
+        }
+        const next =
+          beats === 0
+            ? userId
+            : pickNaturalFollowSpeaker({
+                participantIds: roster,
+                lastSpeakerId: lastId,
+                mutedIds: mutedIdsRef.current,
+              });
+        if (!next) break;
+        const follow =
+          next === userId
+            ? await sendContent('', { ghostwrite: true })
+            : await sendContent('', { speakerAssetId: next });
+        if (!follow.ok || follow.aborted) break;
+        if (takeoverRunRef.current !== run || speakRoundRef.current !== round) break;
+        beats += 1;
+        lastId = next === userId ? userId : (follow.speakerAssetId ?? next);
+        if (follow.pendingProposal) {
+          setRollbackNote('有待确认的世界变化，接管先停在这里。');
+          break;
+        }
+      }
+      if (takeoverRunRef.current === run && beats >= KEEP_TALKING_CAP) {
+        setRollbackNote(`已经替你演了 ${KEEP_TALKING_CAP} 句。要再继续，再点一次「AI 接管」。`);
+      }
+    } finally {
+      if (takeoverRunRef.current === run) setAiTakeover(false);
+    }
   }
 
   async function keepGroupTalking() {
@@ -776,6 +862,8 @@ export function ChatPanel() {
     setTalkPaused(false);
     const round = ++speakRoundRef.current;
     const run = ++keepTalkingRunRef.current;
+    takeoverRunRef.current += 1;
+    setAiTakeover(false);
     setKeepTalking(true);
     const participants = roleplay.participant_asset_ids ?? [];
     let lastId =
@@ -852,6 +940,7 @@ export function ChatPanel() {
   }
 
   async function speakOne(speakerAssetId: string) {
+    stopTakeover();
     const round = ++speakRoundRef.current;
     const result = await sendContent('', { speakerAssetId });
     if (!talkPausedRef.current) await maybeContinueGroup(result, { fromUser: false, round });
@@ -961,6 +1050,7 @@ export function ChatPanel() {
       setError('你是谁不能和正在开口的角色重复');
       return;
     }
+    stopTakeover();
     await openRoleplay(
       projectId,
       activeRoleplay.character_asset_id,
@@ -1238,7 +1328,7 @@ export function ChatPanel() {
   const groupNames = activeRoleplay?.participant_names?.length
     ? activeRoleplay.participant_names
     : groupIds.map((id) => characterAssets.find((item) => item.id === id)?.name ?? id);
-  const ticks = userTicks(messages);
+  const ticks = activeRoleplay ? dialogueTicks(messages) : userTicks(messages);
   const rollbackDrop = rollbackTarget
     ? rollbackSlice(messages, rollbackTarget.messageId, rollbackTarget.mode).drop
     : [];
@@ -1260,6 +1350,8 @@ export function ChatPanel() {
   const userSpeakerValue = creatingSelf
     ? NEW_SELF
     : (activeRoleplay?.user_character_asset_id ?? '');
+  const playingAsName = activeRoleplay?.user_character_name?.trim() || '';
+  const canTakeover = Boolean(activeRoleplay?.user_character_asset_id);
 
   async function confirmRollback() {
     if (!threadId || !rollbackTarget || rollbackBusy) return;
@@ -1293,6 +1385,7 @@ export function ChatPanel() {
 
   async function speakAll() {
     if (!isGroup) return;
+    stopTakeover();
     const round = ++speakRoundRef.current;
     const ids = groupIds.filter((id) => !mutedIdsRef.current.includes(id));
     for (const [index, id] of ids.entries()) {
@@ -1526,10 +1619,11 @@ export function ChatPanel() {
             </div>
           ) : (
             <>
+              <div className="relative min-h-0 flex-1">
               <div
-                className={`min-h-0 flex-1 overflow-y-auto px-4 lg:px-6 ${empty ? 'flex items-center' : 'py-6'}`}
+                className={`min-h-0 h-full overflow-y-auto px-4 lg:px-6 ${empty ? 'flex items-center' : 'py-6'}`}
               >
-                <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+                <div className="mx-auto flex min-w-0 w-full max-w-2xl flex-col gap-6">
                   {activeRoleplay && (
                     <div className="mx-auto flex flex-wrap items-center justify-center gap-2">
                       <label className="inline-flex items-center gap-1 rounded-full bg-[#eef2ff] px-3 py-1 text-xs text-[#1e3a8a]">
@@ -1827,6 +1921,19 @@ export function ChatPanel() {
                   <div ref={endRef} />
                 </div>
               </div>
+                {!empty && ticks.length > 0 ? (
+                  <div className="pointer-events-none absolute inset-y-0 right-1 z-10 flex items-start pt-6 lg:right-3">
+                    <div className="pointer-events-auto max-h-full">
+                      <ConversationTicksRail
+                        ticks={ticks}
+                        userLabel={activeRoleplay?.user_character_name?.trim() || '读者'}
+                        assistantLabel={isGroup ? '角色' : (activeRoleplay?.character_name ?? '角色')}
+                        onPick={(messageId) => setRollbackTarget({ messageId, mode: 'keep' })}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
 
               <div className="px-4 pb-3 pt-1 lg:px-6">
                 {error ? (
@@ -1865,21 +1972,10 @@ export function ChatPanel() {
                     {rollbackNote}
                   </p>
                 ) : null}
-                {ticks.length > 0 ? (
-                  <div className="mx-auto mb-2 flex max-w-2xl flex-wrap items-center gap-1">
-                    <span className="text-[10px] text-zinc-400">刻度</span>
-                    {ticks.map((tick, index) => (
-                      <button
-                        key={tick.id}
-                        type="button"
-                        title={tick.content.slice(0, 80)}
-                        className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-[#eef2ff] hover:text-[#1e3a8a]"
-                        onClick={() => setRollbackTarget({ messageId: tick.id, mode: 'keep' })}
-                      >
-                        {index + 1}
-                      </button>
-                    ))}
-                  </div>
+                {aiTakeover ? (
+                  <p className="mx-auto mb-2 max-w-2xl text-center text-[11px] text-[#1e3a8a]">
+                    正在替你演「{playingAsName || '这个角色'}」。打字或点「我来演」就会接回来。
+                  </p>
                 ) : null}
                 {isGroup && keepTalking ? (
                   <p className="mx-auto mb-2 max-w-2xl text-center text-[11px] text-[#1e3a8a]">
@@ -1891,8 +1987,33 @@ export function ChatPanel() {
                     交流已暂停，他们不会自己接着说。输入框发送即可接话；这不是取消思考。
                   </p>
                 ) : null}
-                {isGroup ? (
+                {isGroup || canTakeover ? (
                   <div className="mx-auto mb-2 flex max-w-2xl flex-wrap items-center gap-1">
+                    {canTakeover ? (
+                      <button
+                        type="button"
+                        disabled={sending && !aiTakeover}
+                        aria-label={aiTakeover ? '我来演' : `AI接管${playingAsName}`}
+                        title={
+                          aiTakeover
+                            ? '接回来自己说。已经替你说的还在。'
+                            : `让 AI 替你演「${playingAsName || '这个角色'}」。你打字就会接回来。`
+                        }
+                        className={`rounded-full px-2 py-0.5 text-[11px] disabled:opacity-40 ${
+                          aiTakeover
+                            ? 'bg-[#eef2ff] text-[#1e3a8a]'
+                            : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-100'
+                        }`}
+                        onClick={() => {
+                          if (aiTakeover) stopTakeover();
+                          else void startTakeoverTalk();
+                        }}
+                      >
+                        {aiTakeover ? '我来演' : 'AI 接管'}
+                      </button>
+                    ) : null}
+                    {isGroup ? (
+                    <>
                     <button
                       type="button"
                       title={
@@ -1972,6 +2093,8 @@ export function ChatPanel() {
                         </button>
                       );
                     })}
+                    </>
+                    ) : null}
                   </div>
                 ) : null}
                 <ChatComposer
@@ -2011,7 +2134,10 @@ export function ChatPanel() {
                     setWriteMode(next);
                     writeStoredWriteMode(next);
                   }}
-                  onChange={setInput}
+                  onChange={(next) => {
+                    setInput(next);
+                    if (aiTakeover && next.length > 0) stopTakeover();
+                  }}
                   onSubmit={() => void send()}
                   onStop={stopGeneration}
                   onNewChat={() => {

@@ -225,4 +225,55 @@ describe('group chat + tick rollback (mock provider)', () => {
     const liveMessages = (live.json() as { messages: Array<{ id: string; role: string }> }).messages;
     expect(liveMessages.map((item) => item.id)).toEqual([user!.id]);
   });
+
+  it('ghostwrites a user-character line without putting them on the AI roster', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/roleplay/threads',
+      payload: {
+        project_id: 'p1',
+        character_asset_id: 'c-ailin',
+        user_character_asset_id: 'c-chenmo',
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    const { id } = created.json() as { id: string };
+
+    const missing = await app.inject({
+      method: 'POST',
+      url: `/api/v1/roleplay/threads/${id}/messages`,
+      payload: { ghostwrite: true, content: '我想自己说' },
+    });
+    expect(missing.statusCode).toBe(400);
+
+    const asReader = await app.inject({
+      method: 'POST',
+      url: '/api/v1/roleplay/threads',
+      payload: { project_id: 'p1', character_asset_id: 'c-ailin' },
+    });
+    const readerId = (asReader.json() as { id: string }).id;
+    const noCharacter = await app.inject({
+      method: 'POST',
+      url: `/api/v1/roleplay/threads/${readerId}/messages`,
+      payload: { ghostwrite: true },
+    });
+    expect(noCharacter.statusCode).toBe(400);
+
+    const said = await app.inject({
+      method: 'POST',
+      url: `/api/v1/roleplay/threads/${id}/messages`,
+      payload: { ghostwrite: true },
+    });
+    expect(said.statusCode).toBe(201);
+    const body = said.json() as {
+      ghostwrite?: boolean;
+      user_message: { role: string; content: string; speaker_asset_id: string | null };
+      assistant_message: unknown;
+    };
+    expect(body.ghostwrite).toBe(true);
+    expect(body.assistant_message).toBeNull();
+    expect(body.user_message.role).toBe('user');
+    expect(body.user_message.speaker_asset_id).toBe('c-chenmo');
+    expect(body.user_message.content.trim().length).toBeGreaterThan(0);
+  });
 });

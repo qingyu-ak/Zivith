@@ -312,6 +312,7 @@ export function buildRoleplaySystemPrompt(
   spoilerLocked = false,
   chatRecall: string | null = null,
   continueBeat = false,
+  ghostwrite = false,
 ): string {
   const experienceBlock =
     state.experiences.length > 0
@@ -320,15 +321,18 @@ export function buildRoleplaySystemPrompt(
         ? '\n## 你亲历过的事\n（到目前为止还没有记在你名下的亲历事件。不要因此编造主线，也不要用对该作品的外部知识补全。）'
         : '\n## 你亲历过的事\n（暂无记录——以角色身份自然应对）';
   const companions = state.companions ?? [];
-  const groupLine =
-    companions.length > 0
+  const groupLine = ghostwrite
+    ? companions.length > 0
+      ? `创作者把「${state.name}」交给你接着演。也在场的还有：${companions.join('、')}。用第一人称说你自己的话，不要替别人开口，也不要对着读者说话。`
+      : `创作者把「${state.name}」交给你接着演。用第一人称把场面往下推，不要解释你在代打。`
+    : companions.length > 0
       ? `你正在一场群聊里扮演「${state.name}」。用户是「${state.userLabel}」。也在场的还有：${companions.join('、')}。你只说自己的话，不要替别人开口。对着在场的人说话，不要把场面收成请读者提问。`
       : `你正在扮演小说角色「${state.name}」，与「${state.userLabel}」对话。`;
   const sections = [
     groupLine,
     '\n## 角色档案',
     state.persona,
-    `\n${state.userSection}`,
+    ghostwrite ? '' : `\n${state.userSection}`,
     state.traits.length > 0
       ? `\n## 关于你的已知细节\n${state.traits.map((t) => `· ${t}`).join('\n')}`
       : '',
@@ -352,11 +356,13 @@ export function buildRoleplaySystemPrompt(
     '4. 不跳出角色，不以 AI 或助手身份说话，不输出旁白解说（除非用户要求）。',
     continueBeat
       ? `5. 这一拍「${state.userLabel}」没有开口。不要对他们说话、道别或确认他们在场；对着在场的其他角色把场面往下推。`
-      : `5. 把用户当成「${state.userLabel}」来应答；不要替用户说话或改写用户身份。`,
+      : ghostwrite
+        ? '5. 这一拍由你开口。不要解释你在代打，不要问创作者想说什么，不要对读者说话。'
+        : `5. 把用户当成「${state.userLabel}」来应答；不要替用户说话或改写用户身份。`,
     '6. 回复长度适中（1-4 句），保持对话感。',
     '7. 用户问「还记得吗」或「你什么时候做了什么」时，只根据上面的检索结果和亲历回答；检索和亲历都没有，就以角色身份说记不清，不要编对白细节。',
     companions.length > 0
-      ? continueBeat
+      ? continueBeat || ghostwrite
         ? '8. 群聊里不要替其他在场角色说话，也不要把别人的亲历当成你自己的记忆。对着在场的人接话；一次只说一个节拍。从交情或亲历里另起话头，不要重复上一拍的动作和口头禅，不要编造未发生的主线。'
         : '8. 群聊里不要替其他在场角色说话，也不要把别人的亲历当成你自己的记忆。对着在场的人接话；一次只说一个节拍（一两句或一个动作），把话头留给别人。不要总结全场，也不要用「你想问什么就问」把对话停住。'
       : '',
@@ -398,6 +404,8 @@ export interface RoleplayInput {
   effort?: EffectiveAgentEffort | null;
   /** Group beat with no new user utterance: they talk among themselves. */
   continueBeat?: boolean;
+  /** Speak as the human's character for one beat; stored as a user line. */
+  ghostwrite?: boolean;
 }
 
 export function buildRoleplayUserPrompt(input: {
@@ -407,6 +415,7 @@ export function buildRoleplayUserPrompt(input: {
   userLabel: string;
   speakerFallback?: string;
   continueBeat?: boolean;
+  ghostwrite?: boolean;
 }): string {
   const historyText = input.history
     .slice(-input.historyTurns)
@@ -418,7 +427,7 @@ export function buildRoleplayUserPrompt(input: {
     })
     .join('\n');
   const prefix = historyText ? `${historyText}\n\n` : '';
-  if (input.continueBeat) {
+  if (input.continueBeat || input.ghostwrite) {
     return `${prefix}（场面提示，不是「${input.userLabel}」在说话）\n${input.text}`;
   }
   return `${prefix}${input.userLabel}：${input.text}`;
@@ -432,8 +441,10 @@ export class RoleplayAgent {
 
   async respond(input: RoleplayInput): Promise<{ reply: string; promptTokens: number }> {
     const continueBeat = Boolean(input.continueBeat);
+    const ghostwrite = Boolean(input.ghostwrite);
     const spoilerLocked =
       !continueBeat &&
+      !ghostwrite &&
       input.state.hasAnchor &&
       mentionsLaterPlot(input.text, input.state.laterPlot);
     const systemPrompt = buildRoleplaySystemPrompt(
@@ -441,6 +452,7 @@ export class RoleplayAgent {
       spoilerLocked,
       input.chatCatalog ?? null,
       continueBeat,
+      ghostwrite,
     );
     const promptTokens =
       estimateTokens(systemPrompt) +
@@ -462,6 +474,7 @@ export class RoleplayAgent {
       userLabel: input.state.userLabel,
       speakerFallback: input.state.name,
       ...(continueBeat ? { continueBeat: true } : {}),
+      ...(ghostwrite ? { ghostwrite: true } : {}),
     });
 
     const completion = await this.llm.complete({
@@ -469,7 +482,7 @@ export class RoleplayAgent {
       model: this.model,
       system_prompt: systemPrompt,
       user_prompt: userPrompt,
-      temperature: continueBeat ? 0.92 : 0.8,
+      temperature: continueBeat || ghostwrite ? 0.92 : 0.8,
       max_tokens: input.effort?.schedule.max_output_tokens ?? 1_500,
     });
     return {

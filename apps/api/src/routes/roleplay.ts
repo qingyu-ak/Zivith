@@ -27,6 +27,7 @@ import {
   sameParticipantSet,
 } from '../contexts/roleplay/group-chat.js';
 import {
+  buildGhostwriteCue,
   buildGroupContinueCue,
   collapseRepeatedAssistantBeats,
   isGroupContinueBeat,
@@ -320,6 +321,7 @@ export function registerRoleplayRoutes(
           ])
           .optional(),
         retry: z.boolean().optional(),
+        ghostwrite: z.boolean().optional(),
       })
       .strict()
       .parse(request.body ?? {});
@@ -334,7 +336,16 @@ export function registerRoleplayRoutes(
     ]);
     const namesById = Object.fromEntries(names);
     const text = body.content.trim();
-    if (!text && !body.speaker_asset_id) {
+    const ghostwrite = Boolean(body.ghostwrite);
+    if (ghostwrite) {
+      if (!roleplay.userCharacterAssetId) {
+        throw new ApiError(400, 'USER_CHARACTER_REQUIRED', '先选一个你扮演的角色，才能交给 AI 接着说');
+      }
+      if (text) {
+        throw new ApiError(400, 'GHOSTWRITE_EMPTY', '接管这一拍不要同时提交你自己打的字');
+      }
+    }
+    if (!text && !body.speaker_asset_id && !ghostwrite) {
       throw new ApiError(400, 'CONTENT_REQUIRED', '请先说一句，或指定谁开口');
     }
     if (body.speaker_asset_id && !participants.includes(body.speaker_asset_id)) {
@@ -366,15 +377,16 @@ export function registerRoleplayRoutes(
               },
             });
 
-    const speakerAssetId =
-      body.speaker_asset_id ||
-      pickNextSpeaker({
-        participantIds: participants,
-        namesById,
-        userText: text || liveRows.filter((row) => row.role === 'user').at(-1)?.content || '',
-        lastSpeakerId: lastAssistantSpeakerId(liveRows),
-        ...(body.muted_asset_ids ? { mutedIds: body.muted_asset_ids } : {}),
-      });
+    const speakerAssetId = ghostwrite
+      ? roleplay.userCharacterAssetId!
+      : body.speaker_asset_id ||
+        pickNextSpeaker({
+          participantIds: participants,
+          namesById,
+          userText: text || liveRows.filter((row) => row.role === 'user').at(-1)?.content || '',
+          lastSpeakerId: lastAssistantSpeakerId(liveRows),
+          ...(body.muted_asset_ids ? { mutedIds: body.muted_asset_ids } : {}),
+        });
     if (!speakerAssetId) {
       throw new ApiError(400, 'SPEAKER_REQUIRED', '这场对话里没有能开口的角色');
     }
@@ -386,6 +398,7 @@ export function registerRoleplayRoutes(
       speakerAssetId,
       namesById,
       participants,
+      ...(ghostwrite ? { ghostwrite: true as const } : {}),
     };
 
     if (wantsEventStream(request)) {
@@ -394,16 +407,20 @@ export function registerRoleplayRoutes(
     }
 
     const result = await createRoleplayReply(db, agent, roleplay, turn, memory, effort);
+    const userName = roleplay.userCharacterAssetId
+      ? (namesById[roleplay.userCharacterAssetId] ?? null)
+      : null;
+    if (result.ghostwriteMessage) {
+      return reply.status(201).send({
+        user_message: messageDto(result.ghostwriteMessage, userName),
+        assistant_message: null,
+        ghostwrite: true,
+        effort: effortDto(effort),
+      });
+    }
     if (!result.assistantMessage) {
       return reply.status(200).send({
-        user_message: userMessage
-          ? messageDto(
-              userMessage,
-              roleplay.userCharacterAssetId
-                ? (namesById[roleplay.userCharacterAssetId] ?? null)
-                : null,
-            )
-          : null,
+        user_message: userMessage ? messageDto(userMessage, userName) : null,
         assistant_message: null,
         cancelled: true,
         effort: effortDto(effort),
@@ -499,6 +516,7 @@ async function createRoleplayReply(
     namesById: Record<string, string>;
     participants: string[];
     aborted?: () => boolean;
+    ghostwrite?: boolean;
   },
   memory?: MemoryService | null,
   effort?: EffectiveAgentEffort,
@@ -513,7 +531,7 @@ async function createRoleplayReply(
     roleplay.projectId,
     speakerAssetId,
     roleplay.anchoredWorldEventId,
-    roleplay.userCharacterAssetId,
+    turn.ghostwrite ? null : roleplay.userCharacterAssetId,
     companionNames,
   );
   if (!state) throw new ApiError(404, 'CHARACTER_NOT_FOUND', '角色不存在');
@@ -531,43 +549,61 @@ async function createRoleplayReply(
     [...historyRows].reverse().find((row) => row.role === 'user')?.content ||
     '';
   const group = isGroupChat(turn.participants);
-  const continueBeat = isGroupContinueBeat({
-    isGroup: group,
-    userMessageContent: turn.userMessage?.content ?? null,
-  });
+  const lastLiveRole = turn.userMessage?.role ?? historyRows.at(-1)?.role ?? null;
+  const ghostwrite = Boolean(turn.ghostwrite);
+  const continueBeat =
+    !ghostwrite &&
+    isGroupContinueBeat({
+      isGroup: group,
+      userMessageContent: turn.userMessage?.content ?? null,
+      lastLiveRole,
+    });
   const recentAssistants = historyRows
     .filter((row) => row.role === 'assistant')
     .map((row) => row.content);
   const lastAssistantText = recentAssistants.at(-1) ?? null;
-  const stuckRepeating = continueBeat && looksStuckRepeating(recentAssistants);
-  const topicSeed = continueBeat
-    ? pickContinueTopicSeed({
-        relations: state.relations,
-        experiences: state.experiences,
-        traits: state.traits,
-        companions: state.companions ?? [],
-        recentAssistantTexts: recentAssistants.slice(-8),
-        beatSalt: historyRows.length,
-      })
-    : null;
-  const cueText = continueBeat
-    ? buildGroupContinueCue({
+  const recentSpoken = historyRows
+    .filter((row) => row.role === 'assistant' || row.role === 'user')
+    .map((row) => row.content);
+  const stuckRepeating =
+    (continueBeat || ghostwrite) && looksStuckRepeating(continueBeat ? recentAssistants : recentSpoken);
+  const topicSeed =
+    continueBeat || ghostwrite
+      ? pickContinueTopicSeed({
+          relations: state.relations,
+          experiences: state.experiences,
+          traits: state.traits,
+          companions: state.companions ?? [],
+          recentAssistantTexts: (continueBeat ? recentAssistants : recentSpoken).slice(-8),
+          beatSalt: historyRows.length,
+        })
+      : null;
+  const cueText = ghostwrite
+    ? buildGhostwriteCue({
         speakerName: state.name,
-        userLabel: state.userLabel,
         companions: state.companions ?? [],
         topicSeed,
         stuckRepeating,
       })
-    : lastUserText.trim() || '请用角色身份接着说一句。';
-  const retrieveQuery = continueBeat
-    ? resolveContinueRetrieveQuery({
-        lastAssistantText,
-        topicSeed,
-        stuckRepeating,
-        fallback: cueText,
-      })
-    : cueText;
-  const worldChangeUserText = continueBeat ? '' : cueText;
+    : continueBeat
+      ? buildGroupContinueCue({
+          speakerName: state.name,
+          userLabel: state.userLabel,
+          companions: state.companions ?? [],
+          topicSeed,
+          stuckRepeating,
+        })
+      : lastUserText.trim() || '请用角色身份接着说一句。';
+  const retrieveQuery =
+    continueBeat || ghostwrite
+      ? resolveContinueRetrieveQuery({
+          lastAssistantText,
+          topicSeed,
+          stuckRepeating,
+          fallback: cueText,
+        })
+      : cueText;
+  const worldChangeUserText = continueBeat || ghostwrite ? '' : cueText;
 
   const world = await buildWorldContext(db, roleplay.projectId);
   let memoryOps = null;
@@ -699,7 +735,7 @@ async function createRoleplayReply(
       speakerName: speakerOf(row),
     }));
   }
-  if (continueBeat) {
+  if (continueBeat || ghostwrite) {
     history = collapseRepeatedAssistantBeats(history);
   }
 
@@ -710,9 +746,52 @@ async function createRoleplayReply(
     chatCatalog,
     effort: resolved,
     ...(continueBeat ? { continueBeat: true } : {}),
+    ...(ghostwrite ? { ghostwrite: true } : {}),
   });
   if (turn.aborted?.()) {
-    return { assistantMessage: null, memoryOps, world, cueText, worldChangeUserText };
+    return {
+      assistantMessage: null,
+      ghostwriteMessage: null,
+      memoryOps,
+      world,
+      cueText,
+      worldChangeUserText,
+    };
+  }
+  if (ghostwrite) {
+    const ghostwriteMessage = await db.creatorChatMessage.create({
+      data: {
+        threadId: roleplay.threadId,
+        role: 'user',
+        content: response.reply,
+        speakerAssetId: roleplay.userCharacterAssetId,
+      },
+    });
+    if (memory) {
+      await memory.ingest({
+        messageId: ghostwriteMessage.id,
+        threadId: roleplay.threadId,
+        projectId: roleplay.projectId,
+        content: response.reply,
+        world,
+        ingestMode: 'roleplay',
+        defaultEntity: roleplay.userCharacterAssetId
+          ? { entityType: 'character', entityId: roleplay.userCharacterAssetId }
+          : undefined,
+      });
+      if (evicted.length > 0) {
+        await memory.updateThreadSummary(roleplay.threadId, evicted);
+      }
+    }
+    await db.roleplayThread.update({ where: { id: roleplay.id }, data: { updatedAt: new Date() } });
+    return {
+      assistantMessage: null,
+      ghostwriteMessage,
+      memoryOps,
+      world,
+      cueText,
+      worldChangeUserText,
+    };
   }
   const assistantMessage = await db.creatorChatMessage.create({
     data: {
@@ -737,7 +816,7 @@ async function createRoleplayReply(
     }
   }
   await db.roleplayThread.update({ where: { id: roleplay.id }, data: { updatedAt: new Date() } });
-  return { assistantMessage, memoryOps, world, cueText, worldChangeUserText };
+  return { assistantMessage, ghostwriteMessage: null, memoryOps, world, cueText, worldChangeUserText };
 }
 
 async function pipeRoleplaySse(
@@ -751,6 +830,7 @@ async function pipeRoleplaySse(
     speakerAssetId: string;
     namesById: Record<string, string>;
     participants: string[];
+    ghostwrite?: boolean;
   },
   memory?: MemoryService | null,
   effort?: EffectiveAgentEffort,
@@ -799,14 +879,32 @@ async function pipeRoleplaySse(
 
   const resolvedEffort = effort ?? resolveAgentEffort();
   try {
-    const { assistantMessage, memoryOps, world, worldChangeUserText } = await createRoleplayReply(
-      db,
-      agent,
-      roleplay,
-      { ...turn, aborted: () => closed },
-      memory,
-      resolvedEffort,
-    );
+    const { assistantMessage, ghostwriteMessage, memoryOps, world, worldChangeUserText } =
+      await createRoleplayReply(
+        db,
+        agent,
+        roleplay,
+        { ...turn, aborted: () => closed },
+        memory,
+        resolvedEffort,
+      );
+    if (ghostwriteMessage) {
+      if (closed) {
+        await db.creatorChatMessage.update({
+          where: { id: ghostwriteMessage.id },
+          data: { suppressed: true },
+        });
+        return;
+      }
+      if (memoryOps) writeEvent('memory', { ops: memoryOps });
+      writeEvent('user', { user_message: messageDto(ghostwriteMessage, userName) });
+      writeEvent('done', {
+        user_message: messageDto(ghostwriteMessage, userName),
+        ghostwrite: true,
+        effort: effortDto(resolvedEffort),
+      });
+      return;
+    }
     if (!assistantMessage) return;
     if (memoryOps) {
       writeEvent('memory', { ops: memoryOps });

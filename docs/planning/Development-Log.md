@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-09-21 · pending · feat(chat) · 群聊拍间 3.5s、侧面刻度、扮演 AI 接管
+
+落地 2026-09-16 群聊实测积压的前三项（Journey D）。拍间留白改为上一句上屏后再等 3.5 秒（用户开口后的第一句不拖）。Chat / 扮演每句对白一条右侧竖条，悬停展示说话人与摘要，点选回退；Studio Agent 仍只给用户句打点。用户「你扮演」为书中角色时可点「AI 接管」，生成句以 `role=user` 写入该角色；「我来演」或打字接回。读者身份无此按钮。剩「角色感不强」未做。
+
+- **feat(web)** `GROUP_BEAT_MS = 3500`；`conversation-ticks-rail.tsx`；Chat `dialogueTicks` / Agent `userTicks`；`AI 接管` / `我来演`
+- **feat(api)** `ghostwrite`：空内容、说话人为 `user_character_asset_id`，落库 `role=user`；空拍不再把上一句用户（含代打）当「读者沉默」
+- **test** api `group-chat-flow` / `group-continue` / `roleplay-agent`；web `group-chat-rhythm` / `conversation-ticks`
+- **docs** `task-s25-ai-takeover.md`、`next-session-2026-09-16.md`
+- 模块：roleplay / creator-chat / studio-agent-panel
+
 ## 2026-09-16 · 927b49b · feat(studio) · 新建世界到群聊一直说入库；实测积压留到下次
 
 从扮演世界变化之后的工作区一次入库：新建世界 / TXT / 第一个角色、按世界时间记得与交谈三层、群聊 v1（分人认知、暂停/插话/用户句回退）以及互聊节奏、「让他们一直说」、空拍自己找话题。产品所有者实测问题（互聊太快、角色句回退与侧面竖条、扮演中途 AI 接管、角色感）记在 [next-session-2026-09-16.md](next-session-2026-09-16.md)，下次先出修改计划。人工 Journey D/E 走查仍缺。

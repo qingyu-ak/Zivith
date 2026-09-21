@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GROUP_BEAT_MS,
   KEEP_TALKING_CAP,
   canTakeNaturalBeat,
   naturalBeatCap,
   pickNaturalFollowSpeaker,
+  takeoverSpeakerIds,
+  lastSpokenSpeakerId,
 } from './group-chat-rhythm';
 
 describe('group chat rhythm', () => {
@@ -59,5 +62,30 @@ describe('group chat rhythm', () => {
 
   it('lets them keep talking well past a short scene, enough to run a 30-beat check', () => {
     expect(KEEP_TALKING_CAP).toBeGreaterThanOrEqual(30);
+  });
+
+  it('leaves a reading pause after a beat, long enough to finish the last line', () => {
+    expect(GROUP_BEAT_MS).toBeGreaterThanOrEqual(3500);
+  });
+
+  it('puts the user character first in the takeover roster', () => {
+    expect(
+      takeoverSpeakerIds({
+        userCharacterAssetId: 'me',
+        participantIds: ['a', 'b'],
+      }),
+    ).toEqual(['me', 'a', 'b']);
+  });
+
+  it('reads the last spoken id from user or assistant ticks', () => {
+    expect(
+      lastSpokenSpeakerId([
+        { role: 'user', speaker_asset_id: 'me' },
+        { role: 'assistant', speaker_asset_id: 'a' },
+      ]),
+    ).toBe('a');
+    expect(
+      lastSpokenSpeakerId([{ role: 'user', speaker_asset_id: 'me' }]),
+    ).toBe('me');
   });
 });

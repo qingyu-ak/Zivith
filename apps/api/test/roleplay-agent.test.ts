@@ -116,4 +116,17 @@ describe('buildRoleplayUserPrompt', () => {
     });
     expect(prompt).toBe('读者：你们继续聊');
   });
+
+  it('does not label a ghostwrite cue as the reader speaking', () => {
+    const prompt = buildRoleplayUserPrompt({
+      history: [{ role: 'assistant', content: '你倒是说话啊。', speakerName: '诺诺' }],
+      historyTurns: 16,
+      text: '创作者把「路明非」交给你接着演',
+      userLabel: '路明非',
+      speakerFallback: '路明非',
+      ghostwrite: true,
+    });
+    expect(prompt).toContain('场面提示');
+    expect(prompt).not.toMatch(/路明非：创作者/);
+  });
 });

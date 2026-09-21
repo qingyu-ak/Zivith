@@ -1,4 +1,4 @@
-/** 用户发送刻度：撤回 / 回退预览（与服务端 rollbackCut 切点一致）。 */
+/** Conversation ticks: withdraw / rollback preview (matches server rollbackCut). */
 
 export type TickMode = 'keep' | 'withdraw';
 
@@ -6,12 +6,29 @@ export interface TickMessage {
   id: string;
   role: string;
   content: string;
+  speaker_name?: string | null;
   proposal_state?: string | null;
   proposal?: unknown;
 }
 
 export function userTicks<T extends { role: string }>(messages: T[]): T[] {
   return messages.filter((item) => item.role === 'user');
+}
+
+/** Chat / roleplay ticks: every spoken line. Agent stays on userTicks. */
+export function dialogueTicks<T extends { role: string }>(messages: T[]): T[] {
+  return messages.filter((item) => item.role === 'user' || item.role === 'assistant');
+}
+
+export function tickPreview(
+  tick: { role: string; content: string; speaker_name?: string | null },
+  labels?: { user?: string; assistant?: string },
+): { speaker: string; snippet: string } {
+  const speaker =
+    tick.speaker_name?.trim() ||
+    (tick.role === 'user' ? (labels?.user ?? '你') : (labels?.assistant ?? '角色'));
+  const snippet = tick.content.replace(/\s+/g, ' ').trim().slice(0, 36);
+  return { speaker, snippet };
 }
 
 export function rollbackSlice<T extends { id: string }>(

@@ -178,7 +178,7 @@ export async function sendRoleplayTurn(
   onEvent: (event: string, data: unknown) => void,
   effort?: 'fast' | 'balanced' | 'deep',
   signal?: AbortSignal,
-  options?: { retry?: boolean; speakerAssetId?: string; mutedAssetIds?: string[] },
+  options?: { retry?: boolean; speakerAssetId?: string; mutedAssetIds?: string[]; ghostwrite?: boolean },
 ): Promise<void> {
   await postChatTurn(
     `/roleplay/threads/${roleplayThreadId}/messages`,
@@ -188,6 +188,7 @@ export async function sendRoleplayTurn(
       ...(options?.retry ? { retry: true } : {}),
       ...(options?.speakerAssetId ? { speaker_asset_id: options.speakerAssetId } : {}),
       ...(options?.mutedAssetIds?.length ? { muted_asset_ids: options.mutedAssetIds } : {}),
+      ...(options?.ghostwrite ? { ghostwrite: true } : {}),
     },
     onEvent,
     signal,
@@ -218,9 +219,14 @@ async function postChatTurn(
     user_message?: unknown;
     assistant_message?: unknown;
     memory_ops?: unknown;
+    ghostwrite?: unknown;
   };
   if (payload.user_message) onEvent('user', { user_message: payload.user_message });
   if (payload.memory_ops) onEvent('memory', { ops: payload.memory_ops });
+  if (payload.ghostwrite) {
+    onEvent('done', { user_message: payload.user_message, ghostwrite: true });
+    return;
+  }
   const assistant = payload.assistant_message;
   if (assistant && typeof assistant === 'object') {
     const reply =

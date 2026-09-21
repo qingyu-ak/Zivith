@@ -1,8 +1,10 @@
 /// <reference types="vitest/globals" />
 import {
   appliedTitlesFromMessages,
+  dialogueTicks,
   rollbackPreview,
   rollbackSlice,
+  tickPreview,
   userTicks,
 } from './conversation-ticks';
 
@@ -22,6 +24,18 @@ const messages = [
 describe('conversation ticks', () => {
   it('lists only user sends as ticks', () => {
     expect(userTicks(messages).map((item) => item.id)).toEqual(['u1', 'u2']);
+  });
+
+  it('lists spoken lines for chat rollback, including character beats', () => {
+    expect(dialogueTicks(messages).map((item) => item.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
+  });
+
+  it('shows speaker and a short line when a tick is hovered', () => {
+    expect(tickPreview({ role: 'assistant', content: '林夕开口', speaker_name: '林夕' })).toEqual({
+      speaker: '林夕',
+      snippet: '林夕开口',
+    });
+    expect(tickPreview({ role: 'user', content: '你们好' }, { user: '读者' }).speaker).toBe('读者');
   });
 
   it('keeps the tick and drops later turns', () => {

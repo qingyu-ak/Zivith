@@ -36,6 +36,7 @@ import {
   type ChatEffort,
 } from '@/lib/chat-composer';
 import { rollbackPreview, rollbackSlice, userTicks } from '@/lib/conversation-ticks';
+import { ConversationTicksRail } from '@/components/creator-chat/conversation-ticks-rail';
 import {
   handledProposalState,
   parseProposals,
@@ -649,7 +650,8 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
         </p>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 h-full overflow-y-auto px-3 py-3">
         {loading ? (
           <p className="text-xs text-zinc-400">正在打开当前项目的 Agent 对话…</p>
         ) : messages.length === 0 && !streamText ? (
@@ -761,6 +763,19 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
         {memoryNote && !sending ? <ThoughtSummary note={memoryNote} className="mt-2" /> : null}
         <div ref={endRef} />
       </div>
+      {userTicks(messages).length > 0 ? (
+        <div className="pointer-events-none absolute inset-y-0 right-1 z-10 flex items-start pt-3">
+          <div className="pointer-events-auto max-h-full">
+            <ConversationTicksRail
+              ticks={userTicks(messages)}
+              userLabel="你"
+              assistantLabel="助手"
+              onPick={(messageId) => setRollbackTickId(messageId)}
+            />
+          </div>
+        </div>
+      ) : null}
+      </div>
 
       <form
         className="shrink-0 border-t border-line p-2"
@@ -784,22 +799,6 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
               }
               onDismiss={() => setError('')}
             />
-          </div>
-        ) : null}
-        {userTicks(messages).length > 0 ? (
-          <div className="mb-2 flex flex-wrap items-center gap-1">
-            <span className="text-[10px] text-zinc-400">刻度</span>
-            {userTicks(messages).map((tick, index) => (
-              <button
-                key={tick.id}
-                type="button"
-                className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-[#eef2ff]"
-                title={tick.content.slice(0, 80)}
-                onClick={() => setRollbackTickId(tick.id)}
-              >
-                {index + 1}
-              </button>
-            ))}
           </div>
         ) : null}
         {rollbackTickId ? (

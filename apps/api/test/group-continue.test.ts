@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildGhostwriteCue,
   buildGroupContinueCue,
   collapseRepeatedAssistantBeats,
   isGroupContinueBeat,
@@ -17,6 +18,9 @@ describe('group continue beat', () => {
     expect(isGroupContinueBeat({ isGroup: true, userMessageContent: '  ' })).toBe(true);
     expect(isGroupContinueBeat({ isGroup: true, userMessageContent: '我先走了' })).toBe(false);
     expect(isGroupContinueBeat({ isGroup: false, userMessageContent: null })).toBe(false);
+    expect(
+      isGroupContinueBeat({ isGroup: true, userMessageContent: null, lastLiveRole: 'user' }),
+    ).toBe(false);
   });
 
   it('flags a goodbye loop as stuck repeating', () => {
@@ -72,5 +76,18 @@ describe('group continue beat', () => {
     });
     expect(query).toContain('学生会');
     expect(query).not.toContain('拜拜');
+  });
+
+  it('asks the handed-over character to speak as themselves', () => {
+    const cue = buildGhostwriteCue({
+      speakerName: '路明非',
+      companions: ['诺诺'],
+      topicSeed: '与「诺诺」：师姐（学生会）',
+      stuckRepeating: false,
+    });
+    expect(cue).toContain('路明非');
+    expect(cue).toContain('交给你接着演');
+    expect(cue).toContain('诺诺');
+    expect(cue).not.toContain('没有开口');
   });
 });
