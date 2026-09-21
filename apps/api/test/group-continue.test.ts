@@ -9,8 +9,7 @@ import {
   resolveContinueRetrieveQuery,
 } from '../src/contexts/roleplay/group-continue.js';
 
-const bye = (round: number) =>
-  `（冲你那边摆了下手）嗯，拜拜。师姐，第${round}回了。`;
+const bye = (round: number) => `（冲你那边摆了下手）嗯，拜拜。师姐，第${round}回了。`;
 
 describe('group continue beat', () => {
   it('treats empty group turns as continue beats', () => {
@@ -65,6 +64,7 @@ describe('group continue beat', () => {
     expect(cue).toContain('不要对他们道别');
     expect(cue).toContain('必须换一件');
     expect(cue).toContain('师姐');
+    expect(cue).toContain('不要上课');
   });
 
   it('retrieves from the seed when the last lines are looping', () => {
@@ -89,5 +89,58 @@ describe('group continue beat', () => {
     expect(cue).toContain('交给你接着演');
     expect(cue).toContain('诺诺');
     expect(cue).not.toContain('没有开口');
+  });
+
+  it('bans stage directions that just appeared', () => {
+    const cue = buildGroupContinueCue({
+      speakerName: '楚子航',
+      userLabel: '读者',
+      companions: ['路明非'],
+      topicSeed: null,
+      stuckRepeating: false,
+      avoidDirections: ['手指在兜里动了动', '把手从船舷上收回来'],
+    });
+    expect(cue).toContain('不要再写');
+    expect(cue).toContain('手指在兜里动了动');
+    expect(cue).toContain('船舷');
+  });
+
+  it('prefers a short trait over a long plot lecture', () => {
+    const seed = pickContinueTopicSeed({
+      relations: ['与「诺诺」：师姐（学生会）'],
+      experiences: [
+        '· 路明非 · 战胜我的本体：路明非在东京对上了自己的血之哀，场面很长，足够写成一段说明书。',
+      ],
+      traits: ['贫嘴'],
+      companions: ['诺诺'],
+      recentAssistantTexts: [],
+      beatSalt: 0,
+    });
+    expect(seed).toBe('贫嘴');
+  });
+
+  it('falls back to a companion when the card has no traits or plot', () => {
+    const seed = pickContinueTopicSeed({
+      relations: [],
+      experiences: [],
+      traits: [],
+      companions: ['诺诺'],
+      recentAssistantTexts: [],
+      beatSalt: 0,
+    });
+    expect(seed).toContain('诺诺');
+  });
+
+  it('returns null when there is nobody and nothing to talk about', () => {
+    expect(
+      pickContinueTopicSeed({
+        relations: [],
+        experiences: [],
+        traits: [],
+        companions: [],
+        recentAssistantTexts: [],
+        beatSalt: 0,
+      }),
+    ).toBeNull();
   });
 });

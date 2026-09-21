@@ -1,5 +1,7 @@
 /** Keep-talking / named-speak beats: the reader is silent; speakers find the next beat themselves. */
 
+import { formatAvoidedDirections } from './character-voice.js';
+
 const REPEAT_NGRAM = 4;
 const REPEAT_OVERLAP = 0.28;
 
@@ -62,7 +64,7 @@ export function pickContinueTopicSeed(input: {
   recentAssistantTexts: string[];
   beatSalt: number;
 }): string | null {
-  const pool = [...input.relations, ...input.experiences, ...input.traits]
+  const pool = [...input.traits, ...input.relations, ...input.experiences]
     .map((item) => item.replace(/^·\s*/, '').trim())
     .filter((item) => item.length > 0);
   const recent = input.recentAssistantTexts.join('');
@@ -72,8 +74,10 @@ export function pickContinueTopicSeed(input: {
   });
   const choices = unused.length > 0 ? unused : pool;
   if (choices.length > 0) {
-    const index = Math.abs(input.beatSalt) % choices.length;
-    return choices[index] ?? null;
+    const short = choices.filter((item) => item.length <= 40);
+    const pickFrom = short.length > 0 ? short : choices;
+    const index = Math.abs(input.beatSalt) % pickFrom.length;
+    return pickFrom[index] ?? null;
   }
   const companion = input.companions[0];
   if (companion) {
@@ -88,18 +92,20 @@ export function buildGroupContinueCue(input: {
   companions: string[];
   topicSeed: string | null;
   stuckRepeating: boolean;
+  avoidDirections?: string[];
 }): string {
   const others = input.companions.filter(Boolean).join('、') || '在场的人';
   const lines = [
     `此刻「${input.userLabel}」没有开口，只是在听。不要对他们道别、挥手、报回数，也不要问他们还在不在。`,
     `你是「${input.speakerName}」。对着「${others}」把场面往下推一个节拍：接上一句，或从你们的交情、共同经历里另起一个自然的话头。`,
-    '已经说过的道别到此为止。不要编造未发生的主线，也不要总结全场。',
+    '已经说过的道别到此为止。不要编造未发生的主线，也不要总结全场，也不要把亲历讲成说明书。',
   ];
   if (input.stuckRepeating) {
     lines.push('刚才几句已经在重复同一套动作和口头禅，必须换一件你们之间会发生的小事。');
   }
+  appendAvoidedDirections(lines, input.avoidDirections);
   if (input.topicSeed) {
-    lines.push(`可以从这件事里找话头（不必照念）：${input.topicSeed}`);
+    lines.push(`可以从这件事里找话头（当作气氛，不要照念、不要上课）：${input.topicSeed}`);
   }
   return lines.join('\n');
 }
@@ -110,20 +116,27 @@ export function buildGhostwriteCue(input: {
   companions: string[];
   topicSeed: string | null;
   stuckRepeating: boolean;
+  avoidDirections?: string[];
 }): string {
   const others = input.companions.filter(Boolean).join('、') || '在场的人';
   const lines = [
     `创作者把「${input.speakerName}」交给你接着演。这一拍由你开口。`,
     `你是「${input.speakerName}」。对着「${others}」把场面往下推一个节拍：接上一句，或从你们的交情、共同经历里另起一个自然的话头。`,
-    '不要解释你在代打，不要问创作者想说什么，不要对读者说话，不要编造未发生的主线。',
+    '不要解释你在代打，不要问创作者想说什么，不要对读者说话，不要编造未发生的主线，也不要把亲历讲成说明书。',
   ];
   if (input.stuckRepeating) {
     lines.push('刚才几句已经在重复同一套动作和口头禅，必须换一件你们之间会发生的小事。');
   }
+  appendAvoidedDirections(lines, input.avoidDirections);
   if (input.topicSeed) {
-    lines.push(`可以从这件事里找话头（不必照念）：${input.topicSeed}`);
+    lines.push(`可以从这件事里找话头（当作气氛，不要照念、不要上课）：${input.topicSeed}`);
   }
   return lines.join('\n');
+}
+
+function appendAvoidedDirections(lines: string[], avoidDirections?: string[]): void {
+  const line = formatAvoidedDirections(avoidDirections);
+  if (line) lines.push(line);
 }
 
 export function resolveContinueRetrieveQuery(input: {

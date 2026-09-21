@@ -44,6 +44,7 @@ describe('archiveWorldWorkspace', () => {
         update,
       },
       creatorChatThread: { updateMany },
+      roleplayThread: { updateMany: vi.fn() },
     } as unknown as PrismaClient;
 
     await expect(archiveWorldWorkspace(db, 'p1')).resolves.toEqual({
@@ -64,6 +65,7 @@ describe('archiveWorldWorkspace', () => {
     const db = {
       project: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn() },
       creatorChatThread: { updateMany: vi.fn() },
+      roleplayThread: { updateMany: vi.fn() },
     } as unknown as PrismaClient;
 
     await expect(archiveWorldWorkspace(db, 'missing')).rejects.toBeInstanceOf(ApiError);
@@ -73,17 +75,23 @@ describe('archiveWorldWorkspace', () => {
 describe('archiveCreatorChat', () => {
   it('archives an active thread', async () => {
     const update = vi.fn();
+    const closeRoleplay = vi.fn();
     const db = {
       creatorChatThread: {
         findFirst: vi.fn().mockResolvedValue({ id: 't1', projectId: 'p1' }),
         update,
       },
+      roleplayThread: { updateMany: closeRoleplay },
     } as unknown as PrismaClient;
 
     await expect(archiveCreatorChat(db, 't1')).resolves.toEqual({ id: 't1', projectId: 'p1' });
     expect(update).toHaveBeenCalledWith({
       where: { id: 't1' },
       data: { state: 'archived' },
+    });
+    expect(closeRoleplay).toHaveBeenCalledWith({
+      where: { threadId: 't1', status: 'active' },
+      data: { status: 'closed' },
     });
   });
 
@@ -93,6 +101,7 @@ describe('archiveCreatorChat', () => {
         findFirst: vi.fn().mockResolvedValue(null),
         update: vi.fn(),
       },
+      roleplayThread: { updateMany: vi.fn() },
     } as unknown as PrismaClient;
 
     await expect(archiveCreatorChat(db, 'missing')).rejects.toBeInstanceOf(ApiError);

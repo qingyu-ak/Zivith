@@ -23,7 +23,10 @@ import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { applyProposal } from '../contexts/world/proposal-applier.js';
 import { applyConversationRollback } from '../contexts/chat/apply-conversation-rollback.js';
-import { stampAppliedEntityIds } from '../contexts/chat/conversation-rollback.js';
+import {
+  canRollbackToMessage,
+  stampAppliedEntityIds,
+} from '../contexts/chat/conversation-rollback.js';
 import { isGroupChat, parseParticipantIds } from '../contexts/roleplay/group-chat.js';
 import {
   archiveCreatorChat,
@@ -896,7 +899,10 @@ async function loadRoleplayMeta(
       : [];
   const nameById = new Map(assets.map((asset) => [asset.id, asset.name]));
   for (const roleplay of roleplays) {
-    const participants = parseParticipantIds(roleplay.participantAssetIds, roleplay.characterAssetId);
+    const participants = parseParticipantIds(
+      roleplay.participantAssetIds,
+      roleplay.characterAssetId,
+    );
     meta.set(roleplay.threadId, {
       characterName: nameById.get(roleplay.characterAssetId) ?? '',
       userCharacterName: roleplay.userCharacterAssetId
@@ -1157,6 +1163,25 @@ function wantsEventStream(request: FastifyRequest): boolean {
   return typeof accept === 'string' && accept.includes('text/event-stream');
 }
 
+async function lastMessageForTurn(db: PrismaClient, threadId: string, retry?: boolean) {
+  const last = await db.creatorChatMessage.findFirst({
+    where: { threadId, suppressed: false },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!retry || !last || last.role !== 'assistant') return last;
+  await db.creatorChatMessage.update({
+    where: { id: last.id },
+    data: {
+      suppressed: true,
+      ...(last.proposalState === 'pending' ? { proposalState: 'rejected' } : {}),
+    },
+  });
+  return db.creatorChatMessage.findFirst({
+    where: { threadId, suppressed: false },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
 async function pipeCreatorChatSse(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -1236,7 +1261,13 @@ async function pipeCreatorChatSse(
     if (closed) {
       await db.creatorChatMessage.update({
         where: { id: assistantMessage.id },
-        data: { suppressed: true, proposalState: assistantMessage.proposalState === 'pending' ? 'rejected' : assistantMessage.proposalState },
+        data: {
+          suppressed: true,
+          proposalState:
+            assistantMessage.proposalState === 'pending'
+              ? 'rejected'
+              : assistantMessage.proposalState,
+        },
       });
       return;
     }
@@ -1450,13 +1481,14 @@ function registerCreatorChatRoutes(
     const roleplayMeta = await loadRoleplayMeta(db, [thread.id]);
     const speakerIds = [
       ...new Set(
-        messages
-          .map((item) => item.speakerAssetId)
-          .filter((id): id is string => Boolean(id)),
+        messages.map((item) => item.speakerAssetId).filter((id): id is string => Boolean(id)),
       ),
     ];
     const speakers = speakerIds.length
-      ? await db.asset.findMany({ where: { id: { in: speakerIds } }, select: { id: true, name: true } })
+      ? await db.asset.findMany({
+          where: { id: { in: speakerIds } },
+          select: { id: true, name: true },
+        })
       : [];
     const speakerName = new Map(speakers.map((item) => [item.id, item.name]));
     return {
@@ -1466,7 +1498,10 @@ function registerCreatorChatRoutes(
         roleplay: roleplayMeta.get(thread.id) ?? null,
       }),
       messages: messages.map((item) =>
-        chatMessageDto(item, item.speakerAssetId ? (speakerName.get(item.speakerAssetId) ?? null) : null),
+        chatMessageDto(
+          item,
+          item.speakerAssetId ? (speakerName.get(item.speakerAssetId) ?? null) : null,
+        ),
       ),
     };
   });
@@ -1543,12 +1578,7 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const lastMessage = body.retry
-      ? await db.creatorChatMessage.findFirst({
-          where: { threadId, suppressed: false },
-          orderBy: { createdAt: 'desc' },
-        })
-      : null;
+    const lastMessage = await lastMessageForTurn(db, threadId, body.retry);
     const userMessage =
       canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
         ? lastMessage
@@ -1625,12 +1655,7 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const lastMessage = body.retry
-      ? await db.creatorChatMessage.findFirst({
-          where: { threadId, suppressed: false },
-          orderBy: { createdAt: 'desc' },
-        })
-      : null;
+    const lastMessage = await lastMessageForTurn(db, threadId, body.retry);
     const userMessage =
       canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
         ? lastMessage
@@ -1829,7 +1854,11 @@ function registerCreatorChatRoutes(
       where: { id: body.message_id, threadId, suppressed: false },
     });
     if (!target) throw new ApiError(404, 'MESSAGE_NOT_FOUND', '找不到这条对话');
-    if (target.role !== 'user') {
+    const roleplay = await db.roleplayThread.findFirst({
+      where: { threadId },
+      select: { id: true },
+    });
+    if (!canRollbackToMessage({ role: target.role, isRoleplay: Boolean(roleplay) })) {
       throw new ApiError(400, 'ROLLBACK_USER_ONLY', '只能回退到你发出的那一句');
     }
     return applyConversationRollback(db, {

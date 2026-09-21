@@ -287,8 +287,9 @@ export async function createRoleplayThread(
   anchoredWorldEventId?: string | null,
   userCharacterAssetId?: string | null,
   participantAssetIds?: string[],
+  options?: { forceNew?: boolean },
 ): Promise<{ id: string; thread_id: string; reused: boolean }> {
-  return api<{ id: string; thread_id: string; reused: boolean }>('/roleplay/threads', {
+  const created = await api<{ id: string; thread_id: string; reused: boolean }>('/roleplay/threads', {
     method: 'POST',
     body: {
       project_id: projectId,
@@ -298,8 +299,11 @@ export async function createRoleplayThread(
       ...(participantAssetIds && participantAssetIds.length >= 2
         ? { participant_asset_ids: participantAssetIds }
         : {}),
+      ...(options?.forceNew ? { force_new: true } : {}),
     },
   });
+  if (!created?.thread_id) throw new Error('没能打开这场对话');
+  return created;
 }
 
 export async function rollbackCreatorChat(

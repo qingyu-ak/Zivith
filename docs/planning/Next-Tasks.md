@@ -4,7 +4,18 @@
 >
 > Status: Active — **从属于产品宪法**
 >
-> Synced: 2026-09-16（产品宪法优先）。**当前拾取：** [next-session-2026-09-16.md](next-session-2026-09-16.md)（群聊实测积压，下次先出修改计划）。
+> Synced: 2026-09-21（产品宪法优先）。
+>
+> **当前产品拾取（Journey，不是下表工程史）：**
+>
+> 1. ~~[task-s25-character-voice.md](task-s25-character-voice.md) / [task-s25-character-tick-rollback.md](task-s25-character-tick-rollback.md) — 角色感、群聊归档 404、World Builder 冲突去重、扮演角色刻度回退~~
+> 2. 人工走查剩余：Journey **E**（1:1 同一闭环）+ Journey D 边（拒绝、取消思考、再进、删对话）。D 主路径 2.1–2.5 已实测。说明：[human-walk-journey-de.md](human-walk-journey-de.md)
+> 3. 走查里看到、**未确认不改**：同一已写入事件再提会再出一张待确认卡
+> 4. 仍等产品所有者另开：World Builder 抽取引擎、角色复制/导入、Agent 三层 + 热词
+>
+> 工程表里还空着、**现在不做**：C7 BYOK、I3 Organization、W2 文件权威、ENG 加固、免 Docker 安装包。安装包是分发最后一刀，不插在功能收尾前面。
+>
+> 积压记录：[next-session-2026-09-16.md](next-session-2026-09-16.md)
 >
 > **优先级：** [产品宪法](../product/Product-Constitution.md) 的 User Journey A–F 高于本表任何 Track。本文件记录已经做过的工程轨道与技术债，供实现时复用，**不得**当作「下一步做什么」的权威。与宪法冲突处以宪法「立宪裁决」为准（例如 M3「扮演不反写世界」不再是完成定义）。
 >

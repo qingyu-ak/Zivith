@@ -21,6 +21,7 @@ import {
   type RoleplayDraftResult,
 } from './world-change-drafter.js';
 import { pickCharacterAtomsForAnchor } from './character-cognition.js';
+import { buildVoiceLock, clampStageDirections } from './character-voice.js';
 
 export interface RoleplayChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -32,6 +33,8 @@ export interface CharacterState {
   name: string;
   description: string;
   persona: string;
+  /** Studio 角色卡「个性」；空则只靠档案里的口吻。 */
+  personality?: string | null;
   experiences: string[];
   relations: string[];
   anchorLabel: string;
@@ -185,6 +188,7 @@ export async function buildCharacterState(
     name: asOf.card.name,
     description: asOf.card.description ?? '',
     persona: composeCharacterPersona(card, core?.content),
+    personality: asOf.card.personality ?? null,
     experiences,
     relations,
     anchorLabel: anchor ? `《${anchor.title}》之后` : '全书读完（知晓全部亲历剧情）',
@@ -203,7 +207,10 @@ export async function loadRoleplayTimeIndex(
   db: PrismaClient,
   threadIds: string[],
 ): Promise<{
-  roleplayByThreadId: Map<string, { anchoredWorldEventId: string | null; characterAssetId: string }>;
+  roleplayByThreadId: Map<
+    string,
+    { anchoredWorldEventId: string | null; characterAssetId: string }
+  >;
   eventOrderById: Map<string, number | null>;
 }> {
   const roleplayByThreadId = new Map<
@@ -313,6 +320,7 @@ export function buildRoleplaySystemPrompt(
   chatRecall: string | null = null,
   continueBeat = false,
   ghostwrite = false,
+  avoidDirections: string[] = [],
 ): string {
   const experienceBlock =
     state.experiences.length > 0
@@ -330,6 +338,13 @@ export function buildRoleplaySystemPrompt(
       : `你正在扮演小说角色「${state.name}」，与「${state.userLabel}」对话。`;
   const sections = [
     groupLine,
+    '\n## 这一拍怎么说话',
+    buildVoiceLock({
+      name: state.name,
+      personality: state.personality,
+      persona: state.persona,
+      avoidDirections,
+    }),
     '\n## 角色档案',
     state.persona,
     ghostwrite ? '' : `\n${state.userSection}`,
@@ -350,7 +365,7 @@ export function buildRoleplaySystemPrompt(
       ? '\n## 此轮硬约束\n用户问起的事不在你的亲历里，属于当前时间点之后。你必须表示不知情或听不懂，禁止确认、禁止描述任何细节。'
       : '',
     '\n## 行为准则',
-    `1. 始终以「${state.name}」的第一人称视角回应，模仿角色的语气、口癖与性格。`,
+    `1. 始终以「${state.name}」的第一人称视角回应。上面「这一拍怎么说话」优先于档案和亲历；不要用在场其他人的口吻。`,
     '2. 你只知道上面「你亲历过的事」。绝不知道未来，也绝不知道你未曾亲历的事件——用户问起时，以角色身份自然地表示不知道或疑惑。',
     '3. 禁止使用训练数据或对该作品的外部剧情知识。没写进「亲历过的事」的情节，一律当不知道。',
     '4. 不跳出角色，不以 AI 或助手身份说话，不输出旁白解说（除非用户要求）。',
@@ -359,7 +374,9 @@ export function buildRoleplaySystemPrompt(
       : ghostwrite
         ? '5. 这一拍由你开口。不要解释你在代打，不要问创作者想说什么，不要对读者说话。'
         : `5. 把用户当成「${state.userLabel}」来应答；不要替用户说话或改写用户身份。`,
-    '6. 回复长度适中（1-4 句），保持对话感。',
+    companions.length > 0
+      ? '6. 回复短：一两句对白，括号动作最多一个，保持对话感，不要写成段落分析。'
+      : '6. 回复长度适中（1-4 句），保持对话感。',
     '7. 用户问「还记得吗」或「你什么时候做了什么」时，只根据上面的检索结果和亲历回答；检索和亲历都没有，就以角色身份说记不清，不要编对白细节。',
     companions.length > 0
       ? continueBeat || ghostwrite
@@ -406,6 +423,8 @@ export interface RoleplayInput {
   continueBeat?: boolean;
   /** Speak as the human's character for one beat; stored as a user line. */
   ghostwrite?: boolean;
+  /** Recent parenthetical actions already on screen; ban them this beat. */
+  avoidDirections?: string[];
 }
 
 export function buildRoleplayUserPrompt(input: {
@@ -453,15 +472,21 @@ export class RoleplayAgent {
       input.chatCatalog ?? null,
       continueBeat,
       ghostwrite,
+      input.avoidDirections ?? [],
     );
     const promptTokens =
       estimateTokens(systemPrompt) +
       input.history.reduce((sum, message) => sum + estimateTokens(message.content), 0) +
       estimateTokens(input.text);
 
+    const finish = (reply: string) =>
+      (input.state.companions ?? []).length > 0 ? clampStageDirections(reply) : reply;
+
     if (spoilerLocked || this.llm.provider === 'mock') {
       return {
-        reply: mockRoleplayReply(input.state, input.text, spoilerLocked, input.chatCatalog ?? null),
+        reply: finish(
+          mockRoleplayReply(input.state, input.text, spoilerLocked, input.chatCatalog ?? null),
+        ),
         promptTokens,
       };
     }
@@ -486,7 +511,10 @@ export class RoleplayAgent {
       max_tokens: input.effort?.schedule.max_output_tokens ?? 1_500,
     });
     return {
-      reply: completion.text.trim() || mockRoleplayReply(input.state, input.text, spoilerLocked, input.chatCatalog ?? null),
+      reply: finish(
+        completion.text.trim() ||
+          mockRoleplayReply(input.state, input.text, spoilerLocked, input.chatCatalog ?? null),
+      ),
       promptTokens,
     };
   }

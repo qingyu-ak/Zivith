@@ -160,6 +160,47 @@ describe('world builder conflict surfacing', () => {
     expect(asked.world_state.conflicts.length).toBeGreaterThan(0);
     expect(asked.reply).toContain('不会自动修改');
   });
+
+  it('does not repeat an event-order collision already said this thread', () => {
+    const world = {
+      projectId: 'p1',
+      projectName: '龙族',
+      worldview: { rules: [] },
+      stories: [],
+      characters: [],
+      locations: [],
+      scenes: [],
+      worldEvents: [
+        {
+          id: 'e1',
+          title: '路明非随布宁一行在俄罗斯港口待了半个月',
+          description: null,
+          order: 63,
+        },
+        { id: 'e2', title: '路明非在俄罗斯被围并肩上挨刀', description: null, order: 63 },
+      ],
+      relationships: [],
+    };
+    const first = mockWorldBuilderResponse({
+      text: '开多线就开多线',
+      history: [{ role: 'user', content: '开多线就开多线' }],
+      world,
+      stage: 'mature',
+    });
+    expect(first.reply).toContain('呈现顺序');
+    const second = mockWorldBuilderResponse({
+      text: '先写龙化这条',
+      history: [
+        { role: 'user', content: '开多线就开多线' },
+        { role: 'assistant', content: first.reply },
+        { role: 'user', content: '先写龙化这条' },
+      ],
+      world,
+      stage: 'mature',
+    });
+    expect(second.reply.split('发现').length).toBe(1);
+    expect(second.reply).not.toContain('发现 1 处设定冲突');
+  });
 });
 
 describe('world builder response schema', () => {

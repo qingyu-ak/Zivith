@@ -35,6 +35,7 @@ import {
   pickContinueTopicSeed,
   resolveContinueRetrieveQuery,
 } from '../contexts/roleplay/group-continue.js';
+import { collectRecentStageDirections } from '../contexts/roleplay/character-voice.js';
 import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
 import { canReuseLastUser } from '../lib/chat-turn.js';
 import { chunkReply } from '../contexts/world-builder/world-builder-agent.js';
@@ -92,10 +93,7 @@ function rosterIds(roleplay: RoleplayRecord): string[] {
   return parseParticipantIds(roleplay.participantAssetIds, roleplay.characterAssetId);
 }
 
-async function loadNameMap(
-  db: PrismaClient,
-  ids: string[],
-): Promise<Map<string, string>> {
+async function loadNameMap(db: PrismaClient, ids: string[]): Promise<Map<string, string>> {
   const unique = [...new Set(ids.filter(Boolean))];
   if (unique.length === 0) return new Map();
   const assets = await db.asset.findMany({
@@ -133,6 +131,7 @@ export function registerRoleplayRoutes(
         user_character_asset_id: idSchema.nullish(),
         anchored_world_event_id: idSchema.nullish(),
         participant_asset_ids: z.array(idSchema).max(4).optional(),
+        force_new: z.boolean().optional(),
       })
       .strict()
       .parse(request.body ?? {});
@@ -152,7 +151,11 @@ export function registerRoleplayRoutes(
       select: { id: true, name: true },
     });
     if (assets.length !== roster.length) {
-      throw new ApiError(404, 'CHARACTER_NOT_FOUND', isGroup ? '有的角色不在这个世界里' : '角色不存在');
+      throw new ApiError(
+        404,
+        'CHARACTER_NOT_FOUND',
+        isGroup ? '有的角色不在这个世界里' : '角色不存在',
+      );
     }
     const nameById = new Map(assets.map((item) => [item.id, item.name]));
     const lead = assets.find((item) => item.id === leadId);
@@ -186,13 +189,25 @@ export function registerRoleplayRoutes(
         status: 'active',
       },
     });
-    const existing = candidates.find((item) => {
-      const ids = parseParticipantIds(item.participantAssetIds, item.characterAssetId);
-      if (isGroup) return sameParticipantSet(ids, roster);
-      return item.characterAssetId === leadId && !isGroupChat(ids);
-    });
+    const existing = body.force_new
+      ? undefined
+      : candidates.find((item) => {
+          const ids = parseParticipantIds(item.participantAssetIds, item.characterAssetId);
+          if (isGroup) return sameParticipantSet(ids, roster);
+          return item.characterAssetId === leadId && !isGroupChat(ids);
+        });
     if (existing) {
-      return { id: existing.id, thread_id: existing.threadId, reused: true };
+      const liveChat = await db.creatorChatThread.findFirst({
+        where: { id: existing.threadId, state: 'active', projectId: body.project_id },
+        select: { id: true },
+      });
+      if (liveChat) {
+        return { id: existing.id, thread_id: existing.threadId, reused: true };
+      }
+      await db.roleplayThread.update({
+        where: { id: existing.id },
+        data: { status: 'closed' },
+      });
     }
     const title = isGroup
       ? groupChatTitle(roster.map((id) => nameById.get(id) ?? id))
@@ -220,15 +235,30 @@ export function registerRoleplayRoutes(
       .object({ project_id: idSchema })
       .strict()
       .parse(request.query ?? {});
-    const threads = await db.roleplayThread.findMany({
+    const listed = await db.roleplayThread.findMany({
       where: { projectId: query.project_id, status: 'active' },
       orderBy: { updatedAt: 'desc' },
       take: 50,
     });
+    const chatIds = [...new Set(listed.map((thread) => thread.threadId))];
+    const liveChatIds = new Set(
+      (
+        chatIds.length
+          ? await db.creatorChatThread.findMany({
+              where: { id: { in: chatIds }, state: 'active' },
+              select: { id: true },
+            })
+          : []
+      ).map((chat) => chat.id),
+    );
+    const threads = listed.filter((thread) => liveChatIds.has(thread.threadId));
     const assetIds = [
       ...new Set(
         threads.flatMap((thread) => {
-          const participants = parseParticipantIds(thread.participantAssetIds, thread.characterAssetId);
+          const participants = parseParticipantIds(
+            thread.participantAssetIds,
+            thread.characterAssetId,
+          );
           return thread.userCharacterAssetId
             ? [...participants, thread.userCharacterAssetId]
             : participants;
@@ -254,27 +284,30 @@ export function registerRoleplayRoutes(
       : [];
     return {
       items: threads.map((thread) => {
-        const participants = parseParticipantIds(thread.participantAssetIds, thread.characterAssetId);
+        const participants = parseParticipantIds(
+          thread.participantAssetIds,
+          thread.characterAssetId,
+        );
         return {
-        id: thread.id,
-        thread_id: thread.threadId,
-        character_asset_id: thread.characterAssetId,
-        character_name: assets.find((a) => a.id === thread.characterAssetId)?.name ?? '未知角色',
-        character_description:
-          assets.find((a) => a.id === thread.characterAssetId)?.description ?? '',
-        user_character_asset_id: thread.userCharacterAssetId,
-        user_character_name: thread.userCharacterAssetId
-          ? (assets.find((a) => a.id === thread.userCharacterAssetId)?.name ?? null)
-          : null,
-        participant_asset_ids: participants,
-        participant_names: participants.map(
-          (id) => assets.find((asset) => asset.id === id)?.name ?? id,
-        ),
-        is_group: isGroupChat(participants),
-        anchored_world_event_id: thread.anchoredWorldEventId,
-        anchor_title: anchors.find((a) => a.id === thread.anchoredWorldEventId)?.title ?? null,
-        updated_at: thread.updatedAt.toISOString(),
-      };
+          id: thread.id,
+          thread_id: thread.threadId,
+          character_asset_id: thread.characterAssetId,
+          character_name: assets.find((a) => a.id === thread.characterAssetId)?.name ?? '未知角色',
+          character_description:
+            assets.find((a) => a.id === thread.characterAssetId)?.description ?? '',
+          user_character_asset_id: thread.userCharacterAssetId,
+          user_character_name: thread.userCharacterAssetId
+            ? (assets.find((a) => a.id === thread.userCharacterAssetId)?.name ?? null)
+            : null,
+          participant_asset_ids: participants,
+          participant_names: participants.map(
+            (id) => assets.find((asset) => asset.id === id)?.name ?? id,
+          ),
+          is_group: isGroupChat(participants),
+          anchored_world_event_id: thread.anchoredWorldEventId,
+          anchor_title: anchors.find((a) => a.id === thread.anchoredWorldEventId)?.title ?? null,
+          updated_at: thread.updatedAt.toISOString(),
+        };
       }),
     };
   });
@@ -290,9 +323,7 @@ export function registerRoleplayRoutes(
     });
     const speakerIds = [
       ...new Set(
-        messages
-          .map((item) => item.speakerAssetId)
-          .filter((id): id is string => Boolean(id)),
+        messages.map((item) => item.speakerAssetId).filter((id): id is string => Boolean(id)),
       ),
     ];
     const names = await loadNameMap(db, [
@@ -330,16 +361,17 @@ export function registerRoleplayRoutes(
       throw new ApiError(404, 'THREAD_NOT_FOUND', '扮演线程不存在或已关闭');
     }
     const participants = rosterIds(roleplay);
-    const names = await loadNameMap(db, [
-      ...participants,
-      roleplay.userCharacterAssetId ?? '',
-    ]);
+    const names = await loadNameMap(db, [...participants, roleplay.userCharacterAssetId ?? '']);
     const namesById = Object.fromEntries(names);
     const text = body.content.trim();
     const ghostwrite = Boolean(body.ghostwrite);
     if (ghostwrite) {
       if (!roleplay.userCharacterAssetId) {
-        throw new ApiError(400, 'USER_CHARACTER_REQUIRED', '先选一个你扮演的角色，才能交给 AI 接着说');
+        throw new ApiError(
+          400,
+          'USER_CHARACTER_REQUIRED',
+          '先选一个你扮演的角色，才能交给 AI 接着说',
+        );
       }
       if (text) {
         throw new ApiError(400, 'GHOSTWRITE_EMPTY', '接管这一拍不要同时提交你自己打的字');
@@ -440,7 +472,12 @@ export function registerRoleplayRoutes(
     });
     return reply.status(201).send({
       user_message: userMessage
-        ? messageDto(userMessage, roleplay.userCharacterAssetId ? namesById[roleplay.userCharacterAssetId] ?? null : null)
+        ? messageDto(
+            userMessage,
+            roleplay.userCharacterAssetId
+              ? (namesById[roleplay.userCharacterAssetId] ?? null)
+              : null,
+          )
         : null,
       assistant_message: messageDto(finalMessage, namesById[speakerAssetId] ?? null),
       memory_ops: result.memoryOps,
@@ -566,7 +603,9 @@ async function createRoleplayReply(
     .filter((row) => row.role === 'assistant' || row.role === 'user')
     .map((row) => row.content);
   const stuckRepeating =
-    (continueBeat || ghostwrite) && looksStuckRepeating(continueBeat ? recentAssistants : recentSpoken);
+    (continueBeat || ghostwrite) &&
+    looksStuckRepeating(continueBeat ? recentAssistants : recentSpoken);
+  const avoidDirections = group ? collectRecentStageDirections(recentSpoken) : [];
   const topicSeed =
     continueBeat || ghostwrite
       ? pickContinueTopicSeed({
@@ -584,6 +623,7 @@ async function createRoleplayReply(
         companions: state.companions ?? [],
         topicSeed,
         stuckRepeating,
+        avoidDirections,
       })
     : continueBeat
       ? buildGroupContinueCue({
@@ -592,6 +632,7 @@ async function createRoleplayReply(
           companions: state.companions ?? [],
           topicSeed,
           stuckRepeating,
+          avoidDirections,
         })
       : lastUserText.trim() || '请用角色身份接着说一句。';
   const retrieveQuery =
@@ -747,6 +788,7 @@ async function createRoleplayReply(
     effort: resolved,
     ...(continueBeat ? { continueBeat: true } : {}),
     ...(ghostwrite ? { ghostwrite: true } : {}),
+    ...(avoidDirections.length > 0 ? { avoidDirections } : {}),
   });
   if (turn.aborted?.()) {
     return {
@@ -816,7 +858,14 @@ async function createRoleplayReply(
     }
   }
   await db.roleplayThread.update({ where: { id: roleplay.id }, data: { updatedAt: new Date() } });
-  return { assistantMessage, ghostwriteMessage: null, memoryOps, world, cueText, worldChangeUserText };
+  return {
+    assistantMessage,
+    ghostwriteMessage: null,
+    memoryOps,
+    world,
+    cueText,
+    worldChangeUserText,
+  };
 }
 
 async function pipeRoleplaySse(
@@ -919,7 +968,9 @@ async function pipeRoleplaySse(
         data: {
           suppressed: true,
           proposalState:
-            assistantMessage.proposalState === 'pending' ? 'rejected' : assistantMessage.proposalState,
+            assistantMessage.proposalState === 'pending'
+              ? 'rejected'
+              : assistantMessage.proposalState,
         },
       });
       return;

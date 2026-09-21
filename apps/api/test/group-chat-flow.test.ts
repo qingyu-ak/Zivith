@@ -103,6 +103,85 @@ describe('group chat + tick rollback (mock provider)', () => {
     expect(items.find((item) => item.id === group.id)?.is_group).toBe(true);
   });
 
+  it('opens a new group after the previous chat was archived', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/roleplay/threads',
+      payload: {
+        project_id: 'p1',
+        character_asset_id: 'c-ailin',
+        participant_asset_ids: ['c-ailin', 'c-chenmo'],
+      },
+    });
+    const first = created.json() as { id: string; thread_id: string };
+    const archived = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/world/creator-chats/${first.thread_id}`,
+    });
+    expect(archived.statusCode).toBe(204);
+
+    const again = await app.inject({
+      method: 'POST',
+      url: '/api/v1/roleplay/threads',
+      payload: {
+        project_id: 'p1',
+        character_asset_id: 'c-ailin',
+        participant_asset_ids: ['c-ailin', 'c-chenmo'],
+      },
+    });
+    expect(again.statusCode).toBe(200);
+    const second = again.json() as { id: string; thread_id: string; reused: boolean };
+    expect(second.reused).toBe(false);
+    expect(second.thread_id).not.toBe(first.thread_id);
+
+    const live = await app.inject({
+      method: 'GET',
+      url: `/api/v1/world/creator-chats/${second.thread_id}`,
+    });
+    expect(live.statusCode).toBe(200);
+    expect(live.json()).toMatchObject({ thread: { is_group: true } });
+
+    const dead = await app.inject({
+      method: 'GET',
+      url: `/api/v1/world/creator-chats/${first.thread_id}`,
+    });
+    expect(dead.statusCode).toBe(404);
+  });
+
+  it('force_new starts a second live group with the same people', async () => {
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/roleplay/threads',
+      payload: {
+        project_id: 'p1',
+        character_asset_id: 'c-ailin',
+        participant_asset_ids: ['c-ailin', 'c-chenmo'],
+      },
+    });
+    const opened = first.json() as { id: string; thread_id: string };
+    const fresh = await app.inject({
+      method: 'POST',
+      url: '/api/v1/roleplay/threads',
+      payload: {
+        project_id: 'p1',
+        character_asset_id: 'c-ailin',
+        participant_asset_ids: ['c-ailin', 'c-chenmo'],
+        force_new: true,
+      },
+    });
+    expect(fresh.statusCode).toBe(200);
+    const second = fresh.json() as { id: string; thread_id: string; reused: boolean };
+    expect(second.reused).toBe(false);
+    expect(second.id).not.toBe(opened.id);
+    expect(second.thread_id).not.toBe(opened.thread_id);
+
+    const live = await app.inject({
+      method: 'GET',
+      url: `/api/v1/world/creator-chats/${second.thread_id}`,
+    });
+    expect(live.statusCode).toBe(200);
+  });
+
   it('lets a named speaker talk without a new user line', async () => {
     const created = await app.inject({
       method: 'POST',
@@ -224,6 +303,96 @@ describe('group chat + tick rollback (mock provider)', () => {
     });
     const liveMessages = (live.json() as { messages: Array<{ id: string; role: string }> }).messages;
     expect(liveMessages.map((item) => item.id)).toEqual([user!.id]);
+  });
+
+  it('keeps a character tick and does not revert the write on that line', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/roleplay/threads',
+      payload: { project_id: 'p1', character_asset_id: 'c-ailin', force_new: true },
+    });
+    const { id, thread_id: threadId } = created.json() as { id: string; thread_id: string };
+    const said = await app.inject({
+      method: 'POST',
+      url: `/api/v1/roleplay/threads/${id}/messages`,
+      payload: { content: '你在码头救下了受伤的陈默' },
+    });
+    const first = said.json() as {
+      user_message: { id: string };
+      assistant_message: { id: string };
+    };
+    const applied = await app.inject({
+      method: 'POST',
+      url: `/api/v1/world/creator-chats/${threadId}/proposals/${first.assistant_message.id}/apply`,
+      payload: {},
+    });
+    expect(applied.statusCode).toBe(200);
+    const entityId = (applied.json() as { applied: Array<{ entity_id: string }> }).applied[0]
+      ?.entity_id;
+    expect(entityId).toBeTruthy();
+
+    const follow = await app.inject({
+      method: 'POST',
+      url: `/api/v1/roleplay/threads/${id}/messages`,
+      payload: { content: '后来你们有没有再提起这件事？' },
+    });
+    expect(follow.statusCode).toBe(201);
+    const later = (follow.json() as { user_message: { id: string } }).user_message;
+
+    const rolled = await app.inject({
+      method: 'POST',
+      url: `/api/v1/world/creator-chats/${threadId}/rollback`,
+      payload: { message_id: first.assistant_message.id, mode: 'keep' },
+    });
+    expect(rolled.statusCode).toBe(200);
+    const body = rolled.json() as {
+      reverted: Array<{ title: string }>;
+      suppressed_ids: string[];
+      head_message_id: string;
+    };
+    expect(body.head_message_id).toBe(first.assistant_message.id);
+    expect(body.suppressed_ids).toContain(later.id);
+    expect(body.reverted).toEqual([]);
+
+    const stored = await db.worldEvent.findFirst({ where: { id: entityId } });
+    expect(stored?.deletedAt).toBeNull();
+
+    const live = await app.inject({
+      method: 'GET',
+      url: `/api/v1/world/creator-chats/${threadId}`,
+    });
+    const liveMessages = (live.json() as { messages: Array<{ id: string }> }).messages;
+    expect(liveMessages.map((item) => item.id)).toEqual([
+      first.user_message.id,
+      first.assistant_message.id,
+    ]);
+  });
+
+  it('still forbids rolling back an agent assistant line', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/world/creator-chats',
+      payload: { project_id: 'p1', title: '世界构建' },
+    });
+    expect(created.statusCode).toBe(201);
+    const threadId = (created.json() as { id: string }).id;
+    const user = await db.creatorChatMessage.create({
+      data: { threadId, role: 'user', content: '补一条设定' },
+    });
+    const assistant = await db.creatorChatMessage.create({
+      data: { threadId, role: 'assistant', content: '记下了' },
+    });
+    expect(user.id).toBeTruthy();
+
+    const rolled = await app.inject({
+      method: 'POST',
+      url: `/api/v1/world/creator-chats/${threadId}/rollback`,
+      payload: { message_id: assistant.id, mode: 'keep' },
+    });
+    expect(rolled.statusCode).toBe(400);
+    expect(rolled.json()).toMatchObject({
+      error: { code: 'ROLLBACK_USER_ONLY', message: '只能回退到你发出的那一句' },
+    });
   });
 
   it('ghostwrites a user-character line without putting them on the AI roster', async () => {

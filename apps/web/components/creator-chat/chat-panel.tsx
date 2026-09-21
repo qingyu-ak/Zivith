@@ -240,6 +240,8 @@ export function ChatPanel() {
       setThread(normalizeThread(value.thread));
       setMessages(Array.isArray(value.messages) ? value.messages : []);
     } catch (reason) {
+      setThread(null);
+      setMessages([]);
       setError(errorMessage(reason));
     } finally {
       setLoading(false);
@@ -1008,7 +1010,9 @@ export function ChatPanel() {
     setError('');
     try {
       const group = (participantAssetIds ?? []).length >= 2;
+      const liveChatIds = new Set(threads.map((item) => item.id));
       const existing = roleplayThreads.find((item) => {
+        if (!item.thread_id || !liveChatIds.has(item.thread_id)) return false;
         const sameUser = (item.user_character_asset_id ?? null) === (userCharacterAssetId ?? null);
         const sameAnchor =
           (item.anchored_world_event_id ?? null) === (anchoredWorldEventId ?? null);

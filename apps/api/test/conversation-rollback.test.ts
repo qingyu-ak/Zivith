@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   appliedEntitiesFromProposal,
+  canRollbackToMessage,
   rollbackCut,
   stampAppliedEntityIds,
   wasStudioEdited,
@@ -34,6 +35,28 @@ describe('conversation rollback', () => {
         mode: 'keep',
       }),
     ).toEqual({ headMessageId: 'u1', suppressIds: ['a1', 'u2'] });
+  });
+
+  it('keeps a character line and drops later turns', () => {
+    expect(
+      rollbackCut({
+        messages: [
+          { id: 'u1', role: 'user' },
+          { id: 'a1', role: 'assistant' },
+          { id: 'u2', role: 'user' },
+          { id: 'a2', role: 'assistant' },
+        ],
+        targetMessageId: 'a1',
+        mode: 'keep',
+      }),
+    ).toEqual({ headMessageId: 'a1', suppressIds: ['u2', 'a2'] });
+  });
+
+  it('allows assistant cuts only on roleplay threads', () => {
+    expect(canRollbackToMessage({ role: 'user', isRoleplay: false })).toBe(true);
+    expect(canRollbackToMessage({ role: 'assistant', isRoleplay: false })).toBe(false);
+    expect(canRollbackToMessage({ role: 'assistant', isRoleplay: true })).toBe(true);
+    expect(canRollbackToMessage({ role: 'system', isRoleplay: true })).toBe(false);
   });
 
   it('stamps created entity ids onto matching proposals', () => {

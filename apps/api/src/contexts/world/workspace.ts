@@ -602,6 +602,10 @@ export async function archiveWorldWorkspace(db: Db, projectId: string) {
     where: { projectId },
     data: { state: 'archived' },
   });
+  await db.roleplayThread.updateMany({
+    where: { projectId, status: 'active' },
+    data: { status: 'closed' },
+  });
   return project;
 }
 
@@ -614,6 +618,10 @@ export async function archiveCreatorChat(db: Db, threadId: string) {
   await db.creatorChatThread.update({
     where: { id: threadId },
     data: { state: 'archived' },
+  });
+  await db.roleplayThread.updateMany({
+    where: { threadId, status: 'active' },
+    data: { status: 'closed' },
   });
   return thread;
 }

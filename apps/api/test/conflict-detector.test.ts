@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conflictReportedInText,
   conflictSummaries,
   detectWorldConflicts,
+  formatConflictAppendix,
   formatConflictCheckReply,
   mergeConflictSummaries,
+  unreportedConflicts,
   wantsConflictCheck,
 } from '../src/contexts/world-builder/conflict-detector.js';
 import type { WorldContext } from '../src/contexts/world-builder/world-context.js';
@@ -217,6 +220,26 @@ describe('conflict check helpers', () => {
     const merged = mergeConflictSummaries(['模型补充的冲突', detected[0]?.summary ?? ''], detected);
     expect(merged[0]).toBe(conflictSummaries(detected)[0]);
     expect(merged).toHaveLength(2);
+  });
+
+  it('treats an event order collision as already said after the first appendix', () => {
+    const detected = detectWorldConflicts(
+      world({
+        worldEvents: [
+          {
+            id: 'e1',
+            title: '路明非随布宁一行在俄罗斯港口待了半个月',
+            description: null,
+            order: 63,
+          },
+          { id: 'e2', title: '路明非在俄罗斯被围并肩上挨刀', description: null, order: 63 },
+        ],
+      }),
+    );
+    expect(detected[0]?.kind).toBe('event_order_collision');
+    const first = formatConflictAppendix(detected);
+    expect(conflictReportedInText(first, detected[0]!)).toBe(true);
+    expect(unreportedConflicts([{ role: 'assistant', content: first }], detected)).toEqual([]);
   });
 
   it('explains an empty check without proposing a write', () => {

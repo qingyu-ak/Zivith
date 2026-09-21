@@ -60,6 +60,7 @@ export function GroupChatLaunch({
         anchorId || null,
         userChoice || null,
         picked,
+        { forceNew: true },
       );
       onCreated(created.thread_id);
     } catch (reason) {

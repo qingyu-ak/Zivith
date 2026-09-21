@@ -53,6 +53,12 @@ export function appliedEntitiesFromProposal(raw: unknown): Array<{
   return out;
 }
 
+/** Chat/roleplay may cut on a spoken line. Agent stays on the user tick. */
+export function canRollbackToMessage(input: { role: string; isRoleplay: boolean }): boolean {
+  if (input.role === 'user') return true;
+  return input.isRoleplay && input.role === 'assistant';
+}
+
 export function rollbackCut(input: {
   messages: Array<{ id: string; role: string }>;
   targetMessageId: string;

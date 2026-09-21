@@ -4,11 +4,13 @@ import type { LLMAdapter } from '../../ports/llm.js';
 import { buildWorldBuilderSystemPrompt, type WorldBuilderFocus } from './prompt.js';
 import type { WorldContext } from './world-context.js';
 import {
+  conflictReportedInText,
   detectWorldConflicts,
   formatConflictAppendix,
   formatConflictCheckReply,
   mergeConflictSummaries,
   normalizeEntityName,
+  unreportedConflicts,
   wantsConflictCheck,
 } from './conflict-detector.js';
 import {
@@ -319,8 +321,13 @@ function applyDetectedConflicts(
   if (checking) {
     proposals = [];
     reply = formatConflictCheckReply(detected);
-  } else if (detected.length > 0 && !/设定冲突/.test(reply)) {
-    reply = `${reply}${formatConflictAppendix(detected)}`;
+  } else {
+    const fresh = unreportedConflicts(input.history, detected).filter(
+      (item) => !conflictReportedInText(reply, item),
+    );
+    if (fresh.length > 0) {
+      reply = `${reply}${formatConflictAppendix(fresh)}`;
+    }
   }
   return {
     ...response,
@@ -666,6 +673,16 @@ export class WorldBuilderAgent {
       .slice(-historyTurns)
       .join('\n');
 
+    const assistantHistory = input.history
+      .filter((message) => message.role === 'assistant')
+      .map((message) => message.content)
+      .join('\n');
+    const alreadyReported = wantsConflictCheck(input.text)
+      ? []
+      : detectWorldConflicts(input.world, { text: input.text })
+          .filter((item) => conflictReportedInText(assistantHistory, item))
+          .map((item) => item.summary);
+
     const completion = await this.llm.completeStructured(
       {
         request_id: `world-builder:${Date.now()}`,
@@ -675,6 +692,7 @@ export class WorldBuilderAgent {
           input.stage,
           input.focus,
           input.memoryDigest ?? null,
+          alreadyReported,
         ),
         user_prompt: JSON.stringify({
           recent_conversation: historyText,

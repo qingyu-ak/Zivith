@@ -87,6 +87,51 @@ describe('buildRoleplaySystemPrompt', () => {
     expect(prompt).toContain('另起话头');
     expect(prompt).not.toContain('把用户当成「读者」来应答');
   });
+
+  it('locks speaking manner before the archive and plot', () => {
+    const prompt = buildRoleplaySystemPrompt(
+      state({
+        name: '楚子航',
+        personality: '话少，不解释自己',
+        persona: '姓名：楚子航\n个性：话少，不解释自己\n简介：很长的档案会把口吻淹没',
+        companions: ['路明非'],
+      }),
+    );
+    const voiceAt = prompt.indexOf('这一拍怎么说话');
+    const archiveAt = prompt.indexOf('## 角色档案');
+    expect(voiceAt).toBeGreaterThan(0);
+    expect(archiveAt).toBeGreaterThan(voiceAt);
+    expect(prompt).toContain('话少，不解释自己');
+    expect(prompt).toContain('括号动作最多一个');
+    expect(prompt).toContain('不要用在场其他人的口吻');
+  });
+
+  it('still builds when the card has no personality', () => {
+    const prompt = buildRoleplaySystemPrompt(
+      state({
+        name: '诺诺',
+        personality: null,
+        persona: '姓名：诺诺',
+        companions: ['路明非'],
+      }),
+    );
+    expect(prompt).toContain('## 这一拍怎么说话');
+    expect(prompt).toContain('不要用所有角色共用的书面腔');
+    expect(prompt).toContain('诺诺');
+  });
+
+  it('bans recent stage directions even on a user-spoken group beat', () => {
+    const prompt = buildRoleplaySystemPrompt(
+      state({ name: '诺诺', companions: ['路明非'] }),
+      false,
+      null,
+      false,
+      false,
+      ['把手从船舷上收回来'],
+    );
+    expect(prompt).toContain('不要再写同类动作');
+    expect(prompt).toContain('船舷');
+  });
 });
 
 describe('buildRoleplayUserPrompt', () => {
