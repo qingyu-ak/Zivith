@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-09-21 · c58e82a · feat(chat) · 角色感、群聊再开、扮演角色刻度回退
+
+收完 09-16 积压 4，并修 Journey D 走查里挡住闭环的洞。群聊提示词把角色卡「个性」提前成说话锁，每拍最多一个括号动作且禁用近期动作，空拍不再把长亲历当讲义。归档后再点「开始群聊」不再 404（死线程关掉、`force_new`）。World Builder 同一条 event_order_collision 不再每轮复述。扮演侧边横条可回退到角色句（头指针 + 抑制 + 软删本场写入）；Studio Agent 仍只能回退用户句。D 主路径 2.1–2.5 已实测。未改：已写入事件再提会再出卡；免 Docker。
+
+- **feat(api)** `character-voice.ts` `buildVoiceLock` / `clampStageDirections`；`canRollbackToMessage`；归档时关闭 `RoleplayThread`；`force_new`；`unreportedConflicts`；重试 `lastMessageForTurn`
+- **feat(web)** 群聊启动一律 `forceNew`；死 `thread_id` 不再复用
+- **test** `character-voice` / `group-chat-flow` / `conversation-rollback` / `conflict-detector` / `workspace`
+- **docs** `task-s25-character-voice.md`、`task-s25-character-tick-rollback.md`、`human-walk-journey-de.md`
+- 模块：roleplay / creator-chat / world-builder / conversation-rollback
+
 ## 2026-09-21 · e41650a · feat(chat) · 群聊拍间 3.5s、侧面刻度、扮演 AI 接管
 
 落地 2026-09-16 群聊实测积压的前三项（Journey D）。拍间留白改为上一句上屏后再等 3.5 秒（用户开口后的第一句不拖）。Chat / 扮演每句对白一条右侧竖条，悬停展示说话人与摘要，点选回退；Studio Agent 仍只给用户句打点。用户「你扮演」为书中角色时可点「AI 接管」，生成句以 `role=user` 写入该角色；「我来演」或打字接回。读者身份无此按钮。剩「角色感不强」未做。
