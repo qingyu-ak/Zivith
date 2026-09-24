@@ -512,13 +512,33 @@ async function attachWorldChangeProposals(
     ? (world.characters.find((item) => item.id === roleplay.userCharacterAssetId) ?? null)
     : null;
 
+  const pending = await db.creatorChatMessage.findMany({
+    where: { thread: { projectId: roleplay.projectId }, proposalState: 'pending' },
+    select: { proposal: true },
+    take: 40,
+  });
+  const pendingEvents = pending.flatMap((row) => {
+    if (!Array.isArray(row.proposal)) return [];
+    return row.proposal.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const proposal = item as { kind?: string; payload?: { title?: string } };
+      if (proposal.kind !== 'create_world_event') return [];
+      const title = proposal.payload?.title?.trim();
+      return title ? [{ id: `pending:${title}`, title, description: null, order: null }] : [];
+    });
+  });
+  const worldForDraft = {
+    ...world,
+    worldEvents: [...world.worldEvents, ...pendingEvents],
+  };
+
   let draft: Awaited<ReturnType<RoleplayAgent['draftWorldChanges']>>;
   try {
     draft = await agent.draftWorldChanges(
       {
         text: input.userText,
         reply: input.assistantMessage.content,
-        world,
+        world: worldForDraft,
         character: { id: character.id, name: character.name },
         userCharacter: userCharacter ? { id: userCharacter.id, name: userCharacter.name } : null,
         effort: input.effort,

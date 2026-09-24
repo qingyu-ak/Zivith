@@ -3,6 +3,8 @@ import type { ZodType } from 'zod';
 import {
   draftRoleplayWorldChanges,
   draftWorldChangesByRule,
+  contentRestatesEvent,
+  eventAlreadyRecorded,
   sanitizeLlmChanges,
   type RoleplayDraftInput,
 } from '../src/contexts/roleplay/world-change-drafter.js';
@@ -84,6 +86,92 @@ describe('draftWorldChangesByRule', () => {
     expect(proposals.filter((item) => item.kind === 'create_relationship')).toEqual([]);
   });
 
+  it('does not draft another event when the title is already on the timeline', () => {
+    const recorded = assembleWorldContext({
+      projectId: 'p1',
+      projectName: '雾港遗事',
+      worldview: {},
+      stories: [],
+      characters: world.characters,
+      locations: [],
+      scenes: [],
+      worldEvents: [
+        {
+          id: 'e1',
+          title: '艾琳把灯塔的秘密告诉了陈默',
+          description: null,
+          order: 1,
+        },
+      ],
+      relationships: [],
+    });
+    const proposals = draftWorldChangesByRule(
+      input('你把灯塔的秘密告诉了陈默，然后我们一起离开了雾港', { world: recorded }),
+    );
+    expect(proposals.filter((item) => item.kind === 'create_world_event')).toEqual([]);
+  });
+
+  it('treats a rephrased title about the same people as the same event', () => {
+    const fog = assembleWorldContext({
+      projectId: 'p1',
+      projectName: '走查雾城信',
+      worldview: {},
+      stories: [],
+      characters: [
+        { id: 'lin', name: '林晚', description: null, tags: [] },
+        { id: 'chen', name: '陈叔', description: null, tags: [] },
+      ],
+      locations: [],
+      scenes: [],
+      worldEvents: [
+        {
+          id: 'e-tea',
+          title: '林晚在雾城酒馆向陈叔递交信件（Studio 改过）',
+          description: '林晚亲手将一封信交到雾城酒馆店主陈叔手中，陈叔收下信件并请她喝了一碗热茶。',
+          order: 2,
+        },
+      ],
+      relationships: [],
+    });
+    expect(eventAlreadyRecorded('林晚在雾城酒馆向陈叔递信并喝热茶', fog)).toBe(true);
+    const earlierOnly = assembleWorldContext({
+      ...{
+        projectId: fog.projectId,
+        projectName: fog.projectName,
+        worldview: {},
+        stories: [],
+        characters: fog.characters,
+        locations: [],
+        scenes: [],
+        relationships: [],
+      },
+      worldEvents: [
+        {
+          id: 'e-letter',
+          title: '林晚在雾城酒馆将一封信交给店主',
+          description: '林晚当面把一封信交给了雾城酒馆的店主。',
+          order: 1,
+        },
+      ],
+    });
+    expect(eventAlreadyRecorded('林晚在雾城酒馆向陈叔递信并喝热茶', earlierOnly)).toBe(false);
+  });
+
+  it('treats chat facts that restate a deleted event as the same event', () => {
+    const event = {
+      title: '林晚在雾城酒馆向陈叔递交信件（Studio 改过）',
+      description: '林晚亲手将一封信交到雾城酒馆店主陈叔手中，陈叔收下信件并请她喝了一碗热茶。',
+    };
+    const names = ['林晚', '陈叔'];
+    expect(
+      contentRestatesEvent('林晚在雾城酒馆向陈叔递交了信件，并喝了热茶。', event, names),
+    ).toBe(true);
+    expect(contentRestatesEvent('林晚确认信已亲手交到陈叔手上，茶也喝了。', event, names)).toBe(
+      true,
+    );
+    expect(contentRestatesEvent('雾大。钟声听不太清。', event, names)).toBe(false);
+  });
+
   it('does not propose anything for small talk or questions', () => {
     expect(draftWorldChangesByRule(input('你好呀'))).toEqual([]);
     expect(draftWorldChangesByRule(input('你今天心情怎么样？'))).toEqual([]);
@@ -138,7 +226,7 @@ describe('sanitizeLlmChanges', () => {
           },
         ],
       },
-      input('无关'),
+      input('你把灯塔的秘密告诉了陈默，你和陈默成了对手'),
     );
     expect(proposals).toHaveLength(2);
     expect(proposals[0]?.payload.character_ids).toEqual(['c-ailin', 'c-chenmo']);
@@ -208,6 +296,88 @@ describe('draftRoleplayWorldChanges', () => {
     };
     const result = await draftRoleplayWorldChanges(quiet, 'x', input('你决定明天出发去北境'));
     expect(result.mode).toBe('llm');
+    expect(result.proposals).toEqual([]);
+  });
+
+  it('drops an LLM event when the user was only chatting', async () => {
+    const completeStructured = async <T>(
+      request: CompletionRequest,
+      schema: ZodType<T>,
+    ): Promise<StructuredCompletionResult<T>> => ({
+      data: schema.parse({
+        changes: [
+          {
+            kind: 'create_world_event',
+            title: '林晚雾中送信至钟楼拐角折返',
+            character_ids: ['c-ailin'],
+          },
+        ],
+      }),
+      text: '{}',
+      model: request.model,
+      input_tokens: 0,
+      output_tokens: 0,
+      metadata: {},
+    });
+    const chatty: LLMAdapter = {
+      provider: 'deepseek',
+      supportedModels: [],
+      complete: vi.fn(),
+      completeStructured,
+    };
+    const result = await draftRoleplayWorldChanges(chatty, 'x', input('今天雾很大，随便聊聊'));
+    expect(result.proposals).toEqual([]);
+  });
+
+  it('drops an LLM event that repeats one already on the timeline', async () => {
+    const recorded = assembleWorldContext({
+      projectId: 'p1',
+      projectName: '雾港遗事',
+      worldview: {},
+      stories: [],
+      characters: world.characters,
+      locations: [],
+      scenes: [],
+      worldEvents: [
+        {
+          id: 'e1',
+          title: '路明非在天台向诺诺坦白见过龙王',
+          description: null,
+          order: 1,
+        },
+      ],
+      relationships: [],
+    });
+    const completeStructured = async <T>(
+      request: CompletionRequest,
+      schema: ZodType<T>,
+    ): Promise<StructuredCompletionResult<T>> => ({
+      data: schema.parse({
+        changes: [
+          {
+            kind: 'create_world_event',
+            title: '路明非在天台向诺诺坦白见过龙王',
+            character_ids: ['c-ailin'],
+          },
+        ],
+      }),
+      text: '{}',
+      model: request.model,
+      input_tokens: 0,
+      output_tokens: 0,
+      metadata: {},
+    });
+    const repeating: LLMAdapter = {
+      provider: 'deepseek',
+      supportedModels: [],
+      complete: vi.fn(),
+      completeStructured,
+    };
+    const result = await draftRoleplayWorldChanges(
+      repeating,
+      'x',
+      input('刚才路明非在天台向诺诺坦白见过龙王，这件事已经发生了', { world: recorded }),
+    );
     expect(result.proposals).toEqual([]);
   });
 });
