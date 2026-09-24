@@ -13,6 +13,7 @@ import type {
 } from '@/lib/types';
 import { threadDisplayTitle } from '@/lib/chat-history';
 import { createRoleplayThread } from '@/lib/api';
+import { isPlayableCharacter } from '@/lib/create-world-character';
 import { DIMENSION_KIND_LABEL, resolveDisplayDimensions, worldTimeCaption } from '@/lib/world-line';
 import { useState, type ReactNode } from 'react';
 import type { RelationshipCreateInput, StudioCreateKind } from '@/lib/studio-entity-create';
@@ -49,6 +50,7 @@ function TreeFolder({
   creating,
   createLabel,
   namePlaceholder,
+  descriptionPlaceholder,
   nameRequired,
   emptyActionLabel,
   children,
@@ -56,10 +58,11 @@ function TreeFolder({
   label: string;
   count: number;
   defaultOpen: boolean;
-  onCreate?: (name?: string) => void;
+  onCreate?: (name?: string, description?: string) => void;
   creating?: boolean;
   createLabel?: string;
   namePlaceholder?: string;
+  descriptionPlaceholder?: string;
   nameRequired?: boolean;
   emptyActionLabel?: string;
   children: ReactNode;
@@ -67,6 +70,7 @@ function TreeFolder({
   const [open, setOpen] = useState(defaultOpen);
   const [naming, setNaming] = useState(false);
   const [draftName, setDraftName] = useState('');
+  const [draftDescription, setDraftDescription] = useState('');
   const [nameError, setNameError] = useState('');
 
   function beginCreate() {
@@ -74,6 +78,7 @@ function TreeFolder({
     if (namePlaceholder) {
       setNaming(true);
       setDraftName('');
+      setDraftDescription('');
       setNameError('');
       return;
     }
@@ -119,10 +124,12 @@ function TreeFolder({
                   setNameError('请填写角色名称');
                   return;
                 }
+                const intro = draftDescription.trim();
                 setNaming(false);
                 setDraftName('');
+                setDraftDescription('');
                 setNameError('');
-                onCreate?.(next || undefined);
+                onCreate?.(next || undefined, intro || undefined);
               }}
             >
               <input
@@ -136,6 +143,15 @@ function TreeFolder({
                   if (nameError) setNameError('');
                 }}
               />
+              {descriptionPlaceholder ? (
+                <input
+                  value={draftDescription}
+                  disabled={creating}
+                  placeholder={descriptionPlaceholder}
+                  className="w-full rounded border border-zinc-200 px-1.5 py-1 text-[11px] outline-none focus:border-[#4d6bfe]"
+                  onChange={(event) => setDraftDescription(event.target.value)}
+                />
+              ) : null}
               {nameError ? (
                 <p className="text-[11px] text-red-600" role="alert">
                   {nameError}
@@ -148,6 +164,7 @@ function TreeFolder({
                   onClick={() => {
                     setNaming(false);
                     setDraftName('');
+                    setDraftDescription('');
                     setNameError('');
                   }}
                 >
@@ -188,6 +205,8 @@ function TreeFile({
   actionLabel,
   onClick,
   onAction,
+  secondaryLabel,
+  onSecondary,
 }: {
   active: boolean;
   title: string;
@@ -195,6 +214,8 @@ function TreeFile({
   actionLabel?: string;
   onClick: () => void;
   onAction?: () => void;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
 }) {
   return (
     <div
@@ -212,6 +233,18 @@ function TreeFile({
         <span className="truncate text-[13px] leading-5">{title}</span>
         {subtitle ? <span className="truncate text-[11px] text-zinc-400">{subtitle}</span> : null}
       </button>
+      {onSecondary && secondaryLabel ? (
+        <button
+          type="button"
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-white"
+          onClick={(event) => {
+            event.stopPropagation();
+            onSecondary();
+          }}
+        >
+          {secondaryLabel}
+        </button>
+      ) : null}
       {onAction && actionLabel ? (
         <button
           type="button"
@@ -356,11 +389,18 @@ export function EntityExplorer({
           count={characterItems.length}
           defaultOpen
           onCreate={
-            onCreate ? (name) => void onCreate('character', name ? { name } : undefined) : undefined
+            onCreate
+              ? (name, description) =>
+                  void onCreate('character', {
+                    ...(name ? { name } : {}),
+                    ...(description ? { description } : {}),
+                  })
+              : undefined
           }
           creating={creatingKind === 'character'}
           createLabel="+ 角色"
           namePlaceholder="角色名，如韩立"
+          descriptionPlaceholder="简介，如雾城酒馆的店主"
           nameRequired
           emptyActionLabel="新建角色"
         >
@@ -370,6 +410,19 @@ export function EntityExplorer({
               active={selection?.kind === 'character' && selection.id === item.id}
               title={item.title}
               subtitle={item.subtitle}
+              secondaryLabel={
+                onCreate &&
+                isPlayableCharacter(characters.find((character) => character.id === item.id) ?? {})
+                  ? creatingKind === 'character'
+                    ? '…'
+                    : '复制'
+                  : undefined
+              }
+              onSecondary={
+                onCreate
+                  ? () => void onCreate('character', { copyFromId: item.id })
+                  : undefined
+              }
               actionLabel="对话"
               onClick={() => onSelect({ kind: 'character', id: item.id })}
               onAction={() => {

@@ -1,5 +1,5 @@
 import { api } from './api';
-import { createWorldCharacter } from './create-world-character';
+import { copyWorldCharacter, createWorldCharacter } from './create-world-character';
 import type { WorldResourcesDTO, WorldSelection } from './types';
 import { nextUntitledName, resolveCreateName } from './unique-name';
 import { resolveDisplayDimensions } from './world-line';
@@ -19,6 +19,8 @@ export interface RelationshipCreateInput {
 export interface StudioCreateExtras {
   relationship?: RelationshipCreateInput;
   name?: string;
+  description?: string;
+  copyFromId?: string;
 }
 
 function createdId(value: unknown, fallbackMessage: string): string {
@@ -37,9 +39,20 @@ export async function createStudioEntity(
 ): Promise<Exclude<WorldSelection, null>> {
   switch (kind) {
     case 'character': {
+      if (extras?.copyFromId) {
+        const source = resources.entities.characters.find((item) => item.id === extras.copyFromId);
+        if (!source) throw new Error('要复制的角色不存在');
+        const created = await copyWorldCharacter({
+          projectId,
+          source,
+          existingNames: resources.entities.characters.map((item) => item.name),
+        });
+        return { kind: 'character', id: created.id };
+      }
       const created = await createWorldCharacter({
         projectId,
         name: extras?.name ?? '',
+        description: extras?.description,
         existingNames: resources.entities.characters.map((item) => item.name),
       });
       return { kind: 'character', id: created.id };

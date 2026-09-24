@@ -40,6 +40,30 @@ export async function createWorldCharacter(input: {
   return created;
 }
 
+/** 在同一个世界里复制一张角色卡。不带扮演线程，名字加「副本」。 */
+export async function copyWorldCharacter(input: {
+  projectId: string;
+  source: AssetDTO;
+  existingNames?: string[];
+}): Promise<AssetDTO> {
+  const base = input.source.name.trim() || '未命名角色';
+  const name = nextUntitledName(input.existingNames ?? [], `${base} 副本`);
+  const description = input.source.description?.trim() || '（待补充）';
+  const personality = input.source.personality?.trim();
+  const created = await api<AssetDTO>(`/projects/${input.projectId}/assets`, {
+    method: 'POST',
+    body: {
+      asset_type: 'character',
+      name,
+      description,
+      ...(personality ? { personality } : {}),
+      state: 'active',
+    },
+  });
+  if (!created?.id) throw new Error('无法复制角色');
+  return created;
+}
+
 export async function openRoleplayForCharacter(
   projectId: string,
   characterId: string,
