@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, session } = require('electron');
+const fs = require('node:fs');
 const path = require('node:path');
 const { prepareApp, stopProcessTree, WEB_URL } = require('./launcher.cjs');
 
@@ -8,6 +9,21 @@ const SPLASH_HTML = path.join(__dirname, '..', 'assets', 'splash.html');
 let mainWindow = null;
 let splashWindow = null;
 let spawnedServers = null;
+
+function folderDialogStart(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const candidate = path.normalize(trimmed);
+  try {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) return candidate;
+    const parent = path.dirname(candidate);
+    if (parent && fs.existsSync(parent) && fs.statSync(parent).isDirectory()) return parent;
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 function setSplashStatus(text) {
   if (!splashWindow || splashWindow.isDestroyed()) return;
@@ -165,10 +181,12 @@ if (!gotLock) {
       (_webContents, permission, requestingOrigin) =>
         permission === 'media' && requestingOrigin === webOrigin,
     );
-    ipcMain.handle('workspace:openDirectory', async () => {
+    ipcMain.handle('workspace:openDirectory', async (_event, defaultPath) => {
+      const start = folderDialogStart(defaultPath);
       const result = await dialog.showOpenDialog({
         title: '选择世界文件夹',
         properties: ['openDirectory'],
+        ...(start ? { defaultPath: start } : {}),
       });
       if (result.canceled || result.filePaths.length === 0) return null;
       return result.filePaths[0] ?? null;

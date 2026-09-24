@@ -241,7 +241,7 @@ function FolderSettings({ projectId }: { projectId: string }) {
     setError('');
     setStatus('');
     try {
-      const picked = await pickWorkspaceDirectory();
+      const picked = await pickWorkspaceDirectory(root);
       if (!picked) return;
       const saved = await api<{ path: string }>('/world/folders/root', {
         method: 'PUT',
@@ -258,7 +258,7 @@ function FolderSettings({ projectId }: { projectId: string }) {
     setError('');
     setStatus('');
     try {
-      const picked = await pickWorkspaceDirectory();
+      const picked = await pickWorkspaceDirectory(worldPath);
       if (!picked) return;
       await openWorldFolderRequest(picked, { rebind_project_id: projectId });
       setWorldPath(picked);
