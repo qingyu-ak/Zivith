@@ -28,6 +28,7 @@ import {
   stampAppliedEntityIds,
 } from '../contexts/chat/conversation-rollback.js';
 import { isGroupChat, parseParticipantIds } from '../contexts/roleplay/group-chat.js';
+import { contentRestatesEvent } from '../contexts/roleplay/world-change-drafter.js';
 import {
   archiveCreatorChat,
   createWorldInFolder,
@@ -465,11 +466,43 @@ function registerWorldEventRoutes(app: FastifyInstance, db: PrismaClient) {
     });
   });
 
+async function forgetChatFactsForEvent(
+  db: PrismaClient,
+  event: { projectId: string; title: string; description: string | null },
+) {
+  const [characters, atoms] = await Promise.all([
+    db.asset.findMany({
+      where: { projectId: event.projectId, type: 'character', deletedAt: null },
+      select: { name: true },
+    }),
+    db.memoryAtom.findMany({
+      where: {
+        projectId: event.projectId,
+        status: 'active',
+        factType: { in: ['event', 'episodic'] },
+      },
+      select: { id: true, content: true },
+    }),
+  ]);
+  const names = characters.map((character) => character.name);
+  const ids = atoms
+    .filter((atom) =>
+      contentRestatesEvent(atom.content, { title: event.title, description: event.description }, names),
+    )
+    .map((atom) => atom.id);
+  if (ids.length === 0) return;
+  await db.memoryAtom.updateMany({
+    where: { id: { in: ids } },
+    data: { status: 'invalidated', validTo: new Date() },
+  });
+}
+
   app.delete('/world-events/:id', async (request, reply) => {
     const { id } = entityParams.parse(request.params);
     const existing = await db.worldEvent.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new ApiError(404, 'WORLD_EVENT_NOT_FOUND', '世界事件不存在');
     await db.worldEvent.update({ where: { id }, data: { deletedAt: new Date() } });
+    await forgetChatFactsForEvent(db, existing);
     return reply.status(204).send();
   });
 
@@ -1220,16 +1253,19 @@ async function pipeCreatorChatSse(
     reply.raw.write(formatSseEvent(event, data));
     flushHttpStream(reply.raw);
   };
+  const markClientGone = () => {
+    closed = true;
+  };
+  reply.raw.on('close', markClientGone);
   const cleanup = () => {
     closed = true;
-    request.raw.off('close', cleanup);
+    reply.raw.off('close', markClientGone);
     try {
       reply.raw.end();
     } catch {
       // stream already closed
     }
   };
-  request.raw.on('close', cleanup);
 
   writeEvent('user', { user_message: chatMessageDto(userMessage) });
   writeEvent('status', { phase: 'thinking' });

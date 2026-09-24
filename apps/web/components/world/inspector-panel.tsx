@@ -753,6 +753,37 @@ export function InspectorPanel({
                 label="在对话中继续"
                 className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50"
               />
+              {selection.kind === 'world_event' ? (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    const event = resources.entities.world_events.find(
+                      (item) => item.id === selection.id,
+                    );
+                    const title = event?.title?.trim() || '这条事件';
+                    if (
+                      !window.confirm(
+                        `删除事件「${title}」？它会从时间线和相关角色的亲历里消失。`,
+                      )
+                    ) {
+                      return;
+                    }
+                    setSaving(true);
+                    setEditError('');
+                    void api(`/world/world-events/${selection.id}`, { method: 'DELETE' })
+                      .then(() => {
+                        onSelect?.({ kind: 'project', id: resources.project.id });
+                        onUpdated?.();
+                      })
+                      .catch((reason: unknown) => setEditError(errorMessage(reason)))
+                      .finally(() => setSaving(false));
+                  }}
+                  className="rounded-md border border-line px-2 py-0.5 text-xs text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  删除
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setEditing(true)}
@@ -763,6 +794,11 @@ export function InspectorPanel({
             </div>
           ) : null}
         </header>
+        {editError && !editing ? (
+          <p className="px-4 pb-2 text-xs text-red-500" role="alert">
+            {editError}
+          </p>
+        ) : null}
         {selection ? (
           <>
             {relatedConflicts.length > 0 ? (
