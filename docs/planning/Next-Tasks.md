@@ -9,7 +9,7 @@
 > **当前产品拾取（Journey，不是下表工程史）：**
 >
 > 1. ~~[task-s25-character-voice.md](task-s25-character-voice.md) / [task-s25-character-tick-rollback.md](task-s25-character-tick-rollback.md) — 角色感、群聊归档 404、World Builder 冲突去重、扮演角色刻度回退~~
-> 2. 人工走查：D 边再进/删对话已过；再进不闪新世界已修；Journey F 关桌面再开已过；已写入事件按 id 可打开，外套测试事件已删（2026-09-24）。说明：[human-walk-journey-de.md](human-walk-journey-de.md)
+> 2. 人工走查：D 边再进/删对话已过；再进不闪新世界已修；Journey F 关桌面再开已过；已写入事件按 id 可打开；桌面再开回到上次路径（2026-09-24）。说明：[human-walk-journey-de.md](human-walk-journey-de.md)
 > 3. 走查里看到、**未确认不改**：同一已写入事件若用户再次断言，去重依赖 Jaccard / 同阵容；问句路径已拦住。龙族「外套」测试事件已用 Studio 删除。`GET /world/world-events/:id` 已补 → [task-s25-world-event-get.md](task-s25-world-event-get.md)
 > 4. 仍等产品所有者另开：World Builder 抽取引擎、角色复制/导入、Agent 三层 + 热词
 >

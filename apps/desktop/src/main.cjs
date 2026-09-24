@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, session } = require('electron
 const fs = require('node:fs');
 const path = require('node:path');
 const { prepareApp, stopProcessTree, WEB_URL } = require('./launcher.cjs');
+const { startupUrl, writeLastPath } = require('./last-location.cjs');
 
 const ICON = path.join(__dirname, '..', 'assets', 'icon.ico');
 const SPLASH_HTML = path.join(__dirname, '..', 'assets', 'splash.html');
@@ -102,6 +103,12 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  mainWindow.webContents.on('did-navigate', (_event, url) => {
+    writeLastPath(app.getPath('userData'), url);
+  });
+  mainWindow.webContents.on('did-navigate-in-page', (_event, url) => {
+    writeLastPath(app.getPath('userData'), url);
+  });
   void loadMainWindowUrl();
 }
 
@@ -121,7 +128,8 @@ function loadUrlWithTimeout(win, url, timeoutMs) {
 async function loadMainWindowUrl(attempt = 0) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
-    await loadUrlWithTimeout(mainWindow, WEB_URL, 15_000);
+    const target = startupUrl(WEB_URL, app.getPath('userData'));
+    await loadUrlWithTimeout(mainWindow, target, 15_000);
   } catch (error) {
     if (attempt >= 4 || !mainWindow || mainWindow.isDestroyed()) {
       mainWindow?.show();
@@ -181,6 +189,9 @@ if (!gotLock) {
       (_webContents, permission, requestingOrigin) =>
         permission === 'media' && requestingOrigin === webOrigin,
     );
+    ipcMain.handle('location:persist', (_event, pathname) => {
+      writeLastPath(app.getPath('userData'), pathname);
+    });
     ipcMain.handle('workspace:openDirectory', async (_event, defaultPath) => {
       const start = folderDialogStart(defaultPath);
       const result = await dialog.showOpenDialog({

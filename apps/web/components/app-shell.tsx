@@ -20,6 +20,7 @@ import { StudioAgentPanel } from '@/components/studio-agent-panel';
 import { parseWorldCanvasView, worldCanvasHref } from '@/lib/world-canvas';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import { isDesktopApp, pickWorkspaceDirectory } from '@/lib/desktop';
+import { persistLastLocation } from '@/lib/last-location';
 import { EntityExplorer } from './world/entity-explorer';
 import { StudioSelectionProvider, useStudioSelection } from './world/studio-selection';
 
@@ -43,6 +44,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
+
+  useEffect(() => {
+    persistLastLocation(pathname);
+  }, [pathname]);
 
   useEffect(() => {
     if (pathname.startsWith('/creator-chats')) return;
