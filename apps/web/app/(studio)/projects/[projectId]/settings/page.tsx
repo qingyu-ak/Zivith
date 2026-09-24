@@ -26,7 +26,8 @@ import {
   writeStoredWriteMode,
   type AgentWriteMode,
 } from '@/lib/agent-write-mode';
-import { api } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
+import { openWorldFolderRequest } from '@/lib/world-folder';
 import type { WriteLogItemDTO } from '@/lib/types';
 
 type SettingsSection = 'general' | 'appearance' | 'models' | 'memory' | 'writes' | 'usage';
@@ -152,7 +153,7 @@ export default function SettingsPage() {
         </nav>
       </aside>
       <section className="min-w-0 flex-1">
-        {section === 'general' ? <GeneralSection /> : null}
+        {section === 'general' ? <GeneralSection projectId={projectId} /> : null}
         {section === 'appearance' ? <AppearanceSection /> : null}
         {section === 'models' ? (
           <div className="grid gap-6">
@@ -185,7 +186,111 @@ export default function SettingsPage() {
 }
 
 /** 常规：写入策略与默认努力程度。 */
-function GeneralSection() {
+function FolderSettings({ projectId }: { projectId: string }) {
+  const [root, setRoot] = useState('');
+  const [worldPath, setWorldPath] = useState('');
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      api<{ path: string }>('/world/folders/root'),
+      api<{ workspace_path?: string | null; workspacePath?: string | null }>(`/projects/${projectId}`),
+    ])
+      .then(([rootValue, project]) => {
+        if (cancelled) return;
+        setRoot(rootValue.path ?? '');
+        setWorldPath(project.workspace_path ?? project.workspacePath ?? '');
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(errorMessage(reason));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  async function saveRoot() {
+    setError('');
+    setStatus('');
+    try {
+      const saved = await api<{ path: string }>('/world/folders/root', {
+        method: 'PUT',
+        body: { path: root.trim() },
+      });
+      setRoot(saved.path);
+      setStatus('默认目录已保存');
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  async function saveWorldPath() {
+    setError('');
+    setStatus('');
+    try {
+      await openWorldFolderRequest(worldPath.trim(), { rebind_project_id: projectId });
+      setStatus('当前世界的文件夹已更新');
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  return (
+    <>
+      <SettingRow
+        title="新建世界的默认目录"
+        description="之后新建的世界会放在这个目录下的同名文件夹里，并写入 .zivith/workspace.json。"
+      >
+        <div className="flex w-full max-w-xl gap-2">
+          <input
+            className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400"
+            value={root}
+            aria-label="新建世界的默认目录"
+            onChange={(event) => setRoot(event.target.value)}
+          />
+          <button
+            type="button"
+            className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50"
+            onClick={() => void saveRoot()}
+          >
+            保存
+          </button>
+        </div>
+      </SettingRow>
+      <SettingRow
+        title="当前世界的文件夹"
+        description="改成另一个已有文件夹后保存。不会自动搬走里面的文件。"
+      >
+        <div className="flex w-full max-w-xl gap-2">
+          <input
+            className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400"
+            value={worldPath}
+            aria-label="当前世界的文件夹"
+            placeholder="尚未绑定文件夹"
+            onChange={(event) => setWorldPath(event.target.value)}
+          />
+          <button
+            type="button"
+            className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50"
+            onClick={() => void saveWorldPath()}
+          >
+            保存
+          </button>
+        </div>
+      </SettingRow>
+      {status ? <p className="px-1 text-xs text-zinc-500">{status}</p> : null}
+      {error ? (
+        <p className="px-1 text-xs text-red-600" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function GeneralSection({ projectId }: { projectId: string }) {
   const [effort, setEffort] = useState<ChatEffort>('balanced');
   const [writeMode, setWriteMode] = useState<AgentWriteMode>('confirm');
   const [ready, setReady] = useState(false);
@@ -200,6 +305,7 @@ function GeneralSection() {
     <div>
       <h2 className="text-base font-semibold text-zinc-900">常规</h2>
       <div className="mt-4 grid gap-3">
+        <FolderSettings projectId={projectId} />
         <SettingRow
           title="Agent 写入模式"
           description="Agent 可以改 IP Core 与 Studio 里的世界实体。写入会留下提案记录；删除项目等高危操作始终询问。"

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { Prisma, PrismaClient } from '@zivith/database';
 import { ApiError } from '../../errors.js';
@@ -624,6 +625,53 @@ export async function archiveCreatorChat(db: Db, threadId: string) {
     data: { status: 'closed' },
   });
   return thread;
+}
+
+const WORLDS_ROOT_FILE = path.join(process.cwd(), 'data', 'worlds-root.json');
+
+/** 新建世界的默认父目录：桌面\\Zivith。设置里改过则以设置为准。 */
+export function builtinWorldsRoot(): string {
+  return path.join(os.homedir(), 'Desktop', 'Zivith');
+}
+
+export function readWorldsRoot(): string {
+  try {
+    const raw = JSON.parse(fs.readFileSync(WORLDS_ROOT_FILE, 'utf8')) as { path?: unknown };
+    if (typeof raw.path === 'string' && path.isAbsolute(raw.path.trim())) {
+      return path.normalize(raw.path.trim());
+    }
+  } catch {
+    // 没有设置文件时用桌面\\Zivith。
+  }
+  return builtinWorldsRoot();
+}
+
+export function writeWorldsRoot(folder: string): string {
+  const trimmed = folder.trim();
+  if (!trimmed || !path.isAbsolute(trimmed)) {
+    throw new ApiError(400, 'FOLDER_PATH_REQUIRED', '请提供默认目录的绝对路径');
+  }
+  const normalized = path.normalize(trimmed);
+  fs.mkdirSync(normalized, { recursive: true });
+  fs.mkdirSync(path.dirname(WORLDS_ROOT_FILE), { recursive: true });
+  fs.writeFileSync(WORLDS_ROOT_FILE, JSON.stringify({ path: normalized }, null, 2), 'utf8');
+  return normalized;
+}
+
+/** 在默认目录下准备一个同名空文件夹。重名则加序号。已有世界文件夹不会被占用。 */
+export function allocateWorldFolder(name: string, root = readWorldsRoot()): string {
+  fs.mkdirSync(root, { recursive: true });
+  const base = name.replace(/[<>:"/\\|?*\u0000]/g, '').trim().slice(0, 80) || '未命名世界';
+  for (let index = 1; index < 100; index += 1) {
+    const folderName = index === 1 ? base : `${base} ${index}`;
+    const candidate = path.join(root, folderName);
+    if (!fs.existsSync(candidate)) {
+      fs.mkdirSync(candidate);
+      return candidate;
+    }
+    if (inspectWorkspaceFolder(candidate).state === 'not_a_world') return candidate;
+  }
+  throw new ApiError(409, 'FOLDER_PATH_REQUIRED', '默认目录下没有可用的文件夹名');
 }
 
 export async function claimWorkspaceSeed(
