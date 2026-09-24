@@ -915,7 +915,7 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
               {voice.notice}
             </p>
           ) : null}
-          <div className="flex flex-wrap items-center gap-1 pb-1">
+          <div className="flex flex-nowrap items-center gap-0.5 pb-1">
             <div className="relative" ref={writeMenuRef}>
               <button
                 type="button"
@@ -1008,11 +1008,11 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
                 </option>
               ))}
             </select>
-            <span className="flex-1" />
+            <span className="min-w-0 flex-1" />
             {sending && !input.trim() ? (
               <button
                 type="button"
-                className="grid size-7 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800"
+                className="grid size-7 shrink-0 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800"
                 aria-label="暂停思考"
                 title="取消这一轮思考"
                 onClick={() => abortRef.current?.abort()}
@@ -1025,7 +1025,7 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
                 disabled={!input.trim() || !threadId || Boolean(mentionHint) || loading}
                 aria-label={sending ? '补充' : '发送'}
                 title={mentionHint ?? (sending ? '补充' : '发送')}
-                className="grid size-7 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400"
+                className="grid size-7 shrink-0 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400"
               >
                 {sending ? (
                   <span className="px-0.5 text-[9px] font-medium">补充</span>

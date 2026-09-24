@@ -27,6 +27,7 @@ import {
   type AgentWriteMode,
 } from '@/lib/agent-write-mode';
 import { api, errorMessage } from '@/lib/api';
+import { pickWorkspaceDirectory } from '@/lib/desktop';
 import { openWorldFolderRequest } from '@/lib/world-folder';
 import type { WriteLogItemDTO } from '@/lib/types';
 
@@ -185,6 +186,31 @@ export default function SettingsPage() {
   );
 }
 
+function FolderPick({
+  path,
+  label,
+  onPick,
+}: {
+  path: string;
+  label: string;
+  onPick: () => void;
+}) {
+  return (
+    <div className="flex max-w-[18rem] items-center gap-2">
+      <span className="min-w-0 flex-1 truncate text-right text-xs text-zinc-500" title={path}>
+        {path || '尚未选择'}
+      </span>
+      <button
+        type="button"
+        className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50"
+        onClick={onPick}
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
+
 /** 常规：写入策略与默认努力程度。 */
 function FolderSettings({ projectId }: { projectId: string }) {
   const [root, setRoot] = useState('');
@@ -211,13 +237,15 @@ function FolderSettings({ projectId }: { projectId: string }) {
     };
   }, [projectId]);
 
-  async function saveRoot() {
+  async function chooseRoot() {
     setError('');
     setStatus('');
     try {
+      const picked = await pickWorkspaceDirectory();
+      if (!picked) return;
       const saved = await api<{ path: string }>('/world/folders/root', {
         method: 'PUT',
-        body: { path: root.trim() },
+        body: { path: picked },
       });
       setRoot(saved.path);
       setStatus('默认目录已保存');
@@ -226,11 +254,14 @@ function FolderSettings({ projectId }: { projectId: string }) {
     }
   }
 
-  async function saveWorldPath() {
+  async function chooseWorldPath() {
     setError('');
     setStatus('');
     try {
-      await openWorldFolderRequest(worldPath.trim(), { rebind_project_id: projectId });
+      const picked = await pickWorkspaceDirectory();
+      if (!picked) return;
+      await openWorldFolderRequest(picked, { rebind_project_id: projectId });
+      setWorldPath(picked);
       setStatus('当前世界的文件夹已更新');
     } catch (reason) {
       setError(errorMessage(reason));
@@ -243,42 +274,13 @@ function FolderSettings({ projectId }: { projectId: string }) {
         title="新建世界的默认目录"
         description="之后新建的世界会放在这个目录下的同名文件夹里，并写入 .zivith/workspace.json。"
       >
-        <div className="flex w-full max-w-xl gap-2">
-          <input
-            className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400"
-            value={root}
-            aria-label="新建世界的默认目录"
-            onChange={(event) => setRoot(event.target.value)}
-          />
-          <button
-            type="button"
-            className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50"
-            onClick={() => void saveRoot()}
-          >
-            保存
-          </button>
-        </div>
+        <FolderPick path={root} label="选择默认目录" onPick={() => void chooseRoot()} />
       </SettingRow>
       <SettingRow
         title="当前世界的文件夹"
-        description="改成另一个已有文件夹后保存。不会自动搬走里面的文件。"
+        description="选择另一个已有文件夹。不会自动搬走里面的文件。"
       >
-        <div className="flex w-full max-w-xl gap-2">
-          <input
-            className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400"
-            value={worldPath}
-            aria-label="当前世界的文件夹"
-            placeholder="尚未绑定文件夹"
-            onChange={(event) => setWorldPath(event.target.value)}
-          />
-          <button
-            type="button"
-            className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50"
-            onClick={() => void saveWorldPath()}
-          >
-            保存
-          </button>
-        </div>
+        <FolderPick path={worldPath} label="选择文件夹" onPick={() => void chooseWorldPath()} />
       </SettingRow>
       {status ? <p className="px-1 text-xs text-zinc-500">{status}</p> : null}
       {error ? (
@@ -483,7 +485,7 @@ function SettingRow({
         <p className="text-sm font-medium text-zinc-900">{title}</p>
         <p className="mt-0.5 text-sm text-zinc-500">{description}</p>
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="min-w-0 shrink">{children}</div>
     </div>
   );
 }
