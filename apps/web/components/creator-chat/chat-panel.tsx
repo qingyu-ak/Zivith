@@ -31,7 +31,11 @@ import { playableCharacters } from '@/lib/create-world-character';
 import { ThoughtSummary } from '@/components/creator-chat/thought-summary';
 import { ChatComposer } from '@/components/creator-chat/chat-composer';
 import { CreateCharacterForm } from '@/components/create-character-form';
-import { PENDING_CHAT_TURN_KEY, threadDisplayTitle } from '@/lib/chat-history';
+import {
+  openingChatTitle,
+  openingComposerPlaceholder,
+  PENDING_CHAT_TURN_KEY,
+} from '@/lib/chat-history';
 import {
   readStoredEffort,
   writeStoredEffort,
@@ -135,6 +139,7 @@ export function ChatPanel() {
   const [thread, setThread] = useState<CreatorChatThreadDTO | null>(null);
   const [messages, setMessages] = useState<CreatorChatMessageDTO[]>([]);
   const [threads, setThreads] = useState<CreatorChatThreadDTO[]>([]);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
   const [projects, setProjects] = useState<Pick<ProjectDTO, 'id' | 'name' | 'workspace_path'>[]>(
     [],
   );
@@ -225,30 +230,43 @@ export function ChatPanel() {
       .catch(() => setCatalog(null));
   }, []);
 
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
+
   const load = useCallback(async () => {
-    if (!threadId) {
+    const id = threadIdRef.current;
+    if (!id) {
       setThread(null);
       setMessages([]);
       setLoading(false);
       return;
     }
+    setLoading(true);
     try {
       const value = await api<{
         thread: CreatorChatThreadDTO;
         messages: CreatorChatMessageDTO[];
-      }>(`/world/creator-chats/${threadId}`);
+      }>(`/world/creator-chats/${id}`);
+      if (threadIdRef.current !== id) return;
       setThread(normalizeThread(value.thread));
       setMessages(Array.isArray(value.messages) ? value.messages : []);
+      setError('');
     } catch (reason) {
+      if (threadIdRef.current !== id) return;
       setThread(null);
       setMessages([]);
       setError(errorMessage(reason));
     } finally {
-      setLoading(false);
+      if (threadIdRef.current === id) setLoading(false);
     }
-  }, [threadId]);
+  }, []);
 
   const loadThreads = useCallback(() => {
+    let remaining = 2;
+    const markReady = () => {
+      remaining -= 1;
+      if (remaining <= 0) setWorkspaceReady(true);
+    };
     api<CreatorChatThreadDTO[] | { data?: CreatorChatThreadDTO[]; items?: CreatorChatThreadDTO[] }>(
       '/world/creator-chats',
     )
@@ -259,7 +277,8 @@ export function ChatPanel() {
             .filter((item): item is CreatorChatThreadDTO => Boolean(item)),
         ),
       )
-      .catch(() => setThreads([]));
+      .catch(() => setThreads([]))
+      .finally(markReady);
     api<unknown[] | { data?: unknown[]; items?: unknown[] }>('/projects')
       .then((value) => {
         setProjects(
@@ -277,12 +296,13 @@ export function ChatPanel() {
           }),
         );
       })
-      .catch(() => setProjects([]));
+      .catch(() => setProjects([]))
+      .finally(markReady);
   }, []);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, threadId]);
 
   useEffect(() => {
     loadThreads();
@@ -419,6 +439,7 @@ export function ChatPanel() {
     setRollbackNote('');
     setMemoryNote('');
     setError('');
+    setThread(null);
     setMessages([]);
     setLoading(Boolean(threadId));
   }, [threadId]);
@@ -1321,6 +1342,24 @@ export function ChatPanel() {
   const settingsProjectId =
     thread?.project_id ?? threads.find((item) => item.project_id)?.project_id ?? projects[0]?.id;
   const settingsHref = settingsHrefFor(settingsProjectId);
+  const listedThread = threads.find((item) => item.id === threadId) ?? null;
+  const loadFailed = Boolean(threadId && !thread && !loading && error);
+  const headerTitle = openingChatTitle({
+    threadId,
+    loading,
+    loadFailed,
+    thread,
+    listed: listedThread,
+  });
+  const openingPlaceholder = openingComposerPlaceholder({
+    threadId,
+    loading,
+    loadFailed,
+    thread,
+    listed: listedThread,
+    activeRoleplay: Boolean(activeRoleplay),
+  });
+  const openingThread = Boolean(openingPlaceholder);
   const empty = (!threadId || messages.length === 0) && !sending && !streamText && !loading;
   const worldBound = Boolean(threadId);
   const canSend = worldBound && input.trim().length > 0 && !busy;
@@ -1427,6 +1466,7 @@ export function ChatPanel() {
             projects={projects}
             threadId={threadId}
             busy={busy}
+            workspaceReady={workspaceReady}
             pickerOpen={folderPickerOpen}
             settingsHref={settingsHref}
             onToggle={toggleCollapsed}
@@ -1469,9 +1509,7 @@ export function ChatPanel() {
                       ? isGroup
                         ? `群聊 · ${groupNames.join('、')}`
                         : `与「${activeRoleplay.character_name}」对话`
-                      : thread
-                        ? threadDisplayTitle(thread)
-                        : '新世界对话'}
+                      : headerTitle}
                   </h1>
                   {thread?.project_id && playableAssets.length > 0 && (
                     <ChatChoiceMenu
@@ -2105,7 +2143,9 @@ export function ChatPanel() {
                 <ChatComposer
                   value={input}
                   placeholder={
-                    !threadId
+                    openingPlaceholder
+                      ? openingPlaceholder
+                      : !threadId
                       ? projects.length > 0
                         ? WEB_CHAT_NEEDS_WORLD
                         : WEB_CHAT_NEEDS_WORLD_EMPTY
@@ -2122,8 +2162,8 @@ export function ChatPanel() {
                               : '发给世界构建者…'
                   }
                   sending={sending}
-                  canSend={canSend}
-                  blocked={!threadId}
+                  canSend={canSend && !openingThread}
+                  blocked={!threadId || openingThread}
                   interruptLabel={activeRoleplay ? '插话' : '补充'}
                   projectId={thread?.project_id}
                   settingsProjectId={settingsProjectId}
