@@ -65,5 +65,5 @@ Chat / 扮演：每句对白一条侧面小横条；悬停拉长显示说话人�
 ## 下次怎么开始
 
 1. 读本页 + [task-s25-group-chat.md](task-s25-group-chat.md)。
-2. 积压 1–4 已入库。文件夹同一世界、Journey E 1:1、「还记得吗」不再出卡、D 边再进/删对话、再进不闪新世界、Journey F 关桌面再开 均已测过。**人工走查说明：** [human-walk-journey-de.md](human-walk-journey-de.md)。免 Docker 安装包不插队。
+2. 积压 1–4 已入库。文件夹同一世界、Journey E 1:1、「还记得吗」不再出卡、D 边再进/删对话、再进不闪新世界、Journey F 关桌面再开、已写入事件按 id 打开、桌面再开回到上次路径 均已测过。**人工走查说明：** [human-walk-journey-de.md](human-walk-journey-de.md)。免 Docker 安装包不插队。
 3. D 主路径已测过；E 与 D 边仍请所有者过一眼。

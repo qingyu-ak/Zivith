@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 export interface ZivithDesktop {
   openDirectory: (defaultPath?: string) => Promise<string | null>;
+  persistLocation?: (pathname: string) => Promise<void>;
 }
 
 declare global {
