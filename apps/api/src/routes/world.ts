@@ -30,8 +30,11 @@ import {
 import { isGroupChat, parseParticipantIds } from '../contexts/roleplay/group-chat.js';
 import { contentRestatesEvent } from '../contexts/roleplay/world-change-drafter.js';
 import {
+  allocateWorldFolder,
   archiveCreatorChat,
   createWorldInFolder,
+  readWorldsRoot,
+  writeWorldsRoot,
   createWorldWorkspace,
   inspectWorkspaceFolder,
   isWorkspaceSeed,
@@ -1413,6 +1416,18 @@ function registerCreatorChatRoutes(
         workspacePath: project.workspacePath,
       }),
     );
+  });
+
+  app.get('/folders/root', () => ({ path: readWorldsRoot() }));
+
+  app.put('/folders/root', (request) => {
+    const body = z.object({ path: z.string().trim().min(1) }).strict().parse(request.body ?? {});
+    return { path: writeWorldsRoot(body.path) };
+  });
+
+  app.post('/folders/allocate', (request) => {
+    const body = z.object({ name: z.string().trim().min(1).max(200) }).strict().parse(request.body ?? {});
+    return { path: allocateWorldFolder(body.name) };
   });
 
   app.post('/folders/open', async (request, reply) => {

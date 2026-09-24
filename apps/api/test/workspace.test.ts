@@ -8,6 +8,7 @@ import {
   archiveWorldWorkspace,
   archiveCreatorChat,
   createWorldInFolder,
+  allocateWorldFolder,
   initializeWorldFolder,
   inspectWorkspaceFolder,
   normalizeWorkspacePath,
@@ -33,6 +34,19 @@ function writeRawMarker(folder: string, payload: unknown): void {
     'utf8',
   );
 }
+
+describe('allocateWorldFolder', () => {
+  it('creates a same-name folder and skips one that is already a world', () => {
+    const root = makeTempFolder('zivith-root-');
+    const first = allocateWorldFolder('雾城', root);
+    expect(first).toBe(path.join(root, '雾城'));
+    expect(fs.statSync(first).isDirectory()).toBe(true);
+    initializeWorldFolder(first, { worldId: 'world-1', name: '雾城' });
+    const second = allocateWorldFolder('雾城', root);
+    expect(second).toBe(path.join(root, '雾城 2'));
+    expect(fs.existsSync(path.join(second, WORKSPACE_MARKER_DIR))).toBe(false);
+  });
+});
 
 describe('archiveWorldWorkspace', () => {
   it('soft-deletes the project and archives its chat threads', async () => {

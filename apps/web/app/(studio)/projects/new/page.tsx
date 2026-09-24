@@ -192,7 +192,7 @@ export default function NewWorldPage() {
                   <Input
                     value={worldFolder}
                     readOnly
-                    placeholder="不选择则创建无文件夹的世界"
+                    placeholder="不选则自动放到桌面 Zivith 下的同名文件夹"
                     className="flex-1"
                     disabled={creating}
                   />
@@ -217,6 +217,9 @@ export default function NewWorldPage() {
                 </div>
               </Field>
             ) : null}
+            <p className="text-xs leading-5 text-zinc-500">
+              创建后会在默认目录下自动建同名文件夹，并写入 .zivith/workspace.json。默认目录和当前世界的路径可在设置 → 常规里改。
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={creating}>
                 {creating ? '正在创建…' : '创建世界'}

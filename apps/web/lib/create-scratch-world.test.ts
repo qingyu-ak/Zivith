@@ -23,19 +23,19 @@ describe('createScratchWorld', () => {
     expect(apiMock).not.toHaveBeenCalled();
   });
 
-  it('creates a project then a World Builder thread', async () => {
+  it('allocates a folder then creates the world there', async () => {
     apiMock
-      .mockResolvedValueOnce({ id: 'p1', name: '雾城' })
+      .mockResolvedValueOnce({ path: 'C:\\Users\\AK\\Desktop\\Zivith\\雾城' })
       .mockResolvedValueOnce({ id: 't1', project_id: 'p1' });
     const thread = await createScratchWorld({ name: '雾城', description: '港口' });
     expect(thread).toMatchObject({ id: 't1', project_id: 'p1' });
-    expect(apiMock).toHaveBeenNthCalledWith(1, '/projects', {
+    expect(apiMock).toHaveBeenNthCalledWith(1, '/world/folders/allocate', {
       method: 'POST',
-      body: { name: '雾城', description: '港口' },
+      body: { name: '雾城' },
     });
-    expect(apiMock).toHaveBeenNthCalledWith(2, '/world/creator-chats', {
+    expect(apiMock).toHaveBeenNthCalledWith(2, '/world/folders/create', {
       method: 'POST',
-      body: { project_id: 'p1' },
+      body: { path: 'C:\\Users\\AK\\Desktop\\Zivith\\雾城', name: '雾城', description: '港口' },
     });
   });
 
