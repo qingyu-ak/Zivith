@@ -1,5 +1,5 @@
 import { api } from './api';
-import { copyWorldCharacter, createWorldCharacter } from './create-world-character';
+import { copyWorldCharacter, createWorldCharacter, importWorldCharacter } from './create-world-character';
 import type { WorldResourcesDTO, WorldSelection } from './types';
 import { nextUntitledName, resolveCreateName } from './unique-name';
 import { resolveDisplayDimensions } from './world-line';
@@ -21,6 +21,7 @@ export interface StudioCreateExtras {
   name?: string;
   description?: string;
   copyFromId?: string;
+  importFrom?: { sourceProjectId: string; sourceCharacterId: string };
 }
 
 function createdId(value: unknown, fallbackMessage: string): string {
@@ -39,6 +40,15 @@ export async function createStudioEntity(
 ): Promise<Exclude<WorldSelection, null>> {
   switch (kind) {
     case 'character': {
+      if (extras?.importFrom) {
+        const created = await importWorldCharacter({
+          targetProjectId: projectId,
+          sourceProjectId: extras.importFrom.sourceProjectId,
+          sourceCharacterId: extras.importFrom.sourceCharacterId,
+          existingNames: resources.entities.characters.map((item) => item.name),
+        });
+        return { kind: 'character', id: created.id };
+      }
       if (extras?.copyFromId) {
         const source = resources.entities.characters.find((item) => item.id === extras.copyFromId);
         if (!source) throw new Error('要复制的角色不存在');

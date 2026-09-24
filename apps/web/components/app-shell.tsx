@@ -185,8 +185,8 @@ function ExplorerTree({ projectId, pathname }: { projectId: string; pathname: st
   async function handleCreate(
     kind: StudioCreateKind,
     extras?: Parameters<typeof createStudioEntity>[3],
-  ) {
-    if (!resources || creatingKind) return;
+  ): Promise<boolean> {
+    if (!resources || creatingKind) return false;
     setCreatingKind(kind);
     setCreateError('');
     try {
@@ -198,8 +198,10 @@ function ExplorerTree({ projectId, pathname }: { projectId: string; pathname: st
       if (!pathname.startsWith(worldPath)) {
         router.push(studioHrefForEntity(projectId, next));
       }
+      return true;
     } catch (reason) {
       setCreateError(errorMessage(reason));
+      return false;
     } finally {
       setCreatingKind(null);
     }

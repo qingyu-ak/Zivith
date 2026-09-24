@@ -16,7 +16,8 @@ import { createRoleplayThread } from '@/lib/api';
 import { isPlayableCharacter } from '@/lib/create-world-character';
 import { DIMENSION_KIND_LABEL, resolveDisplayDimensions, worldTimeCaption } from '@/lib/world-line';
 import { useState, type ReactNode } from 'react';
-import type { RelationshipCreateInput, StudioCreateKind } from '@/lib/studio-entity-create';
+import type { RelationshipCreateInput, StudioCreateExtras, StudioCreateKind } from '@/lib/studio-entity-create';
+import { ImportCharacterDialog } from './import-character-dialog';
 import {
   namedRefLabel,
   parseRefKey,
@@ -47,6 +48,7 @@ function TreeFolder({
   count,
   defaultOpen,
   onCreate,
+  extraAction,
   creating,
   createLabel,
   namePlaceholder,
@@ -59,6 +61,7 @@ function TreeFolder({
   count: number;
   defaultOpen: boolean;
   onCreate?: (name?: string, description?: string) => void;
+  extraAction?: { label: string; onClick: () => void; disabled?: boolean };
   creating?: boolean;
   createLabel?: string;
   namePlaceholder?: string;
@@ -98,6 +101,19 @@ function TreeFolder({
           <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
           <span className="tabular-nums text-zinc-400">{count}</span>
         </button>
+        {extraAction ? (
+          <button
+            type="button"
+            disabled={extraAction.disabled || creating}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:opacity-50"
+            onClick={(event) => {
+              event.stopPropagation();
+              extraAction.onClick();
+            }}
+          >
+            {extraAction.label}
+          </button>
+        ) : null}
         {onCreate ? (
           <button
             type="button"
@@ -276,10 +292,7 @@ export function EntityExplorer({
   onSelect: (selection: Exclude<WorldSelection, null>) => void;
   threads?: CreatorChatThreadDTO[];
   onNewChat?: () => void;
-  onCreate?: (
-    kind: StudioCreateKind,
-    extras?: { relationship?: RelationshipCreateInput; name?: string },
-  ) => void | Promise<void>;
+  onCreate?: (kind: StudioCreateKind, extras?: StudioCreateExtras) => void | Promise<void | boolean>;
   creatingKind?: StudioCreateKind | null;
   createError?: string;
 }) {
@@ -287,6 +300,7 @@ export function EntityExplorer({
   const { stories, characters, locations, scenes, world_events, relationships } =
     resources.entities;
   const [relationshipOpen, setRelationshipOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const characterItems: FileItem[] = characters.map((item: AssetDTO) => ({
     id: item.id,
@@ -388,6 +402,15 @@ export function EntityExplorer({
           label="角色"
           count={characterItems.length}
           defaultOpen
+          extraAction={
+            onCreate
+              ? {
+                  label: '从其他世界导入',
+                  disabled: creatingKind === 'character',
+                  onClick: () => setImportOpen(true),
+                }
+              : undefined
+          }
           onCreate={
             onCreate
               ? (name, description) =>
@@ -597,6 +620,20 @@ export function EntityExplorer({
           ))}
         </TreeFolder>
       </div>
+      {importOpen && onCreate ? (
+        <ImportCharacterDialog
+          currentProjectId={resources.project.id}
+          busy={creatingKind === 'character'}
+          onCancel={() => setImportOpen(false)}
+          onConfirm={(sourceProjectId, sourceCharacterId) => {
+            void Promise.resolve(
+              onCreate('character', { importFrom: { sourceProjectId, sourceCharacterId } }),
+            ).then((ok) => {
+              if (ok !== false) setImportOpen(false);
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
