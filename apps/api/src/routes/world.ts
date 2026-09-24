@@ -417,6 +417,13 @@ function registerWorldEventRoutes(app: FastifyInstance, db: PrismaClient) {
     });
   });
 
+  app.get('/world-events/:id', async (request) => {
+    const { id } = entityParams.parse(request.params);
+    const existing = await db.worldEvent.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) throw new ApiError(404, 'WORLD_EVENT_NOT_FOUND', '世界事件不存在');
+    return existing;
+  });
+
   app.post('/projects/:projectId/world-events', async (request, reply) => {
     const { projectId } = projectParams.parse(request.params);
     await requireProject(db, projectId);
