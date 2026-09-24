@@ -753,7 +753,7 @@ export function InspectorPanel({
                 label="在对话中继续"
                 className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50"
               />
-              {selection.kind === 'world_event' ? (
+              {selection.kind === 'world_event' || selection.kind === 'relationship' ? (
                 <button
                   type="button"
                   disabled={saving}
@@ -761,17 +761,25 @@ export function InspectorPanel({
                     const event = resources.entities.world_events.find(
                       (item) => item.id === selection.id,
                     );
-                    const title = event?.title?.trim() || '这条事件';
-                    if (
-                      !window.confirm(
-                        `删除事件「${title}」？它会从时间线和相关角色的亲历里消失。`,
-                      )
-                    ) {
-                      return;
-                    }
+                    const relation = resources.entities.relationships.find(
+                      (item) => item.id === selection.id,
+                    );
+                    const title =
+                      selection.kind === 'world_event'
+                        ? event?.title?.trim() || '这条事件'
+                        : relation?.label?.trim() || relation?.kind || '这条关系';
+                    const message =
+                      selection.kind === 'world_event'
+                        ? `删除事件「${title}」？它会从时间线和相关角色的亲历里消失。`
+                        : `删除关系「${title}」？角色卡上的认识谁会一起去掉。`;
+                    if (!window.confirm(message)) return;
+                    const path =
+                      selection.kind === 'world_event'
+                        ? `/world/world-events/${selection.id}`
+                        : `/world/relationships/${selection.id}`;
                     setSaving(true);
                     setEditError('');
-                    void api(`/world/world-events/${selection.id}`, { method: 'DELETE' })
+                    void api(path, { method: 'DELETE' })
                       .then(() => {
                         onSelect?.({ kind: 'project', id: resources.project.id });
                         onUpdated?.();
