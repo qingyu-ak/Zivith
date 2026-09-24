@@ -37,6 +37,7 @@ import { ContinueInChatButton } from './continue-in-chat';
 import { EntityStages } from './entity-stages';
 import { conflictsForSelection } from '@/lib/world-conflicts';
 import { createStudioEntity, type StudioCreateKind } from '@/lib/studio-entity-create';
+import { studioDeleteTarget } from '@/lib/studio-entity-delete';
 import { CreateCharacterForm } from '@/components/create-character-form';
 import { playableCharacters } from '@/lib/create-world-character';
 import {
@@ -753,44 +754,17 @@ export function InspectorPanel({
                 label="在对话中继续"
                 className="rounded-md border border-line px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50"
               />
-              {selection.kind === 'world_event' ||
-              selection.kind === 'relationship' ||
-              selection.kind === 'location' ? (
+              {studioDeleteTarget(selection, resources) ? (
                 <button
                   type="button"
                   disabled={saving}
                   onClick={() => {
-                    const event = resources.entities.world_events.find(
-                      (item) => item.id === selection.id,
-                    );
-                    const relation = resources.entities.relationships.find(
-                      (item) => item.id === selection.id,
-                    );
-                    const location = resources.entities.locations.find(
-                      (item) => item.id === selection.id,
-                    );
-                    const title =
-                      selection.kind === 'world_event'
-                        ? event?.title?.trim() || '这条事件'
-                        : selection.kind === 'location'
-                          ? location?.name?.trim() || '这个地点'
-                          : relation?.label?.trim() || relation?.kind || '这条关系';
-                    const message =
-                      selection.kind === 'world_event'
-                        ? `删除事件「${title}」？它会从时间线和相关角色的亲历里消失。`
-                        : selection.kind === 'location'
-                          ? `删除地点「${title}」？它会从世界里去掉。`
-                          : `删除关系「${title}」？角色卡上的认识谁会一起去掉。`;
-                    if (!window.confirm(message)) return;
-                    const path =
-                      selection.kind === 'world_event'
-                        ? `/world/world-events/${selection.id}`
-                        : selection.kind === 'location'
-                          ? `/assets/${selection.id}`
-                          : `/world/relationships/${selection.id}`;
+                    const target = studioDeleteTarget(selection, resources);
+                    if (!target) return;
+                    if (!window.confirm(target.confirm)) return;
                     setSaving(true);
                     setEditError('');
-                    void api(path, { method: 'DELETE' })
+                    void api(target.path, { method: 'DELETE' })
                       .then(() => {
                         onSelect?.({ kind: 'project', id: resources.project.id });
                         onUpdated?.();
