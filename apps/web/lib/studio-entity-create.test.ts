@@ -3,12 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStudioEntity, nextUntitledName, resolveCreateName } from './studio-entity-create';
 import type { WorldResourcesDTO } from './types';
 
-const { createWorldCharacterMock } = vi.hoisted(() => ({
-  createWorldCharacterMock: vi.fn(),
-}));
+const { createWorldCharacterMock, copyWorldCharacterMock, importWorldCharacterMock } = vi.hoisted(
+  () => ({
+    createWorldCharacterMock: vi.fn(),
+    copyWorldCharacterMock: vi.fn(),
+    importWorldCharacterMock: vi.fn(),
+  }),
+);
 
 vi.mock('./create-world-character', () => ({
   createWorldCharacter: createWorldCharacterMock,
+  copyWorldCharacter: copyWorldCharacterMock,
+  importWorldCharacter: importWorldCharacterMock,
 }));
 
 vi.mock('./api', () => ({
@@ -17,6 +23,8 @@ vi.mock('./api', () => ({
 
 beforeEach(() => {
   createWorldCharacterMock.mockReset();
+  copyWorldCharacterMock.mockReset();
+  importWorldCharacterMock.mockReset();
 });
 
 function emptyResources(): WorldResourcesDTO {
@@ -74,6 +82,23 @@ describe('createStudioEntity character', () => {
     expect(createWorldCharacterMock).toHaveBeenCalledWith({
       projectId: 'p1',
       name: '林夕',
+      description: undefined,
+      existingNames: [],
+    });
+  });
+
+  it('imports from another world instead of creating blank', async () => {
+    importWorldCharacterMock.mockResolvedValue({ id: 'c-import', name: '林晚' });
+    await expect(
+      createStudioEntity('p1', emptyResources(), 'character', {
+        importFrom: { sourceProjectId: 'fog', sourceCharacterId: 'c-lin' },
+      }),
+    ).resolves.toEqual({ kind: 'character', id: 'c-import' });
+    expect(createWorldCharacterMock).not.toHaveBeenCalled();
+    expect(importWorldCharacterMock).toHaveBeenCalledWith({
+      targetProjectId: 'p1',
+      sourceProjectId: 'fog',
+      sourceCharacterId: 'c-lin',
       existingNames: [],
     });
   });
