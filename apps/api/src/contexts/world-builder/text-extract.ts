@@ -115,6 +115,7 @@ export function isQuestionOrSmallTalk(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.length < 6) return true;
   if (/[?？]\s*$/.test(trimmed)) return true;
+  if (/还记得|记不记得|认不认|当时说了什么/.test(trimmed)) return true;
   if (/^(什么|为什么|怎么|如何|是谁|在哪|哪里|吗|呢)/.test(trimmed)) return true;
   if (/(什么|为什么|怎么|如何|是谁|在哪|哪里|吗|呢|么)\s*[?？。!！]?\s*$/.test(trimmed))
     return true;

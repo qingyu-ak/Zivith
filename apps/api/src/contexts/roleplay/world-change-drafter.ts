@@ -105,17 +105,27 @@ function titleForCompare(title: string): string {
   return title.replace(/（[^）]*）|\([^)]*\)/g, '');
 }
 
+function characterNameKeys(character: {
+  name: string;
+  aliases?: string[];
+}): string[] {
+  return [character.name, ...(character.aliases ?? [])]
+    .map((name) => name.trim())
+    .filter((name) => name.length >= 2);
+}
+
+/** 文本里点到的角色（含别名），用 id 去重，避免「诺诺 / 陈墨淳」对不上。 */
 function namedCast(text: string, world: WorldContext): string[] {
   return world.characters
-    .map((character) => character.name.trim())
-    .filter((name) => name.length >= 2 && text.includes(name));
+    .filter((character) => characterNameKeys(character).some((name) => text.includes(name)))
+    .map((character) => character.id);
 }
 
 function sameCast(left: string, right: string, world: WorldContext): boolean {
   const a = namedCast(left, world);
   const b = namedCast(right, world);
   if (a.length < 2 || b.length < 2 || a.length !== b.length) return false;
-  return a.every((name) => b.includes(name));
+  return a.every((id) => b.includes(id));
 }
 
 /** 标题跟时间线上已有事件说的是同一件事。换说法（递交信件 / 递信并喝热茶）也算。 */
