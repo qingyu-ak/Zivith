@@ -6,8 +6,10 @@ import {
   contentRestatesEvent,
   eventAlreadyRecorded,
   sanitizeLlmChanges,
+  userAssertsEvent,
   type RoleplayDraftInput,
 } from '../src/contexts/roleplay/world-change-drafter.js';
+import { isQuestionOrSmallTalk } from '../src/contexts/world-builder/text-extract.js';
 import { assembleWorldContext } from '../src/contexts/world-builder/world-context.js';
 import { mockWorldBuilderResponse } from '../src/contexts/world-builder/world-builder-agent.js';
 import { resolveAgentEffort } from '../src/contexts/agent-effort.js';
@@ -172,10 +174,39 @@ describe('draftWorldChangesByRule', () => {
     expect(contentRestatesEvent('雾大。钟声听不太清。', event, names)).toBe(false);
   });
 
+  it('treats a rephrased terrace confession as the same event even if one name is an alias', () => {
+    const longzu = assembleWorldContext({
+      projectId: 'p-longzu',
+      projectName: '龙族',
+      worldview: {},
+      stories: [],
+      characters: [
+        { id: 'c-lmf', name: '路明非', description: null, tags: [] },
+        { id: 'c-nuonuo', name: '陈墨淳', description: null, aliases: ['诺诺'], tags: [] },
+      ],
+      locations: [],
+      scenes: [],
+      worldEvents: [
+        {
+          id: 'e-terrace',
+          title: '路明非在天台向诺诺坦白见过龙王',
+          description: '后半夜，路明非在卡塞尔学院天台当面告诉诺诺自己见过龙王。',
+          order: 1,
+        },
+      ],
+      relationships: [],
+    });
+    expect(eventAlreadyRecorded('路明非在天台对诺诺说“你见过龙王”', longzu)).toBe(true);
+  });
+
   it('does not propose anything for small talk or questions', () => {
     expect(draftWorldChangesByRule(input('你好呀'))).toEqual([]);
     expect(draftWorldChangesByRule(input('你今天心情怎么样？'))).toEqual([]);
     expect(draftWorldChangesByRule(input('陈默到底是谁'))).toEqual([]);
+    const remember = '你还记得后半夜在天台对诺诺说的事吗？你当时说了什么？';
+    expect(isQuestionOrSmallTalk(remember)).toBe(true);
+    expect(userAssertsEvent(remember)).toBe(false);
+    expect(draftWorldChangesByRule(input(remember))).toEqual([]);
   });
 
   it('never produces a relationship when the only mentioned character is the speaker', () => {
@@ -326,6 +357,40 @@ describe('draftRoleplayWorldChanges', () => {
       completeStructured,
     };
     const result = await draftRoleplayWorldChanges(chatty, 'x', input('今天雾很大，随便聊聊'));
+    expect(result.proposals).toEqual([]);
+  });
+
+  it('drops an LLM event when the user only asked if the character remembers', async () => {
+    const completeStructured = async <T>(
+      request: CompletionRequest,
+      schema: ZodType<T>,
+    ): Promise<StructuredCompletionResult<T>> => ({
+      data: schema.parse({
+        changes: [
+          {
+            kind: 'create_world_event',
+            title: '路明非在天台对诺诺说“你见过龙王”',
+            character_ids: ['c-ailin'],
+          },
+        ],
+      }),
+      text: '{}',
+      model: request.model,
+      input_tokens: 0,
+      output_tokens: 0,
+      metadata: {},
+    });
+    const probing: LLMAdapter = {
+      provider: 'deepseek',
+      supportedModels: [],
+      complete: vi.fn(),
+      completeStructured,
+    };
+    const result = await draftRoleplayWorldChanges(
+      probing,
+      'x',
+      input('你还记得后半夜在天台对诺诺说的事吗？你当时说了什么？'),
+    );
     expect(result.proposals).toEqual([]);
   });
 
