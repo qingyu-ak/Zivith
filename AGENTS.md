@@ -8,6 +8,8 @@ Zivith 有两部宪章。先读产品宪法，再碰代码。
    [`docs/architecture/architecture-principles.md`](docs/architecture/architecture-principles.md)
 3. 实现约定  
    [`docs/engineering/Code-Agent-Design-Guide.md`](docs/engineering/Code-Agent-Design-Guide.md)
+4. Git 分支  
+   [`docs/engineering/Git-Branching.md`](docs/engineering/Git-Branching.md)：`main` 发版，`develop` 集成，功能与缺陷各自开分支。
 
 写代码前必须填写产品宪法 §25 模板，并经确认。不要从功能清单开工。总任务书未再次启用前不要按其 P0 顺序插队。
 
