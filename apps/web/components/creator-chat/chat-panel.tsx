@@ -694,7 +694,8 @@ export function ChatPanel() {
       if (abortRef.current === controller) abortRef.current = null;
       sendingRef.current = false;
       setSending(false);
-      if (!sawDone) void load();
+      // 暂停思考：不要把服务端刚写上、客户端已丢掉的那句再拉回来。
+      if (!sawDone && !aborted) void load();
       return { ok: sawDone && !aborted, aborted, speakerAssetId, pendingProposal };
     },
     [threadId, autoApplyIfAllowed, load],

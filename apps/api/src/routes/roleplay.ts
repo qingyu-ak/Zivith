@@ -902,16 +902,21 @@ async function pipeRoleplaySse(
     reply.raw.write(formatSseEvent(event, data));
     flushHttpStream(reply.raw);
   };
+  // POST 体读完后 request 的 close 往往已经响过，收不到「暂停思考」拆掉的连接。
+  // 以响应流关闭为准：客户端断开时不再落库。
+  const markClientGone = () => {
+    closed = true;
+  };
+  reply.raw.on('close', markClientGone);
   const cleanup = () => {
     closed = true;
-    request.raw.off('close', cleanup);
+    reply.raw.off('close', markClientGone);
     try {
       reply.raw.end();
     } catch {
       // stream already closed
     }
   };
-  request.raw.on('close', cleanup);
 
   const speakerName = turn.namesById[turn.speakerAssetId] ?? null;
   const userName = roleplay.userCharacterAssetId
