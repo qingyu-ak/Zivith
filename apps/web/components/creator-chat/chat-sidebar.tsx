@@ -9,6 +9,7 @@ import {
   partitionThreadsByKind,
   threadDisplayTitle,
   threadKind,
+  workspaceListHint,
 } from '@/lib/chat-history';
 import { isDesktopApp, WEB_FOLDER_HINT } from '@/lib/desktop';
 import type { CreatorChatKind, CreatorChatThreadDTO, ProjectDTO } from '@/lib/types';
@@ -33,6 +34,7 @@ export function ChatSidebar({
   projects,
   threadId,
   busy,
+  workspaceReady = true,
   pickerOpen,
   settingsHref = '/creator-chats',
   onPickerOpenChange,
@@ -50,6 +52,7 @@ export function ChatSidebar({
   projects: Pick<ProjectDTO, 'id' | 'name' | 'workspace_path'>[];
   threadId?: string;
   busy: boolean;
+  workspaceReady?: boolean;
   pickerOpen: boolean;
   settingsHref?: string;
   onToggle: () => void;
@@ -143,14 +146,14 @@ export function ChatSidebar({
         <TabButton
           id="world"
           label="世界"
-          count={partitionThreadsByKind(threads).world.length}
+          count={workspaceReady ? partitionThreadsByKind(threads).world.length : null}
           active={tab === 'world'}
           onSelect={setTab}
         />
         <TabButton
           id="roleplay"
           label="角色"
-          count={partitionThreadsByKind(threads).roleplay.length}
+          count={workspaceReady ? partitionThreadsByKind(threads).roleplay.length : null}
           active={tab === 'roleplay'}
           onSelect={setTab}
         />
@@ -202,11 +205,7 @@ export function ChatSidebar({
         ) : null}
         {groups.length === 0 ? (
           <p className="px-3 py-4 text-xs leading-5 text-zinc-400">
-            {query.trim()
-              ? '没有匹配的项目或对话'
-              : desktop
-                ? '点「新建世界」从零开始，或点项目旁的加号打开已有文件夹。'
-                : '点「新建世界」从零开始。打开已有文件夹需要桌面应用。'}
+            {workspaceListHint({ ready: workspaceReady, query, desktop })}
           </p>
         ) : (
           <ul className="grid gap-1">
@@ -475,7 +474,7 @@ function TabButton({
 }: {
   id: CreatorChatKind;
   label: string;
-  count: number;
+  count: number | null;
   active: boolean;
   onSelect: (id: CreatorChatKind) => void;
 }) {
@@ -491,7 +490,7 @@ function TabButton({
     >
       {label}
       <span className={`ml-1 tabular-nums ${active ? 'text-zinc-500' : 'text-zinc-400'}`}>
-        {count}
+        {count === null ? '…' : count}
       </span>
     </button>
   );
