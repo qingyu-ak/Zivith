@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
+import { entityStagesLoadView } from '@/lib/entity-stages-load';
 import { boundEventTitle, stageCaption, stageExcerpt } from '@/lib/entity-revisions';
 import type {
   EntityRevisionDTO,
@@ -26,6 +27,12 @@ export function EntityStages({
   const [revisions, setRevisions] = useState<EntityRevisionDTO[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [reloadToken, setReloadToken] = useState(0);
+  const loadView = entityStagesLoadView({
+    loading,
+    error,
+    revisionCount: revisions.length,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +45,7 @@ export function EntityStages({
         if (!cancelled) setRevisions(value.revisions ?? []);
       })
       .catch((reason) => {
-        if (!cancelled) setError(errorMessage(reason));
+        if (!cancelled) setError(errorMessage(reason) || '无法加载阶段状态');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -46,9 +53,9 @@ export function EntityStages({
     return () => {
       cancelled = true;
     };
-  }, [projectId, entityType, entityId]);
+  }, [projectId, entityType, entityId, reloadToken]);
 
-  if (loading && revisions.length === 0) {
+  if (loadView === 'loading') {
     return (
       <div className="border-t border-line px-4 py-3">
         <p className="text-xs font-semibold tracking-wider text-zinc-500">阶段状态</p>
@@ -56,15 +63,25 @@ export function EntityStages({
       </div>
     );
   }
-  if (error) {
+  if (loadView === 'error') {
     return (
-      <div className="border-t border-line px-4 py-3">
+      <div className="border-t border-line px-4 py-3 space-y-2">
         <p className="text-xs font-semibold tracking-wider text-zinc-500">阶段状态</p>
-        <p className="mt-1 text-xs text-red-600">{error}</p>
+        <p className="text-xs text-red-600" role="alert">
+          {error || '无法加载阶段状态'}
+        </p>
+        <button
+          type="button"
+          disabled={loading}
+          className="rounded-md border border-line px-2 py-1 text-xs text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+          onClick={() => setReloadToken((current) => current + 1)}
+        >
+          {loading ? '正在加载…' : '重试'}
+        </button>
       </div>
     );
   }
-  if (revisions.length === 0) return null;
+  if (loadView === 'empty') return null;
 
   return (
     <div className="border-t border-line px-4 py-3">
