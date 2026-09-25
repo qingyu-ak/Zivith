@@ -38,6 +38,7 @@ import {
   PENDING_CHAT_TURN_KEY,
   roleplayPickerView,
 } from '@/lib/chat-history';
+import { chatWorldResourcesView } from '@/lib/chat-world-resources';
 import {
   readStoredEffort,
   writeStoredEffort,
@@ -167,6 +168,8 @@ export function ChatPanel() {
     [],
   );
   const [worldResources, setWorldResources] = useState<WorldResourcesDTO | null>(null);
+  const [worldContextError, setWorldContextError] = useState('');
+  const [worldContextReload, setWorldContextReload] = useState(0);
   const [characterAssets, setCharacterAssets] = useState<AssetDTO[]>([]);
   const [worldEvents, setWorldEvents] = useState<WorldEventDTO[]>([]);
   const [catalog, setCatalog] = useState<ProviderCatalogDTO | null>(null);
@@ -362,32 +365,32 @@ export function ChatPanel() {
       setCharacterAssets([]);
       setWorldEvents([]);
       setWorldResources(null);
+      setWorldContextError('');
       return;
     }
     let cancelled = false;
     void (async () => {
+      const roleplay = await listRoleplayThreads(projectId).catch(() => []);
+      if (cancelled) return;
+      setRoleplayThreads(roleplay);
       try {
-        const [roleplay, resources] = await Promise.all([
-          listRoleplayThreads(projectId),
-          api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`),
-        ]);
+        const resources = await api<WorldResourcesDTO>(`/world/projects/${projectId}/resources`);
         if (cancelled) return;
-        setRoleplayThreads(roleplay);
         hydrateWorldResources(resources);
-      } catch {
-        if (!cancelled) {
-          setRoleplayThreads([]);
-          setCharacters([]);
-          setCharacterAssets([]);
-          setWorldEvents([]);
-          setWorldResources(null);
-        }
+        setWorldContextError('');
+      } catch (reason: unknown) {
+        if (cancelled) return;
+        setWorldResources(null);
+        setCharacterAssets([]);
+        setWorldEvents([]);
+        setCharacters([]);
+        setWorldContextError(errorMessage(reason) || '无法加载这个世界的角色与记忆');
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [hydrateWorldResources, thread?.project_id]);
+  }, [hydrateWorldResources, thread?.project_id, worldContextReload]);
 
   useEffect(() => {
     const pickerId = roleplayPicker ?? groupPicker;
@@ -1431,6 +1434,10 @@ export function ChatPanel() {
     error: pickerLoadError,
     playableCount: playableCharacters(pickerAssets).length,
   });
+  const worldResourcesView = chatWorldResourcesView({
+    error: worldContextError,
+    hasResources: Boolean(worldResources),
+  });
   const playingCharacter = activeRoleplay
     ? assetById.get(activeRoleplay.character_asset_id)
     : undefined;
@@ -1664,7 +1671,15 @@ export function ChatPanel() {
                     name={activeRoleplay.character_name}
                     preview={characterCardPreview(playingCharacter)}
                     extra={
-                      worldResources ? (
+                      worldResourcesView === 'error' ? (
+                        <button
+                          type="button"
+                          className="shrink-0 text-red-600 hover:underline"
+                          onClick={() => setWorldContextReload((current) => current + 1)}
+                        >
+                          重试加载记忆
+                        </button>
+                      ) : worldResources ? (
                         <button
                           type="button"
                           className="shrink-0 text-[#4d6bfe] hover:underline"
@@ -1739,7 +1754,20 @@ export function ChatPanel() {
                       ) : null}
                     </div>
                   )}
-                  {activeRoleplay && thread?.project_id && worldResources ? (
+                  {activeRoleplay && thread?.project_id && worldResourcesView === 'error' ? (
+                    <div className="mx-auto w-full max-w-2xl space-y-2 text-center">
+                      <p className="text-xs text-red-600" role="alert">
+                        {worldContextError || '无法加载这个世界的角色与记忆'}
+                      </p>
+                      <button
+                        type="button"
+                        className="rounded-md border border-line px-2 py-1 text-xs text-zinc-700 transition hover:bg-zinc-100"
+                        onClick={() => setWorldContextReload((current) => current + 1)}
+                      >
+                        重试
+                      </button>
+                    </div>
+                  ) : activeRoleplay && thread?.project_id && worldResources ? (
                     <div className="mx-auto w-full max-w-2xl">
                       <div className="flex justify-center">
                         <button
