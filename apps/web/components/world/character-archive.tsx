@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, errorMessage } from '@/lib/api';
 import type { WorldEventDTO, WorldResourcesDTO, WorldSelection } from '@/lib/types';
+import { characterArchiveLoadView } from '@/lib/character-archive-load';
 import {
   characterIdsWithout,
   compactMemoryLine,
@@ -71,6 +72,7 @@ export function CharacterArchive({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   // 'new' 表示正在新建（尚无 atom id）。
@@ -90,6 +92,7 @@ export function CharacterArchive({
   const experiences = eventsExperiencedBy(resources, characterId, asOfPresentationOrder);
   const relations = relationshipsForCharacter(resources, characterId);
   const sparseArchive = Boolean(core && isSparseImportArchive(core.content));
+  const loadView = characterArchiveLoadView({ loading, loadError });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,9 +110,10 @@ export function CharacterArchive({
       setCore(matched);
       setDraft(matched?.content ?? '');
       setAtoms(Array.isArray(atomsPage.items) ? atomsPage.items : []);
+      setLoadError('');
       setError('');
     } catch (reason) {
-      setError(errorMessage(reason));
+      setLoadError(errorMessage(reason) || '无法加载这个角色记得的事');
     } finally {
       setLoading(false);
     }
@@ -288,7 +292,26 @@ export function CharacterArchive({
           亲历 {experiences.length} · 认识谁 {relations.length} · 重要聊天 {atoms.length}
         </p>
       )}
-      {error ? (
+      {loadView === 'error' ? (
+        <div className="mt-2 space-y-2">
+          <p
+            className="break-words rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs leading-5 text-red-700"
+            role="alert"
+          >
+            {loadError || '无法加载这个角色记得的事'}
+          </p>
+          <button
+            type="button"
+            disabled={loading}
+            className="rounded-md border border-line px-2 py-1 text-xs text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+            onClick={() => {
+              void load();
+            }}
+          >
+            {loading ? '正在加载…' : '重试'}
+          </button>
+        </div>
+      ) : error ? (
         <p
           className="mt-2 break-words rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs leading-5 text-red-700"
           role="alert"
@@ -442,7 +465,7 @@ export function CharacterArchive({
             empty={null}
             defaultOpen
           >
-            {!loading && atoms.length === 0 && editingAtomId !== 'new' ? (
+            {loadView === 'ready' && atoms.length === 0 && editingAtomId !== 'new' ? (
               <li className="px-3 py-2.5 text-[11px] leading-5 text-zinc-400">
                 还没有精简过的重要聊天。全文在这次对话记录里；聊到重要的事会出现在这里。
               </li>
@@ -486,7 +509,7 @@ export function CharacterArchive({
                 )}
               </li>
             ))}
-            {editingAtomId === 'new' ? (
+            {loadView === 'ready' && editingAtomId === 'new' ? (
               <li className="px-3 py-2.5">
                 <AtomDraft
                   factType={atomFactType}
@@ -502,7 +525,7 @@ export function CharacterArchive({
                   }}
                 />
               </li>
-            ) : (
+            ) : loadView === 'ready' ? (
               <li className="px-3 py-2">
                 <button
                   type="button"
@@ -517,7 +540,7 @@ export function CharacterArchive({
                   添加事实
                 </button>
               </li>
-            )}
+            ) : null}
           </MemoryGroup>
 
           <div className="mt-4 min-w-0">
@@ -529,7 +552,7 @@ export function CharacterArchive({
                   onToggle={() => setCoreOpen((value) => !value)}
                 />
               </div>
-              {coreOpen && !editing ? (
+              {coreOpen && !editing && loadView === 'ready' ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -544,9 +567,9 @@ export function CharacterArchive({
               ) : null}
             </div>
             {coreOpen ? (
-              loading ? (
+              loadView === 'loading' ? (
                 <p className="text-xs text-zinc-400">正在加载档案…</p>
-              ) : editing ? (
+              ) : loadView === 'error' ? null : editing ? (
                 <div className="space-y-2">
                   <textarea
                     value={draft}
