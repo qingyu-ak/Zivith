@@ -18,6 +18,10 @@ import {
   formatGuidanceFollowUp,
   formatGuidanceReply,
   mergeOpenQuestions,
+  replacementForRepeatedReply,
+  replyAlreadyAsks,
+  replyRepeatsPrevious,
+  skipGapsAnsweredThisTurn,
   skipGapsCoveredByProposals,
   wantsGuidanceTurn,
   wantsStudioHandoff,
@@ -244,7 +248,7 @@ function applyGuidance(
 ): WorldBuilderResponse {
   if (wantsConflictCheck(input.text)) return response;
   const gaps = skipGapsCoveredByProposals(
-    detectWorldGaps(input.world),
+    skipGapsAnsweredThisTurn(detectWorldGaps(input.world), input.history, input.text),
     response.proposals.map((proposal) => proposal.kind),
   ).slice(0, 3);
   const questions = mergeOpenQuestions(response.world_state.open_questions, gaps);
@@ -283,15 +287,24 @@ function applyGuidance(
 
   let { reply } = response;
   const next = gaps[0];
+  const repeated = !wantsGuidanceTurn(input.text) &&
+    !wantsStudioHandoff(input.text) &&
+    replyRepeatsPrevious(reply, input.history);
+  if (repeated) {
+    reply = replacementForRepeatedReply(input.text, next?.question);
+  }
   if (
+    !repeated &&
     response.proposals.length > 0 &&
     next &&
     !input.focus &&
+    !replyAlreadyAsks(reply) &&
     !reply.includes(next.question) &&
     !reply.includes('下一步我想问')
   ) {
     reply += formatGuidanceFollowUp(next);
   } else if (
+    !repeated &&
     !input.focus &&
     response.proposals.length === 0 &&
     gaps.length > 0 &&
@@ -693,6 +706,8 @@ export class WorldBuilderAgent {
           input.focus,
           input.memoryDigest ?? null,
           alreadyReported,
+          input.history,
+          input.text,
         ),
         user_prompt: JSON.stringify({
           recent_conversation: historyText,
