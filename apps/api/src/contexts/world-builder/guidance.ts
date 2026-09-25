@@ -156,6 +156,63 @@ export function nextGuidanceGaps(world: WorldContext | null, limit = QUESTION_LI
   return detectWorldGaps(world).slice(0, limit);
 }
 
+export function replyAlreadyAsks(reply: string): boolean {
+  return /[？?]/.test(reply) || reply.includes('下一步我想问');
+}
+
+function normalizeReply(text: string): string {
+  return text.replace(/\s+/g, '').replace(/\*+/g, '');
+}
+
+/** 模型把上一轮助手正文原样再输出一遍时为 true。 */
+export function replyRepeatsPrevious(
+  reply: string,
+  history: Array<{ role: string; content: string }>,
+): boolean {
+  const last =
+    [...history].reverse().find((message) => message.role === 'assistant')?.content ?? '';
+  const current = normalizeReply(reply);
+  const previous = normalizeReply(last);
+  if (current.length < 24 || previous.length < 24) return false;
+  if (current === previous || current.includes(previous) || previous.includes(current)) return true;
+  let shared = 0;
+  while (shared < current.length && shared < previous.length && current[shared] === previous[shared]) {
+    shared += 1;
+  }
+  return shared >= 40;
+}
+
+/** 丢掉复读，只收下用户这句，再问还没问过的下一项。 */
+export function replacementForRepeatedReply(userText: string, nextQuestion?: string): string {
+  const heard = userText.trim().slice(0, 80);
+  const ack = heard ? `记下了：${heard}` : '记下了。';
+  return nextQuestion ? `${ack}\n\n${nextQuestion}` : `${ack}\n\n还想补哪一条？`;
+}
+
+/**
+ * 上一轮助手已经问过、创作者本轮正在作答的缺口，不要再塞进清单。
+ * 「继续」仍保留清单，方便只问下一项。
+ * 必须先对完整缺口清单调用，再按提案裁切；否则「上一句带问号就丢掉第一项」
+ * 会把已经按提案跳过的缺口之后的下一项也切掉。
+ */
+export function skipGapsAnsweredThisTurn(
+  gaps: WorldGap[],
+  history: Array<{ role: string; content: string }>,
+  currentText: string,
+): WorldGap[] {
+  if (gaps.length === 0) return gaps;
+  if (wantsGuidanceTurn(currentText) || wantsStudioHandoff(currentText)) return gaps;
+  const lastAssistant =
+    [...history].reverse().find((message) => message.role === 'assistant')?.content ?? '';
+  if (!lastAssistant) return gaps;
+  const remaining = gaps.filter(
+    (item) => !lastAssistant.includes(item.question) && !lastAssistant.includes(item.label),
+  );
+  if (remaining.length < gaps.length) return remaining;
+  if (!/[？?]/.test(lastAssistant)) return gaps;
+  return gaps.slice(1);
+}
+
 export function skipGapsCoveredByProposals(gaps: WorldGap[], proposalKinds: string[]): WorldGap[] {
   const kinds = new Set(proposalKinds);
   return gaps.filter((item) => {
