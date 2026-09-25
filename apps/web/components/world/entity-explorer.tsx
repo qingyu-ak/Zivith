@@ -12,7 +12,8 @@ import type {
   WorldSelection,
 } from '@/lib/types';
 import { threadDisplayTitle } from '@/lib/chat-history';
-import { createRoleplayThread } from '@/lib/api';
+import { createRoleplayThread, errorMessage } from '@/lib/api';
+import { studioTalkActionView } from '@/lib/studio-talk-action';
 import { isPlayableCharacter } from '@/lib/create-world-character';
 import { DIMENSION_KIND_LABEL, resolveDisplayDimensions, worldTimeCaption } from '@/lib/world-line';
 import { useState, type ReactNode } from 'react';
@@ -221,6 +222,7 @@ function TreeFile({
   actionLabel,
   onClick,
   onAction,
+  actionDisabled,
   secondaryLabel,
   onSecondary,
 }: {
@@ -230,6 +232,7 @@ function TreeFile({
   actionLabel?: string;
   onClick: () => void;
   onAction?: () => void;
+  actionDisabled?: boolean;
   secondaryLabel?: string;
   onSecondary?: () => void;
 }) {
@@ -264,9 +267,11 @@ function TreeFile({
       {onAction && actionLabel ? (
         <button
           type="button"
-          className="mr-1 shrink-0 rounded px-1.5 py-0.5 text-[10px] text-[#1e3a8a] hover:bg-white"
+          disabled={actionDisabled}
+          className="mr-1 shrink-0 rounded px-1.5 py-0.5 text-[10px] text-[#1e3a8a] hover:bg-white disabled:opacity-50"
           onClick={(event) => {
             event.stopPropagation();
+            if (actionDisabled) return;
             onAction();
           }}
         >
@@ -301,6 +306,9 @@ export function EntityExplorer({
     resources.entities;
   const [relationshipOpen, setRelationshipOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [talkBusy, setTalkBusy] = useState(false);
+  const [talkError, setTalkError] = useState('');
+  const talkView = studioTalkActionView({ busy: talkBusy, error: talkError });
 
   const characterItems: FileItem[] = characters.map((item: AssetDTO) => ({
     id: item.id,
@@ -350,6 +358,14 @@ export function EntityExplorer({
           role="alert"
         >
           {createError}
+        </p>
+      ) : null}
+      {talkView === 'error' ? (
+        <p
+          className="mx-2 mt-2 rounded-md bg-red-50 px-2 py-1.5 text-[11px] text-red-600"
+          role="alert"
+        >
+          {talkError}
         </p>
       ) : null}
       <div className="mt-1 space-y-0.5 px-1">
@@ -447,13 +463,20 @@ export function EntityExplorer({
                   : undefined
               }
               actionLabel="对话"
+              actionDisabled={talkBusy}
               onClick={() => onSelect({ kind: 'character', id: item.id })}
               onAction={() => {
+                if (talkBusy) return;
+                setTalkBusy(true);
+                setTalkError('');
                 void createRoleplayThread(resources.project.id, item.id)
                   .then((created) => {
                     router.push(`/creator-chats/${created.thread_id}`);
                   })
-                  .catch(() => undefined);
+                  .catch((reason: unknown) => {
+                    setTalkError(errorMessage(reason) || '没能打开这场对话');
+                  })
+                  .finally(() => setTalkBusy(false));
               }}
             />
           ))}
