@@ -15,7 +15,7 @@ export function studioDeleteTarget(
     return {
       kind: 'character',
       path: `/assets/${selection.id}`,
-      confirm: `删除角色「${title}」？角色卡会从本世界去掉。已有对话和已写入的事件还在。`,
+      confirm: `删除角色「${title}」？角色卡会从本世界去掉，与 TA 有关的扮演（含 TA 在场的群聊）会关掉。已写入的事件还在。`,
     };
   }
   if (selection.kind === 'location') {

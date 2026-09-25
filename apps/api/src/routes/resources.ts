@@ -25,6 +25,7 @@ import { ApiError } from '../errors.js';
 import { ensureProjectMember } from '../contexts/world/local-user.js';
 import {
   archiveWorldWorkspace,
+  archiveRoleplayChatsForCharacter,
   createWorldProject,
   syncWorkspaceMarkerName,
 } from '../contexts/world/workspace.js';
@@ -1285,6 +1286,9 @@ export function registerResourceRoutes(
     const asset = await db.asset.findFirst({ where: { id, deletedAt: null } });
     if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '资产不存在');
     await requireMember(db, request.user.sub, asset.projectId, true);
+    if (asset.type === 'character') {
+      await archiveRoleplayChatsForCharacter(db, asset.projectId, asset.id);
+    }
     await db.asset.update({ where: { id }, data: { deletedAt: new Date() } });
     return reply.status(204).send();
   });

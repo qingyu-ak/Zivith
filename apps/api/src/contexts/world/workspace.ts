@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Prisma, PrismaClient } from '@zivith/database';
 import { ApiError } from '../../errors.js';
 import { resolveLocalOwner } from './local-user.js';
+import { isGroupChat, parseParticipantIds } from '../roleplay/group-chat.js';
 
 /** Placeholder name for a world opened as an empty Cursor-style folder. */
 export const WORKSPACE_SEED_NAME = '新世界';
@@ -625,6 +626,33 @@ export async function archiveCreatorChat(db: Db, threadId: string) {
     data: { status: 'closed' },
   });
   return thread;
+}
+
+/** 删角色卡时关掉本世界里与 TA 有关的扮演（1:1 与 TA 在场的群聊）。世界构建对话不动。 */
+export async function archiveRoleplayChatsForCharacter(
+  db: Db,
+  projectId: string,
+  characterAssetId: string,
+): Promise<string[]> {
+  const roleplays = await db.roleplayThread.findMany({
+    where: { projectId, status: 'active' },
+  });
+  const archived: string[] = [];
+  for (const item of roleplays) {
+    const ids = parseParticipantIds(item.participantAssetIds, item.characterAssetId);
+    const related = isGroupChat(ids)
+      ? ids.includes(characterAssetId)
+      : item.characterAssetId === characterAssetId;
+    if (!related) continue;
+    try {
+      await archiveCreatorChat(db, item.threadId);
+      archived.push(item.threadId);
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 404) continue;
+      throw reason;
+    }
+  }
+  return archived;
 }
 
 const WORLDS_ROOT_FILE = path.join(process.cwd(), 'data', 'worlds-root.json');
