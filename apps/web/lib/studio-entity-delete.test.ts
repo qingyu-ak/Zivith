@@ -38,7 +38,7 @@ describe('studioDeleteTarget', () => {
     const target = studioDeleteTarget({ kind: 'character', id: 'c-lin' }, resources());
     expect(target?.path).toBe('/assets/c-lin');
     expect(target?.confirm).toMatch(/林晚 副本/);
-    expect(target?.confirm).toMatch(/对话/);
+    expect(target?.confirm).toMatch(/扮演/);
   });
 
   it('does not offer delete for the user speaker card', () => {
