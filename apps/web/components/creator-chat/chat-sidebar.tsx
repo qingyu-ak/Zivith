@@ -171,7 +171,7 @@ export function ChatSidebar({
         </label>
       </div>
 
-      <nav className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="工作区列表">
+      <nav className="mt-3 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-3" aria-label="工作区列表">
         <div className="flex items-center gap-0.5 px-2 pb-1 pt-1">
           <p className="min-w-0 flex-1 text-[11px] text-zinc-400">项目</p>
           <button
@@ -208,13 +208,13 @@ export function ChatSidebar({
             {workspaceListHint({ ready: workspaceReady, query, desktop })}
           </p>
         ) : (
-          <ul className="grid gap-1">
+          <ul className="grid min-w-0 gap-1">
             {groups.map((group) => {
               const { world, roleplay } = partitionThreadsByKind(group.threads);
               const tabThreads = tab === 'roleplay' ? roleplay : world;
               const renamingProject = rename?.kind === 'project' && rename.id === group.id;
               return (
-                <li key={group.id}>
+                <li key={group.id} className="min-w-0">
                   <div className="flex items-center gap-0.5">
                     {renamingProject ? (
                       <div className="min-w-0 flex-1 px-1">
@@ -311,12 +311,12 @@ export function ChatSidebar({
                       ) : null}
                     </div>
                   ) : (
-                    <ul className="grid gap-0.5 pl-6">
+                    <ul className="grid min-w-0 gap-0.5 pl-6">
                       {tabThreads.map((item) => {
                         const active = item.id === threadId;
                         const renaming = rename?.kind === 'thread' && rename.id === item.id;
                         return (
-                          <li key={item.id}>
+                          <li key={item.id} className="min-w-0">
                             {renaming ? (
                               <div className="px-2 py-1">
                                 <InlineName
@@ -332,6 +332,7 @@ export function ChatSidebar({
                             ) : (
                               <Link
                                 href={`/creator-chats/${item.id}`}
+                                title={threadDisplayTitle(item)}
                                 onContextMenu={(event) =>
                                   openMenu(event, {
                                     kind: 'thread',
@@ -339,7 +340,7 @@ export function ChatSidebar({
                                     name: threadDisplayTitle(item),
                                   })
                                 }
-                                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] transition ${
+                                className={`flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] transition ${
                                   active
                                     ? 'bg-zinc-200/90 text-zinc-900'
                                     : 'text-zinc-600 hover:bg-zinc-200/60 hover:text-zinc-900'
