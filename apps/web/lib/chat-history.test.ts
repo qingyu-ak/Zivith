@@ -9,6 +9,7 @@ import {
   openingChatTitle,
   openingComposerPlaceholder,
   partitionThreadsByKind,
+  roleplayPickerView,
   threadDisplayTitle,
   threadKind,
   workspaceListHint,
@@ -239,5 +240,16 @@ describe('workspaceListHint', () => {
   it('does not look like an empty account while the workspace is loading', () => {
     expect(workspaceListHint({ ready: false, query: '', desktop: false })).toBe('正在加载工作区…');
     expect(workspaceListHint({ ready: true, query: '', desktop: false })).toContain('新建世界');
+  });
+});
+
+describe('roleplayPickerView', () => {
+  it('treats a failed load as error, not as an empty world', () => {
+    expect(roleplayPickerView({ ready: true, error: '无法加载角色列表', playableCount: 0 })).toBe(
+      'error',
+    );
+    expect(roleplayPickerView({ ready: false, error: '', playableCount: 0 })).toBe('loading');
+    expect(roleplayPickerView({ ready: true, error: '', playableCount: 0 })).toBe('empty');
+    expect(roleplayPickerView({ ready: true, error: '', playableCount: 2 })).toBe('list');
   });
 });

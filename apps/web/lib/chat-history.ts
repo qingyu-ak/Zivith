@@ -243,6 +243,18 @@ export function workspaceListHint(input: {
   return '点「新建世界」从零开始。打开已有文件夹需要桌面应用。';
 }
 
+/** 开始扮演 / 群聊弹层：失败不能装成「这个世界没人」。 */
+export function roleplayPickerView(input: {
+  ready: boolean;
+  error: string;
+  playableCount: number;
+}): 'loading' | 'error' | 'empty' | 'list' {
+  if (input.error.trim()) return 'error';
+  if (!input.ready) return 'loading';
+  if (input.playableCount <= 0) return 'empty';
+  return 'list';
+}
+
 export function relativeTime(value: string): string {
   const time = new Date(value).getTime();
   if (Number.isNaN(time)) return '';
