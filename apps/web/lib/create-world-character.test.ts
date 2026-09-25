@@ -188,9 +188,30 @@ describe('character card copy and import', () => {
       }
       throw new Error('unreachable');
     });
-    await expect(listImportableWorlds('open')).resolves.toEqual([
-      { id: 'fog', name: '走查雾城信', characters: [source] },
-    ]);
+    await expect(listImportableWorlds('open')).resolves.toEqual({
+      worlds: [{ id: 'fog', name: '走查雾城信', characters: [source] }],
+      failedCount: 0,
+    });
+  });
+
+  it('counts worlds whose resources failed instead of pretending they have no characters', async () => {
+    apiMock.mockImplementation(async (path: string) => {
+      if (path === '/projects') {
+        return [
+          { id: 'open', name: '开折' },
+          { id: 'fog', name: '走查雾城信' },
+          { id: 'down', name: '挂了的世界' },
+        ];
+      }
+      if (String(path).includes('fog')) {
+        return { entities: { characters: [source] } };
+      }
+      throw new Error('resources down');
+    });
+    await expect(listImportableWorlds('open')).resolves.toEqual({
+      worlds: [{ id: 'fog', name: '走查雾城信', characters: [source] }],
+      failedCount: 1,
+    });
   });
 });
 

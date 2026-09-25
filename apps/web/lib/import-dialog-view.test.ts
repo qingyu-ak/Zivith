@@ -10,4 +10,13 @@ describe('importDialogView', () => {
     expect(importDialogView({ loading: false, error: '', worldCount: 0 })).toBe('empty');
     expect(importDialogView({ loading: false, error: '', worldCount: 2 })).toBe('list');
   });
+
+  it('treats skipped world resource failures as error or partial, not as empty', () => {
+    expect(importDialogView({ loading: false, error: '', worldCount: 0, failedCount: 2 })).toBe(
+      'error',
+    );
+    expect(importDialogView({ loading: false, error: '', worldCount: 1, failedCount: 1 })).toBe(
+      'partial',
+    );
+  });
 });

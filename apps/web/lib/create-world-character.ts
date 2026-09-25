@@ -109,13 +109,15 @@ export async function copyWorldCharacter(input: {
   return postCharacterCard(input.projectId, input.source, name);
 }
 
-export async function listImportableWorlds(
-  currentProjectId: string,
-): Promise<Array<{ id: string; name: string; characters: AssetDTO[] }>> {
+export async function listImportableWorlds(currentProjectId: string): Promise<{
+  worlds: Array<{ id: string; name: string; characters: AssetDTO[] }>;
+  failedCount: number;
+}> {
   const projects = unwrapList(
     await api<ProjectDTO[] | { data?: ProjectDTO[]; items?: ProjectDTO[] }>('/projects'),
   );
   const worlds: Array<{ id: string; name: string; characters: AssetDTO[] }> = [];
+  let failedCount = 0;
   for (const project of projects) {
     if (!project.id || project.id === currentProjectId) continue;
     try {
@@ -128,10 +130,10 @@ export async function listImportableWorlds(
         characters,
       });
     } catch {
-      continue;
+      failedCount += 1;
     }
   }
-  return worlds;
+  return { worlds, failedCount };
 }
 
 /** 从本机另一个世界拷贝角色卡。不搬记忆、事件、关系、对话。 */
