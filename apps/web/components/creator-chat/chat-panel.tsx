@@ -36,6 +36,7 @@ import {
   openingChatTitle,
   openingComposerPlaceholder,
   PENDING_CHAT_TURN_KEY,
+  roleplayPickerView,
 } from '@/lib/chat-history';
 import {
   readStoredEffort,
@@ -174,6 +175,8 @@ export function ChatPanel() {
   const [pickerAssets, setPickerAssets] = useState<AssetDTO[]>([]);
   const [pickerEvents, setPickerEvents] = useState<WorldEventDTO[]>([]);
   const [pickerReady, setPickerReady] = useState(false);
+  const [pickerLoadError, setPickerLoadError] = useState('');
+  const [pickerReload, setPickerReload] = useState(0);
   const [pickerImportOpen, setPickerImportOpen] = useState(false);
   const [pickerImportBusy, setPickerImportBusy] = useState(false);
   const [pickerImportError, setPickerImportError] = useState('');
@@ -392,6 +395,7 @@ export function ChatPanel() {
       setPickerAssets([]);
       setPickerEvents([]);
       setPickerReady(false);
+      setPickerLoadError('');
       setPickerImportOpen(false);
       setPickerImportError('');
       setPickerImportBusy(false);
@@ -399,6 +403,7 @@ export function ChatPanel() {
     }
     let cancelled = false;
     setPickerReady(false);
+    setPickerLoadError('');
     void api<{
       entities?: { characters?: AssetDTO[]; world_events?: WorldEventDTO[] };
     }>(`/world/projects/${pickerId}/resources`)
@@ -416,19 +421,21 @@ export function ChatPanel() {
               typeof event.id === 'string' && typeof event.title === 'string',
           ),
         );
+        setPickerLoadError('');
         setPickerReady(true);
       })
-      .catch(() => {
+      .catch((reason: unknown) => {
         if (!cancelled) {
           setPickerAssets([]);
           setPickerEvents([]);
+          setPickerLoadError(errorMessage(reason) || '无法加载角色列表');
           setPickerReady(true);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [roleplayPicker, groupPicker]);
+  }, [roleplayPicker, groupPicker, pickerReload]);
 
   async function importIntoRoleplayPicker(sourceProjectId: string, sourceCharacterId: string) {
     if (!roleplayPicker || pickerImportBusy) return false;
@@ -1419,6 +1426,11 @@ export function ChatPanel() {
     });
   const assetById = new Map(characterAssets.map((item) => [item.id, item]));
   const playableAssets = characterAssets.filter((item) => !item.tags?.includes('user_self'));
+  const pickerView = roleplayPickerView({
+    ready: pickerReady,
+    error: pickerLoadError,
+    playableCount: playableCharacters(pickerAssets).length,
+  });
   const playingCharacter = activeRoleplay
     ? assetById.get(activeRoleplay.character_asset_id)
     : undefined;
@@ -2262,7 +2274,20 @@ export function ChatPanel() {
                 关闭
               </button>
             </div>
-            {!pickerReady ? (
+            {pickerView === 'error' ? (
+              <div className="space-y-3">
+                <p className="text-sm text-red-600" role="alert">
+                  {pickerLoadError || '无法加载角色列表'}
+                </p>
+                <button
+                  type="button"
+                  className="rounded-md border border-line px-2 py-1 text-xs text-zinc-700 transition hover:bg-zinc-100"
+                  onClick={() => setPickerReload((current) => current + 1)}
+                >
+                  重试
+                </button>
+              </div>
+            ) : pickerView === 'loading' ? (
               <p className="text-sm text-zinc-500">正在查看这个世界的角色…</p>
             ) : groupPicker ? (
               <GroupChatLaunch
