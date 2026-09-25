@@ -27,10 +27,11 @@ import {
 import { formatMemoryOps } from '@/lib/memory-ops';
 import { FolderFlowCancelled, openWorldFromFolder } from '@/lib/world-folder';
 import { NEW_WORLD_HREF } from '@/lib/create-scratch-world';
-import { playableCharacters } from '@/lib/create-world-character';
+import { importWorldCharacter, playableCharacters } from '@/lib/create-world-character';
 import { ThoughtSummary } from '@/components/creator-chat/thought-summary';
 import { ChatComposer } from '@/components/creator-chat/chat-composer';
 import { CreateCharacterForm } from '@/components/create-character-form';
+import { ImportCharacterDialog } from '@/components/world/import-character-dialog';
 import {
   openingChatTitle,
   openingComposerPlaceholder,
@@ -173,6 +174,9 @@ export function ChatPanel() {
   const [pickerAssets, setPickerAssets] = useState<AssetDTO[]>([]);
   const [pickerEvents, setPickerEvents] = useState<WorldEventDTO[]>([]);
   const [pickerReady, setPickerReady] = useState(false);
+  const [pickerImportOpen, setPickerImportOpen] = useState(false);
+  const [pickerImportBusy, setPickerImportBusy] = useState(false);
+  const [pickerImportError, setPickerImportError] = useState('');
   const [stopped, setStopped] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [creatingSelf, setCreatingSelf] = useState(false);
@@ -388,6 +392,9 @@ export function ChatPanel() {
       setPickerAssets([]);
       setPickerEvents([]);
       setPickerReady(false);
+      setPickerImportOpen(false);
+      setPickerImportError('');
+      setPickerImportBusy(false);
       return;
     }
     let cancelled = false;
@@ -422,6 +429,30 @@ export function ChatPanel() {
       cancelled = true;
     };
   }, [roleplayPicker, groupPicker]);
+
+  async function importIntoRoleplayPicker(sourceProjectId: string, sourceCharacterId: string) {
+    if (!roleplayPicker || pickerImportBusy) return false;
+    setPickerImportBusy(true);
+    setPickerImportError('');
+    try {
+      const created = await importWorldCharacter({
+        targetProjectId: roleplayPicker,
+        sourceProjectId,
+        sourceCharacterId,
+        existingNames: pickerAssets.map((item) => item.name),
+      });
+      setPickerAssets((current) =>
+        current.some((item) => item.id === created.id) ? current : [created, ...current],
+      );
+      if (thread?.project_id === roleplayPicker) void reloadWorldResources();
+      return true;
+    } catch (reason: unknown) {
+      setPickerImportError(errorMessage(reason) || '没能导入角色');
+      return false;
+    } finally {
+      setPickerImportBusy(false);
+    }
+  }
 
   useEffect(() => {
     pendingConsumed.current = false;
@@ -2248,25 +2279,62 @@ export function ChatPanel() {
                 }}
               />
             ) : playableCharacters(pickerAssets).length === 0 ? (
-              <CreateCharacterForm
-                projectId={roleplayPicker!}
-                existingNames={pickerAssets.map((item) => item.name)}
-                onCreated={(character) => {
-                  setPickerAssets((current) =>
-                    current.some((item) => item.id === character.id)
-                      ? current
-                      : [character, ...current],
-                  );
-                  if (thread?.project_id === roleplayPicker) void reloadWorldResources();
-                }}
-                onOpenTalk={(talkId) => {
-                  setRoleplayPicker(null);
-                  router.push(`/creator-chats/${talkId}`);
-                }}
-                onCancel={() => setRoleplayPicker(null)}
-              />
+              <div className="space-y-3">
+                {pickerImportError ? (
+                  <p className="text-xs text-red-600" role="alert">
+                    {pickerImportError}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  className="text-xs text-[#4d6bfe] hover:underline"
+                  onClick={() => {
+                    setPickerImportError('');
+                    setPickerImportOpen(true);
+                  }}
+                >
+                  从其他世界导入
+                </button>
+                <CreateCharacterForm
+                  projectId={roleplayPicker!}
+                  existingNames={pickerAssets.map((item) => item.name)}
+                  onCreated={(character) => {
+                    setPickerAssets((current) =>
+                      current.some((item) => item.id === character.id)
+                        ? current
+                        : [character, ...current],
+                    );
+                    if (thread?.project_id === roleplayPicker) void reloadWorldResources();
+                  }}
+                  onOpenTalk={(talkId) => {
+                    setRoleplayPicker(null);
+                    router.push(`/creator-chats/${talkId}`);
+                  }}
+                  onCancel={() => setRoleplayPicker(null)}
+                />
+              </div>
             ) : (
-              <ul className="grid max-h-[60vh] gap-3 overflow-y-auto">
+              <>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  {pickerImportError ? (
+                    <p className="text-xs text-red-600" role="alert">
+                      {pickerImportError}
+                    </p>
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs text-[#4d6bfe] hover:underline"
+                    onClick={() => {
+                      setPickerImportError('');
+                      setPickerImportOpen(true);
+                    }}
+                  >
+                    从其他世界导入
+                  </button>
+                </div>
+                <ul className="grid max-h-[60vh] gap-3 overflow-y-auto">
                 {pickerAssets
                   .filter((item) => !item.tags?.includes('user_self'))
                   .map((character) => (
@@ -2298,10 +2366,23 @@ export function ChatPanel() {
                       />
                     </li>
                   ))}
-              </ul>
+                </ul>
+              </>
             )}
           </div>
         </div>
+      ) : null}
+      {pickerImportOpen && roleplayPicker ? (
+        <ImportCharacterDialog
+          currentProjectId={roleplayPicker}
+          busy={pickerImportBusy}
+          onCancel={() => setPickerImportOpen(false)}
+          onConfirm={(sourceProjectId, sourceCharacterId) => {
+            void importIntoRoleplayPicker(sourceProjectId, sourceCharacterId).then((ok) => {
+              if (ok !== false) setPickerImportOpen(false);
+            });
+          }}
+        />
       ) : null}
       {rollbackTarget ? (
         <div
