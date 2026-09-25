@@ -24,20 +24,33 @@ export function ImportCharacterDialog({
   const [worlds, setWorlds] = useState<Array<{ id: string; name: string; characters: AssetDTO[] }>>(
     [],
   );
+  const [failedCount, setFailedCount] = useState(0);
   const [worldId, setWorldId] = useState('');
   const [characterId, setCharacterId] = useState('');
-  const dialogView = importDialogView({ loading, error, worldCount: worlds.length });
+  const dialogView = importDialogView({
+    loading,
+    error,
+    worldCount: worlds.length,
+    failedCount,
+  });
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError('');
+    setFailedCount(0);
     void listImportableWorlds(currentProjectId)
-      .then((items) => {
+      .then((result) => {
         if (cancelled) return;
-        setWorlds(items);
-        setWorldId(items[0]?.id ?? '');
-        setCharacterId(items[0]?.characters[0]?.id ?? '');
+        setWorlds(result.worlds);
+        setFailedCount(result.failedCount);
+        setWorldId(result.worlds[0]?.id ?? '');
+        setCharacterId(result.worlds[0]?.characters[0]?.id ?? '');
+        setError(
+          result.worlds.length === 0 && result.failedCount > 0
+            ? '有的世界没加载到，暂时看不到可导入的角色'
+            : '',
+        );
       })
       .catch((reason: unknown) => {
         if (!cancelled) setError(errorMessage(reason) || '无法加载可导入的角色');
@@ -125,6 +138,21 @@ export function ImportCharacterDialog({
               onConfirm(worldId, characterId);
             }}
           >
+            {dialogView === 'partial' ? (
+              <div className="space-y-2">
+                <p className="text-xs text-red-600" role="alert">
+                  有的世界没加载到。已列出的仍可导入。
+                </p>
+                <button
+                  type="button"
+                  disabled={loading || busy}
+                  className="rounded-md border border-line px-2 py-1 text-xs text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+                  onClick={() => setReloadToken((current) => current + 1)}
+                >
+                  {loading ? '正在加载…' : '重试'}
+                </button>
+              </div>
+            ) : null}
             <label className="block text-xs text-zinc-600">
               世界
               <select
