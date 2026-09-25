@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { errorMessage } from '@/lib/api';
 import { listImportableWorlds } from '@/lib/create-world-character';
+import { importDialogView } from '@/lib/import-dialog-view';
 import type { AssetDTO } from '@/lib/types';
 
 export function ImportCharacterDialog({
@@ -19,11 +20,13 @@ export function ImportCharacterDialog({
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
   const [worlds, setWorlds] = useState<Array<{ id: string; name: string; characters: AssetDTO[] }>>(
     [],
   );
   const [worldId, setWorldId] = useState('');
   const [characterId, setCharacterId] = useState('');
+  const dialogView = importDialogView({ loading, error, worldCount: worlds.length });
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +40,7 @@ export function ImportCharacterDialog({
         setCharacterId(items[0]?.characters[0]?.id ?? '');
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(errorMessage(reason));
+        if (!cancelled) setError(errorMessage(reason) || '无法加载可导入的角色');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -45,7 +48,7 @@ export function ImportCharacterDialog({
     return () => {
       cancelled = true;
     };
-  }, [currentProjectId]);
+  }, [currentProjectId, reloadToken]);
 
   const selected = worlds.find((item) => item.id === worldId);
   const characters = selected?.characters ?? [];
@@ -75,22 +78,32 @@ export function ImportCharacterDialog({
             取消
           </button>
         </div>
-        {loading ? (
+        {dialogView === 'loading' ? (
           <p className="text-xs text-zinc-500">正在查找可导入的角色…</p>
-        ) : error ? (
+        ) : dialogView === 'error' ? (
           <div className="space-y-3">
             <p className="text-xs text-red-600" role="alert">
-              {error}
+              {error || '无法加载可导入的角色'}
             </p>
-            <button
-              type="button"
-              className="rounded-md border border-line px-2 py-1 text-xs"
-              onClick={onCancel}
-            >
-              关闭
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={loading}
+                className="rounded-md border border-line px-2 py-1 text-xs text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+                onClick={() => setReloadToken((current) => current + 1)}
+              >
+                {loading ? '正在加载…' : '重试'}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-line px-2 py-1 text-xs"
+                onClick={onCancel}
+              >
+                关闭
+              </button>
+            </div>
           </div>
-        ) : worlds.length === 0 ? (
+        ) : dialogView === 'empty' ? (
           <div className="space-y-3">
             <p className="text-xs text-zinc-500">
               没有可导入的角色。先在别的世界创建，或在这里新建。
