@@ -12,6 +12,7 @@ import {
   studioHrefForEntity,
 } from '@/lib/creator-chat-nav';
 import { createStudioEntity, type StudioCreateKind } from '@/lib/studio-entity-create';
+import { studioTreeView } from '@/lib/studio-tree-view';
 import { WORKSPACE_LAYOUT_KEYS, usePersistedFlag } from '@/lib/workspace-layout';
 import { IconAgent, IconPanelRight } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
@@ -208,13 +209,35 @@ function ExplorerTree({ projectId, pathname }: { projectId: string; pathname: st
   }
 
   if (!resources) {
+    const treeView = studioTreeView({
+      loading,
+      error,
+      ready: false,
+    });
+    const retrying = treeView === 'loading';
     return (
-      <p
-        className={`px-4 py-4 text-xs ${error ? 'text-red-600' : 'text-zinc-500'}`}
-        role={error ? 'alert' : undefined}
-      >
-        {error || (loading ? '正在加载项目树…' : '无法加载项目树')}
-      </p>
+      <div className="space-y-2 px-4 py-4">
+        <p
+          className={`text-xs ${treeView === 'error' || treeView === 'missing' ? 'text-red-600' : 'text-zinc-500'}`}
+          role={treeView === 'error' || treeView === 'missing' ? 'alert' : undefined}
+        >
+          {retrying
+            ? '正在加载项目树…'
+            : error || '无法加载项目树'}
+        </p>
+        {treeView === 'error' || treeView === 'missing' ? (
+          <button
+            type="button"
+            disabled={retrying}
+            className="rounded-md border border-line px-2 py-1 text-xs text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+            onClick={() => {
+              void reload();
+            }}
+          >
+            重试
+          </button>
+        ) : null}
+      </div>
     );
   }
 
