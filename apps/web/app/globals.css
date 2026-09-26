@@ -4,7 +4,49 @@
 
 :root {
   color-scheme: light;
-  background: #ffffff;
+  --z-bg: #ffffff;
+  --z-fg: #18181b;
+  --z-fg-muted: #3f3f46;
+  --z-panel: #ffffff;
+  --z-line: #e5e7eb;
+  --z-wash: #fafafa;
+  --z-wash-2: #f4f4f5;
+  --z-chrome: #f7f8fa;
+  --z-timeline-canvas: #ffffff;
+  --z-timeline-lane-a: #f4f4f5;
+  --z-timeline-lane-b: #ffffff;
+  --z-timeline-chrome: #fafafa;
+  --z-timeline-border: #e4e4e7;
+  --z-timeline-muted: #71717a;
+  --z-timeline-hover: #e4e4e7;
+  --z-timeline-axis-label: #3f3f46;
+  --z-timeline-axis-sub: #71717a;
+  --z-timeline-guide: rgba(24, 24, 27, 0.08);
+  --z-timeline-link: rgba(24, 24, 27, 0.28);
+  background: var(--z-bg);
+}
+
+html.dark {
+  color-scheme: dark;
+  --z-bg: #18181b;
+  --z-fg: #fafafa;
+  --z-fg-muted: #e4e4e7;
+  --z-panel: #1c1c1f;
+  --z-line: #3f3f46;
+  --z-wash: #27272a;
+  --z-wash-2: #3f3f46;
+  --z-chrome: #161618;
+  --z-timeline-canvas: #1c1c1f;
+  --z-timeline-lane-a: #232326;
+  --z-timeline-lane-b: #1c1c1f;
+  --z-timeline-chrome: #161618;
+  --z-timeline-border: #27272a;
+  --z-timeline-muted: #a1a1aa;
+  --z-timeline-hover: #27272a;
+  --z-timeline-axis-label: #d4d4d8;
+  --z-timeline-axis-sub: #a1a1aa;
+  --z-timeline-guide: rgba(255, 255, 255, 0.06);
+  --z-timeline-link: rgba(255, 255, 255, 0.22);
 }
 
 * {
@@ -14,8 +56,49 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: #ffffff;
-  color: #18181b;
+  background: var(--z-bg);
+  color: var(--z-fg);
+}
+
+html.dark .bg-white,
+html.dark .bg-panel {
+  background-color: var(--z-panel);
+}
+
+html.dark .bg-zinc-50 {
+  background-color: var(--z-wash);
+}
+
+html.dark .bg-zinc-100 {
+  background-color: var(--z-wash-2);
+}
+
+html.dark .text-zinc-900,
+html.dark .text-ink {
+  color: var(--z-fg);
+}
+
+html.dark .text-zinc-800,
+html.dark .text-zinc-700 {
+  color: var(--z-fg-muted);
+}
+
+html.dark .border-zinc-200,
+html.dark .border-line {
+  border-color: var(--z-line);
+}
+
+html.dark .hover\:bg-zinc-50:hover,
+html.dark .hover\:bg-zinc-100:hover {
+  background-color: var(--z-wash);
+}
+
+html.dark .bg-\[\#f7f8fa\] {
+  background-color: var(--z-chrome);
+}
+
+html.dark *:hover::-webkit-scrollbar-thumb {
+  background: rgba(250, 250, 250, 0.28);
 }
 
 button,
@@ -27,6 +110,49 @@ select {
 
 ::selection {
   background: rgba(77, 107, 254, 0.18);
+}
+
+/* 滚动条默认不占位，指针进入该区域才出现。 */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+*:hover {
+  scrollbar-width: thin;
+}
+
+*:hover::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(24, 24, 27, 0.28);
+}
+
+*:hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-none,
+.scrollbar-none:hover {
+  scrollbar-width: none !important;
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.scrollbar-none:hover::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

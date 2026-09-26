@@ -9,6 +9,11 @@ export { nextUntitledName, resolveCreateName } from './unique-name';
 export type StudioCreateKind =
   'character' | 'location' | 'scene' | 'story' | 'world_event' | 'relationship' | 'dimension';
 
+export type TimelineCreatableKind = Extract<
+  StudioCreateKind,
+  'character' | 'location' | 'scene' | 'world_event'
+>;
+
 export interface RelationshipCreateInput {
   kind: string;
   source: { type: 'asset' | 'scene' | 'world_event' | 'story'; id: string };

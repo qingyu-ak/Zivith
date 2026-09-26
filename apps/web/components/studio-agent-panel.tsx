@@ -651,7 +651,7 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
       ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
-      <div className="min-h-0 h-full overflow-y-auto px-3 py-3">
+      <div className="min-h-0 h-full overflow-x-hidden overflow-y-auto px-3 py-3">
         {loading ? (
           <p className="text-xs text-zinc-400">正在打开当前项目的 Agent 对话…</p>
         ) : messages.length === 0 && !streamText ? (

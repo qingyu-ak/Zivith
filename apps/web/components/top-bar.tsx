@@ -51,7 +51,7 @@ export function TopBar({
 
   return (
     <header
-      className="sticky top-0 z-40 flex h-11 shrink-0 items-center gap-1 border-b border-line bg-[#f7f8fa] px-2 select-none [-webkit-app-region:drag]"
+      className="sticky top-0 z-40 flex h-11 shrink-0 items-center gap-1 border-b border-line bg-[var(--z-chrome)] px-2 select-none [-webkit-app-region:drag]"
       style={{
         paddingLeft: 'max(0.5rem, env(titlebar-area-x, 0.5rem))',
         width: 'env(titlebar-area-width, 100%)',

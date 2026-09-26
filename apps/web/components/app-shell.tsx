@@ -13,7 +13,8 @@ import {
 } from '@/lib/creator-chat-nav';
 import { createStudioEntity, type StudioCreateKind } from '@/lib/studio-entity-create';
 import { studioTreeView } from '@/lib/studio-tree-view';
-import { WORKSPACE_LAYOUT_KEYS, usePersistedFlag } from '@/lib/workspace-layout';
+import { WORKSPACE_LAYOUT_KEYS, usePersistedFlag, usePersistedPx } from '@/lib/workspace-layout';
+import { ResizeHandle } from '@/components/world/workspace-split';
 import { IconAgent, IconPanelRight } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
 import { StudioMenuBar } from '@/components/studio-menu-bar';
@@ -42,6 +43,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [agentOpen, toggleAgentOpen] = usePersistedFlag(
     WORKSPACE_LAYOUT_KEYS.agentPanelOpen,
     false,
+  );
+  const [explorerWidth, setExplorerWidth] = usePersistedPx(
+    WORKSPACE_LAYOUT_KEYS.leftWidth,
+    240,
+    180,
+    520,
+  );
+  const [agentWidth, setAgentWidth] = usePersistedPx(
+    WORKSPACE_LAYOUT_KEYS.agentWidth,
+    360,
+    280,
+    720,
   );
 
   const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
@@ -148,7 +161,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-[calc(100dvh-2.75rem)] flex-1">
         <StudioSelectionProvider key={projectId ?? 'no-project'} projectId={projectId ?? ''}>
           {showExplorer && !explorerCollapsed && (
-            <aside className="sticky top-11 h-[calc(100dvh-2.75rem)] w-[268px] shrink-0 overflow-y-auto border-r border-line bg-[#f7f8fa]">
+            <aside
+              className="sticky top-11 h-[calc(100dvh-2.75rem)] shrink-0 overflow-x-hidden overflow-y-auto border-r border-line bg-[var(--z-chrome)]"
+              style={{ width: explorerWidth }}
+            >
               {projectId ? (
                 <ExplorerTree projectId={projectId} pathname={pathname} />
               ) : (
@@ -156,9 +172,26 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             </aside>
           )}
+          {showExplorer && !explorerCollapsed ? (
+            <ResizeHandle
+              orientation="vertical"
+              label="调整左侧栏宽度"
+              onDrag={(delta) => setExplorerWidth((width) => width + delta)}
+            />
+          ) : null}
           <main className="min-w-0 flex-1 bg-white">{children}</main>
           {agentOpen && projectId ? (
-            <aside className="sticky top-11 h-[calc(100dvh-2.75rem)] w-[380px] shrink-0 overflow-hidden border-l border-line bg-white">
+            <ResizeHandle
+              orientation="vertical"
+              label="调整对话栏宽度"
+              onDrag={(delta) => setAgentWidth((width) => width - delta)}
+            />
+          ) : null}
+          {agentOpen && projectId ? (
+            <aside
+              className="sticky top-11 h-[calc(100dvh-2.75rem)] shrink-0 overflow-hidden border-l border-line bg-white"
+              style={{ width: agentWidth }}
+            >
               <StudioAgentPanel projectId={projectId} />
             </aside>
           ) : null}

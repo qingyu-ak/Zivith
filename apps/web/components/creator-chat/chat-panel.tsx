@@ -1493,7 +1493,7 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-white text-zinc-900 [color-scheme:light]">
+    <div className="flex h-dvh flex-col overflow-hidden bg-white text-zinc-900">
       <TopBar
         surface="chat"
         onToggleSidebar={toggleCollapsed}

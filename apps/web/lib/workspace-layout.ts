@@ -8,6 +8,7 @@ export const WORKSPACE_LAYOUT_KEYS = {
   dockMemory: 'zivith.worldDockMemoryOpen',
   dockImport: 'zivith.worldDockImportOpen',
   agentPanelOpen: 'zivith.studioAgentPanelOpen',
+  agentWidth: 'zivith.studioAgentWidth',
 } as const;
 
 const LAYOUT_EVENT = 'zivith-layout';
