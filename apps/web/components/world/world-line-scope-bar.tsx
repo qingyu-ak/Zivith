@@ -24,10 +24,10 @@ export function WorldLineScopeBar({
   }
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-white px-4 py-2 text-xs text-zinc-600">
-      <span className="font-medium text-zinc-800">范围</span>
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-[var(--z-chrome)] px-4 py-2 text-xs text-[var(--z-fg-muted)]">
+      <span className="font-medium text-[var(--z-fg)]">范围</span>
       <div
-        className="flex rounded-lg border border-line bg-zinc-100 p-0.5"
+        className="flex rounded-lg border border-line bg-[var(--z-wash)] p-0.5"
         role="radiogroup"
         aria-label="世界线范围"
       >
@@ -36,7 +36,9 @@ export function WorldLineScopeBar({
           role="radio"
           aria-checked={view.overview}
           className={`rounded-md px-2.5 py-0.5 transition ${
-            view.overview ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'
+            view.overview
+              ? 'bg-[var(--z-chip)] text-[var(--z-fg)] shadow-sm'
+              : 'text-[var(--z-fg-subtle)] hover:text-[var(--z-fg)]'
           }`}
           onClick={() => onChange({ ...view, overview: true, from: min, to: max })}
         >
@@ -48,8 +50,8 @@ export function WorldLineScopeBar({
           aria-checked={!view.overview}
           className={`rounded-md px-2.5 py-0.5 transition ${
             !view.overview
-              ? 'bg-white text-zinc-900 shadow-sm'
-              : 'text-zinc-500 hover:text-zinc-800'
+              ? 'bg-[var(--z-chip)] text-[var(--z-fg)] shadow-sm'
+              : 'text-[var(--z-fg-subtle)] hover:text-[var(--z-fg)]'
           }`}
           onClick={() =>
             onChange({
@@ -76,7 +78,7 @@ export function WorldLineScopeBar({
             max={max}
             value={view.from}
             aria-label="起始章"
-            className="w-14 rounded-md border border-line bg-white px-1.5 py-0.5 text-xs tabular-nums"
+            className="w-14 rounded-md border border-line bg-[var(--z-panel)] px-1.5 py-0.5 text-xs tabular-nums text-[var(--z-fg)]"
             onChange={(event) => {
               const from = clampOrder(Number(event.target.value));
               onChange({ ...view, overview: false, from, to: Math.max(from, view.to) });
@@ -89,7 +91,7 @@ export function WorldLineScopeBar({
             max={max}
             value={view.to}
             aria-label="结束章"
-            className="w-14 rounded-md border border-line bg-white px-1.5 py-0.5 text-xs tabular-nums"
+            className="w-14 rounded-md border border-line bg-[var(--z-panel)] px-1.5 py-0.5 text-xs tabular-nums text-[var(--z-fg)]"
             onChange={(event) => {
               const to = clampOrder(Number(event.target.value));
               onChange({ ...view, overview: false, to, from: Math.min(view.from, to) });
@@ -101,9 +103,9 @@ export function WorldLineScopeBar({
 
       <span className="mx-1 h-3 w-px bg-zinc-200" aria-hidden />
 
-      <span className="font-medium text-zinc-800">角色 / 场景</span>
+      <span className="font-medium text-[var(--z-fg)]">角色 / 场景</span>
       <div
-        className="flex rounded-lg border border-line bg-zinc-100 p-0.5"
+        className="flex rounded-lg border border-line bg-[var(--z-wash)] p-0.5"
         role="radiogroup"
         aria-label="条目密度"
       >
@@ -113,8 +115,8 @@ export function WorldLineScopeBar({
           aria-checked={view.density === 'all'}
           className={`rounded-md px-2.5 py-0.5 transition ${
             view.density === 'all'
-              ? 'bg-white text-zinc-900 shadow-sm'
-              : 'text-zinc-500 hover:text-zinc-800'
+              ? 'bg-[var(--z-chip)] text-[var(--z-fg)] shadow-sm'
+              : 'text-[var(--z-fg-subtle)] hover:text-[var(--z-fg)]'
           }`}
           onClick={() => onChange({ ...view, density: 'all' })}
         >
@@ -126,8 +128,8 @@ export function WorldLineScopeBar({
           aria-checked={view.density === 'main'}
           className={`rounded-md px-2.5 py-0.5 transition ${
             view.density === 'main'
-              ? 'bg-white text-zinc-900 shadow-sm'
-              : 'text-zinc-500 hover:text-zinc-800'
+              ? 'bg-[var(--z-chip)] text-[var(--z-fg)] shadow-sm'
+              : 'text-[var(--z-fg-subtle)] hover:text-[var(--z-fg)]'
           }`}
           onClick={() => onChange({ ...view, density: 'main' })}
         >

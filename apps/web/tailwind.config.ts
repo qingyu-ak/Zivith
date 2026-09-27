@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  darkMode: 'class',
   content: [
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -9,9 +10,9 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: '#18181b',
-        panel: '#ffffff',
-        line: '#e5e7eb',
+        ink: 'var(--z-fg)',
+        panel: 'var(--z-panel)',
+        line: 'var(--z-line)',
         accent: '#4d6bfe',
       },
       boxShadow: {

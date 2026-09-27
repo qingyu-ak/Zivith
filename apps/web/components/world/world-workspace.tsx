@@ -18,6 +18,7 @@ import {
   type WorldLineViewState,
 } from '@/lib/world-line';
 import { parseStudioSelect } from '@/lib/creator-chat-nav';
+import { createStudioEntity, type TimelineCreatableKind } from '@/lib/studio-entity-create';
 import { parseWorldCanvasView } from '@/lib/world-canvas';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import { characterSpanPatches, locationSpanPatches } from '@/lib/world-track-edit';
@@ -55,8 +56,10 @@ export function WorldWorkspace() {
   const searchParams = useSearchParams();
   const canvas = parseWorldCanvasView(searchParams);
   const view = canvas === 'production' ? 'production' : 'world';
-  const { selection, setSelection, resources, loading, error, reload } = useStudioSelection();
+  const { selection, setSelection, resources, loading, error, reload, requestEdit } =
+    useStudioSelection();
   const [clipNotice, setClipNotice] = useState('');
+  const [creatingKind, setCreatingKind] = useState<TimelineCreatableKind | null>(null);
   const [rightCollapsed, toggleRight] = useCollapsedSidebar('worldRight');
   const [agentOpen] = usePersistedFlag(WORKSPACE_LAYOUT_KEYS.agentPanelOpen, false);
   const expandedForSelect = useRef(false);
@@ -84,6 +87,48 @@ export function WorldWorkspace() {
     },
     [reload],
   );
+
+  function revealInspector() {
+    if (rightCollapsed) toggleRight();
+  }
+
+  async function createFromTimeline(kind: TimelineCreatableKind) {
+    if (!resources || creatingKind) return;
+    setCreatingKind(kind);
+    setClipNotice('');
+    try {
+      const next = await createStudioEntity(
+        resources.project.id,
+        resources,
+        kind,
+        kind === 'character' ? { name: '未命名角色' } : undefined,
+      );
+      await load({ silent: true });
+      setSelection(next);
+      requestEdit(next);
+      revealInspector();
+    } catch (reason) {
+      setClipNotice(errorMessage(reason));
+    } finally {
+      setCreatingKind(null);
+    }
+  }
+
+  function editFromTimeline(item: WorldLineItem) {
+    const kind = item.entityType;
+    if (
+      kind !== 'character' &&
+      kind !== 'location' &&
+      kind !== 'scene' &&
+      kind !== 'world_event'
+    ) {
+      return;
+    }
+    const next = { kind, id: item.id };
+    setSelection(next);
+    requestEdit(next);
+    revealInspector();
+  }
 
   useEffect(() => {
     if (!parseStudioSelect(searchParams) || expandedForSelect.current || !rightCollapsed) return;
@@ -288,7 +333,7 @@ export function WorldWorkspace() {
                     onChange={updateLineView}
                   />
                   {focusedDimension ? (
-                    <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-4 py-2 text-xs leading-5 text-violet-950">
+                    <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-4 py-2 text-xs leading-5 text-violet-950 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-100">
                       {isPrimaryWorldline(focusedDimension) ? (
                         <>
                           正在查看「{focusedDimension.label}
@@ -309,11 +354,11 @@ export function WorldWorkspace() {
                   ) : null}
                 </>
               ) : (
-                <div className="shrink-0 border-b border-line bg-zinc-50 px-4 py-2 text-xs leading-5 text-zinc-600">
+                <div className="shrink-0 border-b border-line bg-[var(--z-chrome)] px-4 py-2 text-xs leading-5 text-[var(--z-fg-muted)]">
                   机位 / 风格 / 提示词 / 模型是从镜头当前状态投影的只读轨，不另存 TimelineItem。
                 </div>
               )}
-              <div className="min-h-0 flex-1 p-3">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 {model &&
                 (view === 'production' ||
                   !model.tracks.every((track) => track.items.length === 0)) ? (
@@ -327,6 +372,9 @@ export function WorldWorkspace() {
                       focusedDimension ? isPrimaryWorldline(focusedDimension) : true
                     }
                     onClipCommit={commitClip}
+                    onCreateTrack={view === 'world' ? createFromTimeline : undefined}
+                    onEditItem={view === 'world' ? editFromTimeline : undefined}
+                    creatingKind={creatingKind}
                   />
                 ) : worldModel && !worldModel.tracks.every((track) => track.items.length === 0) ? (
                   <div className="grid h-full place-items-center">
@@ -356,7 +404,7 @@ export function WorldWorkspace() {
                     <div className="max-w-sm text-center">
                       <p className="text-zinc-400">这个世界还没有任何世界线条目。</p>
                       <p className="mt-3 text-sm text-zinc-500">
-                        左侧树点「+ 新建」补角色、场景、事件；也可以用顶栏 Chat 口述创建。
+                        时间线角色/地点/场景/事件轨点「+」添加，双击片段在右侧编辑；不可以在时间线上删块或当剪辑软件拖块。
                       </p>
                     </div>
                   </div>
@@ -371,7 +419,7 @@ export function WorldWorkspace() {
                   setDockHeight((height) => clampPx(height - delta, 40, max));
                 }}
               />
-              <div className="min-h-0 shrink-0 overflow-y-auto" style={{ height: dockHeight }}>
+              <div className="min-h-0 shrink-0 overflow-x-hidden overflow-y-auto" style={{ height: dockHeight }}>
                 {view === 'world' && (
                   <DockSection title="副驾驶" open={copilotOpen} onToggle={toggleCopilot}>
                     <CoPilotPanel resources={resources} onSelect={setSelection} showTitle={false} />

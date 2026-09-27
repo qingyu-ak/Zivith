@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, session } from '@/lib/api';
 import { captureSettingsReturn } from '@/lib/settings-return';
-import { IconDevice, IconGear, IconHelp, IconLogout } from './nav-icons';
+import { TitleBarTools } from './title-bar-tools';
+import { IconGear, IconHelp, IconLogout } from './nav-icons';
 
 export function AccountMenu({
   settingsHref,
@@ -51,7 +52,8 @@ export function AccountMenu({
   const name = signedIn ? '已登录' : '本地创作者';
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="flex items-center gap-0.5">
+      <div className="relative min-w-0 flex-1" ref={rootRef}>
       {open && (
         <div
           className={`absolute bottom-[calc(100%+8px)] left-0 right-0 overflow-hidden rounded-2xl shadow-lg ${
@@ -76,7 +78,10 @@ export function AccountMenu({
             className={`flex items-center gap-3 px-3 py-2.5 text-sm ${
               light ? 'text-zinc-700 hover:bg-zinc-50' : 'text-zinc-600 hover:bg-zinc-100'
             }`}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              captureSettingsReturn();
+              setOpen(false);
+            }}
           >
             <IconHelp className="size-4" />
             帮助与反馈
@@ -98,7 +103,10 @@ export function AccountMenu({
               className={`flex items-center gap-3 px-3 py-2.5 text-sm ${
                 light ? 'text-zinc-700 hover:bg-zinc-50' : 'text-zinc-600 hover:bg-zinc-100'
               }`}
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                captureSettingsReturn();
+                setOpen(false);
+              }}
             >
               <IconLogout className="size-4" />
               登录
@@ -106,36 +114,36 @@ export function AccountMenu({
           )}
         </div>
       )}
-      <button
-        type="button"
-        className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition ${
-          open
-            ? light
-              ? 'bg-white ring-1 ring-[#4d6bfe]'
-              : 'bg-zinc-100 ring-1 ring-accent/50'
-            : light
-              ? 'hover:bg-white/80'
-              : 'hover:bg-zinc-100'
-        }`}
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <span
-          className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold ${
-            light ? 'bg-zinc-200 text-zinc-600' : 'bg-zinc-100 text-accent'
+        <button
+          type="button"
+          className={`flex min-w-0 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition ${
+            open
+              ? light
+                ? 'bg-white ring-1 ring-[#4d6bfe]'
+                : 'bg-zinc-100 ring-1 ring-accent/50'
+              : light
+                ? 'hover:bg-white/80'
+                : 'hover:bg-zinc-100'
           }`}
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-haspopup="menu"
         >
-          <span className="text-[11px]">我</span>
-        </span>
-        <span
-          className={`min-w-0 flex-1 truncate text-sm ${light ? 'text-zinc-800' : 'text-zinc-700'}`}
-        >
-          {name}
-        </span>
-        <IconDevice className={`size-4 ${light ? 'text-zinc-400' : 'text-zinc-500'}`} />
-        <IconGear className={`size-4 ${light ? 'text-zinc-400' : 'text-zinc-500'}`} />
-      </button>
+          <span
+            className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold ${
+              light ? 'bg-zinc-200 text-zinc-600' : 'bg-zinc-100 text-accent'
+            }`}
+          >
+            <span className="text-[11px]">我</span>
+          </span>
+          <span
+            className={`min-w-0 flex-1 truncate text-sm ${light ? 'text-zinc-800' : 'text-zinc-700'}`}
+          >
+            {name}
+          </span>
+        </button>
+      </div>
+      <TitleBarTools />
     </div>
   );
 }

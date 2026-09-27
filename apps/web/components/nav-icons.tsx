@@ -292,6 +292,32 @@ export function IconStatus(props: IconProps) {
   );
 }
 
+export function IconPhone(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="8" y="3.5" width="8" height="17" rx="1.8" />
+      <path d="M11 17.6h2" />
+    </svg>
+  );
+}
+
+export function IconSun(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 4.5v1.6M12 17.9v1.6M4.5 12h1.6M17.9 12h1.6M6.4 6.4l1.1 1.1M16.5 16.5l1.1 1.1M17.6 6.4l-1.1 1.1M7.5 16.5l-1.1 1.1" />
+    </svg>
+  );
+}
+
+export function IconMoon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M15.5 4.8A7.2 7.2 0 1 0 19 14.2 5.6 5.6 0 0 1 15.5 4.8Z" />
+    </svg>
+  );
+}
+
 export function IconArrowLeft(props: IconProps) {
   return (
     <svg {...base} {...props}>

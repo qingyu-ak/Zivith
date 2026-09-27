@@ -1,7 +1,12 @@
 import { isPlayableCharacter } from './create-world-character';
 import type { WorldResourcesDTO, WorldSelection } from './types';
 
-export type StudioDeletableKind = 'character' | 'location' | 'world_event' | 'relationship';
+export type StudioDeletableKind =
+  | 'character'
+  | 'location'
+  | 'scene'
+  | 'world_event'
+  | 'relationship';
 
 export function studioDeleteTarget(
   selection: WorldSelection,
@@ -25,6 +30,15 @@ export function studioDeleteTarget(
       kind: 'location',
       path: `/assets/${selection.id}`,
       confirm: `删除地点「${title}」？它会从世界里去掉。`,
+    };
+  }
+  if (selection.kind === 'scene') {
+    const scene = resources.entities.scenes.find((item) => item.id === selection.id);
+    const title = scene?.title?.trim() || '这个场景';
+    return {
+      kind: 'scene',
+      path: `/scenes/${selection.id}`,
+      confirm: `删除场景「${title}」？它会从时间线和故事里去掉。镜头会一起去掉。`,
     };
   }
   if (selection.kind === 'world_event') {

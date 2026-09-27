@@ -785,6 +785,30 @@ export function InspectorPanel({
                 {selection.kind === 'character' ? '编辑角色卡' : '编辑'}
               </button>
             </div>
+          ) : selection && editing && studioDeleteTarget(selection, resources) ? (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                const target = studioDeleteTarget(selection, resources);
+                if (!target) return;
+                if (!window.confirm(target.confirm)) return;
+                setSaving(true);
+                setEditError('');
+                void api(target.path, { method: 'DELETE' })
+                  .then(() => {
+                    consumeBeginEditing();
+                    setEditing(false);
+                    onSelect?.({ kind: 'project', id: resources.project.id });
+                    onUpdated?.();
+                  })
+                  .catch((reason: unknown) => setEditError(errorMessage(reason)))
+                  .finally(() => setSaving(false));
+              }}
+              className="rounded-md border border-line px-2 py-0.5 text-xs text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+            >
+              删除
+            </button>
           ) : null}
         </header>
         {editError && !editing ? (

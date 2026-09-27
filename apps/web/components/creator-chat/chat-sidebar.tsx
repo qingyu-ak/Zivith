@@ -122,7 +122,7 @@ export function ChatSidebar({
   }
 
   return (
-    <aside className="flex h-full w-[268px] shrink-0 flex-col bg-[#f7f8fa]">
+    <aside className="flex h-full w-[268px] shrink-0 flex-col bg-[var(--z-chrome)]">
       <div className="px-3 pt-3">
         <button
           type="button"
@@ -505,7 +505,7 @@ export function ChatSidebarRail({
   onCreateWorld: () => void;
 }) {
   return (
-    <aside className="flex h-full w-14 shrink-0 flex-col items-center gap-2 bg-[#f7f8fa] py-3">
+    <aside className="flex h-full w-14 shrink-0 flex-col items-center gap-2 bg-[var(--z-chrome)] py-3">
       <button
         type="button"
         className="grid size-9 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-800"

@@ -9,7 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { WorldLineItem, WorldLineModel, WorldSelection } from '@/lib/types';
-import { createOrderScale, integerTicks, thinByMinGap } from '@/lib/world-scale';
+import { clipPlotBox, createOrderScale, integerTicks, paddedOrderDomain, thinByMinGap } from '@/lib/world-scale';
 import {
   overlayFocusOfItem,
   isTimelineItemActive,
@@ -20,16 +20,17 @@ import {
 } from '@/lib/world-line';
 import { persistClipWrites } from '@/lib/world-track-edit';
 
-const TRACK_LABEL_WIDTH = 92;
-const TRACK_HEIGHT = 72;
-const TRACK_GAP = 10;
-const PADDING = { top: 10, right: 28, bottom: 16 };
-const ITEM_HEIGHT = 48;
-const EDGE = 18;
+const TRACK_LABEL_WIDTH = 112;
+const TRACK_HEIGHT = 56;
+const TRACK_GAP = 0;
+const PLOT_GUTTER = 16;
+const PADDING = { top: 6, right: 16, bottom: 0 };
+const ITEM_HEIGHT = 28;
+const EDGE = 10;
 const MIN_UNIT_PX = 56;
-const MIN_EDIT_CLIP_PX = 88;
-const CHAR_LANE_GAP = 6;
-const CHAR_LANE_PAD = 8;
+const MIN_EDIT_CLIP_PX = 64;
+const CHAR_LANE_GAP = 4;
+const CHAR_LANE_PAD = 6;
 
 interface TrackColor {
   fill: string;
@@ -38,17 +39,27 @@ interface TrackColor {
 }
 
 const TRACK_COLORS: Record<string, TrackColor> = {
-  character: { fill: 'rgba(77,107,254,0.12)', stroke: '#4d6bfe', text: '#1e3a8a' },
-  location: { fill: 'rgba(5,150,105,0.12)', stroke: '#059669', text: '#065f46' },
-  scene: { fill: 'rgba(37,99,235,0.10)', stroke: '#2563eb', text: '#1e3a8a' },
-  world_event: { fill: 'rgba(217,119,6,0.12)', stroke: '#d97706', text: '#92400e' },
-  story: { fill: 'rgba(219,39,119,0.10)', stroke: '#db2777', text: '#9d174d' },
-  shot: { fill: 'rgba(225,29,72,0.10)', stroke: '#e11d48', text: '#9f1239' },
-  camera: { fill: 'rgba(13,148,136,0.12)', stroke: '#0f766e', text: '#115e59' },
-  style: { fill: 'rgba(168,85,247,0.12)', stroke: '#7c3aed', text: '#5b21b6' },
-  prompt: { fill: 'rgba(245,158,11,0.12)', stroke: '#d97706', text: '#92400e' },
-  model: { fill: 'rgba(99,102,241,0.12)', stroke: '#4f46e5', text: '#3730a3' },
+  character: { fill: '#3b5bdb', stroke: '#91a7ff', text: '#f8fafc' },
+  location: { fill: '#0f766e', stroke: '#5eead4', text: '#f8fafc' },
+  scene: { fill: '#1d4ed8', stroke: '#93c5fd', text: '#f8fafc' },
+  world_event: { fill: '#c2410c', stroke: '#fdba74', text: '#fff7ed' },
+  story: { fill: '#9d174d', stroke: '#f9a8d4', text: '#fdf2f8' },
+  shot: { fill: '#be123c', stroke: '#fda4af', text: '#fff1f2' },
+  camera: { fill: '#0f766e', stroke: '#5eead4', text: '#f8fafc' },
+  style: { fill: '#6d28d9', stroke: '#d8b4fe', text: '#f5f3ff' },
+  prompt: { fill: '#b45309', stroke: '#fcd34d', text: '#fffbeb' },
+  model: { fill: '#4338ca', stroke: '#a5b4fc', text: '#eef2ff' },
 };
+
+const TIMELINE_CANVAS = 'var(--z-timeline-canvas)';
+const TIMELINE_LANE_A = 'var(--z-timeline-lane-a)';
+const TIMELINE_LANE_B = 'var(--z-timeline-lane-b)';
+const TIMELINE_BORDER = 'var(--z-timeline-border)';
+const TIMELINE_MUTED = 'var(--z-timeline-muted)';
+const TIMELINE_AXIS_LABEL = 'var(--z-timeline-axis-label)';
+const TIMELINE_AXIS_SUB = 'var(--z-timeline-axis-sub)';
+const TIMELINE_GUIDE = 'var(--z-timeline-guide)';
+const TIMELINE_LINK = 'var(--z-timeline-link)';
 
 const KIND_LABEL: Record<string, string> = {
   character: '角色',
@@ -117,6 +128,23 @@ function persistWrites(kind: string): boolean {
   return persistClipWrites(kind);
 }
 
+function canCreateOnTrack(
+  kind: string,
+): kind is 'character' | 'location' | 'scene' | 'world_event' {
+  return (
+    kind === 'character' || kind === 'location' || kind === 'scene' || kind === 'world_event'
+  );
+}
+
+function canEditOnTrack(kind: string): boolean {
+  return canCreateOnTrack(kind);
+}
+
+/** 世界线是语义轨，不是剪辑软件：禁止拖块、拉长短。 */
+function canTrimClipLikeNle(_kind: string): boolean {
+  return false;
+}
+
 function HorizontalNav({
   canvasWidth,
   viewportWidth,
@@ -131,6 +159,7 @@ function HorizontalNav({
   onJump: (left: number) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const [held, setHeld] = useState(false);
   const maxScroll = Math.max(0, canvasWidth - viewportWidth);
   const viewRatio = canvasWidth <= 0 ? 1 : Math.min(1, viewportWidth / canvasWidth);
   const thumbPct = Math.max(8, viewRatio * 100);
@@ -147,10 +176,21 @@ function HorizontalNav({
   }
 
   return (
-    <div className="flex h-9 shrink-0 items-center gap-2 border-t border-line bg-zinc-50 px-2">
+    <div
+      className={`absolute inset-x-0 bottom-0 z-30 flex h-8 items-center gap-2 border-t px-2 transition-opacity ${
+        held
+          ? 'pointer-events-auto opacity-100'
+          : 'pointer-events-none opacity-0 group-hover/timeline:pointer-events-auto group-hover/timeline:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'
+      }`}
+      style={{
+        borderColor: TIMELINE_BORDER,
+        background: 'color-mix(in srgb, var(--z-timeline-chrome) 95%, transparent)',
+      }}
+    >
       <button
         type="button"
-        className="grid size-7 place-items-center rounded-md text-lg leading-none text-zinc-600 hover:bg-zinc-200"
+        className="grid size-7 place-items-center rounded-md text-lg leading-none hover:opacity-100"
+        style={{ color: TIMELINE_MUTED }}
         aria-label="向左滚动"
         onClick={() => onJump(scrollLeft - Math.max(160, viewportWidth * 0.55))}
       >
@@ -158,7 +198,8 @@ function HorizontalNav({
       </button>
       <div
         ref={trackRef}
-        className="relative h-3.5 flex-1 cursor-pointer rounded-full bg-zinc-200"
+        className="relative h-2.5 flex-1 cursor-pointer rounded-full"
+        style={{ background: 'var(--z-timeline-hover)' }}
         role="scrollbar"
         aria-label="时间线横向位置"
         aria-orientation="horizontal"
@@ -167,6 +208,7 @@ function HorizontalNav({
         aria-valuenow={Math.round(scrollLeft)}
         onPointerDown={(event) => {
           event.preventDefault();
+          setHeld(true);
           onJump(clientToScroll(event.clientX));
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
@@ -174,6 +216,8 @@ function HorizontalNav({
           if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
           onJump(clientToScroll(event.clientX));
         }}
+        onPointerUp={() => setHeld(false)}
+        onPointerCancel={() => setHeld(false)}
       >
         <div
           className="absolute top-0 h-full rounded-full bg-zinc-500"
@@ -182,7 +226,8 @@ function HorizontalNav({
       </div>
       <button
         type="button"
-        className="grid size-7 place-items-center rounded-md text-lg leading-none text-zinc-600 hover:bg-zinc-200"
+        className="grid size-7 place-items-center rounded-md text-lg leading-none"
+        style={{ color: TIMELINE_MUTED }}
         aria-label="向右滚动"
         onClick={() => onJump(scrollLeft + Math.max(160, viewportWidth * 0.55))}
       >
@@ -214,6 +259,9 @@ export function WorldTimeline({
   focusedDimensionLabel = null,
   focusedIsPrimary = true,
   onClipCommit,
+  onCreateTrack,
+  onEditItem,
+  creatingKind = null,
 }: {
   model: WorldLineModel;
   selection: WorldSelection;
@@ -222,6 +270,9 @@ export function WorldTimeline({
   focusedDimensionLabel?: string | null;
   focusedIsPrimary?: boolean;
   onClipCommit?: (item: WorldLineItem, start: number, end: number) => Promise<void> | void;
+  onCreateTrack?: (kind: 'character' | 'location' | 'scene' | 'world_event') => void;
+  onEditItem?: (item: WorldLineItem) => void;
+  creatingKind?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -229,8 +280,10 @@ export function WorldTimeline({
   const skipSelectRef = useRef(false);
   const [width, setWidth] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
-  const [zoomX, setZoomX] = useState(1);
-  const [zoomY, setZoomY] = useState(1);
+  const [zoomX, setZoomX] = useState(0.75);
+  const [zoomY, setZoomY] = useState(0.85);
+  const zoomRef = useRef({ x: 0.75, y: 0.85 });
+  zoomRef.current = { x: zoomX, y: zoomY };
   const panRef = useRef<{
     originX: number;
     originY: number;
@@ -306,8 +359,8 @@ export function WorldTimeline({
       const zoom = window.localStorage.getItem(zoomKey);
       if (zoom) {
         const parsed = JSON.parse(zoom) as { x?: number; y?: number };
-        if (typeof parsed.x === 'number') setZoomX(clamp(parsed.x, 0.5, 3));
-        if (typeof parsed.y === 'number') setZoomY(clamp(parsed.y, 0.6, 2.2));
+        if (typeof parsed.x === 'number') setZoomX(clamp(parsed.x, 0.35, 3));
+        if (typeof parsed.y === 'number') setZoomY(clamp(parsed.y, 0.45, 2.2));
       }
     } catch {
       /* keep defaults */
@@ -325,10 +378,11 @@ export function WorldTimeline({
 
   const namedAxis = model.axisMarks.length > 0;
   const axisHeight = namedAxis ? 56 : 32;
-  const plotLeft = TRACK_LABEL_WIDTH + 8;
-  const domainSpan = Math.max(1, model.scaleDomain.max - model.scaleDomain.min);
-  const available = Math.max(160, width - plotLeft - PADDING.right);
+  const plotLeft = TRACK_LABEL_WIDTH + PLOT_GUTTER;
+  const [visualMin, visualMax] = paddedOrderDomain(model.scaleDomain.min, model.scaleDomain.max);
+  const domainSpan = Math.max(visualMax - visualMin, 0.5);
   const unitMin = MIN_UNIT_PX * zoomX;
+  const available = Math.max(160, width - plotLeft - PADDING.right);
   const plotWidth = Math.max(available, domainSpan * unitMin);
   const unitPx = plotWidth / domainSpan;
   const plotRight = plotLeft + plotWidth;
@@ -337,10 +391,10 @@ export function WorldTimeline({
   const laneGap = CHAR_LANE_GAP * zoomY;
   const lanePad = CHAR_LANE_PAD * zoomY;
 
-  const scale = useMemo(() => {
-    const { min, max } = model.scaleDomain;
-    return createOrderScale([min, max], [plotLeft, plotRight]);
-  }, [model.scaleDomain, plotLeft, plotRight]);
+  const scale = useMemo(
+    () => createOrderScale([visualMin, visualMax], [plotLeft, plotRight]),
+    [visualMin, visualMax, plotLeft, plotRight],
+  );
 
   const fallbackTicks = useMemo(
     () => integerTicks(model.scaleDomain.min, model.scaleDomain.max),
@@ -398,35 +452,35 @@ export function WorldTimeline({
 
       track.items.forEach((item, itemIndex) => {
         const span = draftSpans[item.id] ?? clipSpan(item);
-        const startX = plotLeft + (span.start - model.scaleDomain.min) * unitPx;
-        const endX = plotLeft + (span.end - model.scaleDomain.min) * unitPx;
-        const itemWidth = Math.max(
-          canEditClip(item.entityType) ? MIN_EDIT_CLIP_PX * zoomX : 48 * zoomX,
-          endX - startX,
-        );
-        const x = startX;
+        const minWidth = (canEditClip(item.entityType) ? MIN_EDIT_CLIP_PX : 48) * zoomX;
+        const spanLen = span.end - span.start;
+        const box = clipPlotBox(span, scale, minWidth, {
+          minX: plotLeft,
+          maxX: plotRight,
+          maxWidth: spanLen <= 1.2 ? 168 * zoomX : undefined,
+        });
         const itemY = stacked
           ? trackY + lanePad + itemIndex * (itemH + laneGap)
           : trackY + (height - itemH) / 2;
         positions.set(item.id, {
-          x,
+          x: box.x,
           y: itemY,
-          cx: x + itemWidth / 2,
+          cx: box.x + box.width / 2,
           cy: itemY + itemH / 2,
-          itemWidth,
+          itemWidth: box.width,
           kind: track.kind,
         });
       });
 
-      y += height + TRACK_GAP * zoomY;
+      y += height + TRACK_GAP;
     }
 
-    return { tracks, positions, totalHeight: y - TRACK_GAP * zoomY + PADDING.bottom };
+    return { tracks, positions, totalHeight: Math.max(y, axisHeight + trackH) + PADDING.bottom };
   }, [
     orderedTracks,
+    scale,
     plotLeft,
-    unitPx,
-    model.scaleDomain.min,
+    plotRight,
     axisHeight,
     draftSpans,
     itemH,
@@ -633,7 +687,8 @@ export function WorldTimeline({
     });
   }
 
-  const canvasWidth = plotRight + PADDING.right;
+  const canvasWidth = Math.max(plotRight + PADDING.right, width);
+  const laneRight = canvasWidth;
 
   function jumpScroll(left: number) {
     const scroller = scrollRef.current;
@@ -683,39 +738,64 @@ export function WorldTimeline({
   }
 
   function changeZoom(nextX: number, nextY: number) {
-    const x = clamp(nextX, 0.5, 3);
-    const y = clamp(nextY, 0.6, 2.2);
+    const x = clamp(nextX, 0.35, 3);
+    const y = clamp(nextY, 0.45, 2.2);
     setZoomX(x);
     setZoomY(y);
     window.localStorage.setItem(`zivith.worldZoom.${model.projectId}`, JSON.stringify({ x, y }));
   }
 
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      const direction = event.deltaY < 0 ? 1 : -1;
+      const { x, y } = zoomRef.current;
+      changeZoom(x + direction * 0.08, y + direction * 0.08);
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => node.removeEventListener('wheel', onWheel);
+  }, [model.projectId]);
+
   return (
     <div
       ref={containerRef}
-      className="relative isolate flex h-full min-h-64 w-full flex-col overflow-hidden"
+      className="group/timeline relative isolate flex h-full min-h-64 w-full flex-col overflow-hidden"
+      style={{ background: TIMELINE_CANVAS }}
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-white px-1 py-1 text-[11px] text-zinc-500">
-        <span>左键拖块移动 · 边缘左右拉长短 · 右键拖动画布 · 拖轨名换上下</span>
-        <span className="inline-flex items-center gap-1.5 text-violet-700">
-          <span className="inline-block size-2 rounded-full bg-violet-500" />
+      <div
+        className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-2 py-1 text-[11px]"
+        style={{
+          borderColor: TIMELINE_BORDER,
+          background: 'var(--z-timeline-chrome)',
+          color: TIMELINE_MUTED,
+        }}
+      >
+        <span>
+          左键选中 · 双击编辑角色/地点/场景/事件 · 点轨名旁 + 添加 · Ctrl+滚轮缩放 ·
+          不支持剪辑式拖块删块
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
+          <span className="inline-block size-2 rounded-full bg-violet-400" />
           {focusedDimensionLabel && !focusedIsPrimary
             ? `叠层「${focusedDimensionLabel}」· 主轴仍按呈现顺序`
             : '世界时间默认跟随主轴'}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-3 w-px bg-zinc-300" />
+          <span className="inline-block h-3 w-px bg-zinc-600" />
           事件竖线对齐主轴
         </span>
         {hasDivergence && (
-          <span className="inline-flex items-center gap-1.5 text-amber-700">
-            <span className="inline-block size-2 rounded-full bg-amber-500" />
+          <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+            <span className="inline-block size-2 rounded-full bg-amber-400" />
             琥珀色表示世界时间偏离呈现序
           </span>
         )}
         {hasOverlay && (
-          <span className="inline-flex items-center gap-1.5 text-violet-700">
-            <span className="inline-block size-2 rounded-full bg-violet-500" />
+          <span className="inline-flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
+            <span className="inline-block size-2 rounded-full bg-violet-400" />
             紫色表示显式世界时间绑定（区间 / 相对 / 平行）
           </span>
         )}
@@ -723,7 +803,7 @@ export function WorldTimeline({
           横
           <input
             type="range"
-            min={0.5}
+            min={0.35}
             max={3}
             step={0.1}
             value={zoomX}
@@ -736,7 +816,7 @@ export function WorldTimeline({
           纵
           <input
             type="range"
-            min={0.6}
+            min={0.45}
             max={2.2}
             step={0.1}
             value={zoomY}
@@ -748,7 +828,8 @@ export function WorldTimeline({
       </div>
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-300"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        style={{ background: TIMELINE_CANVAS }}
         onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}
         onContextMenu={(event) => event.preventDefault()}
         onPointerDownCapture={(event) => {
@@ -806,6 +887,29 @@ export function WorldTimeline({
               </filter>
             </defs>
 
+            <rect x={0} y={0} width={canvasWidth} height={svgHeight} fill={TIMELINE_CANVAS} />
+            {layout.tracks.map((track, index) => (
+              <rect
+                key={`lane-${track.id}`}
+                x={0}
+                y={track.trackY}
+                width={laneRight}
+                height={track.height}
+                fill={index % 2 === 0 ? TIMELINE_LANE_A : TIMELINE_LANE_B}
+              />
+            ))}
+            {layout.tracks.map((track) => (
+              <line
+                key={`lane-edge-${track.id}`}
+                x1={0}
+                y1={track.trackY + track.height}
+                x2={laneRight}
+                y2={track.trackY + track.height}
+                stroke={TIMELINE_BORDER}
+                strokeWidth="1"
+              />
+            ))}
+
             {/* 事件竖导轨：把呈现主轴落到各轨道 */}
             <g>
               {(namedAxis ? model.axisMarks : fallbackTicks.map((tick) => ({ order: tick }))).map(
@@ -816,24 +920,24 @@ export function WorldTimeline({
                       x1={scale(mark.order)}
                       y1={axisY}
                       x2={scale(mark.order)}
-                      y2={svgHeight - PADDING.bottom}
+                      y2={svgHeight}
                       stroke={
                         'worldTimeDiverges' in mark && mark.worldTimeDiverges
-                          ? 'rgba(217,119,6,0.28)'
-                          : 'rgba(24,24,27,0.08)'
+                          ? 'rgba(217,119,6,0.35)'
+                          : TIMELINE_GUIDE
                       }
                       strokeWidth="1"
                     />
                   ) : null,
               )}
             </g>
-            {playheadX != null && playheadX > plotLeft && playheadX < plotRight ? (
+            {playheadX != null && playheadX > plotLeft && playheadX < laneRight ? (
               <line
                 x1={playheadX}
-                y1={axisY}
+                y1={0}
                 x2={playheadX}
-                y2={svgHeight - PADDING.bottom}
-                stroke="rgba(24,24,27,0.55)"
+                y2={svgHeight}
+                stroke="#ef4444"
                 strokeWidth="1.5"
                 pointerEvents="none"
               />
@@ -856,7 +960,7 @@ export function WorldTimeline({
                     <path
                       d={link.d}
                       fill="none"
-                      stroke={active ? 'rgba(217,119,6,0.9)' : 'rgba(24,24,27,0.18)'}
+                      stroke={active ? 'rgba(251,191,36,0.95)' : TIMELINE_LINK}
                       strokeWidth={active ? 2.25 : 1.25}
                       strokeDasharray="4 3"
                     />
@@ -864,7 +968,7 @@ export function WorldTimeline({
                       <text
                         x={link.midX}
                         y={link.midY}
-                        fill={active ? '#b45309' : '#71717a'}
+                        fill={active ? '#fbbf24' : '#a1a1aa'}
                         fontSize="10"
                         textAnchor="middle"
                       >
@@ -879,21 +983,27 @@ export function WorldTimeline({
             {/* 顶部刻度轴：呈现顺序为主轴，事件标题为刻度名 */}
             <g>
               <line
-                x1={plotLeft}
+                x1={0}
                 y1={axisY}
-                x2={plotRight}
+                x2={laneRight}
                 y2={axisY}
-                stroke="#d4d4d8"
+                stroke={TIMELINE_BORDER}
                 strokeWidth="1"
               />
               {namedAxis
                 ? model.axisMarks.map((mark, index) => {
                     const x = scale(mark.order);
+                    const labelAnchor =
+                      x < plotLeft + 56 ? 'start' : x > plotRight - 56 ? 'end' : 'middle';
                     const diverges = Boolean(mark.worldTimeDiverges);
                     const overlay = mark.worldTimeRelation && mark.worldTimeRelation !== 'follow';
-                    const accent = diverges ? '#d97706' : overlay ? '#7c3aed' : '#d4d4d8';
-                    const labelFill = diverges ? '#b45309' : overlay ? '#5b21b6' : '#3f3f46';
-                    const subFill = diverges ? '#d97706' : overlay ? '#7c3aed' : '#a1a1aa';
+                    const accent = diverges ? '#f59e0b' : overlay ? '#a78bfa' : TIMELINE_MUTED;
+                    const labelFill = diverges
+                      ? '#f59e0b'
+                      : overlay
+                        ? '#7c3aed'
+                        : TIMELINE_AXIS_LABEL;
+                    const subFill = diverges ? '#d97706' : overlay ? '#7c3aed' : TIMELINE_AXIS_SUB;
                     const showLabel = axisLabelKeep[index];
                     const caption = mark.worldTimeLabel
                       ? `${mark.label} · ${mark.worldTimeLabel}`
@@ -917,7 +1027,7 @@ export function WorldTimeline({
                               fill={labelFill}
                               fontSize="11"
                               fontWeight="600"
-                              textAnchor="middle"
+                              textAnchor={labelAnchor}
                             >
                               {clipLabel(mark.label, 8)}
                             </text>
@@ -926,7 +1036,7 @@ export function WorldTimeline({
                               y={PADDING.top + 28}
                               fill={subFill}
                               fontSize="9"
-                              textAnchor="middle"
+                              textAnchor={labelAnchor}
                             >
                               {mark.worldTimeLabel
                                 ? clipLabel(mark.worldTimeLabel, 10)
@@ -950,14 +1060,14 @@ export function WorldTimeline({
                         y1={axisY}
                         x2={scale(tick)}
                         y2={axisY + 5}
-                        stroke="#d4d4d8"
+                        stroke={TIMELINE_MUTED}
                         strokeWidth="1"
                       />
                       {axisLabelKeep[index] && (
                         <text
                           x={scale(tick)}
                           y={PADDING.top + 12}
-                          fill="#71717a"
+                          fill={TIMELINE_AXIS_SUB}
                           fontSize="11"
                           textAnchor="middle"
                         >
@@ -978,18 +1088,15 @@ export function WorldTimeline({
                   <rect
                     x={TRACK_LABEL_WIDTH}
                     y={track.trackY}
-                    width={Math.max(0, plotRight - TRACK_LABEL_WIDTH)}
+                    width={Math.max(0, laneRight - TRACK_LABEL_WIDTH)}
                     height={track.height}
-                    rx="10"
-                    fill="rgba(24,24,27,0.03)"
-                    stroke="#e5e7eb"
-                    strokeWidth="1"
+                    fill="transparent"
                   />
-                  {trackItems.length === 0 && track.kind === 'world_event' ? (
+                  {trackItems.length === 0 && track.kind === 'world_event' && !onCreateTrack ? (
                     <text
                       x={plotLeft + 12}
                       y={track.trackY + track.height / 2}
-                      fill="#a1a1aa"
+                      fill={TIMELINE_MUTED}
                       fontSize="11"
                       dominantBaseline="middle"
                     >
@@ -1002,18 +1109,18 @@ export function WorldTimeline({
                     <text
                       x={plotLeft + 12}
                       y={track.trackY + track.height / 2}
-                      fill="#a1a1aa"
+                      fill={TIMELINE_MUTED}
                       fontSize="11"
                       dominantBaseline="middle"
                     >
                       还没有故事
                     </text>
                   ) : null}
-                  {trackItems.length === 0 && track.kind === 'scene' ? (
+                  {trackItems.length === 0 && track.kind === 'scene' && !onCreateTrack ? (
                     <text
                       x={plotLeft + 12}
                       y={track.trackY + track.height / 2}
-                      fill="#a1a1aa"
+                      fill={TIMELINE_MUTED}
                       fontSize="11"
                       dominantBaseline="middle"
                     >
@@ -1024,7 +1131,7 @@ export function WorldTimeline({
                     <text
                       x={plotLeft + 12}
                       y={track.trackY + track.height / 2}
-                      fill="#a1a1aa"
+                      fill={TIMELINE_MUTED}
                       fontSize="11"
                       dominantBaseline="middle"
                     >
@@ -1035,7 +1142,7 @@ export function WorldTimeline({
                     <text
                       x={plotLeft + 12}
                       y={track.trackY + track.height / 2}
-                      fill="#a1a1aa"
+                      fill={TIMELINE_MUTED}
                       fontSize="11"
                       dominantBaseline="middle"
                     >
@@ -1046,7 +1153,7 @@ export function WorldTimeline({
                     <text
                       x={plotLeft + 12}
                       y={track.trackY + track.height / 2}
-                      fill="#a1a1aa"
+                      fill={TIMELINE_MUTED}
                       fontSize="11"
                       dominantBaseline="middle"
                     >
@@ -1057,7 +1164,7 @@ export function WorldTimeline({
                     <text
                       x={plotLeft + 12}
                       y={track.trackY + track.height / 2}
-                      fill="#a1a1aa"
+                      fill={TIMELINE_MUTED}
                       fontSize="11"
                       dominantBaseline="middle"
                     >
@@ -1068,7 +1175,7 @@ export function WorldTimeline({
                     <text
                       x={plotLeft + 12}
                       y={track.trackY + track.height / 2}
-                      fill="#a1a1aa"
+                      fill={TIMELINE_MUTED}
                       fontSize="11"
                       dominantBaseline="middle"
                     >
@@ -1086,12 +1193,12 @@ export function WorldTimeline({
                     const stroke = active
                       ? '#ffffff'
                       : diverges
-                        ? '#d97706'
+                        ? '#f59e0b'
                         : crossing
-                          ? '#7c3aed'
+                          ? '#c4b5fd'
                           : overlay
-                            ? '#8b5cf6'
-                            : 'rgba(255,255,255,0.85)';
+                            ? '#a78bfa'
+                            : color.stroke;
                     const span = draftSpans[item.id] ?? clipSpan(item);
                     const spanLabel = spanCaption(span.start, span.end);
                     const pillWidth = Math.max(36, estimateTextWidth(spanLabel) + 12);
@@ -1106,49 +1213,30 @@ export function WorldTimeline({
                           y={pos.y}
                           width={pos.itemWidth}
                           height={itemH}
-                          rx="10"
+                          rx="3"
                           fill={color.fill}
                           stroke={stroke}
-                          strokeWidth={active ? 2.5 : 1.5}
+                          strokeWidth={active ? 2 : 1}
                           filter={active ? 'url(#selected-glow)' : undefined}
                         />
-                        {pos.itemWidth > pillWidth + 16 ? (
-                          <rect
-                            x={pos.x + 8}
-                            y={pos.y + 6}
-                            width={pillWidth}
-                            height={14}
-                            rx="7"
-                            fill="rgba(24,24,27,0.55)"
-                          />
-                        ) : null}
-                        {pos.itemWidth > pillWidth + 16 ? (
+                        {pos.itemWidth > 28 ? (
                           <text
-                            x={pos.x + 8 + pillWidth / 2}
-                            y={pos.y + 14}
-                            fill="#fff"
-                            fontSize="9"
-                            textAnchor="middle"
+                            x={pos.x + 8}
+                            y={pos.y + itemH / 2}
+                            fill={color.text}
+                            fontSize="11"
+                            fontWeight="600"
                             dominantBaseline="middle"
                             style={{ pointerEvents: 'none' }}
                           >
-                            {spanLabel}
+                            {clipLabel(
+                              pos.itemWidth > pillWidth + 36
+                                ? `${item.title}  ${spanLabel}`
+                                : item.title,
+                              Math.max(2, Math.floor((pos.itemWidth - 14) / 12)),
+                            )}
                           </text>
                         ) : null}
-                        <text
-                          x={pos.x + pos.itemWidth / 2}
-                          y={pos.y + itemH / 2 + 6}
-                          fill={color.text}
-                          fontSize="12"
-                          fontWeight="700"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          style={{ pointerEvents: 'none' }}
-                        >
-                          {pos.itemWidth < 44
-                            ? ''
-                            : clipLabel(item.title, pos.itemWidth < 88 ? 4 : 12)}
-                        </text>
                         {(diverges || overlay) && (
                           <circle
                             cx={pos.x + pos.itemWidth - 16}
@@ -1169,7 +1257,7 @@ export function WorldTimeline({
               track.items.map((item) => {
                 const pos = layout.positions.get(item.id);
                 if (!pos) return null;
-                const editable = canEditClip(item.entityType);
+                const nleTrim = canTrimClipLikeNle(item.entityType);
                 return (
                   <div
                     key={`hit-${item.id}`}
@@ -1179,7 +1267,7 @@ export function WorldTimeline({
                       top: pos.y,
                       width: pos.itemWidth,
                       height: itemH,
-                      cursor: editable ? 'grab' : 'pointer',
+                      cursor: nleTrim ? 'grab' : 'pointer',
                       touchAction: 'none',
                     }}
                     onClick={() => {
@@ -1194,15 +1282,21 @@ export function WorldTimeline({
                       }
                       onSelect({ kind: item.entityType, id: item.id });
                     }}
+                    onDoubleClick={(event) => {
+                      event.preventDefault();
+                      if (!canEditOnTrack(item.entityType)) return;
+                      onSelect({ kind: item.entityType, id: item.id });
+                      onEditItem?.(item);
+                    }}
                     onPointerDown={(event) => {
-                      if (!editable) return;
+                      if (!nleTrim) return;
                       beginClipDrag('move', item, event);
                     }}
                     onMouseEnter={(event) => showItemHover(event, item, track.kind)}
                     onMouseMove={(event) => showItemHover(event, item, track.kind)}
                     onMouseLeave={() => setHover(null)}
                   >
-                    {editable ? (
+                    {nleTrim ? (
                       <>
                         <div
                           className="absolute inset-y-0 left-0 z-10"
@@ -1221,25 +1315,87 @@ export function WorldTimeline({
               }),
             )}
           </div>
+          {layout.tracks.map((track) => {
+            const source = orderedTracks.find((item) => item.id === track.id);
+            if (!source || source.items.length > 0) return null;
+            if (!canCreateOnTrack(track.kind) || !onCreateTrack) return null;
+            const kind = track.kind;
+            const label = KIND_LABEL[kind] ?? kind;
+            const busy = creatingKind === kind;
+            return (
+              <button
+                key={`add-${track.id}`}
+                type="button"
+                disabled={busy}
+                className="pointer-events-auto absolute z-10 text-left text-[11px] disabled:opacity-40"
+                style={{
+                  left: plotLeft,
+                  top: track.trackY,
+                  height: track.height,
+                  width: Math.max(80, canvasWidth - plotLeft - 16),
+                  color: TIMELINE_MUTED,
+                }}
+                onClick={() => {
+                  if (canCreateOnTrack(kind)) onCreateTrack(kind);
+                }}
+              >
+                {busy ? `正在添加${label}…` : `点击添加${label}`}
+              </button>
+            );
+          })}
           <div
-            className="pointer-events-auto absolute top-0 z-20 border-r border-line bg-white/95"
-            style={{ left: scrollLeft, width: TRACK_LABEL_WIDTH, height: svgHeight }}
+            className="pointer-events-auto absolute z-20 border-r"
+            style={{
+              left: scrollLeft,
+              top: axisY,
+              width: TRACK_LABEL_WIDTH,
+              height: Math.max(0, svgHeight - axisY),
+              borderColor: TIMELINE_BORDER,
+              background: 'var(--z-timeline-chrome)',
+              boxShadow: '8px 0 16px color-mix(in srgb, var(--z-timeline-chrome) 88%, transparent)',
+            }}
           >
             {layout.tracks.map((track) => {
               const label = track.title || KIND_LABEL[track.kind] || track.kind;
               const dragging = dragRef.current?.mode === 'track' && dragRef.current.id === track.id;
+              const busy = creatingKind === track.kind;
               return (
-                <button
+                <div
                   key={track.id}
-                  type="button"
-                  className={`absolute left-0 right-0 flex cursor-ns-resize items-center justify-end px-2 text-xs font-semibold ${
-                    dragging ? 'bg-zinc-100 text-zinc-800' : 'text-zinc-500 hover:bg-zinc-50'
-                  }`}
-                  style={{ top: track.trackY, height: track.height, touchAction: 'none' }}
-                  onPointerDown={(event) => beginTrackDrag(track.id, event)}
+                  className="absolute left-0 right-0 flex"
+                  style={{ top: track.trackY - axisY, height: track.height }}
                 >
-                  {label}
-                </button>
+                  {canCreateOnTrack(track.kind) && onCreateTrack ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="grid w-7 shrink-0 place-items-center text-base leading-none disabled:opacity-40"
+                      style={{ color: TIMELINE_MUTED }}
+                      aria-label={`添加${label}`}
+                      title={`添加${label}`}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => {
+                        if (canCreateOnTrack(track.kind)) onCreateTrack(track.kind);
+                      }}
+                    >
+                      {busy ? '…' : '+'}
+                    </button>
+                  ) : (
+                    <span className="w-7 shrink-0" />
+                  )}
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 cursor-ns-resize truncate px-1.5 text-left text-xs font-medium"
+                    style={{
+                      touchAction: 'none',
+                      color: dragging ? 'var(--z-fg)' : TIMELINE_MUTED,
+                      background: dragging ? 'var(--z-timeline-hover)' : undefined,
+                    }}
+                    onPointerDown={(event) => beginTrackDrag(track.id, event)}
+                  >
+                    {label}
+                  </button>
+                </div>
               );
             })}
           </div>

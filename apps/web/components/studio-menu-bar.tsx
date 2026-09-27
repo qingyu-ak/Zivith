@@ -156,10 +156,22 @@ export function StudioMenuBar({
         </MenuLink>
       </Menu>
       <Menu label="帮助" id="help" open={open} setOpen={setOpen}>
-        <MenuLink href="/help" onClick={() => setOpen(null)}>
+        <MenuLink
+          href="/help"
+          onClick={() => {
+            captureSettingsReturn();
+            setOpen(null);
+          }}
+        >
           使用文档
         </MenuLink>
-        <MenuLink href="/help#feedback" onClick={() => setOpen(null)}>
+        <MenuLink
+          href="/help#feedback"
+          onClick={() => {
+            captureSettingsReturn();
+            setOpen(null);
+          }}
+        >
           反馈
         </MenuLink>
       </Menu>

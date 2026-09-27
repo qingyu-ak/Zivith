@@ -66,9 +66,9 @@ export function WorldTimeBar({
   }
 
   return (
-    <div className="shrink-0 border-b border-line bg-violet-50/60 px-4 py-2.5">
+    <div className="shrink-0 border-b border-line bg-violet-50/60 px-4 py-2.5 dark:border-violet-900/40 dark:bg-violet-950/30">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold tracking-wider text-violet-800">世界时间</span>
+        <span className="text-xs font-semibold tracking-wider text-violet-800 dark:text-violet-200">世界时间</span>
         <span className="text-[11px] text-zinc-500">点维度切换叠层，不换算真实日历</span>
         {dimensions.map((dimension) => {
           const active = selectedDimensionId === dimension.id;
@@ -80,7 +80,7 @@ export function WorldTimeBar({
               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] ${
                 active
                   ? 'border-violet-700 bg-violet-700 text-white'
-                  : 'border-violet-200 bg-white text-violet-900 hover:border-violet-400'
+                  : 'border-violet-200 bg-white text-violet-900 hover:border-violet-400 dark:border-violet-700 dark:bg-transparent dark:text-violet-200 dark:hover:border-violet-400'
               }`}
             >
               <span className="font-medium">{dimension.label}</span>
@@ -98,7 +98,7 @@ export function WorldTimeBar({
             type="button"
             disabled={saving}
             onClick={() => addPreset(preset)}
-            className="rounded-full border border-dashed border-violet-300 px-2.5 py-0.5 text-[11px] text-violet-700 hover:bg-white disabled:opacity-50"
+            className="rounded-full border border-dashed border-violet-300 px-2.5 py-0.5 text-[11px] text-violet-700 hover:bg-white disabled:opacity-50 dark:border-violet-600 dark:text-violet-300 dark:hover:bg-violet-950/50"
           >
             + {preset.label}
           </button>
@@ -106,7 +106,7 @@ export function WorldTimeBar({
         <button
           type="button"
           onClick={() => setAdding((current) => !current)}
-          className="rounded-full border border-violet-300 px-2.5 py-0.5 text-[11px] text-violet-800 hover:bg-white"
+          className="rounded-full border border-violet-300 px-2.5 py-0.5 text-[11px] text-violet-800 hover:bg-white dark:border-violet-600 dark:text-violet-200 dark:hover:bg-violet-950/50"
         >
           {adding ? '取消' : '+ 自定义维度'}
         </button>

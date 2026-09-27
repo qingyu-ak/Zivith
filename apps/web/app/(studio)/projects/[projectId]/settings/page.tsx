@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { IconArrowLeft } from '@/components/nav-icons';
-import { STUDIO_SURFACE, navigationHistoryFor } from '@/lib/navigation-history';
-import { clearSettingsReturn, readSettingsReturn } from '@/lib/settings-return';
+import { resolveOverlayReturn } from '@/lib/nav-overlay';
 import { ModelSettings } from '@/components/model-settings';
 import { ModelVisibilityList } from '@/components/model-visibility';
 import { UsageSummaryCard } from '@/components/usage-summary-card';
@@ -28,6 +27,7 @@ import {
 } from '@/lib/agent-write-mode';
 import { api, errorMessage } from '@/lib/api';
 import { pickWorkspaceDirectory } from '@/lib/desktop';
+import { useAppearanceTheme } from '@/lib/use-appearance-theme';
 import { openWorldFolderRequest } from '@/lib/world-folder';
 import type { WriteLogItemDTO } from '@/lib/types';
 
@@ -101,16 +101,7 @@ export default function SettingsPage() {
   }
 
   function leaveSettings() {
-    const origin = readSettingsReturn();
-    if (origin) {
-      clearSettingsReturn();
-      router.push(origin);
-      return;
-    }
-    const previous = navigationHistoryFor(STUDIO_SURFACE).backLeaving((path) =>
-      path.includes('/settings'),
-    );
-    router.push(previous ?? `/projects/${projectId}/world`);
+    router.push(resolveOverlayReturn(`/projects/${projectId}/world`));
   }
 
   return (
@@ -360,16 +351,34 @@ function GeneralSection({ projectId }: { projectId: string }) {
   );
 }
 
-/** 外观：只列真实存在的固定项，不做假开关。 */
+/** 外观：主题写入本机，时间线与工作台共用，不做假开关。 */
 function AppearanceSection() {
+  const [theme, setTheme] = useAppearanceTheme();
   return (
     <div>
       <h2 className="text-base font-semibold text-zinc-900">外观</h2>
       <div className="mt-4 grid gap-3">
-        <SettingRow title="主题" description="Chat 与 Studio 均为浅色，暂不提供深色主题。">
-          <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500">
-            浅色 · 固定
-          </span>
+        <SettingRow
+          title="主题"
+          description="浅色与 Studio 其余界面一致。深色时工作台和时间线改用深色背景。"
+        >
+          <div className="flex rounded-lg border border-zinc-200 p-0.5">
+            {(['light', 'dark'] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                aria-pressed={theme === item}
+                className={`rounded-md px-2.5 py-1 text-xs ${
+                  theme === item
+                    ? 'bg-zinc-900 text-white'
+                    : 'text-zinc-600 hover:bg-zinc-50'
+                }`}
+                onClick={() => setTheme(item)}
+              >
+                {item === 'light' ? '浅色' : '深色'}
+              </button>
+            ))}
+          </div>
         </SettingRow>
         <SettingRow title="代码主题" description="Zivith 不含代码编辑器，无代码高亮设置。">
           <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500">不适用</span>

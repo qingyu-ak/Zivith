@@ -29,11 +29,13 @@ export function ConversationTicksRail({
             aria-label={`回退到${preview.speaker}：${preview.snippet || '这句'}`}
             title={`${preview.speaker}：${preview.snippet}`}
             className={`pointer-events-auto group z-0 flex h-1.5 w-3 shrink-0 items-center overflow-hidden rounded-sm text-left transition-all hover:z-20 hover:h-auto hover:min-h-7 hover:w-44 hover:px-1.5 hover:py-1 hover:shadow-sm ${
-              isUser ? 'bg-zinc-400 hover:bg-zinc-100' : 'bg-[#4d6bfe]/55 hover:bg-[#eef2ff]'
+              isUser
+                ? 'bg-zinc-400 hover:bg-[var(--z-bubble)]'
+                : 'bg-[#4d6bfe]/55 hover:bg-[var(--z-select)]'
             }`}
             onClick={() => onPick(tick.id)}
           >
-            <span className="hidden min-w-0 truncate text-[10px] leading-4 text-zinc-700 group-hover:block">
+            <span className="hidden min-w-0 truncate text-[10px] leading-4 text-[var(--z-fg)] group-hover:block">
               <span className="font-medium">{preview.speaker}</span>
               {preview.snippet ? ` ${preview.snippet}` : ''}
             </span>

@@ -19,6 +19,37 @@ export interface OrderScale {
   domain(): [number, number];
 }
 
+/** 条目默认半宽 0.35，轴两端再留一点空隙，避免第一条压进轨名栏。 */
+export const ORDER_VIEW_PAD = 0.5;
+
+export function paddedOrderDomain(
+  min: number,
+  max: number,
+  pad = ORDER_VIEW_PAD,
+): [number, number] {
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  return [lo - pad, hi + pad];
+}
+
+export function clipPlotBox(
+  span: { start: number; end: number },
+  scale: OrderScale,
+  minWidth: number,
+  bounds?: { minX: number; maxX: number; maxWidth?: number },
+): { x: number; width: number } {
+  const start = scale(span.start);
+  const end = scale(span.end);
+  let width = Math.max(minWidth, end - start);
+  if (bounds?.maxWidth != null) width = Math.min(width, Math.max(minWidth, bounds.maxWidth));
+  let x = (start + end) / 2 - width / 2;
+  if (bounds) {
+    if (x < bounds.minX) x = bounds.minX;
+    if (x + width > bounds.maxX) x = Math.max(bounds.minX, bounds.maxX - width);
+  }
+  return { x, width };
+}
+
 /** 线性 domain→range 映射，clamp 到 range 两端。 */
 export function createOrderScale(domain: [number, number], range: [number, number]): OrderScale {
   const [d0, d1] = domain;

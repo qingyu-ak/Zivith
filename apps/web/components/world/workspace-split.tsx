@@ -37,8 +37,8 @@ export function ResizeHandle({
       onPointerMove={move}
       className={
         vertical
-          ? 'z-10 w-1.5 shrink-0 cursor-col-resize bg-transparent hover:bg-accent/25 active:bg-accent/40'
-          : 'z-10 h-1.5 shrink-0 cursor-row-resize bg-zinc-200/80 hover:bg-accent/30 active:bg-accent/50'
+          ? 'z-20 w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-accent/35 active:bg-accent/50'
+          : 'z-20 h-2 shrink-0 cursor-row-resize bg-transparent hover:bg-accent/35 active:bg-accent/50'
       }
     />
   );
