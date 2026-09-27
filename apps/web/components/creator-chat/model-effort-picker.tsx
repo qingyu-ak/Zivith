@@ -206,6 +206,7 @@ export function ModelEffortPicker({
                   className="effort-rail"
                   data-effort={stopEffort}
                   data-top={topStop ? 'true' : 'false'}
+                  data-fast={fast ? 'on' : 'off'}
                   data-thinking={thinkingEnabled ? 'on' : 'off'}
                 >
                   <div className="effort-rail-fill" style={{ width: stopFill(safeStop, stops.length) }} />
@@ -226,6 +227,7 @@ export function ModelEffortPicker({
                     </div>
                   )}
                 </div>
+                {fast ? <div className="effort-fast-sheen" aria-hidden /> : null}
                 <div
                   className="effort-thumb"
                   aria-hidden
