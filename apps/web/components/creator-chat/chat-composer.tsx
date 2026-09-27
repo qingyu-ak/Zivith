@@ -141,6 +141,7 @@ export function ChatComposer({
   thinkingSpeaker?: string;
 }) {
   const rootRef = useRef<HTMLFormElement | null>(null);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
   const [menu, setMenu] = useState<MenuKind>(null);
   const [pickerView, setPickerView] = useState<PickerView>('main');
@@ -240,10 +241,21 @@ export function ChatComposer({
   useEffect(() => {
     if (!menu) return;
     function onPointer(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setMenu(null);
+      const target = event.target as Node;
+      if (menu === 'picker') {
+        if (!pickerRef.current?.contains(target)) {
+          setMenu(null);
+          setPickerView('main');
+        }
+        return;
+      }
+      if (!rootRef.current?.contains(target)) setMenu(null);
     }
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') setMenu(null);
+      if (event.key === 'Escape') {
+        setMenu(null);
+        setPickerView('main');
+      }
     }
     document.addEventListener('mousedown', onPointer);
     document.addEventListener('keydown', onKey);
@@ -449,6 +461,12 @@ export function ChatComposer({
           onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
           onKeyUp={(event) => setCursor(event.currentTarget.selectionStart)}
           onKeyDown={handleKeyDown}
+          onMouseDown={() => {
+            if (menu === 'picker') {
+              setMenu(null);
+              setPickerView('main');
+            }
+          }}
         />
       </div>
       {voice.recording && voice.interim ? (
@@ -608,55 +626,57 @@ export function ChatComposer({
             </div>
           ) : null}
         </div>
-        <ModelEffortPicker
-          open={menu === 'picker'}
-          view={pickerView}
-          onOpen={() => {
-            if (menu === 'picker') {
-              setMenu(null);
+        <div ref={pickerRef} className="relative">
+          <ModelEffortPicker
+            open={menu === 'picker'}
+            view={pickerView}
+            onOpen={() => {
+              if (menu === 'picker') {
+                setMenu(null);
+                setPickerView('main');
+                return;
+              }
+              setMenu('picker');
               setPickerView('main');
-              return;
-            }
-            setMenu('picker');
-            setPickerView('main');
-          }}
-          onView={setPickerView}
-          stops={stops}
-          stopIndex={safeStop}
-          onStopChange={(index, nextEffort) => {
-            setStopIndex(index);
-            writeStoredStopIndex(index);
-            onEffortChange(nextEffort);
-            writeStoredEffort(nextEffort);
-          }}
-          fast={fast}
-          onFastChange={(next) => {
-            setFast(next);
-            writeStoredFast(next);
-          }}
-          thinkingEnabled={thinkingOn}
-          onThinkingChange={(next) => {
-            setThinking(next);
-            writeStoredThinking(next);
-          }}
-          supportsThinking={capabilities.thinking}
-          contextWindows={capabilities.contextWindows}
-          contextWindow={clampContextWindow(contextWindow, capabilities.contextWindows)}
-          onContextWindowChange={(tokens) => {
-            setContextWindow(tokens);
-            writeStoredContextWindow(tokens);
-            setPickerView('main');
-          }}
-          modelLabel={modelLabel}
-          catalog={catalog}
-          saving={saving}
-          visibleChoices={visibleChoices}
-          modelQuery={modelQuery}
-          onModelQueryChange={setModelQuery}
-          searchRef={searchRef}
-          settingsHref={settingsHref}
-          onPickModel={(provider, model) => void pickModel(provider, model)}
-        />
+            }}
+            onView={setPickerView}
+            stops={stops}
+            stopIndex={safeStop}
+            onStopChange={(index, nextEffort) => {
+              setStopIndex(index);
+              writeStoredStopIndex(index);
+              onEffortChange(nextEffort);
+              writeStoredEffort(nextEffort);
+            }}
+            fast={fast}
+            onFastChange={(next) => {
+              setFast(next);
+              writeStoredFast(next);
+            }}
+            thinkingEnabled={thinkingOn}
+            onThinkingChange={(next) => {
+              setThinking(next);
+              writeStoredThinking(next);
+            }}
+            supportsThinking={capabilities.thinking}
+            contextWindows={capabilities.contextWindows}
+            contextWindow={clampContextWindow(contextWindow, capabilities.contextWindows)}
+            onContextWindowChange={(tokens) => {
+              setContextWindow(tokens);
+              writeStoredContextWindow(tokens);
+              setPickerView('main');
+            }}
+            modelLabel={modelLabel}
+            catalog={catalog}
+            saving={saving}
+            visibleChoices={visibleChoices}
+            modelQuery={modelQuery}
+            onModelQueryChange={setModelQuery}
+            searchRef={searchRef}
+            settingsHref={settingsHref}
+            onPickModel={(provider, model) => void pickModel(provider, model)}
+          />
+        </div>
         {sending && !value.trim() && onStop ? (
           <button
             type="button"
