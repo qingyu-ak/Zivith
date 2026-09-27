@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /** 与 web `appearance-theme.ts` / `globals.css` 的 --z-bg 对齐。 */
-const LIGHT = { backgroundColor: '#ffffff' };
+const LIGHT = { backgroundColor: '#e8eaee' };
 const DARK = { backgroundColor: '#18181b' };
 
 function asAppearanceTheme(value) {

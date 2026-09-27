@@ -417,7 +417,7 @@ export function ChatComposer({
   return (
     <form
       ref={rootRef}
-      className="relative mx-auto max-w-2xl rounded-[28px] border border-zinc-200 bg-white px-3 pb-2 pt-3 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+      className="relative mx-auto max-w-2xl rounded-[28px] border border-line bg-panel px-3 pb-2 pt-3 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
       onSubmit={handleSubmit}
     >
       {thinkingStatus ? (
@@ -523,7 +523,7 @@ export function ChatComposer({
             <IconChevron className="size-3.5 text-zinc-400" />
           </button>
           {menu === 'confirm' ? (
-            <div className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-72 overflow-hidden rounded-2xl border border-zinc-200 bg-white py-1 shadow-lg">
+            <div className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-72 overflow-hidden rounded-2xl border border-line bg-panel py-1 shadow-lg">
               {AGENT_WRITE_MODES.map((item) => (
                 <button
                   key={item}
@@ -565,7 +565,7 @@ export function ChatComposer({
             <ContextUsageRing percent={usedPct} hot={usedPct >= 90} />
           </button>
           {menu === 'usage' ? (
-            <div className="absolute bottom-[calc(100%+8px)] right-0 z-20 w-80 rounded-2xl border border-zinc-200 bg-white p-3.5 text-sm shadow-[0_12px_40px_rgba(15,23,42,0.12)]">
+            <div className="absolute bottom-[calc(100%+8px)] right-0 z-20 w-80 rounded-2xl border border-line bg-panel p-3.5 text-sm shadow-[0_12px_40px_rgba(15,23,42,0.12)]">
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-zinc-500">本轮预算</p>
                 <p className="tabular-nums text-zinc-800">{contextRatio}</p>
@@ -721,7 +721,7 @@ function ContextUsageRing({ percent, hot }: { percent: number; hot: boolean }) {
         className="absolute inset-0 rounded-full"
         style={{ background: `conic-gradient(${color} ${fill}%, #e4e4e7 0)` }}
       />
-      <span className="relative size-2.5 rounded-full bg-white" />
+      <span className="relative size-2.5 rounded-full bg-panel" />
     </span>
   );
 }

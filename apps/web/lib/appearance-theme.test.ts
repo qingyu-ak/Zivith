@@ -23,6 +23,11 @@ describe('WINDOW_CHROME', () => {
     expect(WINDOW_CHROME.dark.backgroundColor).toBe('#18181b');
     expect(WINDOW_CHROME.dark.overlayColor).toBe('#161618');
   });
+
+  it('keeps light chrome off pure white', () => {
+    expect(WINDOW_CHROME.light.backgroundColor).toBe('#e8eaee');
+    expect(WINDOW_CHROME.light.overlayColor).toBe('#e2e4e8');
+  });
 });
 
 describe('syncDesktopAppearanceTheme', () => {

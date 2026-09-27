@@ -33,6 +33,10 @@ describe('desktop window chrome', () => {
     expect(chrome.chromeForTheme('dark').backgroundColor).toBe(WINDOW_CHROME.dark.backgroundColor);
   });
 
+  it('uses the same light canvas as the web background token', () => {
+    expect(chrome.chromeForTheme('light').backgroundColor).toBe(WINDOW_CHROME.light.backgroundColor);
+  });
+
   it('remembers the last theme in userData', () => {
     const dir = mkdtempSync(join(tmpdir(), 'zivith-chrome-'));
     dirs.push(dir);
