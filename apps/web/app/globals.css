@@ -253,6 +253,10 @@ select {
   .effort-rail[data-thinking='on'] .effort-rail-fill {
     animation: none !important;
   }
+
+  .effort-fast-sheen::before {
+    display: none !important;
+  }
 }
 
 .meteor-field {
@@ -539,6 +543,36 @@ select {
   50% {
     box-shadow: 0 0 14px 1px rgba(124, 92, 255, 0.28);
   }
+}
+
+.effort-fast-sheen {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  height: 22px;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: 999px;
+}
+
+.effort-fast-sheen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 42%,
+    rgba(255, 255, 255, 0.72) 50%,
+    transparent 58%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  background-position: 120% 0;
+  animation: effort-hint-sheen 1.35s linear infinite;
 }
 
 .effort-rail {
