@@ -2013,11 +2013,6 @@ export function ChatPanel() {
                       />
                     </div>
                   )}
-                  {sending && !streamText && (
-                    <p className="text-sm text-zinc-400">
-                      {streamingSpeaker ? `${streamingSpeaker}正在说…` : '正在思考…'}
-                    </p>
-                  )}
                   {memoryNote && !sending ? <ThoughtSummary note={memoryNote} /> : null}
                   {!sending && memoryConflicts.length > 0 && (
                     <ul className="space-y-2 pb-1">
@@ -2245,6 +2240,10 @@ export function ChatPanel() {
                     setEffort(next);
                     writeStoredEffort(next);
                   }}
+                  streaming={Boolean(streamText)}
+                  stopped={stopped}
+                  failed={Boolean(error)}
+                  thinkingSpeaker={streamingSpeaker}
                   writeMode={writeMode}
                   onWriteModeChange={(next) => {
                     setWriteMode(next);

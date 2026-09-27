@@ -16,13 +16,23 @@ import {
   llmChoices,
   selectedLlmLabel,
   writeStoredEffort,
-  displayModelId,
+  writeStoredFast,
+  writeStoredThinking,
+  writeStoredContextWindow,
+  writeStoredStopIndex,
   filterLlmChoices,
+  readStoredFast,
+  readStoredThinking,
+  readStoredContextWindow,
+  readStoredStopIndex,
   type ChatEffort,
 } from '@/lib/chat-composer';
+import { meteorStatusLabel } from '@/lib/meteor-motion';
+import { clampContextWindow, clampStopIndex, modelCapabilities, modelEffortStops } from '@/lib/model-capabilities';
+import { MeteorField, useMeteorPhase, usePrefersReducedMotion } from '@/components/brand/meteor-field';
+import { ModelEffortPicker } from '@/components/creator-chat/model-effort-picker';
 import type { ProviderCatalogDTO, ProviderId, WorldResourcesDTO } from '@/lib/types';
 import {
-  IconBrain,
   IconCheck,
   IconChevron,
   IconClipboard,
@@ -53,7 +63,8 @@ import {
 } from '@/lib/agent-mentions';
 import { MentionMenu } from './mention-menu';
 
-type MenuKind = 'confirm' | 'usage' | 'model' | 'effort' | null;
+type MenuKind = 'confirm' | 'usage' | 'picker' | null;
+type PickerView = 'main' | 'model' | 'context';
 
 interface ThreadContextDTO {
   token_estimate: number;
@@ -96,6 +107,10 @@ export function ChatComposer({
   onMentionPick,
   blocked = false,
   interruptLabel = '插话',
+  streaming = false,
+  stopped = false,
+  failed = false,
+  thinkingSpeaker = '',
 }: {
   value: string;
   placeholder: string;
@@ -120,10 +135,19 @@ export function ChatComposer({
   blocked?: boolean;
   /** 生成中且输入框有字时，发送按钮文案（扮演=插话，世界构建=补充）。 */
   interruptLabel?: string;
+  streaming?: boolean;
+  stopped?: boolean;
+  failed?: boolean;
+  thinkingSpeaker?: string;
 }) {
   const rootRef = useRef<HTMLFormElement | null>(null);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
   const [menu, setMenu] = useState<MenuKind>(null);
+  const [pickerView, setPickerView] = useState<PickerView>('main');
+  const [fast, setFast] = useState(false);
+  const [thinking, setThinking] = useState(false);
+  const [contextWindow, setContextWindow] = useState<number | null>(null);
+  const [stopIndex, setStopIndex] = useState(1);
   const [catalog, setCatalog] = useState<ProviderCatalogDTO | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
@@ -175,6 +199,11 @@ export function ChatComposer({
     void api<ProviderCatalogDTO>('/providers')
       .then(setCatalog)
       .catch(() => setCatalog(null));
+    setFast(readStoredFast());
+    setThinking(readStoredThinking());
+    setContextWindow(readStoredContextWindow());
+    const storedStop = readStoredStopIndex();
+    if (storedStop != null) setStopIndex(storedStop);
   }, []);
 
   useEffect(() => {
@@ -225,12 +254,12 @@ export function ChatComposer({
   }, [menu]);
 
   useEffect(() => {
-    if (menu !== 'model') {
+    if (menu !== 'picker' || pickerView !== 'model') {
       setModelQuery('');
       return;
     }
     searchRef.current?.focus();
-  }, [menu]);
+  }, [menu, pickerView]);
 
   useEffect(() => {
     areaRef.current?.focus();
@@ -248,6 +277,23 @@ export function ChatComposer({
   const settingsHref = settingsHrefFor(projectId, [settingsProjectId], 'models');
   const account = catalog?.siliconflow_account;
   const llmProvider = catalog?.providers.find((item) => item.id === catalog.selection.llm);
+  const currentModel = catalog?.models.llm ?? '';
+  const capabilities = modelCapabilities(currentModel);
+  const stops = modelEffortStops(currentModel);
+  const safeStop = clampStopIndex(stopIndex, stops.length);
+  const thinkingOn = capabilities.thinking && thinking;
+  const phase = useMeteorPhase({
+    sending,
+    hasStream: streaming,
+    stopped,
+    failed,
+  });
+  const reducedMotion = usePrefersReducedMotion();
+  const thinkingStatus = meteorStatusLabel({
+    phase,
+    speaker: thinkingSpeaker,
+    thinkingEnabled: thinkingOn,
+  });
 
   async function pickModel(provider: ProviderId, model: string) {
     setSaving(true);
@@ -362,6 +408,18 @@ export function ChatComposer({
       className="relative mx-auto max-w-2xl rounded-[28px] border border-zinc-200 bg-white px-3 pb-2 pt-3 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
       onSubmit={handleSubmit}
     >
+      {thinkingStatus ? (
+        <div className="mb-1 flex items-center gap-2 px-2" role="status">
+          <MeteorField
+            effort={effort}
+            fast={fast}
+            phase={phase}
+            reduced={reducedMotion}
+            size="status"
+          />
+          <span className="text-xs text-zinc-500">{thinkingStatus}</span>
+        </div>
+      ) : null}
       <div className="relative">
         {mentionMenuOpen ? (
           <MentionMenu
@@ -550,124 +608,55 @@ export function ChatComposer({
             </div>
           ) : null}
         </div>
-        <div className="relative">
-          <button
-            type="button"
-            className="inline-flex h-8 max-w-[10rem] items-center gap-1 rounded-full px-2 text-xs text-zinc-700 hover:bg-zinc-100"
-            aria-expanded={menu === 'model'}
-            onClick={() => setMenu(menu === 'model' ? null : 'model')}
-          >
-            <span className="truncate">{modelLabel}</span>
-            <IconChevron className="size-3.5 shrink-0 text-zinc-400" />
-          </button>
-          {menu === 'model' ? (
-            <div className="absolute bottom-[calc(100%+8px)] right-0 z-20 flex w-72 max-h-[min(20rem,46vh)] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-lg">
-              <p className="flex shrink-0 items-center gap-2 px-3 pb-1 pt-2 text-xs text-zinc-400">
-                Zivith
-                <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px]">对话</span>
-              </p>
-              <div className="shrink-0 px-2 pb-2">
-                <input
-                  ref={searchRef}
-                  className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:bg-white"
-                  placeholder="搜索模型"
-                  value={modelQuery}
-                  onChange={(event) => setModelQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.preventDefault();
-                  }}
-                />
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto py-1">
-                {visibleChoices.length === 0 ? (
-                  <p className="px-3 py-2 text-sm text-zinc-400">没有匹配的模型</p>
-                ) : (
-                  visibleChoices.map((choice, index) => {
-                    const showProvider =
-                      index === 0 || visibleChoices[index - 1]?.provider !== choice.provider;
-                    const active =
-                      catalog?.selection.llm === choice.provider &&
-                      catalog.models.llm === choice.model;
-                    return (
-                      <div key={`${choice.provider}:${choice.model}`}>
-                        {showProvider ? (
-                          <p className="px-3 pb-1 pt-2 text-[11px] text-zinc-400">
-                            {choice.providerLabel}
-                          </p>
-                        ) : null}
-                        <button
-                          type="button"
-                          disabled={saving}
-                          title={choice.model}
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
-                          onClick={() => void pickModel(choice.provider, choice.model)}
-                        >
-                          <span className="min-w-0 flex-1 truncate">
-                            {displayModelId(choice.model)}
-                          </span>
-                          {choice.tag ? (
-                            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                              {choice.tag}
-                            </span>
-                          ) : null}
-                          {active ? <IconCheck className="size-4 shrink-0 text-zinc-700" /> : null}
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              <div className="shrink-0 border-t border-zinc-100">
-                <Link
-                  href={settingsHref}
-                  className="block px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
-                  onClick={() => {
-                    captureSettingsReturn();
-                    setMenu(null);
-                  }}
-                >
-                  管理模型
-                </Link>
-              </div>
-            </div>
-          ) : null}
-        </div>
-        <div className="relative">
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs text-zinc-700 hover:bg-zinc-100"
-            aria-expanded={menu === 'effort'}
-            onClick={() => setMenu(menu === 'effort' ? null : 'effort')}
-          >
-            <IconBrain className="size-3.5" />
-            {CHAT_EFFORT_LABEL[effort]}
-            <IconChevron className="size-3.5 text-zinc-400" />
-          </button>
-          {menu === 'effort' ? (
-            <div className="absolute bottom-[calc(100%+8px)] right-0 z-20 w-64 overflow-hidden rounded-2xl border border-zinc-200 bg-white py-1 shadow-lg">
-              {(['fast', 'balanced', 'deep'] as const).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className="flex w-full items-start justify-between gap-2 px-3 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50"
-                  onClick={() => {
-                    onEffortChange(item);
-                    writeStoredEffort(item);
-                    setMenu(null);
-                  }}
-                >
-                  <span>
-                    <span className="block">{CHAT_EFFORT_LABEL[item]}</span>
-                    <span className="mt-0.5 block text-[11px] font-normal text-zinc-400">
-                      {CHAT_EFFORT_HINT[item]}
-                    </span>
-                  </span>
-                  {effort === item ? <IconCheck className="mt-0.5 size-4 shrink-0" /> : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <ModelEffortPicker
+          open={menu === 'picker'}
+          view={pickerView}
+          onOpen={() => {
+            if (menu === 'picker') {
+              setMenu(null);
+              setPickerView('main');
+              return;
+            }
+            setMenu('picker');
+            setPickerView('main');
+          }}
+          onView={setPickerView}
+          stops={stops}
+          stopIndex={safeStop}
+          onStopChange={(index, nextEffort) => {
+            setStopIndex(index);
+            writeStoredStopIndex(index);
+            onEffortChange(nextEffort);
+            writeStoredEffort(nextEffort);
+          }}
+          fast={fast}
+          onFastChange={(next) => {
+            setFast(next);
+            writeStoredFast(next);
+          }}
+          thinkingEnabled={thinkingOn}
+          onThinkingChange={(next) => {
+            setThinking(next);
+            writeStoredThinking(next);
+          }}
+          supportsThinking={capabilities.thinking}
+          contextWindows={capabilities.contextWindows}
+          contextWindow={clampContextWindow(contextWindow, capabilities.contextWindows)}
+          onContextWindowChange={(tokens) => {
+            setContextWindow(tokens);
+            writeStoredContextWindow(tokens);
+            setPickerView('main');
+          }}
+          modelLabel={modelLabel}
+          catalog={catalog}
+          saving={saving}
+          visibleChoices={visibleChoices}
+          modelQuery={modelQuery}
+          onModelQueryChange={setModelQuery}
+          searchRef={searchRef}
+          settingsHref={settingsHref}
+          onPickModel={(provider, model) => void pickModel(provider, model)}
+        />
         {sending && !value.trim() && onStop ? (
           <button
             type="button"

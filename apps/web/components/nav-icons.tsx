@@ -163,6 +163,23 @@ export function IconChevron(props: IconProps) {
   );
 }
 
+export function IconBolt({
+  filled = false,
+  ...props
+}: IconProps & { filled?: boolean }) {
+  return (
+    <svg
+      {...base}
+      fill={filled ? 'currentColor' : 'none'}
+      stroke={filled ? 'none' : 'currentColor'}
+      strokeWidth={filled ? 0 : 1.7}
+      {...props}
+    >
+      <path d="M13 3 4.8 13.4h7.1L9.6 21 19.2 10.6h-7.1z" />
+    </svg>
+  );
+}
+
 export function IconBrain(props: IconProps) {
   return (
     <svg {...base} {...props}>

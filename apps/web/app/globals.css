@@ -36,4 +36,270 @@ select {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
   }
+
+  .meteor-star,
+  .meteor-star-slot {
+    display: none !important;
+  }
+}
+
+.meteor-field {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  color: #18181b;
+  --meteor-to-x: -18px;
+  --meteor-to-y: 12px;
+}
+
+.meteor-field[data-size='status'] {
+  width: 4.5rem;
+  height: 1.35rem;
+}
+
+.meteor-field[data-kind='twinkle'] {
+  --meteor-to-x: 0px;
+  --meteor-to-y: 0px;
+}
+
+.meteor-field[data-kind='drift'] {
+  --meteor-to-x: -10px;
+  --meteor-to-y: 7px;
+}
+
+.meteor-field[data-kind='meteor'] {
+  --meteor-to-x: -22px;
+  --meteor-to-y: 14px;
+}
+
+.meteor-field[data-size='slider'] {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  color: #ffffff;
+}
+
+.meteor-field[data-size='capsule'] {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  color: #ffffff;
+}
+
+.meteor-mark {
+  width: 1.15rem;
+  height: 1.15rem;
+  z-index: 1;
+}
+
+.meteor-star-slot {
+  position: absolute;
+  translate: -50% -50%;
+}
+
+.meteor-star {
+  display: block;
+  transform-origin: center;
+  background: currentColor;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.85));
+}
+
+.meteor-field[data-kind='twinkle'] .meteor-star {
+  animation: zivith-star-twinkle var(--meteor-duration) ease-in-out infinite;
+}
+
+.meteor-field[data-kind='drift'] .meteor-star {
+  animation: zivith-star-drift var(--meteor-duration) linear infinite;
+}
+
+.meteor-field[data-kind='meteor'] .meteor-star {
+  animation: zivith-star-meteor var(--meteor-duration) linear infinite;
+}
+
+.meteor-field[data-size='capsule'] .meteor-star {
+  border-radius: 999px;
+  clip-path: none;
+  background: #fff;
+  filter: none;
+  box-shadow:
+    2px -2.2px 0 rgba(255, 255, 255, 0.55),
+    4px -4.4px 0.5px rgba(255, 255, 255, 0.28),
+    6.5px -7.2px 1px rgba(255, 255, 255, 0.12);
+  animation: zivith-capsule-pass var(--meteor-duration) linear infinite;
+}
+
+.meteor-field[data-fast='on'] .meteor-star {
+  filter: drop-shadow(0 0 3px rgba(77, 107, 254, 0.7));
+}
+
+@keyframes zivith-star-twinkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  22% {
+    opacity: var(--star-bright, 0.8);
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  78% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+}
+
+@keyframes zivith-star-drift {
+  0% {
+    opacity: 0;
+    transform: translate3d(12px, -10px, 0) scale(0.4);
+  }
+  15% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--meteor-to-x), var(--meteor-to-y), 0) scale(0.55);
+  }
+}
+
+@keyframes zivith-star-meteor {
+  0% {
+    opacity: 0;
+    transform: translate3d(16px, -14px, 0) scale(0.35);
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--meteor-to-x), var(--meteor-to-y), 0) scale(0.45);
+  }
+}
+
+@keyframes zivith-capsule-pass {
+  0% {
+    opacity: 0;
+    transform: translate3d(6px, -10px, 0) scale(0.7);
+  }
+  14% {
+    opacity: var(--star-bright, 1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--star-travel, -22px), var(--star-drift, 24px), 0) scale(0.85);
+  }
+}
+
+.meteor-field[data-size='slider'] .meteor-star {
+  border-radius: 999px;
+  clip-path: none;
+  background: #fff;
+  filter: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+  animation: zivith-star-twinkle var(--meteor-duration) ease-in-out infinite;
+}
+
+.effort-rail {
+  position: relative;
+  height: 22px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ececf1;
+}
+
+.effort-rail-fill {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4f8cff 0%, #6a78ff 52%, #8b63f6 100%);
+  transition: width 180ms ease;
+}
+
+.effort-stops {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.effort-stops span {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #d4d4d8;
+  transform: translate(-50%, -50%);
+}
+
+.effort-stops span.is-on {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.effort-rail[data-top='true'] .effort-rail-fill {
+  background: linear-gradient(90deg, #5b8cff 0%, #7a6cff 48%, #9a5cff 100%);
+}
+
+.meteor-effort-slider {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.meteor-effort-slider::-webkit-slider-runnable-track {
+  height: 22px;
+  background: transparent;
+}
+
+.meteor-effort-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.22);
+  cursor: pointer;
+}
+
+.meteor-effort-slider::-moz-range-track {
+  height: 22px;
+  background: transparent;
+  border: 0;
+}
+
+.meteor-effort-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.22);
+  cursor: pointer;
 }
