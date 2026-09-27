@@ -124,6 +124,11 @@ html.dark .border-line {
   border-color: var(--z-line);
 }
 
+html.dark .bg-white\/80,
+html.dark .hover\:bg-white\/80:hover {
+  background-color: var(--z-wash);
+}
+
 html.dark .hover\:bg-zinc-50:hover,
 html.dark .hover\:bg-zinc-100:hover {
   background-color: var(--z-wash);

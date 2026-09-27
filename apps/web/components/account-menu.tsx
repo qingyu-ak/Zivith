@@ -8,12 +8,13 @@ import { captureSettingsReturn } from '@/lib/settings-return';
 import { TitleBarTools } from './title-bar-tools';
 import { IconGear, IconHelp, IconLogout } from './nav-icons';
 
+const itemClass =
+  'flex items-center gap-3 px-3 py-2.5 text-sm text-[var(--z-fg-muted)] hover:bg-[var(--z-wash)] hover:text-[var(--z-fg)]';
+
 export function AccountMenu({
   settingsHref,
-  tone = 'light',
 }: {
   settingsHref: string;
-  tone?: 'light' | 'dark';
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,99 +49,68 @@ export function AccountMenu({
     router.push('/');
   }
 
-  const light = tone === 'light';
   const name = signedIn ? '已登录' : '本地创作者';
 
   return (
     <div className="flex items-center gap-0.5">
       <div className="relative min-w-0 flex-1" ref={rootRef}>
-      {open && (
-        <div
-          className={`absolute bottom-[calc(100%+8px)] left-0 right-0 overflow-hidden rounded-2xl shadow-lg ${
-            light ? 'border border-zinc-200 bg-white' : 'border border-line bg-panel'
-          }`}
-        >
-          <Link
-            href={settingsHref}
-            className={`flex items-center gap-3 px-3 py-2.5 text-sm ${
-              light ? 'text-zinc-700 hover:bg-zinc-50' : 'text-zinc-600 hover:bg-zinc-100'
-            }`}
-            onClick={() => {
-              captureSettingsReturn();
-              setOpen(false);
-            }}
-          >
-            <IconGear className="size-4" />
-            系统设置
-          </Link>
-          <Link
-            href="/help"
-            className={`flex items-center gap-3 px-3 py-2.5 text-sm ${
-              light ? 'text-zinc-700 hover:bg-zinc-50' : 'text-zinc-600 hover:bg-zinc-100'
-            }`}
-            onClick={() => {
-              captureSettingsReturn();
-              setOpen(false);
-            }}
-          >
-            <IconHelp className="size-4" />
-            帮助与反馈
-          </Link>
-          {signedIn ? (
-            <button
-              type="button"
-              className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm ${
-                light ? 'text-zinc-700 hover:bg-zinc-50' : 'text-zinc-600 hover:bg-zinc-100'
-              }`}
-              onClick={() => void logout()}
-            >
-              <IconLogout className="size-4" />
-              退出登录
-            </button>
-          ) : (
+        {open && (
+          <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 overflow-hidden rounded-2xl border border-line bg-panel shadow-lg">
             <Link
-              href="/login"
-              className={`flex items-center gap-3 px-3 py-2.5 text-sm ${
-                light ? 'text-zinc-700 hover:bg-zinc-50' : 'text-zinc-600 hover:bg-zinc-100'
-              }`}
+              href={settingsHref}
+              className={itemClass}
               onClick={() => {
                 captureSettingsReturn();
                 setOpen(false);
               }}
             >
-              <IconLogout className="size-4" />
-              登录
+              <IconGear className="size-4" />
+              系统设置
             </Link>
-          )}
-        </div>
-      )}
+            <Link
+              href="/help"
+              className={itemClass}
+              onClick={() => {
+                captureSettingsReturn();
+                setOpen(false);
+              }}
+            >
+              <IconHelp className="size-4" />
+              帮助与反馈
+            </Link>
+            {signedIn ? (
+              <button type="button" className={`w-full text-left ${itemClass}`} onClick={() => void logout()}>
+                <IconLogout className="size-4" />
+                退出登录
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className={itemClass}
+                onClick={() => {
+                  captureSettingsReturn();
+                  setOpen(false);
+                }}
+              >
+                <IconLogout className="size-4" />
+                登录
+              </Link>
+            )}
+          </div>
+        )}
         <button
           type="button"
           className={`flex min-w-0 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition ${
-            open
-              ? light
-                ? 'bg-white ring-1 ring-[#4d6bfe]'
-                : 'bg-zinc-100 ring-1 ring-accent/50'
-              : light
-                ? 'hover:bg-white/80'
-                : 'hover:bg-zinc-100'
+            open ? 'bg-[var(--z-wash)] ring-1 ring-[#4d6bfe]' : 'hover:bg-[var(--z-wash)]'
           }`}
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
           aria-haspopup="menu"
         >
-          <span
-            className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold ${
-              light ? 'bg-zinc-200 text-zinc-600' : 'bg-zinc-100 text-accent'
-            }`}
-          >
-            <span className="text-[11px]">我</span>
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--z-wash-2)] text-[11px] font-semibold text-[var(--z-fg)]">
+            我
           </span>
-          <span
-            className={`min-w-0 flex-1 truncate text-sm ${light ? 'text-zinc-800' : 'text-zinc-700'}`}
-          >
-            {name}
-          </span>
+          <span className="min-w-0 flex-1 truncate text-sm text-[var(--z-fg)]">{name}</span>
         </button>
       </div>
       <TitleBarTools />

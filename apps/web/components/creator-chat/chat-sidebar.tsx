@@ -406,7 +406,7 @@ export function ChatSidebar({
       ) : null}
 
       <div className="border-t border-zinc-200/80 px-1 pb-3 pt-2">
-        <AccountMenu settingsHref={settingsHref} tone="light" />
+        <AccountMenu settingsHref={settingsHref} />
       </div>
     </aside>
   );
