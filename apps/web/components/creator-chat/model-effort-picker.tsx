@@ -15,8 +15,10 @@ import {
   clampStopIndex,
   formatContextWindow,
   hasContextWindowChoice,
+  EFFORT_THUMB_PX,
   starBrightness,
   stopFill,
+  stopThumbOffset,
   type EffortStop,
 } from '@/lib/model-capabilities';
 import { METEOR_BLUE, stopParticleCount } from '@/lib/meteor-motion';
@@ -212,14 +214,19 @@ export function ModelEffortPicker({
                           style={{
                             left:
                               stops.length <= 1
-                                ? '11px'
-                                : `calc(11px + (100% - 22px) * ${index / (stops.length - 1)})`,
+                                ? `${EFFORT_THUMB_PX / 2}px`
+                                : `calc(${EFFORT_THUMB_PX / 2}px + (100% - ${EFFORT_THUMB_PX}px) * ${index} / ${stops.length - 1})`,
                           }}
                         />
                       ))}
                     </div>
                   )}
                 </div>
+                <div
+                  className="effort-thumb"
+                  aria-hidden
+                  style={{ left: stopThumbOffset(safeStop, stops.length) }}
+                />
                 {topStop ? (
                   <div className="pointer-events-none absolute -top-1.5 right-0 bottom-0 left-0 z-[4] overflow-hidden">
                     <MeteorField

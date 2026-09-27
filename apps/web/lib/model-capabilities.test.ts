@@ -7,6 +7,7 @@ import {
   modelEffortStops,
   starBrightness,
   stopFill,
+  stopThumbOffset,
 } from './model-capabilities';
 
 describe('model capabilities', () => {
@@ -49,6 +50,10 @@ describe('model capabilities', () => {
     expect(starBrightness(2, 5, true)).toBeGreaterThan(starBrightness(2, 5, false));
     expect(stopFill(0, 4)).toBe('22px');
     expect(stopFill(3, 4)).toBe('100%');
+    expect(stopFill(1, 5)).toBe('calc(22px + (100% - 22px) * 1 / 4)');
+    expect(stopThumbOffset(0, 5)).toBe('0px');
+    expect(stopThumbOffset(2, 5)).toBe('calc((100% - 22px) * 2 / 4)');
+    expect(stopThumbOffset(4, 5)).toBe('calc(100% - 22px)');
   });
 
   it('only offers a context chip when a model has more than one window', () => {

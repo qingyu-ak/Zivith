@@ -70,15 +70,33 @@ export function modelEffortStops(modelId: string): EffortStop[] {
   return EFFORT_STOPS[modelCapabilities(modelId).effortStops];
 }
 
+/** Slider knob diameter; the filled capsule’s end cap is this same circle. */
+export const EFFORT_THUMB_PX = 22;
+
 export function clampStopIndex(index: number, count: number): number {
   if (count <= 1) return 0;
   return Math.min(count - 1, Math.max(0, Math.round(index)));
 }
 
+function stopT(index: number, count: number): { i: number; span: number } {
+  const i = clampStopIndex(index, count);
+  return { i, span: Math.max(1, count - 1) };
+}
+
+/** Fill width so the capsule’s right cap is the knob (offset + diameter). */
 export function stopFill(index: number, count: number): string {
-  if (count <= 1 || index <= 0) return '22px';
-  if (index >= count - 1) return '100%';
-  return `max(22px, ${(index / (count - 1)) * 100}%)`;
+  const { i, span } = stopT(index, count);
+  if (i <= 0) return `${EFFORT_THUMB_PX}px`;
+  if (i >= span) return '100%';
+  return `calc(${EFFORT_THUMB_PX}px + (100% - ${EFFORT_THUMB_PX}px) * ${i} / ${span})`;
+}
+
+/** Knob left edge; shares the travel range of the native range thumb. */
+export function stopThumbOffset(index: number, count: number): string {
+  const { i, span } = stopT(index, count);
+  if (i <= 0) return '0px';
+  if (i >= span) return `calc(100% - ${EFFORT_THUMB_PX}px)`;
+  return `calc((100% - ${EFFORT_THUMB_PX}px) * ${i} / ${span})`;
 }
 
 /** Higher gears glow more. Deep thinking adds another step of brightness. */
