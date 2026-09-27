@@ -1,5 +1,12 @@
 /// <reference types="vitest/globals" />
-import { createOrderScale, integerTicks, interpolateOrders, thinByMinGap } from './world-scale';
+import {
+  clipPlotBox,
+  createOrderScale,
+  integerTicks,
+  interpolateOrders,
+  paddedOrderDomain,
+  thinByMinGap,
+} from './world-scale';
 
 describe('createOrderScale (线性 domain→range 映射 + clamp)', () => {
   it('maps domain midpoint to range midpoint', () => {
@@ -33,6 +40,28 @@ describe('createOrderScale (线性 domain→range 映射 + clamp)', () => {
     expect(scale(5)).toBe(0);
     expect(scale(5)).not.toBeNaN();
     expect(scale.invert(0)).toBe(5);
+  });
+});
+
+describe('paddedOrderDomain / clipPlotBox (第一条不压轨名)', () => {
+  it('pads both ends so a single chapter is not a degenerate domain', () => {
+    expect(paddedOrderDomain(1, 1)).toEqual([0.5, 1.5]);
+    expect(paddedOrderDomain(1, 4, 0.5)).toEqual([0.5, 4.5]);
+  });
+
+  it('keeps a default ±0.35 clip at the first chapter inside the plot', () => {
+    const [min, max] = paddedOrderDomain(1, 1);
+    const scale = createOrderScale([min, max], [108, 508]);
+    const box = clipPlotBox({ start: 0.65, end: 1.35 }, scale, 40, {
+      minX: 108,
+      maxX: 508,
+      maxWidth: 120,
+    });
+    expect(box.x).toBeGreaterThan(108);
+    expect(box.x + box.width).toBeLessThan(508);
+    expect(box.width).toBe(120);
+    expect(scale(1)).toBeCloseTo(308, 5);
+    expect(box.x + box.width / 2).toBeCloseTo(308, 5);
   });
 });
 

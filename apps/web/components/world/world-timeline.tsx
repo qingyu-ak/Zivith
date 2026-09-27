@@ -9,7 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { WorldLineItem, WorldLineModel, WorldSelection } from '@/lib/types';
-import { createOrderScale, integerTicks, thinByMinGap } from '@/lib/world-scale';
+import { clipPlotBox, createOrderScale, integerTicks, paddedOrderDomain, thinByMinGap } from '@/lib/world-scale';
 import {
   overlayFocusOfItem,
   isTimelineItemActive,
@@ -20,10 +20,11 @@ import {
 } from '@/lib/world-line';
 import { persistClipWrites } from '@/lib/world-track-edit';
 
-const TRACK_LABEL_WIDTH = 108;
+const TRACK_LABEL_WIDTH = 112;
 const TRACK_HEIGHT = 56;
 const TRACK_GAP = 0;
-const PADDING = { top: 6, right: 0, bottom: 0 };
+const PLOT_GUTTER = 16;
+const PADDING = { top: 6, right: 16, bottom: 0 };
 const ITEM_HEIGHT = 28;
 const EDGE = 10;
 const MIN_UNIT_PX = 56;
@@ -377,10 +378,12 @@ export function WorldTimeline({
 
   const namedAxis = model.axisMarks.length > 0;
   const axisHeight = namedAxis ? 56 : 32;
-  const plotLeft = TRACK_LABEL_WIDTH + 8;
-  const domainSpan = Math.max(1, model.scaleDomain.max - model.scaleDomain.min);
+  const plotLeft = TRACK_LABEL_WIDTH + PLOT_GUTTER;
+  const [visualMin, visualMax] = paddedOrderDomain(model.scaleDomain.min, model.scaleDomain.max);
+  const domainSpan = Math.max(visualMax - visualMin, 0.5);
   const unitMin = MIN_UNIT_PX * zoomX;
-  const plotWidth = Math.max(120, domainSpan * unitMin);
+  const available = Math.max(160, width - plotLeft - PADDING.right);
+  const plotWidth = Math.max(available, domainSpan * unitMin);
   const unitPx = plotWidth / domainSpan;
   const plotRight = plotLeft + plotWidth;
   const itemH = ITEM_HEIGHT * zoomY;
@@ -388,10 +391,10 @@ export function WorldTimeline({
   const laneGap = CHAR_LANE_GAP * zoomY;
   const lanePad = CHAR_LANE_PAD * zoomY;
 
-  const scale = useMemo(() => {
-    const { min, max } = model.scaleDomain;
-    return createOrderScale([min, max], [plotLeft, plotRight]);
-  }, [model.scaleDomain, plotLeft, plotRight]);
+  const scale = useMemo(
+    () => createOrderScale([visualMin, visualMax], [plotLeft, plotRight]),
+    [visualMin, visualMax, plotLeft, plotRight],
+  );
 
   const fallbackTicks = useMemo(
     () => integerTicks(model.scaleDomain.min, model.scaleDomain.max),
@@ -449,22 +452,22 @@ export function WorldTimeline({
 
       track.items.forEach((item, itemIndex) => {
         const span = draftSpans[item.id] ?? clipSpan(item);
-        const startX = plotLeft + (span.start - model.scaleDomain.min) * unitPx;
-        const endX = plotLeft + (span.end - model.scaleDomain.min) * unitPx;
-        const itemWidth = Math.max(
-          canEditClip(item.entityType) ? MIN_EDIT_CLIP_PX * zoomX : 48 * zoomX,
-          endX - startX,
-        );
-        const x = startX;
+        const minWidth = (canEditClip(item.entityType) ? MIN_EDIT_CLIP_PX : 48) * zoomX;
+        const spanLen = span.end - span.start;
+        const box = clipPlotBox(span, scale, minWidth, {
+          minX: plotLeft,
+          maxX: plotRight,
+          maxWidth: spanLen <= 1.2 ? 168 * zoomX : undefined,
+        });
         const itemY = stacked
           ? trackY + lanePad + itemIndex * (itemH + laneGap)
           : trackY + (height - itemH) / 2;
         positions.set(item.id, {
-          x,
+          x: box.x,
           y: itemY,
-          cx: x + itemWidth / 2,
+          cx: box.x + box.width / 2,
           cy: itemY + itemH / 2,
-          itemWidth,
+          itemWidth: box.width,
           kind: track.kind,
         });
       });
@@ -475,9 +478,9 @@ export function WorldTimeline({
     return { tracks, positions, totalHeight: Math.max(y, axisHeight + trackH) + PADDING.bottom };
   }, [
     orderedTracks,
+    scale,
     plotLeft,
-    unitPx,
-    model.scaleDomain.min,
+    plotRight,
     axisHeight,
     draftSpans,
     itemH,
@@ -990,6 +993,8 @@ export function WorldTimeline({
               {namedAxis
                 ? model.axisMarks.map((mark, index) => {
                     const x = scale(mark.order);
+                    const labelAnchor =
+                      x < plotLeft + 56 ? 'start' : x > plotRight - 56 ? 'end' : 'middle';
                     const diverges = Boolean(mark.worldTimeDiverges);
                     const overlay = mark.worldTimeRelation && mark.worldTimeRelation !== 'follow';
                     const accent = diverges ? '#f59e0b' : overlay ? '#a78bfa' : TIMELINE_MUTED;
@@ -1022,7 +1027,7 @@ export function WorldTimeline({
                               fill={labelFill}
                               fontSize="11"
                               fontWeight="600"
-                              textAnchor="middle"
+                              textAnchor={labelAnchor}
                             >
                               {clipLabel(mark.label, 8)}
                             </text>
@@ -1031,7 +1036,7 @@ export function WorldTimeline({
                               y={PADDING.top + 28}
                               fill={subFill}
                               fontSize="9"
-                              textAnchor="middle"
+                              textAnchor={labelAnchor}
                             >
                               {mark.worldTimeLabel
                                 ? clipLabel(mark.worldTimeLabel, 10)
@@ -1324,10 +1329,10 @@ export function WorldTimeline({
                 disabled={busy}
                 className="pointer-events-auto absolute z-10 text-left text-[11px] disabled:opacity-40"
                 style={{
-                  left: TRACK_LABEL_WIDTH + 12,
+                  left: plotLeft,
                   top: track.trackY,
                   height: track.height,
-                  width: Math.max(80, canvasWidth - TRACK_LABEL_WIDTH - 24),
+                  width: Math.max(80, canvasWidth - plotLeft - 16),
                   color: TIMELINE_MUTED,
                 }}
                 onClick={() => {
@@ -1347,6 +1352,7 @@ export function WorldTimeline({
               height: Math.max(0, svgHeight - axisY),
               borderColor: TIMELINE_BORDER,
               background: 'var(--z-timeline-chrome)',
+              boxShadow: '8px 0 16px color-mix(in srgb, var(--z-timeline-chrome) 88%, transparent)',
             }}
           >
             {layout.tracks.map((track) => {
@@ -1379,7 +1385,7 @@ export function WorldTimeline({
                   )}
                   <button
                     type="button"
-                    className="min-w-0 flex-1 cursor-ns-resize px-1 text-right text-xs font-medium"
+                    className="min-w-0 flex-1 cursor-ns-resize truncate px-1.5 text-left text-xs font-medium"
                     style={{
                       touchAction: 'none',
                       color: dragging ? 'var(--z-fg)' : TIMELINE_MUTED,
