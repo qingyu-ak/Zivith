@@ -4,26 +4,26 @@
 
 :root {
   color-scheme: light;
-  --z-bg: #ffffff;
+  --z-bg: #e8eaee;
   --z-fg: #18181b;
   --z-fg-muted: #3f3f46;
   --z-fg-subtle: #71717a;
-  --z-panel: #ffffff;
-  --z-line: #e5e7eb;
-  --z-wash: #fafafa;
-  --z-wash-2: #f4f4f5;
-  --z-chrome: #f7f8fa;
-  --z-bubble: #eef0f4;
+  --z-panel: #f2f3f5;
+  --z-line: #cdd0d6;
+  --z-wash: #dde0e5;
+  --z-wash-2: #d4d7dc;
+  --z-chrome: #e2e4e8;
+  --z-bubble: #dcdfe4;
   --z-bubble-fg: #27272a;
-  --z-select: #e8f0fe;
-  --z-chip: #ffffff;
-  --z-timeline-canvas: #ffffff;
-  --z-timeline-lane-a: #f4f4f5;
-  --z-timeline-lane-b: #ffffff;
-  --z-timeline-chrome: #fafafa;
-  --z-timeline-border: #e4e4e7;
+  --z-select: #dbe4f8;
+  --z-chip: #f2f3f5;
+  --z-timeline-canvas: #f2f3f5;
+  --z-timeline-lane-a: #e8eaee;
+  --z-timeline-lane-b: #f2f3f5;
+  --z-timeline-chrome: #e8eaee;
+  --z-timeline-border: #cdd0d6;
   --z-timeline-muted: #71717a;
-  --z-timeline-hover: #e4e4e7;
+  --z-timeline-hover: #d4d7dc;
   --z-timeline-axis-label: #3f3f46;
   --z-timeline-axis-sub: #71717a;
   --z-timeline-guide: rgba(24, 24, 27, 0.08);
@@ -76,8 +76,8 @@ html.dark body {
   text-rendering: optimizeLegibility;
 }
 
-html.dark .bg-white,
-html.dark .bg-panel {
+html .bg-white,
+html .bg-panel {
   background-color: var(--z-panel);
 }
 
@@ -546,7 +546,7 @@ select {
   height: 22px;
   overflow: hidden;
   border-radius: 999px;
-  background: #ececf1;
+  background: var(--z-wash-2);
 }
 
 .effort-rail-fill {
@@ -587,7 +587,8 @@ select {
   width: 4px;
   height: 4px;
   border-radius: 999px;
-  background: #d4d4d8;
+  background: var(--z-fg-subtle);
+  opacity: 0.45;
   transform: translate(-50%, -50%);
 }
 

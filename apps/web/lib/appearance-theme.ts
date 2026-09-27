@@ -4,7 +4,7 @@ export const APPEARANCE_THEME_KEY = 'zivith.appearanceTheme';
 
 /** 桌面窗口标题栏。颜色与 `globals.css` 的 --z-bg / --z-chrome 对齐。 */
 export const WINDOW_CHROME = {
-  light: { backgroundColor: '#ffffff', overlayColor: '#f7f8fa', symbolColor: '#52525b' },
+  light: { backgroundColor: '#e8eaee', overlayColor: '#e2e4e8', symbolColor: '#52525b' },
   dark: { backgroundColor: '#18181b', overlayColor: '#161618', symbolColor: '#a1a1aa' },
 } as const;
 

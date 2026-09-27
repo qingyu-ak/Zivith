@@ -102,7 +102,7 @@ export function ModelEffortPicker({
     <div className="relative">
       <button
         type="button"
-        className="inline-flex h-8 max-w-[14rem] items-center gap-1 rounded-full px-2 text-xs text-zinc-700 hover:bg-zinc-100"
+        className="inline-flex h-8 max-w-[14rem] items-center gap-1 rounded-full px-2 text-xs text-[var(--z-fg-muted)] hover:bg-[var(--z-wash)]"
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={onOpen}
@@ -114,7 +114,7 @@ export function ModelEffortPicker({
         <IconChevron className="size-3.5 shrink-0 text-zinc-400" />
       </button>
       {open ? (
-        <div className="absolute bottom-[calc(100%+8px)] right-0 z-20 w-[17.5rem] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.12)]">
+        <div className="absolute bottom-[calc(100%+8px)] right-0 z-20 w-[17.5rem] overflow-hidden rounded-2xl border border-line bg-panel shadow-[0_12px_40px_rgba(15,23,42,0.18)]">
           {view === 'model' ? (
             <ModelList
               catalog={catalog}
@@ -140,19 +140,19 @@ export function ModelEffortPicker({
                 <div className="flex items-center gap-0.5">
                   <button
                     type="button"
-                    className="grid size-8 place-items-center rounded-full hover:bg-zinc-50"
+                    className="grid size-8 place-items-center rounded-full text-[var(--z-fg)] hover:bg-[var(--z-wash)]"
                     aria-pressed={fast}
                     aria-label={fast ? '关闭快速' : '开启快速'}
                     title="快速"
                     onClick={() => onFastChange(!fast)}
-                    style={{ color: fast ? METEOR_BLUE : '#18181b' }}
+                    style={{ color: fast ? METEOR_BLUE : undefined }}
                   >
                     <IconBolt filled={fast} className="size-4" />
                   </button>
                   {showContext ? (
                     <button
                       type="button"
-                      className="h-8 rounded-full px-2 text-[11px] text-zinc-600 hover:bg-zinc-50"
+                      className="h-8 rounded-full px-2 text-[11px] text-[var(--z-fg-muted)] hover:bg-[var(--z-wash)]"
                       onClick={() => onView('context')}
                     >
                       {selectedWindow ? formatContextWindow(selectedWindow) : '上下文'}
@@ -165,7 +165,7 @@ export function ModelEffortPicker({
                   </p>
                   <button
                     type="button"
-                    className={`mt-0.5 inline-flex max-w-full items-center gap-0.5 text-[13px] text-zinc-500 hover:text-zinc-800 ${
+                    className={`mt-0.5 inline-flex max-w-full items-center gap-0.5 text-[13px] text-[var(--z-fg-subtle)] hover:text-[var(--z-fg)] ${
                       showHint ? 'invisible' : ''
                     }`}
                     tabIndex={showHint ? -1 : 0}
@@ -184,12 +184,12 @@ export function ModelEffortPicker({
                 {supportsThinking ? (
                   <button
                     type="button"
-                    className="grid size-8 place-items-center rounded-full hover:bg-zinc-50"
+                    className="grid size-8 place-items-center rounded-full text-[var(--z-fg-subtle)] hover:bg-[var(--z-wash)]"
                     aria-pressed={thinkingEnabled}
                     aria-label={thinkingEnabled ? '关闭深度思考' : '开启深度思考'}
                     title="深度思考"
                     onClick={() => onThinkingChange(!thinkingEnabled)}
-                    style={{ color: thinkingEnabled ? METEOR_BLUE : '#71717a' }}
+                    style={{ color: thinkingEnabled ? METEOR_BLUE : undefined }}
                   >
                     <IconBrain className="size-4" />
                   </button>
@@ -198,6 +198,10 @@ export function ModelEffortPicker({
                 )}
               </div>
               <div className="relative mt-3">
+                <div
+                  className="pointer-events-none absolute inset-x-0 -top-3 z-[6] h-3 bg-panel"
+                  aria-hidden
+                />
                 <div
                   className="effort-rail"
                   data-effort={stopEffort}
@@ -288,16 +292,20 @@ function ModelList({
 }) {
   return (
     <div className="flex max-h-[min(20rem,46vh)] flex-col">
-      <p className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-xs text-zinc-400">
+      <p className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-xs text-[var(--z-fg-subtle)]">
         选择模型
-        <button type="button" className="text-zinc-500 hover:text-zinc-800" onClick={onClose}>
+        <button
+          type="button"
+          className="text-[var(--z-fg-subtle)] hover:text-[var(--z-fg)]"
+          onClick={onClose}
+        >
           返回
         </button>
       </p>
       <div className="shrink-0 px-2 pb-2">
         <input
           ref={searchRef}
-          className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:bg-white"
+          className="w-full rounded-lg border border-line bg-[var(--z-wash)] px-2.5 py-1.5 text-sm text-[var(--z-fg)] outline-none placeholder:text-[var(--z-fg-subtle)] focus:border-[var(--z-fg-subtle)] focus:bg-panel"
           placeholder="搜索模型"
           value={modelQuery}
           onChange={(event) => onModelQueryChange(event.target.value)}
@@ -308,7 +316,7 @@ function ModelList({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {visibleChoices.length === 0 ? (
-          <p className="px-3 py-2 text-sm text-zinc-400">没有匹配的模型</p>
+          <p className="px-3 py-2 text-sm text-[var(--z-fg-subtle)]">没有匹配的模型</p>
         ) : (
           visibleChoices.map((choice, index) => {
             const showProvider =
@@ -318,32 +326,34 @@ function ModelList({
             return (
               <div key={`${choice.provider}:${choice.model}`}>
                 {showProvider ? (
-                  <p className="px-3 pb-1 pt-2 text-[11px] text-zinc-400">{choice.providerLabel}</p>
+                  <p className="px-3 pb-1 pt-2 text-[11px] text-[var(--z-fg-subtle)]">
+                    {choice.providerLabel}
+                  </p>
                 ) : null}
                 <button
                   type="button"
                   disabled={saving}
                   title={choice.model}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--z-fg)] hover:bg-[var(--z-wash)] disabled:opacity-50"
                   onClick={() => onPickModel(choice.provider, choice.model)}
                 >
                   <span className="min-w-0 flex-1 truncate">{displayModelId(choice.model)}</span>
                   {choice.tag ? (
-                    <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                    <span className="rounded-full bg-[var(--z-wash-2)] px-1.5 py-0.5 text-[10px] text-[var(--z-fg-subtle)]">
                       {choice.tag}
                     </span>
                   ) : null}
-                  {active ? <IconCheck className="size-4 shrink-0 text-zinc-700" /> : null}
+                  {active ? <IconCheck className="size-4 shrink-0 text-[var(--z-fg-muted)]" /> : null}
                 </button>
               </div>
             );
           })
         )}
       </div>
-      <div className="shrink-0 border-t border-zinc-100">
+      <div className="shrink-0 border-t border-line">
         <Link
           href={settingsHref}
-          className="block px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
+          className="block px-3 py-2 text-sm text-[var(--z-fg-muted)] hover:bg-[var(--z-wash)]"
           onClick={() => {
             captureSettingsReturn();
             onClose();
@@ -369,9 +379,13 @@ function ContextList({
 }) {
   return (
     <div className="py-1">
-      <p className="flex items-center justify-between px-3 pb-1 pt-2 text-xs text-zinc-400">
+      <p className="flex items-center justify-between px-3 pb-1 pt-2 text-xs text-[var(--z-fg-subtle)]">
         选择上下文
-        <button type="button" className="text-zinc-500 hover:text-zinc-800" onClick={onClose}>
+        <button
+          type="button"
+          className="text-[var(--z-fg-subtle)] hover:text-[var(--z-fg)]"
+          onClick={onClose}
+        >
           返回
         </button>
       </p>
@@ -379,11 +393,11 @@ function ContextList({
         <button
           key={tokens}
           type="button"
-          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50"
+          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--z-fg)] hover:bg-[var(--z-wash)]"
           onClick={() => onPick(tokens)}
         >
           {formatContextWindow(tokens)}
-          {selected === tokens ? <IconCheck className="size-4 text-zinc-700" /> : null}
+          {selected === tokens ? <IconCheck className="size-4 text-[var(--z-fg-muted)]" /> : null}
         </button>
       ))}
     </div>
