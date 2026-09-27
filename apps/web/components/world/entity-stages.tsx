@@ -96,7 +96,7 @@ export function EntityStages({
           return (
             <li
               key={revision.id}
-              className="rounded-md border border-line bg-zinc-50/80 px-2.5 py-2"
+              className="rounded-md border border-line bg-[var(--z-wash)] px-2.5 py-2"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-sm font-medium text-zinc-800">{stageCaption(revision)}</span>

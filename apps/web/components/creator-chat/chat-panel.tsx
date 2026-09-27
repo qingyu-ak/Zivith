@@ -1903,7 +1903,7 @@ export function ChatPanel() {
                                   '读者'}
                               </p>
                             )}
-                            <div className="rounded-2xl bg-[#eef0f4] px-4 py-2.5 text-sm leading-6 text-zinc-800">
+                            <div className="rounded-2xl bg-[var(--z-bubble)] px-4 py-2.5 text-sm leading-6 text-[var(--z-bubble-fg)]">
                               <p className="whitespace-pre-wrap">{message.content}</p>
                             </div>
                             <MessageActions
@@ -1931,7 +1931,7 @@ export function ChatPanel() {
                             {message.speaker_name?.trim() || activeRoleplay.character_name}
                           </p>
                         )}
-                        <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
+                        <p className="whitespace-pre-wrap text-[15px] leading-7 text-ink">
                           {message.content}
                         </p>
                         {proposals.length > 0 && (
@@ -1991,7 +1991,7 @@ export function ChatPanel() {
                       {streamingSpeaker ? (
                         <p className="mb-1 text-xs font-medium text-[#4d6bfe]">{streamingSpeaker}</p>
                       ) : null}
-                      <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-800">
+                      <p className="whitespace-pre-wrap text-[15px] leading-7 text-ink">
                         {streamText}
                       </p>
                       {stopped ? <p className="mt-1 text-xs text-zinc-400">已暂停思考</p> : null}

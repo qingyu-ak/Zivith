@@ -333,7 +333,7 @@ export function WorldWorkspace() {
                     onChange={updateLineView}
                   />
                   {focusedDimension ? (
-                    <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-4 py-2 text-xs leading-5 text-violet-950">
+                    <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-4 py-2 text-xs leading-5 text-violet-950 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-100">
                       {isPrimaryWorldline(focusedDimension) ? (
                         <>
                           正在查看「{focusedDimension.label}
@@ -354,7 +354,7 @@ export function WorldWorkspace() {
                   ) : null}
                 </>
               ) : (
-                <div className="shrink-0 border-b border-line bg-zinc-50 px-4 py-2 text-xs leading-5 text-zinc-600">
+                <div className="shrink-0 border-b border-line bg-[var(--z-chrome)] px-4 py-2 text-xs leading-5 text-[var(--z-fg-muted)]">
                   机位 / 风格 / 提示词 / 模型是从镜头当前状态投影的只读轨，不另存 TimelineItem。
                 </div>
               )}

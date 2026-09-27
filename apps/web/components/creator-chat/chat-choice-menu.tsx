@@ -93,7 +93,7 @@ export function ChatChoiceMenu({
                   <li key={option.value}>
                     <div
                       className={`flex items-start gap-2 px-3 py-2 ${
-                        active ? 'bg-[#e8f0fe]' : 'hover:bg-zinc-50'
+                        active ? 'bg-[var(--z-select)]' : 'hover:bg-zinc-50'
                       }`}
                     >
                       <button
@@ -149,7 +149,7 @@ export function CharacterCardPeek({
   extra?: ReactNode;
 }) {
   return (
-    <div className="flex max-w-xl flex-wrap items-baseline gap-x-2 gap-y-1 text-[11px] leading-5 text-zinc-500">
+    <div className="flex max-w-xl flex-wrap items-baseline gap-x-2 gap-y-1 text-[11px] leading-5 text-[var(--z-fg-muted)]">
       <span className="line-clamp-2 min-w-0 flex-1">
         {preview || `「${name}」的角色卡还没有简介。`}
       </span>
