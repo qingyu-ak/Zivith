@@ -1,8 +1,14 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, session, nativeTheme } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { prepareApp, stopProcessTree, WEB_URL } = require('./launcher.cjs');
 const { startupUrl, writeLastPath } = require('./last-location.cjs');
+const {
+  applyWindowAppearance,
+  chromeForTheme,
+  readAppearanceTheme,
+  writeAppearanceTheme,
+} = require('./window-chrome.cjs');
 
 const ICON = path.join(__dirname, '..', 'assets', 'icon.ico');
 const SPLASH_HTML = path.join(__dirname, '..', 'assets', 'splash.html');
@@ -59,24 +65,38 @@ function createSplash() {
   splashWindow.once('ready-to-show', () => splashWindow?.show());
 }
 
+function senderWindow(event) {
+  return BrowserWindow.fromWebContents(event.sender);
+}
+
+function sendMaximized(win) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('window:maximized', win.isMaximized());
+}
+
 function mainWindowChrome() {
   if (process.platform === 'darwin') {
     return { titleBarStyle: 'hiddenInset' };
   }
-  if (process.platform === 'win32') {
-    return {
-      titleBarStyle: 'hidden',
-      titleBarOverlay: {
-        color: '#f7f8fa',
-        symbolColor: '#52525b',
-        height: 44,
-      },
-    };
-  }
-  return {};
+  // Windows 11 native overlay buttons stay white regardless of titleBarOverlay.color.
+  // Frameless window + in-app controls so the chrome matches --z-chrome.
+  return { frame: false };
+}
+
+function storedAppearanceTheme() {
+  return readAppearanceTheme(app.getPath('userData'));
+}
+
+function applyAppearanceTheme(theme) {
+  const next = writeAppearanceTheme(app.getPath('userData'), theme);
+  nativeTheme.themeSource = next;
+  applyWindowAppearance(mainWindow, next);
+  return next;
 }
 
 function createWindow() {
+  const theme = storedAppearanceTheme();
+  nativeTheme.themeSource = theme;
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -84,7 +104,7 @@ function createWindow() {
     minHeight: 640,
     show: false,
     title: 'Zivith',
-    backgroundColor: '#ffffff',
+    backgroundColor: chromeForTheme(theme).backgroundColor,
     icon: ICON,
     autoHideMenuBar: true,
     ...mainWindowChrome(),
@@ -103,6 +123,8 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  mainWindow.on('maximize', () => sendMaximized(mainWindow));
+  mainWindow.on('unmaximize', () => sendMaximized(mainWindow));
   mainWindow.webContents.on('did-navigate', (_event, url) => {
     writeLastPath(app.getPath('userData'), url);
   });
@@ -192,6 +214,21 @@ if (!gotLock) {
     ipcMain.handle('location:persist', (_event, pathname) => {
       writeLastPath(app.getPath('userData'), pathname);
     });
+    ipcMain.handle('appearance:setTheme', (_event, theme) => applyAppearanceTheme(theme));
+    ipcMain.handle('window:minimize', (event) => {
+      senderWindow(event)?.minimize();
+    });
+    ipcMain.handle('window:toggleMaximize', (event) => {
+      const win = senderWindow(event);
+      if (!win) return false;
+      if (win.isMaximized()) win.unmaximize();
+      else win.maximize();
+      return win.isMaximized();
+    });
+    ipcMain.handle('window:close', (event) => {
+      senderWindow(event)?.close();
+    });
+    ipcMain.handle('window:isMaximized', (event) => Boolean(senderWindow(event)?.isMaximized()));
     ipcMain.handle('workspace:openDirectory', async (_event, defaultPath) => {
       const start = folderDialogStart(defaultPath);
       const result = await dialog.showOpenDialog({

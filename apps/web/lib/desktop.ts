@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react';
 
 export interface ZivithDesktop {
+  platform?: string;
+  hasWindowControls?: boolean;
   openDirectory: (defaultPath?: string) => Promise<string | null>;
   persistLocation?: (pathname: string) => Promise<void>;
+  setAppearanceTheme?: (theme: 'light' | 'dark') => Promise<void>;
+  minimizeWindow?: () => Promise<void>;
+  toggleMaximizeWindow?: () => Promise<boolean>;
+  closeWindow?: () => Promise<void>;
+  isWindowMaximized?: () => Promise<boolean>;
+  onWindowMaximized?: (callback: (maximized: boolean) => void) => () => void;
 }
 
 declare global {

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description: 'AI 原生影视创作工作室',
 };
 
-const APPEARANCE_BOOT = `try{var t=localStorage.getItem('zivith.appearanceTheme');if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark';document.documentElement.style.colorScheme='dark'}}catch(e){}`;
+const APPEARANCE_BOOT = `try{var t=localStorage.getItem('zivith.appearanceTheme')==='dark'?'dark':'light';if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark';document.documentElement.style.colorScheme='dark'}if(window.zivithDesktop&&typeof window.zivithDesktop.setAppearanceTheme==='function'){void window.zivithDesktop.setAppearanceTheme(t)}}catch(e){}`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
