@@ -1,7 +1,7 @@
 /**
  * 会话级浏览历史栈（顶栏「上一步 / 下一步」）。
- * 与浏览器历史独立：只记录应用内路径，back/forward 返回目标路径由调用方导航；
- * push 对同一路径幂等，因此导航落地后的重复 push 不会破坏栈。
+ * Chat、Studio、设置、帮助共用一条栈，因此从对话进设置后后退回到原对话。
+ * 与浏览器历史独立：只记录应用内路径。
  */
 export class NavigationHistory {
   private stack: string[] = [];
@@ -59,17 +59,12 @@ export class NavigationHistory {
   }
 }
 
-/** 会话级单例容器：Chat 与 Studio 各一套栈，换壳不串栈。 */
-const surfaces = new Map<string, NavigationHistory>();
+/** 会话级单例：Chat / Studio / 设置 / 帮助共用一条浏览栈。 */
+const appHistory = new NavigationHistory();
 
 export const CHAT_SURFACE = 'chat';
 export const STUDIO_SURFACE = 'studio';
 
-export function navigationHistoryFor(surface: string): NavigationHistory {
-  let instance = surfaces.get(surface);
-  if (!instance) {
-    instance = new NavigationHistory();
-    surfaces.set(surface, instance);
-  }
-  return instance;
+export function navigationHistoryFor(_surface?: string): NavigationHistory {
+  return appHistory;
 }

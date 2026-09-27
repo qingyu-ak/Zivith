@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { IconArrowLeft } from '@/components/nav-icons';
 import { APP_VERSION, buildBugReportTemplate, FEEDBACK_CHANNELS } from '@/lib/help-feedback';
+import { readLastLocation } from '@/lib/last-location';
+import { resolveOverlayReturn } from '@/lib/nav-overlay';
 
 type HelpSection = 'docs' | 'feedback';
 
@@ -12,6 +16,7 @@ const NAV: Array<{ id: HelpSection; label: string }> = [
 ];
 
 export default function HelpPage() {
+  const router = useRouter();
   const [section, setSection] = useState<HelpSection>('docs');
 
   useEffect(() => {
@@ -19,9 +24,21 @@ export default function HelpPage() {
     if (NAV.some((item) => item.id === hash)) setSection(hash);
   }, []);
 
+  function leaveHelp() {
+    router.push(resolveOverlayReturn(readLastLocation() ?? '/projects'));
+  }
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 p-5 sm:flex-row sm:p-8">
       <aside className="w-full shrink-0 sm:w-48">
+        <button
+          type="button"
+          className="mb-3 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-sm text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
+          onClick={leaveHelp}
+        >
+          <IconArrowLeft className="size-4" />
+          返回
+        </button>
         <h1 className="text-lg font-semibold text-zinc-900">帮助与反馈</h1>
         <nav className="mt-4 grid gap-0.5" aria-label="帮助与反馈分组">
           {NAV.map((item) => (

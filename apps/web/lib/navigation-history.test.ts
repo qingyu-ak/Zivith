@@ -58,20 +58,16 @@ describe('NavigationHistory', () => {
     expect(history.current).toBe('/projects/p1/settings');
   });
 
-  it('Chat 与 Studio 分栈：在 Chat 走两线程再进 Studio，Chat 的 back 不会落到 Studio 页面', () => {
-    const chat = navigationHistoryFor('chat');
-    const studio = navigationHistoryFor('studio');
-    chat.reset();
-    studio.reset();
+  it('Chat 与 Studio 共用一条栈：从 Chat 进设置，后退回到原对话', () => {
+    const history = navigationHistoryFor('studio');
+    history.reset();
 
-    chat.push('/creator-chats/t1');
-    chat.push('/creator-chats/t2');
-    studio.push('/projects/p1/world');
+    history.push('/creator-chats/t1');
+    history.push('/creator-chats/t2');
+    history.push('/projects/p1/settings');
 
-    expect(chat.back()).toBe('/creator-chats/t1');
-    expect(chat.current).not.toBe('/projects/p1/world');
-    expect(studio.back()).toBeNull();
-    // 同一 surface 拿到同一实例
-    expect(navigationHistoryFor('chat')).toBe(chat);
+    expect(navigationHistoryFor('chat')).toBe(history);
+    expect(history.back()).toBe('/creator-chats/t2');
+    expect(history.current).toBe('/creator-chats/t2');
   });
 });

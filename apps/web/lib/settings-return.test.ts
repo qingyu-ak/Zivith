@@ -13,10 +13,13 @@ describe('settings return', () => {
     expect(readSettingsReturn()).toBe('/projects/p1/world?line=production');
   });
 
-  it('does not replace the origin with a settings URL', () => {
+  it('does not replace the origin with a settings, help, or auth URL', () => {
     captureSettingsReturn('/creator-chats/t1');
     captureSettingsReturn('/projects/p1/settings');
     captureSettingsReturn('/projects/p1/settings?section=models');
+    captureSettingsReturn('/help');
+    captureSettingsReturn('/login');
+    captureSettingsReturn('/register');
     expect(readSettingsReturn()).toBe('/creator-chats/t1');
   });
 });

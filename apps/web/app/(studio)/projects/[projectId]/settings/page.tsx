@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { IconArrowLeft } from '@/components/nav-icons';
-import { STUDIO_SURFACE, navigationHistoryFor } from '@/lib/navigation-history';
-import { clearSettingsReturn, readSettingsReturn } from '@/lib/settings-return';
+import { resolveOverlayReturn } from '@/lib/nav-overlay';
 import { ModelSettings } from '@/components/model-settings';
 import { ModelVisibilityList } from '@/components/model-visibility';
 import { UsageSummaryCard } from '@/components/usage-summary-card';
@@ -102,16 +101,7 @@ export default function SettingsPage() {
   }
 
   function leaveSettings() {
-    const origin = readSettingsReturn();
-    if (origin) {
-      clearSettingsReturn();
-      router.push(origin);
-      return;
-    }
-    const previous = navigationHistoryFor(STUDIO_SURFACE).backLeaving((path) =>
-      path.includes('/settings'),
-    );
-    router.push(previous ?? `/projects/${projectId}/world`);
+    router.push(resolveOverlayReturn(`/projects/${projectId}/world`));
   }
 
   return (
