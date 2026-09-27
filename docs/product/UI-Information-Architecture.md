@@ -4,11 +4,11 @@
 >
 > Version: 1.3
 >
-> Status: Accepted v1 — Track K 已完成。2026-09-01 Studio 收成 IDE 壳。2026-09-02 本地创作面为 Electron（ADR-0016），Chat 侧栏选择真实路径文件夹。落地任务见 [Next Tasks](../planning/Next-Tasks.md)
+> Status: Accepted v1 — Track K 已完成。2026-09-01 Studio 收成 IDE 壳。2026-09-02 本地创作面为 Electron（ADR-0016）。**产品入口与第一使用以 [产品宪法](Product-Constitution.md) Journey A 为准（2026-09-16）；本文记录当前壳与路由，冲突处听宪法。**
 >
-> Last Updated: 2026-09-02
+> Last Updated: 2026-09-16
 >
-> Related: [Product-Positioning.md](Product-Positioning.md), [Design-Philosophy.md](Design-Philosophy.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI Creative IDE RFC](../architecture/rfc/AI-Creative-IDE-RFC.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md), [ADR-0016](../architecture/adr/0016-local-creative-surface-is-electron.md)
+> Related: [Product Constitution](Product-Constitution.md), [Product-Positioning.md](Product-Positioning.md), [Design-Philosophy.md](Design-Philosophy.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [AI Creative IDE RFC](../architecture/rfc/AI-Creative-IDE-RFC.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md), [ADR-0016](../architecture/adr/0016-local-creative-surface-is-electron.md)
 
 ---
 
@@ -94,8 +94,8 @@ Explorer 把一个项目当成文件夹：里面是 **IP Core**、对话、角�
 
 | 目标路由 | 状态 | 承载 |
 |----------|------|------|
-| `/` | **新增** | Creator Chat 持续对话，应用默认入口；无登录（ADR-0013）；Electron 窗口为本地创作面（ADR-0016）。侧栏按工作区分组：选择文件夹、项目内新聊天、改名、删聊天 |
-| `/projects/new` | 降级 | 手动创建项目的回退入口。默认路径是 Studio `/projects` 打开文件夹 |
+| `/` | **新增** | Creator Chat 持续对话；无登录（ADR-0013）；Electron 窗口为本地创作面（ADR-0016）。侧栏按工作区分组：选择文件夹、项目内新聊天、改名、删聊天。**Journey A：** 新用户必须能从这里或项目页独立新建世界，而不是只有「已经会用的人才能找入口」 |
+| `/projects/new` | **新建世界入口** | 创建世界（一个 `Project`）。不得再写成「降级回退」。默认「打开文件夹」只覆盖已有世界 |
 | `/projects/[id]` | 保留 | 故事列表（不是世界总览；世界在 `/world`） |
 | `/projects/[id]/world` | 新增 | Studio 主画布。三栏世界工作区：左**项目文件夹**（IP Core / 对话 / 实体）/ 中 Timeline + 副驾驶 / 右 Inspector（可视化改 IP Core 与实体属性）。顶栏「世界 / 创作线」是同一 Timeline 的两种视图（H7 投影）；活动栏「制作」专指 `/production` |
 | `/projects/[id]/assets` | 保留 | 实体库，导航名改为「实体库」 |

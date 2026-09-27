@@ -8,7 +8,7 @@
 >
 > Horizon: 5–10 years
 >
-> Related: [architecture-principles.md](architecture-principles.md)（宪章）, [rfc-guide.md](rfc-guide.md)
+> Related: [architecture-principles.md](architecture-principles.md)（架构宪章）, [Product Constitution](../product/Product-Constitution.md)（产品宪法）, [rfc-guide.md](rfc-guide.md)
 
 ---
 
@@ -57,12 +57,15 @@ Architecture Decision Record（ADR）是 Zivith 为何如此成形的永久记�
 权威层级严格且单向：
 
 ```
-Architecture Constitution        (what must remain true)
-        ↓ constrains
-ADRs                             (how the Constitution is applied to a decision)
+Product Constitution             (what experience must remain true — journeys, acceptance)
+Architecture Constitution        (what the system must remain true — domain, boundaries)
+        ↓ constrain
+ADRs                             (how the Architecture Constitution is applied to a decision)
         ↓ constrain
 RFCs and implementation plans    (how a change is designed and executed)
 ```
+
+产品宪法（[Product Constitution](../product/Product-Constitution.md)）约束「做什么 / 是否完成 / Agent 如何执行任务」。本文其余条款约束架构决策。ADR 不得把「功能列表打勾」写成完成定义以绕过产品宪法的 Journey 验收。
 
 关系规则：
 

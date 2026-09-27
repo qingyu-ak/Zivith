@@ -22,10 +22,23 @@ import {
 import { z } from 'zod';
 import { ApiError } from '../errors.js';
 import { applyProposal } from '../contexts/world/proposal-applier.js';
+import { applyConversationRollback } from '../contexts/chat/apply-conversation-rollback.js';
 import {
+  canRollbackToMessage,
+  stampAppliedEntityIds,
+} from '../contexts/chat/conversation-rollback.js';
+import { isGroupChat, parseParticipantIds } from '../contexts/roleplay/group-chat.js';
+import { contentRestatesEvent } from '../contexts/roleplay/world-change-drafter.js';
+import {
+  allocateWorldFolder,
   archiveCreatorChat,
+  createWorldInFolder,
+  readWorldsRoot,
+  writeWorldsRoot,
   createWorldWorkspace,
+  inspectWorkspaceFolder,
   isWorkspaceSeed,
+  normalizeWorkspacePath,
   openWorldFolder,
 } from '../contexts/world/workspace.js';
 import { assetDto, sceneDto } from './resources.js';
@@ -43,6 +56,7 @@ import {
 import { detectWorldConflicts } from '../contexts/world-builder/conflict-detector.js';
 import { formatMemoryDigest } from '../contexts/memory/retrieval.js';
 import type { MemoryService } from '../contexts/memory/service.js';
+import { getEntityRevision, listEntityRevisions } from '../contexts/history/entity-revisions.js';
 import { flushHttpStream, formatSseEvent } from '../lib/sse.js';
 import { canReuseLastUser, isOpenProposalState } from '../lib/chat-turn.js';
 import type { LLMAdapter } from '../ports/llm.js';
@@ -168,6 +182,7 @@ export function registerWorldRoutes(
   registerWorldEventRoutes(app, db);
   registerRelationshipRoutes(app, db);
   registerTimelineRoutes(app, db);
+  registerEntityRevisionRoutes(app, db);
   registerCreatorChatRoutes(app, db, llm, llmModel, memory);
 }
 
@@ -345,6 +360,50 @@ function registerProjectResources(app: FastifyInstance, db: PrismaClient) {
 }
 
 // ---------------------------------------------------------------------------
+// EntityRevision 只读面（角色/地点阶段状态；不是第二条时间线）
+// ---------------------------------------------------------------------------
+
+function registerEntityRevisionRoutes(app: FastifyInstance, db: PrismaClient) {
+  const revisionParams = z
+    .object({
+      projectId: idSchema,
+      entityType: z.string().min(1).max(64),
+      entityId: idSchema,
+    })
+    .strict();
+  const revisionOneParams = revisionParams.extend({
+    revision: z.coerce.number().int().positive(),
+  });
+  const revisionQuery = z
+    .object({
+      as_of_world_event_id: idSchema.optional(),
+      presentation_order: z.coerce.number().int().optional(),
+    })
+    .strict();
+
+  app.get('/projects/:projectId/entities/:entityType/:entityId/revisions', async (request) => {
+    const { projectId, entityType, entityId } = revisionParams.parse(request.params);
+    await requireProject(db, projectId);
+    const query = revisionQuery.parse(request.query);
+    return listEntityRevisions(db, projectId, entityType, entityId, {
+      ...(query.as_of_world_event_id ? { asOfWorldEventId: query.as_of_world_event_id } : {}),
+      ...(query.presentation_order !== undefined
+        ? { presentationOrder: query.presentation_order }
+        : {}),
+    });
+  });
+
+  app.get(
+    '/projects/:projectId/entities/:entityType/:entityId/revisions/:revision',
+    async (request) => {
+      const { projectId, entityType, entityId, revision } = revisionOneParams.parse(request.params);
+      await requireProject(db, projectId);
+      return getEntityRevision(db, projectId, entityType, entityId, revision);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // WorldEvent (ADR-0011)
 // ---------------------------------------------------------------------------
 
@@ -356,6 +415,13 @@ function registerWorldEventRoutes(app: FastifyInstance, db: PrismaClient) {
       where: { projectId, deletedAt: null },
       orderBy: [{ presentationOrder: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
     });
+  });
+
+  app.get('/world-events/:id', async (request) => {
+    const { id } = entityParams.parse(request.params);
+    const existing = await db.worldEvent.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) throw new ApiError(404, 'WORLD_EVENT_NOT_FOUND', '世界事件不存在');
+    return existing;
   });
 
   app.post('/projects/:projectId/world-events', async (request, reply) => {
@@ -410,11 +476,43 @@ function registerWorldEventRoutes(app: FastifyInstance, db: PrismaClient) {
     });
   });
 
+async function forgetChatFactsForEvent(
+  db: PrismaClient,
+  event: { projectId: string; title: string; description: string | null },
+) {
+  const [characters, atoms] = await Promise.all([
+    db.asset.findMany({
+      where: { projectId: event.projectId, type: 'character', deletedAt: null },
+      select: { name: true },
+    }),
+    db.memoryAtom.findMany({
+      where: {
+        projectId: event.projectId,
+        status: 'active',
+        factType: { in: ['event', 'episodic'] },
+      },
+      select: { id: true, content: true },
+    }),
+  ]);
+  const names = characters.map((character) => character.name);
+  const ids = atoms
+    .filter((atom) =>
+      contentRestatesEvent(atom.content, { title: event.title, description: event.description }, names),
+    )
+    .map((atom) => atom.id);
+  if (ids.length === 0) return;
+  await db.memoryAtom.updateMany({
+    where: { id: { in: ids } },
+    data: { status: 'invalidated', validTo: new Date() },
+  });
+}
+
   app.delete('/world-events/:id', async (request, reply) => {
     const { id } = entityParams.parse(request.params);
     const existing = await db.worldEvent.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new ApiError(404, 'WORLD_EVENT_NOT_FOUND', '世界事件不存在');
     await db.worldEvent.update({ where: { id }, data: { deletedAt: new Date() } });
+    await forgetChatFactsForEvent(db, existing);
     return reply.status(204).send();
   });
 
@@ -736,6 +834,19 @@ const createThreadBody = z
 const openFolderBody = z
   .object({
     path: z.string().trim().min(1).max(4096),
+    // §18.1/§18.2/§18.3：异常场景的处理方式由前端明确选择，API 不静默降级。
+    on_missing: z.enum(['error', 'import']).optional(),
+    on_corrupt: z.enum(['error', 'recover']).optional(),
+    on_orphan: z.enum(['error', 'create']).optional(),
+    rebind_project_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const createFolderBody = z
+  .object({
+    path: z.string().trim().min(1).max(4096),
+    name: z.string().trim().min(1).max(200).optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
   })
   .strict();
 
@@ -784,11 +895,17 @@ type ChatThreadRecord = {
   projectId: string | null;
   title: string | null;
   state: string;
+  activeHeadMessageId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
-type RoleplayMeta = { characterName: string; userCharacterName: string | null };
+type RoleplayMeta = {
+  characterName: string;
+  userCharacterName: string | null;
+  participantNames: string[];
+  isGroup: boolean;
+};
 
 async function loadRoleplayMeta(
   db: PrismaClient,
@@ -798,16 +915,22 @@ async function loadRoleplayMeta(
   if (threadIds.length === 0) return meta;
   const roleplays = await db.roleplayThread.findMany({
     where: { threadId: { in: threadIds }, status: 'active' },
-    select: { threadId: true, characterAssetId: true, userCharacterAssetId: true },
+    select: {
+      threadId: true,
+      characterAssetId: true,
+      userCharacterAssetId: true,
+      participantAssetIds: true,
+    },
   });
   if (roleplays.length === 0) return meta;
   const assetIds = [
     ...new Set(
-      roleplays.flatMap((item) =>
-        item.userCharacterAssetId
-          ? [item.characterAssetId, item.userCharacterAssetId]
-          : [item.characterAssetId],
-      ),
+      roleplays.flatMap((item) => {
+        const participants = parseParticipantIds(item.participantAssetIds, item.characterAssetId);
+        return item.userCharacterAssetId
+          ? [...participants, item.userCharacterAssetId]
+          : participants;
+      }),
     ),
   ];
   const assets =
@@ -819,11 +942,17 @@ async function loadRoleplayMeta(
       : [];
   const nameById = new Map(assets.map((asset) => [asset.id, asset.name]));
   for (const roleplay of roleplays) {
+    const participants = parseParticipantIds(
+      roleplay.participantAssetIds,
+      roleplay.characterAssetId,
+    );
     meta.set(roleplay.threadId, {
       characterName: nameById.get(roleplay.characterAssetId) ?? '',
       userCharacterName: roleplay.userCharacterAssetId
         ? (nameById.get(roleplay.userCharacterAssetId) ?? null)
         : null,
+      participantNames: participants.map((id) => nameById.get(id) ?? id),
+      isGroup: isGroupChat(participants),
     });
   }
   return meta;
@@ -849,6 +978,9 @@ function chatThreadDto(
     kind: roleplay ? ('roleplay' as const) : ('world' as const),
     character_name: roleplay?.characterName ? roleplay.characterName : null,
     user_character_name: roleplay?.userCharacterName ?? null,
+    is_group: roleplay?.isGroup ?? false,
+    participant_names: roleplay?.participantNames ?? [],
+    active_head_message_id: thread.activeHeadMessageId ?? null,
     pending_proposal_count: extras?.pendingProposalCount ?? 0,
     created_at: thread.createdAt.toISOString(),
     updated_at: thread.updatedAt.toISOString(),
@@ -863,7 +995,7 @@ async function loadPendingProposalCounts(
   if (threadIds.length === 0) return counts;
   const rows = await db.creatorChatMessage.groupBy({
     by: ['threadId'],
-    where: { threadId: { in: threadIds }, proposalState: 'pending' },
+    where: { threadId: { in: threadIds }, proposalState: 'pending', suppressed: false },
     _count: { id: true },
   });
   for (const row of rows) {
@@ -941,16 +1073,21 @@ function summarizeProposals(raw: unknown): string {
   return parts.join(' · ');
 }
 
-function chatMessageDto(message: {
-  id: string;
-  threadId: string;
-  role: string;
-  content: string;
-  proposal: unknown;
-  proposalKey: string | null;
-  proposalState: string | null;
-  createdAt: Date;
-}) {
+function chatMessageDto(
+  message: {
+    id: string;
+    threadId: string;
+    role: string;
+    content: string;
+    proposal: unknown;
+    proposalKey: string | null;
+    proposalState: string | null;
+    speakerAssetId?: string | null;
+    suppressed?: boolean;
+    createdAt: Date;
+  },
+  speakerName?: string | null,
+) {
   return {
     id: message.id,
     thread_id: message.threadId,
@@ -959,6 +1096,9 @@ function chatMessageDto(message: {
     proposal: message.proposal,
     proposal_key: message.proposalKey,
     proposal_state: message.proposalState,
+    speaker_asset_id: message.speakerAssetId ?? null,
+    speaker_name: speakerName ?? null,
+    suppressed: Boolean(message.suppressed),
     created_at: message.createdAt.toISOString(),
   };
 }
@@ -974,7 +1114,7 @@ async function createAssistantReply(
 ) {
   const resolved = effort ?? resolveAgentEffort();
   const rows = await db.creatorChatMessage.findMany({
-    where: { threadId: thread.id },
+    where: { threadId: thread.id, suppressed: false },
     orderBy: { createdAt: 'asc' },
     take: 200,
   });
@@ -1066,6 +1206,25 @@ function wantsEventStream(request: FastifyRequest): boolean {
   return typeof accept === 'string' && accept.includes('text/event-stream');
 }
 
+async function lastMessageForTurn(db: PrismaClient, threadId: string, retry?: boolean) {
+  const last = await db.creatorChatMessage.findFirst({
+    where: { threadId, suppressed: false },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!retry || !last || last.role !== 'assistant') return last;
+  await db.creatorChatMessage.update({
+    where: { id: last.id },
+    data: {
+      suppressed: true,
+      ...(last.proposalState === 'pending' ? { proposalState: 'rejected' } : {}),
+    },
+  });
+  return db.creatorChatMessage.findFirst({
+    where: { threadId, suppressed: false },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
 async function pipeCreatorChatSse(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -1104,16 +1263,19 @@ async function pipeCreatorChatSse(
     reply.raw.write(formatSseEvent(event, data));
     flushHttpStream(reply.raw);
   };
+  const markClientGone = () => {
+    closed = true;
+  };
+  reply.raw.on('close', markClientGone);
   const cleanup = () => {
     closed = true;
-    request.raw.off('close', cleanup);
+    reply.raw.off('close', markClientGone);
     try {
       reply.raw.end();
     } catch {
       // stream already closed
     }
   };
-  request.raw.on('close', cleanup);
 
   writeEvent('user', { user_message: chatMessageDto(userMessage) });
   writeEvent('status', { phase: 'thinking' });
@@ -1142,6 +1304,19 @@ async function pipeCreatorChatSse(
       },
       { delayMs: closed ? 0 : 16 },
     );
+    if (closed) {
+      await db.creatorChatMessage.update({
+        where: { id: assistantMessage.id },
+        data: {
+          suppressed: true,
+          proposalState:
+            assistantMessage.proposalState === 'pending'
+              ? 'rejected'
+              : assistantMessage.proposalState,
+        },
+      });
+      return;
+    }
     writeEvent('done', {
       assistant_message: chatMessageDto(assistantMessage),
       effort: effort ? effortDto(effort) : effortDto(resolveAgentEffort()),
@@ -1213,6 +1388,55 @@ function registerCreatorChatRoutes(
     );
   });
 
+  // §8 打开世界前先检查文件夹身份，前端据此渲染 §18 的异常选择对话框。
+  app.post('/folders/inspect', (request) => {
+    const body = openFolderBody.pick({ path: true }).parse(request.body ?? {});
+    const workspacePath = normalizeWorkspacePath(body.path);
+    const inspect = inspectWorkspaceFolder(workspacePath);
+    return {
+      path: workspacePath,
+      state: inspect.state,
+      world_id: inspect.state === 'ok' ? inspect.marker.worldId : null,
+      name: inspect.state === 'ok' ? inspect.marker.name : null,
+    };
+  });
+
+  // §7 在选定文件夹中创建新世界（.zivith/ + 基础目录 + 数据库 World 同 worldId）。
+  app.post('/folders/create', async (request, reply) => {
+    const body = createFolderBody.parse(request.body ?? {});
+    let memberUserId: string | null = null;
+    try {
+      await request.jwtVerify();
+      memberUserId = (request.user as { sub?: string } | undefined)?.sub ?? null;
+    } catch {
+      memberUserId = null;
+    }
+    const { project, thread } = await createWorldInFolder(db, {
+      folderPath: body.path,
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      description: body.description ?? null,
+      memberUserId,
+    });
+    return reply.status(201).send(
+      chatThreadDto(thread, {
+        projectName: project.name,
+        workspacePath: project.workspacePath,
+      }),
+    );
+  });
+
+  app.get('/folders/root', () => ({ path: readWorldsRoot() }));
+
+  app.put('/folders/root', (request) => {
+    const body = z.object({ path: z.string().trim().min(1) }).strict().parse(request.body ?? {});
+    return { path: writeWorldsRoot(body.path) };
+  });
+
+  app.post('/folders/allocate', (request) => {
+    const body = z.object({ name: z.string().trim().min(1).max(200) }).strict().parse(request.body ?? {});
+    return { path: allocateWorldFolder(body.name) };
+  });
+
   app.post('/folders/open', async (request, reply) => {
     const body = openFolderBody.parse(request.body ?? {});
     let memberUserId: string | null = null;
@@ -1222,7 +1446,13 @@ function registerCreatorChatRoutes(
     } catch {
       memberUserId = null;
     }
-    const { project, thread } = await openWorldFolder(db, body.path, memberUserId);
+    const { project, thread } = await openWorldFolder(db, body.path, {
+      memberUserId,
+      ...(body.on_missing ? { onMissing: body.on_missing } : {}),
+      ...(body.on_corrupt ? { onCorrupt: body.on_corrupt } : {}),
+      ...(body.on_orphan ? { onOrphan: body.on_orphan } : {}),
+      ...(body.rebind_project_id ? { rebindProjectId: body.rebind_project_id } : {}),
+    });
     return reply.status(200).send(
       chatThreadDto(thread, {
         projectName: project.name,
@@ -1303,17 +1533,34 @@ function registerCreatorChatRoutes(
     const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
     const { thread, projectName, workspacePath } = await requireOpenThread(db, threadId);
     const messages = await db.creatorChatMessage.findMany({
-      where: { threadId },
+      where: { threadId, suppressed: false },
       orderBy: { createdAt: 'asc' },
     });
     const roleplayMeta = await loadRoleplayMeta(db, [thread.id]);
+    const speakerIds = [
+      ...new Set(
+        messages.map((item) => item.speakerAssetId).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const speakers = speakerIds.length
+      ? await db.asset.findMany({
+          where: { id: { in: speakerIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const speakerName = new Map(speakers.map((item) => [item.id, item.name]));
     return {
       thread: chatThreadDto(thread, {
         projectName,
         workspacePath,
         roleplay: roleplayMeta.get(thread.id) ?? null,
       }),
-      messages: messages.map(chatMessageDto),
+      messages: messages.map((item) =>
+        chatMessageDto(
+          item,
+          item.speakerAssetId ? (speakerName.get(item.speakerAssetId) ?? null) : null,
+        ),
+      ),
     };
   });
 
@@ -1327,7 +1574,7 @@ function registerCreatorChatRoutes(
     const { thread } = await requireOpenThread(db, threadId);
     const effort = resolveAgentEffort(query.effort);
     const messages = await db.creatorChatMessage.findMany({
-      where: { threadId },
+      where: { threadId, suppressed: false },
       orderBy: { createdAt: 'asc' },
     });
     let tokenEstimate = messages.reduce(
@@ -1389,12 +1636,7 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const lastMessage = body.retry
-      ? await db.creatorChatMessage.findFirst({
-          where: { threadId },
-          orderBy: { createdAt: 'desc' },
-        })
-      : null;
+    const lastMessage = await lastMessageForTurn(db, threadId, body.retry);
     const userMessage =
       canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
         ? lastMessage
@@ -1471,12 +1713,7 @@ function registerCreatorChatRoutes(
       throw new ApiError(400, 'USER_PROPOSAL_FORBIDDEN', '用户消息不允许携带提案');
     }
 
-    const lastMessage = body.retry
-      ? await db.creatorChatMessage.findFirst({
-          where: { threadId },
-          orderBy: { createdAt: 'desc' },
-        })
-      : null;
+    const lastMessage = await lastMessageForTurn(db, threadId, body.retry);
     const userMessage =
       canReuseLastUser(lastMessage, body.content, body.retry) && lastMessage
         ? lastMessage
@@ -1609,6 +1846,12 @@ function registerCreatorChatRoutes(
       if (results.length === 0 && skipped.length > 0) {
         throw new ApiError(400, 'PROJECT_ALREADY_EXISTS', '该对话已关联项目，不能重复创建');
       }
+      await tx.creatorChatMessage.update({
+        where: { id: messageId },
+        data: {
+          proposal: stampAppliedEntityIds(rawProposals, results) as Prisma.InputJsonValue,
+        },
+      });
       return { results, skipped };
     });
     return { applied: results, skipped };
@@ -1653,5 +1896,34 @@ function registerCreatorChatRoutes(
       });
     }
     return { rejected: true };
+  });
+
+  app.post('/creator-chats/:threadId/rollback', async (request) => {
+    const { threadId } = z.object({ threadId: idSchema }).strict().parse(request.params);
+    const body = z
+      .object({
+        message_id: idSchema,
+        mode: z.enum(['withdraw', 'keep']).default('keep'),
+      })
+      .strict()
+      .parse(request.body ?? {});
+    await requireOpenThread(db, threadId);
+    const target = await db.creatorChatMessage.findFirst({
+      where: { id: body.message_id, threadId, suppressed: false },
+    });
+    if (!target) throw new ApiError(404, 'MESSAGE_NOT_FOUND', '找不到这条对话');
+    const roleplay = await db.roleplayThread.findFirst({
+      where: { threadId },
+      select: { id: true },
+    });
+    if (!canRollbackToMessage({ role: target.role, isRoleplay: Boolean(roleplay) })) {
+      throw new ApiError(400, 'ROLLBACK_USER_ONLY', '只能回退到你发出的那一句');
+    }
+    return applyConversationRollback(db, {
+      threadId,
+      targetMessageId: body.message_id,
+      mode: body.mode,
+      ...(memory ? { memory } : {}),
+    });
   });
 }

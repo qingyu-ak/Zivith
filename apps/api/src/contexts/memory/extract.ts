@@ -89,6 +89,38 @@ export function extractCandidateAtoms(text: string, world: WorldContext | null):
   return atoms;
 }
 
+export const IMPORTANT_CHAT_MAX_CHARS = 80;
+const ROLEPLAY_ATOM_CAP = 4;
+const CHAT_FILLER = /^(嗯+|啊+|哦+|额+|好的?|是啊?|哈哈+|呵呵+|谢谢|没事|继续|然后呢|知道了)[。！？!?…\s]*$/;
+
+export function condenseImportantChat(content: string, maxChars = IMPORTANT_CHAT_MAX_CHARS): string {
+  const trimmed = content.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return '';
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, maxChars).replace(/[，。；、,.!?！？\s]*$/, '')}…`;
+}
+
+export function isChatFiller(text: string): boolean {
+  return CHAT_FILLER.test(text.trim());
+}
+
+/** 扮演中间态：只收重要段并收成短句。World Builder 仍走 extractCandidateAtoms。 */
+export function extractRoleplayImportantAtoms(
+  text: string,
+  world: WorldContext | null,
+): CandidateAtom[] {
+  const picked: CandidateAtom[] = [];
+  for (const candidate of extractCandidateAtoms(text, world)) {
+    if (isChatFiller(candidate.content)) continue;
+    if (candidate.factType === 'episodic' && !candidate.linked) continue;
+    const content = condenseImportantChat(candidate.content);
+    if (!content) continue;
+    picked.push({ ...candidate, content });
+    if (picked.length >= ROLEPLAY_ATOM_CAP) break;
+  }
+  return picked;
+}
+
 /** 实体名 → id 解析（LLM 精炼回填实体链接用）。 */
 export function resolveEntityByName(name: string, world: WorldContext | null): LinkedEntity | null {
   if (!world) return null;

@@ -9,6 +9,7 @@ import {
 } from '@zivith/domain';
 import { ApiError } from '../../errors.js';
 import { claimWorkspaceSeed, createWorldProject, isWorkspaceSeed } from './workspace.js';
+import { ensureAssetBaseline, recordAssetHistory } from '../history/record-asset-change.js';
 
 /**
  * ADR-0010 fence: the agent NEVER writes to the world directly.
@@ -31,6 +32,26 @@ function requireProjectId(proposal: Proposal, fallback?: string | null): string 
   const id = fallback ?? proposal.project_id ?? undefined;
   if (!id) throw new ApiError(400, 'PROJECT_REQUIRED', '该提案缺少 project_id');
   return id;
+}
+
+/** Asset.data 的提案更新是浅合并：patch 中显式为 null 的键会被清空，其余既有键保留。 */
+export function mergeAssetData(
+  current: unknown,
+  patch: Record<string, unknown>,
+): Prisma.InputJsonValue {
+  const base =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? { ...(current as Record<string, unknown>) }
+      : {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (value === null) {
+      delete base[key];
+      continue;
+    }
+    base[key] = value;
+  }
+  return base as Prisma.InputJsonValue;
 }
 
 function requireString(payload: Record<string, unknown>, key: string, label: string): string {
@@ -192,6 +213,15 @@ async function applyCreateAsset(
       tags,
       data,
     },
+  });
+  await recordAssetHistory(db, {
+    asset,
+    changeKind: 'create',
+    eventType: 'entity.created',
+    idempotencyKey: `proposal:create:${asset.id}`,
+    actorType: 'user',
+    sourceType: 'proposal',
+    sourceId: proposal.kind,
   });
   return {
     kind: proposal.kind,
@@ -393,10 +423,29 @@ async function applyUpdateEntity(
       if (Array.isArray(fields.tags)) {
         data.tags = fields.tags.filter((x): x is string => typeof x === 'string');
       }
-      if (fields.data && typeof fields.data === 'object') {
-        data.data = fields.data;
+      if (fields.data && typeof fields.data === 'object' && !Array.isArray(fields.data)) {
+        // 浅合并：提案只带它要改的键，不得抹掉 personality / default_outfit 等既有字段。
+        data.data = mergeAssetData(entity.data, fields.data as Record<string, unknown>);
       }
+      await ensureAssetBaseline(db, entity, { sourceType: 'proposal' });
       await db.asset.update({ where: { id }, data });
+      const updated = await db.asset.findFirst({ where: { id } });
+      if (updated) {
+        const asOf =
+          typeof fields.as_of_world_event_id === 'string' ? fields.as_of_world_event_id : undefined;
+        const stageLabel = typeof fields.stage_label === 'string' ? fields.stage_label : undefined;
+        await recordAssetHistory(db, {
+          asset: updated,
+          changeKind: 'update',
+          eventType: 'entity.changed',
+          idempotencyKey: `proposal:update:${updated.id}:${updated.updatedAt.toISOString()}`,
+          actorType: 'user',
+          sourceType: 'proposal',
+          sourceId: proposal.kind,
+          asOfWorldEventId: asOf ?? null,
+          stageLabel: stageLabel ?? null,
+        });
+      }
       return { kind: proposal.kind, projectId, entityType: 'asset', entityId: id, title };
     }
     case 'scene': {

@@ -733,31 +733,38 @@ model TimelineItem {
 /// ADR-0013 — Creator Chat. Local single-user mode: no userId on these tables.
 /// thread.projectId is null until the "create world" proposal is confirmed.
 model CreatorChatThread {
-  id        String             @id @default(uuid())
-  projectId String?            @map("project_id")
-  title     String?
-  state     String             @default("active")
-  createdAt DateTime           @default(now()) @map("created_at")
-  updatedAt DateTime           @updatedAt @map("updated_at")
-  project   Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  messages  CreatorChatMessage[]
+  id                   String             @id @default(uuid())
+  projectId            String?            @map("project_id")
+  title                String?
+  state                String             @default("active")
+  /// Last visible message after rollback; null = latest unsuppressed.
+  activeHeadMessageId  String?            @map("active_head_message_id")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+  project              Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  messages             CreatorChatMessage[]
 
   @@index([projectId])
   @@map("creator_chat_threads")
 }
 
 model CreatorChatMessage {
-  id            String            @id @default(uuid())
-  threadId      String            @map("thread_id")
-  role          String
-  content       String
-  proposal      Json?             @default("{}")
-  proposalKey   String?           @map("proposal_key")
-  proposalState String?           @map("proposal_state")
-  createdAt     DateTime          @default(now()) @map("created_at")
-  thread        CreatorChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  id              String            @id @default(uuid())
+  threadId        String            @map("thread_id")
+  role            String
+  content         String
+  proposal        Json?             @default("{}")
+  proposalKey     String?           @map("proposal_key")
+  proposalState   String?           @map("proposal_state")
+  /// Who spoke this line (character asset, or null = reader / world builder).
+  speakerAssetId  String?           @map("speaker_asset_id")
+  /// Hidden from the live window after rollback; rows are kept for trace.
+  suppressed      Boolean           @default(false)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  thread          CreatorChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
+  @@index([threadId, suppressed])
   @@map("creator_chat_messages")
 }
 
@@ -896,6 +903,8 @@ model RoleplayThread {
   characterAssetId     String   @map("character_asset_id")
   /// 用户扮演谁；null = 读者（默认）。与 AI 角色卡同一套 Asset。
   userCharacterAssetId String?  @map("user_character_asset_id")
+  /// AI speakers in a group thread (2–3 ids). Empty / omitted = 1:1 using characterAssetId.
+  participantAssetIds  Json     @default("[]") @map("participant_asset_ids")
   threadId             String   @map("thread_id")
   anchoredWorldEventId String?  @map("anchored_world_event_id")
   status               String   @default("active")

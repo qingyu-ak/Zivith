@@ -1,9 +1,18 @@
 import { api } from './api';
+import { copyWorldCharacter, createWorldCharacter, importWorldCharacter } from './create-world-character';
 import type { WorldResourcesDTO, WorldSelection } from './types';
+import { nextUntitledName, resolveCreateName } from './unique-name';
 import { resolveDisplayDimensions } from './world-line';
+
+export { nextUntitledName, resolveCreateName } from './unique-name';
 
 export type StudioCreateKind =
   'character' | 'location' | 'scene' | 'story' | 'world_event' | 'relationship' | 'dimension';
+
+export type TimelineCreatableKind = Extract<
+  StudioCreateKind,
+  'character' | 'location' | 'scene' | 'world_event'
+>;
 
 export interface RelationshipCreateInput {
   kind: string;
@@ -12,12 +21,12 @@ export interface RelationshipCreateInput {
   label?: string;
 }
 
-export function nextUntitledName(existing: string[], base: string): string {
-  const names = new Set(existing.map((name) => name.trim()).filter(Boolean));
-  if (!names.has(base)) return base;
-  let index = 2;
-  while (names.has(`${base} ${index}`)) index += 1;
-  return `${base} ${index}`;
+export interface StudioCreateExtras {
+  relationship?: RelationshipCreateInput;
+  name?: string;
+  description?: string;
+  copyFromId?: string;
+  importFrom?: { sourceProjectId: string; sourceCharacterId: string };
 }
 
 function createdId(value: unknown, fallbackMessage: string): string {
@@ -32,28 +41,41 @@ export async function createStudioEntity(
   projectId: string,
   resources: WorldResourcesDTO,
   kind: StudioCreateKind,
-  extras?: { relationship?: RelationshipCreateInput },
+  extras?: StudioCreateExtras,
 ): Promise<Exclude<WorldSelection, null>> {
   switch (kind) {
     case 'character': {
-      const name = nextUntitledName(
-        resources.entities.characters.map((item) => item.name),
-        '未命名角色',
-      );
-      const created = await api(`/projects/${projectId}/assets`, {
-        method: 'POST',
-        body: {
-          asset_type: 'character',
-          name,
-          description: '（待补充）',
-          state: 'draft',
-        },
+      if (extras?.importFrom) {
+        const created = await importWorldCharacter({
+          targetProjectId: projectId,
+          sourceProjectId: extras.importFrom.sourceProjectId,
+          sourceCharacterId: extras.importFrom.sourceCharacterId,
+          existingNames: resources.entities.characters.map((item) => item.name),
+        });
+        return { kind: 'character', id: created.id };
+      }
+      if (extras?.copyFromId) {
+        const source = resources.entities.characters.find((item) => item.id === extras.copyFromId);
+        if (!source) throw new Error('要复制的角色不存在');
+        const created = await copyWorldCharacter({
+          projectId,
+          source,
+          existingNames: resources.entities.characters.map((item) => item.name),
+        });
+        return { kind: 'character', id: created.id };
+      }
+      const created = await createWorldCharacter({
+        projectId,
+        name: extras?.name ?? '',
+        description: extras?.description,
+        existingNames: resources.entities.characters.map((item) => item.name),
       });
-      return { kind: 'character', id: createdId(created, '角色已创建，但未返回编号') };
+      return { kind: 'character', id: created.id };
     }
     case 'location': {
-      const name = nextUntitledName(
+      const name = resolveCreateName(
         resources.entities.locations.map((item) => item.name),
+        extras?.name,
         '未命名地点',
       );
       const created = await api(`/projects/${projectId}/assets`, {
@@ -68,8 +90,9 @@ export async function createStudioEntity(
       return { kind: 'location', id: createdId(created, '地点已创建，但未返回编号') };
     }
     case 'story': {
-      const title = nextUntitledName(
+      const title = resolveCreateName(
         resources.entities.stories.map((item) => item.title),
+        extras?.name,
         '未命名故事',
       );
       const created = await api(`/projects/${projectId}/stories`, {
@@ -87,8 +110,9 @@ export async function createStudioEntity(
         });
         storyId = createdId(story, '需要先有一个故事才能建场景');
       }
-      const title = nextUntitledName(
+      const title = resolveCreateName(
         resources.entities.scenes.map((item) => item.title),
+        extras?.name,
         '未命名场景',
       );
       const created = await api(`/stories/${storyId}/scenes`, {
@@ -98,8 +122,9 @@ export async function createStudioEntity(
       return { kind: 'scene', id: createdId(created, '场景已创建，但未返回编号') };
     }
     case 'world_event': {
-      const title = nextUntitledName(
+      const title = resolveCreateName(
         resources.entities.world_events.map((item) => item.title),
+        extras?.name,
         '未命名事件',
       );
       const created = await api(`/world/projects/${projectId}/world-events`, {
@@ -130,8 +155,9 @@ export async function createStudioEntity(
       const dimensions = resolveDisplayDimensions(resources);
       const created = {
         id: `dim-${Date.now()}`,
-        label: nextUntitledName(
+        label: resolveCreateName(
           dimensions.map((item) => item.label),
+          extras?.name,
           '未命名维度',
         ),
         kind: 'custom' as const,

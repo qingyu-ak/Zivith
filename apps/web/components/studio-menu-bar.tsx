@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { normalizeThread } from '@/lib/creator-chat-nav';
 import { isDesktopApp, pickWorkspaceDirectory } from '@/lib/desktop';
 import { captureSettingsReturn } from '@/lib/settings-return';
+import { FolderFlowCancelled, openWorldFromFolder } from '@/lib/world-folder';
 
 type MenuId = 'file' | 'edit' | 'view' | 'settings' | 'help';
 
@@ -56,14 +57,14 @@ export function StudioMenuBar({
     try {
       const folderPath = await pickWorkspaceDirectory();
       if (!folderPath) return;
-      const created = await api<unknown>('/world/folders/open', {
-        method: 'POST',
-        body: { path: folderPath },
-      });
+      // §8/§18：先检查 .zivith/workspace.json，再按异常状态引导用户选择。
+      const created = await openWorldFromFolder(folderPath);
       const thread = normalizeThread(created);
       if (thread?.project_id) router.push(`/projects/${thread.project_id}/world`);
-    } catch {
-      router.push('/projects');
+    } catch (reason) {
+      if (reason instanceof FolderFlowCancelled) return;
+      // §18.4：冲突/异常必须把原因告诉用户，不再静默跳转项目页。
+      window.alert(errorMessage(reason));
     }
   }
 
@@ -73,6 +74,7 @@ export function StudioMenuBar({
   }
 
   const worldHref = projectId ? `/projects/${projectId}/world` : '/projects';
+  const spaceHref = projectId ? `/projects/${projectId}/world?view=space` : '/projects';
   const assetsHref = projectId ? `/projects/${projectId}/assets` : '/projects';
   const storiesHref = projectId ? `/projects/${projectId}` : '/projects';
 
@@ -84,8 +86,8 @@ export function StudioMenuBar({
     >
       <Menu label="文件" id="file" open={open} setOpen={setOpen}>
         {desktop ? <MenuButton onClick={() => void openFolder()}>打开文件夹</MenuButton> : null}
-        <MenuLink href="/projects?new=1" onClick={() => setOpen(null)}>
-          新建项目
+        <MenuLink href="/projects/new" onClick={() => setOpen(null)}>
+          新建世界
         </MenuLink>
         <MenuLink href="/projects" onClick={() => setOpen(null)}>
           打开项目…
@@ -123,6 +125,9 @@ export function StudioMenuBar({
         <MenuLink href={worldHref} onClick={() => setOpen(null)}>
           世界工作区
         </MenuLink>
+        <MenuLink href={spaceHref} onClick={() => setOpen(null)}>
+          空间浏览器
+        </MenuLink>
         <MenuLink href={assetsHref} onClick={() => setOpen(null)}>
           实体库
         </MenuLink>
@@ -151,10 +156,22 @@ export function StudioMenuBar({
         </MenuLink>
       </Menu>
       <Menu label="帮助" id="help" open={open} setOpen={setOpen}>
-        <MenuLink href="/help" onClick={() => setOpen(null)}>
+        <MenuLink
+          href="/help"
+          onClick={() => {
+            captureSettingsReturn();
+            setOpen(null);
+          }}
+        >
           使用文档
         </MenuLink>
-        <MenuLink href="/help#feedback" onClick={() => setOpen(null)}>
+        <MenuLink
+          href="/help#feedback"
+          onClick={() => {
+            captureSettingsReturn();
+            setOpen(null);
+          }}
+        >
           反馈
         </MenuLink>
       </Menu>

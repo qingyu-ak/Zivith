@@ -47,4 +47,14 @@ describe('agent write mode', () => {
     expect(decideWriteAction('full', ['create_project'])).toBe('auto');
     expect(decideWriteAction('full', ['delete_project'])).toBe('ask');
   });
+
+  it('always asks for roleplay world changes regardless of the write mode', () => {
+    const kinds = ['create_world_event', 'create_relationship'];
+    expect(decideWriteAction('full', kinds, { roleplay: true })).toBe('ask');
+    expect(decideWriteAction('semi', kinds, { roleplay: true })).toBe('ask');
+    expect(decideWriteAction('plan', kinds, { roleplay: true })).toBe('ask');
+    expect(decideWriteAction('confirm', kinds, { roleplay: true })).toBe('ask');
+    // 非扮演线程不受影响。
+    expect(decideWriteAction('full', kinds, { roleplay: false })).toBe('auto');
+  });
 });

@@ -442,3 +442,27 @@ export function formatConflictAppendix(conflicts: WorldConflict[]): string {
   const extra = conflicts.length > 5 ? `\n- …另有 ${conflicts.length - 5} 处` : '';
   return `\n\n发现 ${conflicts.length} 处设定冲突（不会自动修改，请确认后处理）：\n${lines.join('\n')}${extra}`;
 }
+
+export function conflictReportedInText(text: string, conflict: WorldConflict): boolean {
+  if (!text.trim()) return false;
+  if (text.includes(conflict.summary)) return true;
+  if (conflict.kind !== 'event_order_collision') return false;
+  const titles = [...conflict.summary.matchAll(/「([^」]+)」/g)]
+    .map((match) => match[1]?.trim() ?? '')
+    .filter(Boolean);
+  return (
+    titles.length >= 2 && titles.every((title) => text.includes(title)) && /呈现顺序/.test(text)
+  );
+}
+
+export function unreportedConflicts(
+  history: Array<{ role?: string; content: string }>,
+  conflicts: WorldConflict[],
+): WorldConflict[] {
+  const recent = history
+    .filter((item) => item.role === 'assistant')
+    .slice(-8)
+    .map((item) => item.content)
+    .join('\n');
+  return conflicts.filter((item) => !conflictReportedInText(recent, item));
+}

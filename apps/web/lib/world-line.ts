@@ -5,7 +5,8 @@
 // 条目按 anchorOrder 在非均匀呈现刻度上定位。
 // 世界时间信封保持 opaque：只展示 label / mode，不用 envelope 值改写主轴。
 // v1 视图仍由 WorldResources 派生（TimelineTrack/TimelineItem 表未当权威）。
-// 事件/场景剪辑块可写回 presentation_order / scene.order；角色/地点跨度由参与关系派生。
+// 事件/场景剪辑块可写回 presentation_order / scene.order；
+// 角色/地点跨度由参与关系派生，拖拽区间会写回事件 character_ids / 场景 location_id。
 // H6：显式 WorldTimeBinding（point/range/relative/crossing）叠在呈现主轴上。
 
 import type {

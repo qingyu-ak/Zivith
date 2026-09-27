@@ -26,6 +26,21 @@ export function formatCharacterCard(input: CharacterCardInput): string {
   return lines.join('\n');
 }
 
+export function cardFromAssetSnapshot(
+  snapshot: Record<string, unknown>,
+  fallbackName: string,
+): CharacterCardInput {
+  const aliases = Array.isArray(snapshot.aliases)
+    ? snapshot.aliases.filter((item): item is string => typeof item === 'string')
+    : [];
+  return {
+    name: typeof snapshot.name === 'string' && snapshot.name.trim() ? snapshot.name : fallbackName,
+    description: typeof snapshot.description === 'string' ? snapshot.description : null,
+    personality: personalityFromAssetData(snapshot.data),
+    aliases,
+  };
+}
+
 /** 卡在前（用户刚改的字段优先），导入/记忆档案在后。 */
 export function composeCharacterPersona(card: string, archive: string | null | undefined): string {
   const trimmedArchive = archive?.trim() ?? '';

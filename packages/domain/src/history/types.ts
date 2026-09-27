@@ -12,6 +12,8 @@ export const HISTORY_ENTITY_TYPES = [
   'visual_requirement',
   'world_event',
   'relationship',
+  'character',
+  'location',
 ] as const;
 
 export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];

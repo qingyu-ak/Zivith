@@ -160,11 +160,13 @@ export function filterThreadsByQuery(
     const project = (thread.project_name ?? '').toLowerCase();
     const character = (thread.character_name ?? '').toLowerCase();
     const workspace = (thread.workspace_path ?? '').toLowerCase();
+    const participants = (thread.participant_names ?? []).join(' ').toLowerCase();
     return (
       title.includes(needle) ||
       project.includes(needle) ||
       character.includes(needle) ||
-      workspace.includes(needle)
+      workspace.includes(needle) ||
+      participants.includes(needle)
     );
   });
 }
@@ -177,6 +179,80 @@ export function threadDisplayTitle(
   const project = thread.project_name?.trim();
   if (project) return project;
   return '未命名对话';
+}
+
+export type OpeningChatKnown = Pick<
+  CreatorChatThreadDTO,
+  'title' | 'project_name' | 'kind' | 'character_name' | 'is_group' | 'participant_names'
+>;
+
+/** 有 threadId 时不要用「新世界对话」顶替还没拉到的标题。 */
+export function openingChatTitle(input: {
+  threadId?: string;
+  loading: boolean;
+  loadFailed: boolean;
+  thread: OpeningChatKnown | null;
+  listed: OpeningChatKnown | null;
+}): string {
+  if (!input.threadId) return '新世界对话';
+  const known = input.thread ?? input.listed;
+  if (known) return threadDisplayTitle(known);
+  if (input.loadFailed) return '对话加载失败';
+  return '正在打开对话…';
+}
+
+/**
+ * 打开已有扮演时输入框不要写成「发给世界构建者」。
+ * 返回 null 表示沿用面板里更细的占位。
+ */
+export function openingComposerPlaceholder(input: {
+  threadId?: string;
+  loading: boolean;
+  loadFailed: boolean;
+  thread: OpeningChatKnown | null;
+  listed: OpeningChatKnown | null;
+  activeRoleplay: boolean;
+}): string | null {
+  if (!input.threadId) return null;
+  if (input.loadFailed && !input.thread) return null;
+  const known = input.thread ?? input.listed;
+  const knownRoleplay = Boolean(known && threadKind(known) === 'roleplay');
+  const waitingForPlay = knownRoleplay && !input.activeRoleplay;
+  if (!input.loading && !waitingForPlay) return null;
+  if (knownRoleplay) {
+    if (known?.is_group) {
+      const names = (known.participant_names ?? []).map((name) => name.trim()).filter(Boolean);
+      return names.length > 0 ? `正在打开群聊 · ${names.join('、')}…` : '正在打开对话…';
+    }
+    const name = known?.character_name?.trim();
+    if (name) return `对「${name}」说…`;
+  }
+  return '正在打开对话…';
+}
+
+export function workspaceListHint(input: {
+  ready: boolean;
+  query: string;
+  desktop: boolean;
+}): string {
+  if (input.query.trim()) return '没有匹配的项目或对话';
+  if (!input.ready) return '正在加载工作区…';
+  if (input.desktop) {
+    return '点「新建世界」从零开始，或点项目旁的加号打开已有文件夹。';
+  }
+  return '点「新建世界」从零开始。打开已有文件夹需要桌面应用。';
+}
+
+/** 开始扮演 / 群聊弹层：失败不能装成「这个世界没人」。 */
+export function roleplayPickerView(input: {
+  ready: boolean;
+  error: string;
+  playableCount: number;
+}): 'loading' | 'error' | 'empty' | 'list' {
+  if (input.error.trim()) return 'error';
+  if (!input.ready) return 'loading';
+  if (input.playableCount <= 0) return 'empty';
+  return 'list';
 }
 
 export function relativeTime(value: string): string {

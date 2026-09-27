@@ -73,7 +73,13 @@ function extractMessage(payload: unknown): string {
     const details = (error as Record<string, unknown>).details;
     if (Array.isArray(details) && details[0] && typeof details[0] === 'object') {
       const first = details[0] as Record<string, unknown>;
-      if (typeof first.message === 'string' && first.message.trim()) return first.message;
+      if (typeof first.message === 'string' && first.message.trim()) {
+        const detail = first.message.trim();
+        const parent = typeof message === 'string' ? message.trim() : '';
+        // Zod 默认英文；有中文摘要时不要把 Number must be… 铺到界面上
+        if (/^[A-Za-z]/.test(detail) && parent) return parent;
+        return detail;
+      }
     }
     if (typeof message === 'string') return message;
   }
@@ -172,11 +178,18 @@ export async function sendRoleplayTurn(
   onEvent: (event: string, data: unknown) => void,
   effort?: 'fast' | 'balanced' | 'deep',
   signal?: AbortSignal,
-  options?: { retry?: boolean },
+  options?: { retry?: boolean; speakerAssetId?: string; mutedAssetIds?: string[]; ghostwrite?: boolean },
 ): Promise<void> {
   await postChatTurn(
     `/roleplay/threads/${roleplayThreadId}/messages`,
-    { content, ...(effort ? { effort } : {}), ...(options?.retry ? { retry: true } : {}) },
+    {
+      content,
+      ...(effort ? { effort } : {}),
+      ...(options?.retry ? { retry: true } : {}),
+      ...(options?.speakerAssetId ? { speaker_asset_id: options.speakerAssetId } : {}),
+      ...(options?.mutedAssetIds?.length ? { muted_asset_ids: options.mutedAssetIds } : {}),
+      ...(options?.ghostwrite ? { ghostwrite: true } : {}),
+    },
     onEvent,
     signal,
   );
@@ -206,9 +219,14 @@ async function postChatTurn(
     user_message?: unknown;
     assistant_message?: unknown;
     memory_ops?: unknown;
+    ghostwrite?: unknown;
   };
   if (payload.user_message) onEvent('user', { user_message: payload.user_message });
   if (payload.memory_ops) onEvent('memory', { ops: payload.memory_ops });
+  if (payload.ghostwrite) {
+    onEvent('done', { user_message: payload.user_message, ghostwrite: true });
+    return;
+  }
   const assistant = payload.assistant_message;
   if (assistant && typeof assistant === 'object') {
     const reply =
@@ -255,6 +273,9 @@ export interface RoleplayThreadDTO {
   character_name: string;
   user_character_asset_id?: string | null;
   user_character_name?: string | null;
+  participant_asset_ids?: string[];
+  participant_names?: string[];
+  is_group?: boolean;
   anchored_world_event_id: string | null;
   anchor_title: string | null;
   updated_at: string;
@@ -265,15 +286,39 @@ export async function createRoleplayThread(
   characterAssetId: string,
   anchoredWorldEventId?: string | null,
   userCharacterAssetId?: string | null,
+  participantAssetIds?: string[],
+  options?: { forceNew?: boolean },
 ): Promise<{ id: string; thread_id: string; reused: boolean }> {
-  return api<{ id: string; thread_id: string; reused: boolean }>('/roleplay/threads', {
+  const created = await api<{ id: string; thread_id: string; reused: boolean }>('/roleplay/threads', {
     method: 'POST',
     body: {
       project_id: projectId,
       character_asset_id: characterAssetId,
       ...(anchoredWorldEventId ? { anchored_world_event_id: anchoredWorldEventId } : {}),
       ...(userCharacterAssetId ? { user_character_asset_id: userCharacterAssetId } : {}),
+      ...(participantAssetIds && participantAssetIds.length >= 2
+        ? { participant_asset_ids: participantAssetIds }
+        : {}),
+      ...(options?.forceNew ? { force_new: true } : {}),
     },
+  });
+  if (!created?.thread_id) throw new Error('没能打开这场对话');
+  return created;
+}
+
+export async function rollbackCreatorChat(
+  threadId: string,
+  messageId: string,
+  mode: 'keep' | 'withdraw' = 'keep',
+): Promise<{
+  head_message_id: string | null;
+  suppressed_ids: string[];
+  reverted: Array<{ entity_id: string; title: string; kind: string }>;
+  skipped: Array<{ entity_id: string; title: string; reason: string }>;
+}> {
+  return api(`/world/creator-chats/${threadId}/rollback`, {
+    method: 'POST',
+    body: { message_id: messageId, mode },
   });
 }
 
@@ -311,7 +356,6 @@ async function request(
     if (token) headers.set('Authorization', `Bearer ${token}`);
     if (body && typeof body === 'string') headers.set('Content-Type', 'application/json');
     const streaming = headers.get('Accept')?.includes('text/event-stream');
-    if (streaming) headers.set('Cache-Control', 'no-cache');
     return fetch(`${API_URL}${path}`, {
       ...init,
       headers,

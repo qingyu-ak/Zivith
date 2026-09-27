@@ -73,4 +73,21 @@ describe('API foundation', () => {
       'authorization',
     );
   });
+
+  it('allows chat SSE preflight headers including Cache-Control', async () => {
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/world/creator-chats/11111111-1111-4111-8111-111111111111/messages',
+      headers: {
+        origin: 'http://localhost:3000',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization,content-type,accept,cache-control',
+      },
+    });
+
+    expect(response.statusCode).toBe(204);
+    const allowed = response.headers['access-control-allow-headers']?.toLowerCase() ?? '';
+    expect(allowed).toContain('authorization');
+    expect(allowed).toContain('cache-control');
+  });
 });

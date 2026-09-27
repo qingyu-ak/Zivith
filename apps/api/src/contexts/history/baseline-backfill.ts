@@ -5,6 +5,8 @@ import {
   serializeHistorySnapshot,
   serializeOutputSnapshot,
   serializePromptVersionSnapshot,
+  serializeCharacterSnapshot,
+  serializeLocationSnapshot,
   serializeRelationshipSnapshot,
   serializeShotSnapshot,
   serializeVisualRequirementSnapshot,
@@ -46,6 +48,8 @@ function emptyCounts(): BaselineBackfillResult['byType'] {
     visual_requirement: { scanned: 0, created: 0, skipped: 0 },
     world_event: { scanned: 0, created: 0, skipped: 0 },
     relationship: { scanned: 0, created: 0, skipped: 0 },
+    character: { scanned: 0, created: 0, skipped: 0 },
+    location: { scanned: 0, created: 0, skipped: 0 },
   };
 }
 
@@ -174,6 +178,24 @@ async function loadCandidates(db: Db, projectId?: string): Promise<Candidate[]> 
     });
   }
 
+  const assets = await db.asset.findMany({
+    where: {
+      deletedAt: null,
+      type: { in: ['character', 'location'] },
+      ...(projectId ? { projectId } : {}),
+    },
+  });
+  for (const row of assets) {
+    if (row.type !== 'character' && row.type !== 'location') continue;
+    out.push({
+      entityType: row.type,
+      entityId: row.id,
+      projectId: row.projectId,
+      row,
+      occurredAt: row.createdAt,
+    });
+  }
+
   return out;
 }
 
@@ -193,6 +215,10 @@ function serializeCandidate(candidate: Candidate) {
       return serializeWorldEventSnapshot(candidate.row);
     case 'relationship':
       return serializeRelationshipSnapshot(candidate.row);
+    case 'character':
+      return serializeCharacterSnapshot(candidate.row);
+    case 'location':
+      return serializeLocationSnapshot(candidate.row);
     default: {
       const _exhaustive: never = candidate.entityType;
       throw new Error(`Unsupported entity type: ${String(_exhaustive)}`);

@@ -1,7 +1,13 @@
 /// <reference types="vitest/globals" />
 import {
   asChatEffort,
+  asChatFast,
+  asChatThinking,
+  asContextWindow,
   CHAT_EFFORT_TOKEN_CAP,
+  effortFromIndex,
+  effortIndex,
+  formatModelEffortTrigger,
   displayModelId,
   estimateMessageTokens,
   filterLlmChoices,
@@ -86,6 +92,22 @@ describe('chat composer helpers', () => {
     expect(CHAT_EFFORT_LABEL.fast).toBe('快速');
     expect(CHAT_EFFORT_LABEL.balanced).toBe('均衡');
     expect(CHAT_EFFORT_LABEL.deep).toBe('深度');
+  });
+
+  it('maps the three-stop effort slider and the Fast toggle', () => {
+    expect(effortIndex('fast')).toBe(0);
+    expect(effortIndex('balanced')).toBe(1);
+    expect(effortIndex('deep')).toBe(2);
+    expect(effortFromIndex(0)).toBe('fast');
+    expect(effortFromIndex(2)).toBe('deep');
+    expect(effortFromIndex(9)).toBe('deep');
+    expect(asChatFast('1')).toBe(true);
+    expect(asChatFast('0')).toBe(false);
+    expect(asChatThinking('true')).toBe(true);
+    expect(asContextWindow('128000')).toBe(128_000);
+    expect(formatModelEffortTrigger('deepseek-v4-flash', 'balanced')).toBe(
+      'deepseek-v4-flash 均衡',
+    );
   });
 
   it('builds a shared Chinese context meter line', () => {

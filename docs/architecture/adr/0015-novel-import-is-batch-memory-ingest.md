@@ -25,7 +25,21 @@
 - 导入视为**批量预授权**：产物直接落库，不逐条 `apply-intent`。角色分层（全量卡上限 / 轻量 draft）、规模上限由配置约束。
 - **不**把 `Project.worldview` 静默整组覆盖；要点只进导入报告的 `worldviewHighlights`，世界观仍走 World Builder 提案。
 - 每条导入记录保存报告（实体 ID 清单）。`DELETE /novel-imports/:id` 按该清单级联软删世界层、删除记忆层、关闭相关扮演线程。
-- 扮演对话（M3）**不是**本决策的写入通道：扮演只沉淀 episodic 记忆，不创建或修改世界实体。
+- 扮演对话（M3）**当时**不是本决策的写入通道：扮演只沉淀 episodic 记忆，不创建或修改世界实体。
+
+## Product Constitution overlay（2026-09-16）
+
+[产品宪法](../../product/Product-Constitution.md) 要求与角色的对话可以产生需确认的世界变化（Journey E）。因此：
+
+- **仍有效：** 已有世界内的 TXT 导入是批量预授权，用报告 + 整体撤销，不逐条提案。
+- **覆盖：** 「扮演永远不是世界写入通道」不再是产品完成定义。扮演若写入 `WorldEvent` / `Relationship` / 角色状态，必须走提案确认（[ADR-0010](0010-creator-chat-is-the-world-first-continuous-conversation-surface.md) 围栏），不得静默落库。
+- **未覆盖：** 不得把 Dock「导入小说」改成「上传 TXT 即自动新建世界且无确认」。从 TXT **新建**世界已另走预览确认，见下方 Scope note。
+
+## Scope note: creating a world from TXT (2026-09-16)
+
+本 ADR 只覆盖**已有 Project** 上的 Dock「导入小说」：上传即预授权本批，报告 + 整体撤销。
+
+从「新建世界」用 TXT 创建新 Project 不走本 ADR 的预授权直写：必须先 `POST /novel-imports/preview`（不写世界），用户确认后再 `createWorldProject` + 既有 `POST /novel-imports`。确认前不得出现新 Project / Asset / WorldEvent。
 
 ## Alternatives Considered
 
@@ -43,7 +57,7 @@
 
 ## Consequences
 
-- API：`POST/GET/DELETE /api/v1/novel-imports`，以及 `POST /novel-imports/:id/retry`、`POST /novel-imports/:id/upgrade`。世界工作区提供导入面板。原文存在 `NovelImport.config.sourceText`，列表与详情不回传。
+- API：`POST /api/v1/novel-imports/preview`（只分析）、`POST/GET/DELETE /api/v1/novel-imports`，以及 `POST /novel-imports/:id/retry`、`POST /novel-imports/:id/upgrade`。世界工作区提供导入面板。原文存在 `NovelImport.config.sourceText`，列表与详情与预览均不回传全文。
 - 数据：`NovelImport` / `NovelImportChapter`；报告 JSON 为撤销的权威 ID 清单。
 - 合规：CI 与本地均须从 `@zivith/database` 进口 Prisma 类型（与实现文件一致）。
 - 再议触发：导入产物被制作层引用后撤销会破坏 Shot；或用户要求导入写入 `approved` 且不可撤销。
@@ -52,4 +66,4 @@
 
 - 无 `POST /novel-imports` 却走 `apply-intent` 逐条确认，视为违反本 ADR。
 - 无报告 ID 却硬删世界实体，视为违反本 ADR。
-- 扮演路由若开始 `asset.create` / `worldEvent.create`，须先写取代 ADR，不得静默反写。
+- 扮演路由若开始静默 `asset.create` / `worldEvent.create`（无用户确认），视为违反 ADR-0010。经提案确认的写入不再要求先写取代 ADR；见本文件 Product Constitution overlay。

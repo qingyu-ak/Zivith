@@ -163,6 +163,23 @@ export function IconChevron(props: IconProps) {
   );
 }
 
+export function IconBolt({
+  filled = false,
+  ...props
+}: IconProps & { filled?: boolean }) {
+  return (
+    <svg
+      {...base}
+      fill={filled ? 'currentColor' : 'none'}
+      stroke={filled ? 'none' : 'currentColor'}
+      strokeWidth={filled ? 0 : 1.7}
+      {...props}
+    >
+      <path d="M13 3 4.8 13.4h7.1L9.6 21 19.2 10.6h-7.1z" />
+    </svg>
+  );
+}
+
 export function IconBrain(props: IconProps) {
   return (
     <svg {...base} {...props}>
@@ -247,6 +264,17 @@ export function IconRetry(props: IconProps) {
   );
 }
 
+export function IconGroup(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="10" r="3.2" />
+      <circle cx="15.5" cy="10.5" r="2.7" />
+      <path d="M4.2 17.2c.6-2.2 2.4-3.4 4.8-3.4s4.2 1.2 4.8 3.4" />
+      <path d="M13.4 17.4c.4-1.5 1.6-2.5 3.4-2.5 1.8 0 3 .9 3.4 2.4" />
+    </svg>
+  );
+}
+
 export function IconClose(props: IconProps) {
   return (
     <svg {...base} {...props}>
@@ -260,6 +288,32 @@ export function IconStatus(props: IconProps) {
     <svg {...base} {...props}>
       <circle cx="12" cy="12" r="7.5" />
       <circle cx="12" cy="12" r="3.2" />
+    </svg>
+  );
+}
+
+export function IconPhone(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="8" y="3.5" width="8" height="17" rx="1.8" />
+      <path d="M11 17.6h2" />
+    </svg>
+  );
+}
+
+export function IconSun(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 4.5v1.6M12 17.9v1.6M4.5 12h1.6M17.9 12h1.6M6.4 6.4l1.1 1.1M16.5 16.5l1.1 1.1M17.6 6.4l-1.1 1.1M7.5 16.5l-1.1 1.1" />
+    </svg>
+  );
+}
+
+export function IconMoon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M15.5 4.8A7.2 7.2 0 1 0 19 14.2 5.6 5.6 0 0 1 15.5 4.8Z" />
     </svg>
   );
 }
@@ -287,6 +341,15 @@ export function IconAgent(props: IconProps) {
     <svg {...base} {...props}>
       <path d="M12 3.5l2 5.6 5.6 2-5.6 2-2 5.6-2-5.6-5.6-2 5.6-2z" />
       <path d="M18.5 15.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z" strokeWidth={1.4} />
+    </svg>
+  );
+}
+
+export function IconMic(props: IconProps) {
+  return (
+    <svg {...base} strokeWidth={2} {...props}>
+      <path d="M12 4a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V7a3 3 0 0 1 3-3Z" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3" />
     </svg>
   );
 }

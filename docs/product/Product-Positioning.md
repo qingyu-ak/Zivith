@@ -8,7 +8,7 @@
 >
 > Last Updated: 2026-07-31
 >
-> Related: [architecture-principles.md](../architecture/architecture-principles.md), [Design-Philosophy.md](Design-Philosophy.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md)
+> Related: [Product Constitution](Product-Constitution.md), [architecture-principles.md](../architecture/architecture-principles.md), [Design-Philosophy.md](Design-Philosophy.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [Entity + State + Timeline + Track](../architecture/entity-state-timeline-track.md)
 
 ---
 
@@ -60,12 +60,14 @@ Zivith 不再定位为单纯的 AI 视频生成工具。
 
 | 产品叙述中的说法 | Zivith 实际契约 | 说明 |
 |------------------|-----------------|------|
+| 世界 | **`Project`** | 用户与产品宪法说「世界」。数据上就是 `Project`。Journey「创建项目 → 创建世界」不是两张表。见 [产品宪法 · 立宪裁决](Product-Constitution.md) |
 | IP | **`Project`** | 不新增顶层实体。`Project` 的定义本就是「a complete creative universe / an entire IP」 |
 | Character（角色） | **`Asset(type=character)`** + `EntityRevision` 历史 | 角色的阶段性变化由 State 历史表达，不是复制多个角色 |
 | Scene（地点 / 环境 / 历史） | **`Location`**（`Asset(type=location)`） | ⚠️ Zivith 的 `Scene` 是**叙事单元**（一段连续时空、拥有 `Shot`）。世界中的「地点」是 `Location`，两者不得混用 |
-| Event（世界事件） | **`WorldEvent`**（规划中） | 与既有 `ChangeEvent`（系统审计事实）严格区分。`ChangeEvent` 记录「系统里发生了什么」，`WorldEvent` 记录「故事世界里发生了什么」 |
-| Relationship（关系） | 首版为 `Entity` State 的结构化字段 | 仅在出现真实的跨实体查询需求后，才提升为独立 Entity |
-| Timeline（世界线） | **`Timeline`**（Presentation-led，[ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md)） | 不新增概念。Presentation Time 是稳定主轴，World Time 是可选绑定层 |
+| Event（世界事件） | **`WorldEvent`** | 与 `ChangeEvent`（系统审计）严格区分。Chat 产生的世界变化确认后写入这里（产品宪法 Journey E） |
+| Relationship（关系） | **独立实体**（[ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md)） | 可查询；扮演/Studio 修改后必须彼此同步 |
+| Timeline（世界线） | **`Timeline`**（Presentation-led，[ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md)） | Presentation Time 是稳定主轴，World Time 是可选绑定层 |
+| Universe / World Map | 多个 `Project` 的选择 + `Location` 可视化 | 不是 `Project` 之上的领域实体 |
 | Skill（转换层） | **能力层，不是领域实体** | 见 §6 与 [ADR-0009](../architecture/adr/0009-skill-is-a-capability-layer-not-a-domain-entity.md) |
 
 领域词在中文正文中一律保留英文原词（`Project`、`Entity`、`EntityRevision`、`Asset`、`Timeline`、`Relationship`、`WorldEvent`、`Shot`、`PromptVersion`、`Output`），以保证产品文档与代码之间不产生同义异名。

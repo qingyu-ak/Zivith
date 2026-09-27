@@ -1,0 +1,36 @@
+---
+description: Zivith 产品宪法。每次任务必须先按 Journey 与 §25 模板执行，禁止功能堆砌与擅自扩需求。
+alwaysApply: true
+---
+
+# 产品宪法（必须遵守）
+
+权威全文：[`docs/product/Product-Constitution.md`](docs/product/Product-Constitution.md)
+
+架构宪章（领域/ADR）仍有效：[`docs/architecture/architecture-principles.md`](docs/architecture/architecture-principles.md)
+
+- 要不要做、算不算完成、用户能否独立走完 → 听产品宪法
+- 世界如何被系统表示 → 听架构宪章
+- **文档冲突以产品宪法为准**（含「扮演不反写世界」等旧完成定义）
+- 用户说的「世界」= `Project`。不得新建 `World` 表
+- 扮演产生的世界变化：目标是提议 → 确认 → 写入；现状未做到是缺口，不是禁令
+- 不得为走通 Journey 擅自改数据模型或核心架构；先报告，等确认
+
+## 每次任务
+
+1. 先写清用户目标与所属 User Journey（A–F），不要从功能列表开工。
+2. 写代码前填宪法 §25 模板；未确认不得实现。
+3. 验收看 Journey，不看「功能写完了」。
+4. 每个重要界面覆盖 Empty / Loading / Success / Error / Retry / Cancel。
+5. 世界修改：AI 提议 → 用户确认 → 写入。高风险操作必须确认。
+6. 必须回答：产生什么数据、谁消费、改了之后哪里同步。
+7. 测正常、空、失败、取消、重复、删除、返回、再进入。禁止只测 Happy Path。
+
+## 禁止
+
+- 因为「感觉应该有」就加功能
+- 模块孤立开发
+- 擅自扩大需求、改产品核心逻辑、重构无关模块、改变数据模型
+- 用上一份 P0 总任务书插队；那份先放着，直到产品所有者再次启用
+
+Agent 只能：实现已确认需求、发现问题、报告问题、提出建议。

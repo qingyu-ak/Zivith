@@ -4,9 +4,9 @@
 >
 > Version: 1.0
 >
-> Status: Proposed — 设计已与创作者逐项确认（2026-08-23），待实现规划
+> Status: Proposed — 设计已与创作者逐项确认（2026-08-23），待实现规划。**产品目标以 [产品宪法](../product/Product-Constitution.md) 为准（2026-09-16）。**
 >
-> Related: [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md), [ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md), [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md), [Implementation-Plan.md](Implementation-Plan.md)
+> Related: [Product Constitution](../product/Product-Constitution.md), [ADR-0007](../architecture/adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0008](../architecture/adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md), [ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md), [ADR-0011](../architecture/adr/0011-world-event-is-a-domain-creative-entity.md), [ADR-0012](../architecture/adr/0012-relationship-is-an-independent-queryable-entity.md), [ADR-0013](../architecture/adr/0013-local-single-user-mode-no-login.md), [Implementation-Plan.md](Implementation-Plan.md)
 
 ---
 
@@ -56,7 +56,7 @@ Creator Chat 当前是无长期记忆的：每轮对话只携带近期消息 + �
 | D5 | UI 可见性 | **最小可见性**：对话流内嵌记忆状态反馈（归档/合并/冲突提示）+ 世界工作区记忆面板（查看/删除） |
 | D6 | 管线集成方式 | **混合管线**：同步规则快速路径（抽取→去重→冲突→归档，当轮反馈）+ 异步 LLM 深加工路径（L1 精炼→L2 聚合→向量化，后台队列） |
 | D7 | 小说导入流程与规模 | **全量提取+事后审阅（A 流程）+ 重点提取（C 规模）**：主要角色全量建卡，次要角色降级轻量条目；完成后生成导入报告 |
-| D8 | 角色扮演模式 | **多角色可选 + 时间锚定**：任选已导入角色开启对话，可锚定小说时间线任意时刻（角色只知道该时刻之前亲历的事） |
+| D8 | 角色扮演模式 | **多角色可选 + 时间锚定**：任选已导入角色开启对话，可锚定小说时间线任意时刻（角色只知道该时刻之前亲历的事）。**产品宪法（后于本表）：** 扮演可以产生需确认的世界变化；不得静默写库 |
 
 ---
 
@@ -468,4 +468,4 @@ M3（C）角色扮演 Agent
 
 - **ADR-0014 分层记忆系统**：三层记忆、PG 事实源 + 本地向量派生索引、混合制写入边界；**已接受 2026-08-23**。
 - **ADR-0015 小说导入即批量记忆摄取**：导入预授权写入 + 整体撤销语义；**已接受 2026-08-30**。
-- 扮演 Agent 默认不反写世界层（沿用 ADR-0010；见 [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md) §2.3）。若改为可反写，须新 ADR。
+- 扮演 Agent 的世界写入：**产品宪法要求**可提议事件 / 记忆 / 关系 / 世界状态，用户确认后写入。2026-08 实现默认不反写世界层，现视为 Journey E 缺口，不再是禁令。静默写库仍禁止（[ADR-0010](../architecture/adr/0010-creator-chat-is-the-world-first-continuous-conversation-surface.md)）。见 [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md) §2.3。

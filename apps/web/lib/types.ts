@@ -16,6 +16,8 @@ export interface ProjectDTO {
   asset_count?: number;
   created_at?: string;
   workspace_path?: string | null;
+  /** §19 路径管理：绑定文件夹在本机是否仍然存在（未绑定时为 null）。 */
+  workspace_exists?: boolean | null;
 }
 
 export interface StoryDTO {
@@ -236,6 +238,9 @@ export interface CreatorChatThreadDTO {
   kind?: CreatorChatKind;
   character_name?: string | null;
   user_character_name?: string | null;
+  is_group?: boolean;
+  participant_names?: string[];
+  active_head_message_id?: string | null;
   /** 该线程未确认提案条数；列表接口附带，缺省按 0。 */
   pending_proposal_count?: number;
   created_at: string;
@@ -250,6 +255,9 @@ export interface CreatorChatMessageDTO {
   proposal?: Record<string, unknown> | null;
   proposal_key?: string | null;
   proposal_state?: 'pending' | 'applied' | 'rejected' | (string & {}) | null;
+  speaker_asset_id?: string | null;
+  speaker_name?: string | null;
+  suppressed?: boolean;
   created_at: string;
 }
 
@@ -463,6 +471,24 @@ export interface WorldEventDTO {
   character_ids?: string[];
   scene_ids?: string[];
   created_at: string;
+}
+
+export interface EntityRevisionDTO {
+  id: string;
+  revision: number;
+  change_kind: string;
+  created_at: string;
+  stage_label: string | null;
+  as_of_world_event_id: string | null;
+  as_of_presentation_order: number | null;
+  snapshot: Record<string, unknown>;
+}
+
+export interface EntityRevisionListDTO {
+  entity_type: string;
+  entity_id: string;
+  revisions: EntityRevisionDTO[];
+  at: EntityRevisionDTO | null;
 }
 
 export interface TemporalDimensionDTO {

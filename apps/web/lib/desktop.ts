@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 
 export interface ZivithDesktop {
-  openDirectory: () => Promise<string | null>;
+  platform?: string;
+  hasWindowControls?: boolean;
+  openDirectory: (defaultPath?: string) => Promise<string | null>;
+  persistLocation?: (pathname: string) => Promise<void>;
+  setAppearanceTheme?: (theme: 'light' | 'dark') => Promise<void>;
+  minimizeWindow?: () => Promise<void>;
+  toggleMaximizeWindow?: () => Promise<boolean>;
+  closeWindow?: () => Promise<void>;
+  isWindowMaximized?: () => Promise<boolean>;
+  onWindowMaximized?: (callback: (maximized: boolean) => void) => () => void;
 }
 
 declare global {
@@ -32,11 +41,12 @@ export function useIsDesktopApp(): boolean {
   return desktop;
 }
 
-export async function pickWorkspaceDirectory(): Promise<string | null> {
+export async function pickWorkspaceDirectory(defaultPath?: string): Promise<string | null> {
   if (!isDesktopApp() || !window.zivithDesktop) {
     throw new Error(WEB_FOLDER_HINT);
   }
-  return window.zivithDesktop.openDirectory();
+  const start = defaultPath?.trim();
+  return window.zivithDesktop.openDirectory(start || undefined);
 }
 
 export function asWorkspacePath(record: Record<string, unknown>): string | null {

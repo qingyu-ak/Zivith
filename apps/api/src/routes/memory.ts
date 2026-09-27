@@ -190,6 +190,47 @@ export function registerMemoryRoutes(app: FastifyInstance, memory: MemoryService
     return conflictDto(conflict);
   });
 
+  app.patch('/atoms/:atomId', async (request) => {
+    const { atomId } = z.object({ atomId: idSchema }).strict().parse(request.params);
+    const body = z
+      .object({ content: z.string().trim().min(1).max(2_000) })
+      .strict()
+      .parse(request.body ?? {});
+    return atomDto(await memory.patchAtom(atomId, body.content));
+  });
+
+  app.post('/projects/:projectId/atoms', async (request) => {
+    const { projectId } = z.object({ projectId: idSchema }).strict().parse(request.params);
+    const body = z
+      .object({
+        entity_type: z.string().trim().min(1).max(64),
+        entity_id: idSchema,
+        fact_type: z
+          .enum([
+            'trait',
+            'desire',
+            'event',
+            'relation',
+            'rule',
+            'preference',
+            'constraint',
+            'episodic',
+          ])
+          .default('episodic'),
+        content: z.string().trim().min(1).max(2_000),
+      })
+      .strict()
+      .parse(request.body ?? {});
+    return atomDto(
+      await memory.createManualAtom(projectId, {
+        entityType: body.entity_type,
+        entityId: body.entity_id,
+        factType: body.fact_type,
+        content: body.content,
+      }),
+    );
+  });
+
   app.delete('/atoms/:atomId', async (request) => {
     const { atomId } = z.object({ atomId: idSchema }).strict().parse(request.params);
     const ok = await memory.invalidateAtom(atomId);

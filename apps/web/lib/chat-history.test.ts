@@ -6,9 +6,13 @@ import {
   groupProjectsWithThreads,
   groupRoleplayByProject,
   groupThreadsByRecency,
+  openingChatTitle,
+  openingComposerPlaceholder,
   partitionThreadsByKind,
+  roleplayPickerView,
   threadDisplayTitle,
   threadKind,
+  workspaceListHint,
 } from './chat-history';
 import type { CreatorChatThreadDTO } from './types';
 
@@ -157,5 +161,95 @@ describe('compactRelativeTime', () => {
   it('uses a short sidebar label', () => {
     const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
     expect(compactRelativeTime(twoDaysAgo)).toBe('2天');
+  });
+});
+
+describe('openingChatTitle', () => {
+  it('keeps 新世界对话 only when there is no thread id', () => {
+    expect(
+      openingChatTitle({
+        threadId: undefined,
+        loading: false,
+        loadFailed: false,
+        thread: null,
+        listed: null,
+      }),
+    ).toBe('新世界对话');
+  });
+
+  it('does not use 新世界对话 while a thread id is loading', () => {
+    expect(
+      openingChatTitle({
+        threadId: 't1',
+        loading: true,
+        loadFailed: false,
+        thread: null,
+        listed: null,
+      }),
+    ).toBe('正在打开对话…');
+  });
+
+  it('uses the sidebar title before the thread GET returns', () => {
+    const now = new Date();
+    expect(
+      openingChatTitle({
+        threadId: 't1',
+        loading: true,
+        loadFailed: false,
+        thread: null,
+        listed: thread('t1', now, { title: '与「林晚」对话', kind: 'roleplay' }),
+      }),
+    ).toBe('与「林晚」对话');
+  });
+});
+
+describe('openingComposerPlaceholder', () => {
+  it('blocks 发给世界构建者 while a roleplay thread is still opening', () => {
+    const now = new Date();
+    expect(
+      openingComposerPlaceholder({
+        threadId: 't1',
+        loading: true,
+        loadFailed: false,
+        thread: null,
+        listed: thread('t1', now, {
+          kind: 'roleplay',
+          title: '与「林晚」对话',
+          character_name: '林晚',
+        }),
+        activeRoleplay: false,
+      }),
+    ).toBe('对「林晚」说…');
+  });
+
+  it('stays on 正在打开对话… when kind is not known yet', () => {
+    expect(
+      openingComposerPlaceholder({
+        threadId: 't1',
+        loading: true,
+        loadFailed: false,
+        thread: null,
+        listed: null,
+        activeRoleplay: false,
+      }),
+    ).toBe('正在打开对话…');
+  });
+});
+
+describe('workspaceListHint', () => {
+  it('does not look like an empty account while the workspace is loading', () => {
+    expect(workspaceListHint({ ready: false, query: '', desktop: false })).toBe('正在加载工作区…');
+    expect(workspaceListHint({ ready: true, query: '', desktop: false })).toContain('新建世界');
+  });
+});
+
+describe('roleplayPickerView', () => {
+  it('treats a failed load as error, not as an empty world', () => {
+    expect(roleplayPickerView({ ready: true, error: '无法加载角色列表', playableCount: 0 })).toBe(
+      'error',
+    );
+    expect(roleplayPickerView({ ready: false, error: '', playableCount: 0 })).toBe('loading');
+    expect(roleplayPickerView({ ready: true, error: '', playableCount: 0 })).toBe('empty');
+    expect(roleplayPickerView({ ready: true, error: '', playableCount: 2 })).toBe('list');
   });
 });

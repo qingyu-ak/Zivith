@@ -14,6 +14,7 @@ import { MemoryService } from './contexts/memory/service.js';
 import { PrismaMemoryStore } from './contexts/memory/prisma-store.js';
 import { createMemoryQueueRuntime } from './contexts/memory/queue-runtime.js';
 import { NovelImportService } from './contexts/novel-import/service.js';
+import { VoiceService } from './contexts/voice/service.js';
 
 config({ path: resolve(process.cwd(), '../../.env') });
 
@@ -39,12 +40,15 @@ const memoryService = new MemoryService({
   llmModel: memoryProviders.llmModel,
 });
 const memoryRuntime = createMemoryQueueRuntime(memoryService);
+// ADR-0017: 语音引擎加载失败不阻塞启动——服务以 available=false 降级,路由返回明确错误。
+const voiceService = await VoiceService.create(prisma);
 const app = await buildApp({
   logger: true,
   generationService,
   queueWork: queueRuntime.workBridge,
   memory: memoryService,
   novelImport: new NovelImportService(prisma),
+  voice: voiceService,
 });
 
 const recovered = await new WorkflowOrchestrator(prisma).recoverInterruptedRuns();
@@ -56,6 +60,7 @@ app.log.info(
   {
     queueMode: queueRuntime.mode,
     memoryQueueMode: memoryRuntime.mode,
+    voice: voiceService.status,
     providers: providers.selection,
     models: {
       llm: providers.llmModel,
@@ -81,6 +86,7 @@ try {
 
 const shutdown = async () => {
   await app.close();
+  voiceService.closeAll();
   await queueRuntime.close();
   await memoryRuntime.close();
   memoryVectorStore.close();

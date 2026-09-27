@@ -1,10 +1,77 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describeProposal,
   parseProposals,
   proposalBarLabel,
   unconfirmedProposalCount,
   handledProposalState,
 } from './chat-proposals';
+
+describe('describeProposal', () => {
+  const names = new Map([
+    ['c-ailin', '艾琳'],
+    ['c-chenmo', '陈默'],
+  ]);
+
+  it('lists title, description and participants for a world event', () => {
+    const described = describeProposal(
+      {
+        kind: 'create_world_event',
+        payload: {
+          title: '艾琳把灯塔的秘密告诉了陈默',
+          description: '在雾港码头',
+          character_ids: ['c-ailin', 'c-chenmo', 'ghost'],
+        },
+      },
+      names,
+    );
+    expect(described.headline).toBe('事件「艾琳把灯塔的秘密告诉了陈默」');
+    expect(described.details).toEqual(['在雾港码头', '参与角色：艾琳、陈默、ghost']);
+  });
+
+  it('shows both ends of a relationship by name', () => {
+    const described = describeProposal(
+      {
+        kind: 'create_relationship',
+        payload: {
+          kind: 'ally',
+          label: '盟友',
+          direction: 'undirected',
+          source: { type: 'asset', id: 'c-ailin' },
+          target: { type: 'asset', id: 'c-chenmo' },
+        },
+      },
+      names,
+    );
+    expect(described.headline).toBe('关系「艾琳 ↔ 陈默 · 盟友」');
+    expect(described.details[0]).toBe('艾琳 ↔ 陈默：盟友');
+  });
+
+  it('lists every field of an update so confirmation is not blind', () => {
+    const described = describeProposal(
+      {
+        kind: 'update_entity',
+        payload: {
+          type: 'character',
+          id: 'c-ailin',
+          fields: { description: '灯塔守，24 岁', tags: ['守夜人'], data: { age: 24 } },
+        },
+      },
+      names,
+    );
+    expect(described.headline).toBe('更新角色「艾琳」');
+    expect(described.details).toEqual(['描述 → 灯塔守，24 岁', '标签 → 守夜人', '设定 → age：24']);
+  });
+
+  it('works without a name lookup', () => {
+    const described = describeProposal({
+      kind: 'create_character',
+      payload: { name: '诺诺', description: '小狐狸' },
+    });
+    expect(described.headline).toBe('角色「诺诺」');
+    expect(described.details).toEqual(['小狐狸']);
+  });
+});
 
 describe('parseProposals', () => {
   it('解析单对象与数组提案，过滤未知 kind', () => {

@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { IconArrowLeft } from '@/components/nav-icons';
-import { STUDIO_SURFACE, navigationHistoryFor } from '@/lib/navigation-history';
-import { clearSettingsReturn, readSettingsReturn } from '@/lib/settings-return';
+import { resolveOverlayReturn } from '@/lib/nav-overlay';
 import { ModelSettings } from '@/components/model-settings';
 import { ModelVisibilityList } from '@/components/model-visibility';
 import { UsageSummaryCard } from '@/components/usage-summary-card';
@@ -26,7 +25,10 @@ import {
   writeStoredWriteMode,
   type AgentWriteMode,
 } from '@/lib/agent-write-mode';
-import { api } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
+import { pickWorkspaceDirectory } from '@/lib/desktop';
+import { useAppearanceTheme } from '@/lib/use-appearance-theme';
+import { openWorldFolderRequest } from '@/lib/world-folder';
 import type { WriteLogItemDTO } from '@/lib/types';
 
 type SettingsSection = 'general' | 'appearance' | 'models' | 'memory' | 'writes' | 'usage';
@@ -99,16 +101,7 @@ export default function SettingsPage() {
   }
 
   function leaveSettings() {
-    const origin = readSettingsReturn();
-    if (origin) {
-      clearSettingsReturn();
-      router.push(origin);
-      return;
-    }
-    const previous = navigationHistoryFor(STUDIO_SURFACE).backLeaving((path) =>
-      path.includes('/settings'),
-    );
-    router.push(previous ?? `/projects/${projectId}/world`);
+    router.push(resolveOverlayReturn(`/projects/${projectId}/world`));
   }
 
   return (
@@ -152,7 +145,7 @@ export default function SettingsPage() {
         </nav>
       </aside>
       <section className="min-w-0 flex-1">
-        {section === 'general' ? <GeneralSection /> : null}
+        {section === 'general' ? <GeneralSection projectId={projectId} /> : null}
         {section === 'appearance' ? <AppearanceSection /> : null}
         {section === 'models' ? (
           <div className="grid gap-6">
@@ -184,8 +177,113 @@ export default function SettingsPage() {
   );
 }
 
+function FolderPick({
+  path,
+  label,
+  onPick,
+}: {
+  path: string;
+  label: string;
+  onPick: () => void;
+}) {
+  return (
+    <div className="flex max-w-[18rem] items-center gap-2">
+      <span className="min-w-0 flex-1 truncate text-right text-xs text-zinc-500" title={path}>
+        {path || '尚未选择'}
+      </span>
+      <button
+        type="button"
+        className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50"
+        onClick={onPick}
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
+
 /** 常规：写入策略与默认努力程度。 */
-function GeneralSection() {
+function FolderSettings({ projectId }: { projectId: string }) {
+  const [root, setRoot] = useState('');
+  const [worldPath, setWorldPath] = useState('');
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      api<{ path: string }>('/world/folders/root'),
+      api<{ workspace_path?: string | null; workspacePath?: string | null }>(`/projects/${projectId}`),
+    ])
+      .then(([rootValue, project]) => {
+        if (cancelled) return;
+        setRoot(rootValue.path ?? '');
+        setWorldPath(project.workspace_path ?? project.workspacePath ?? '');
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(errorMessage(reason));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  async function chooseRoot() {
+    setError('');
+    setStatus('');
+    try {
+      const picked = await pickWorkspaceDirectory(root);
+      if (!picked) return;
+      const saved = await api<{ path: string }>('/world/folders/root', {
+        method: 'PUT',
+        body: { path: picked },
+      });
+      setRoot(saved.path);
+      setStatus('默认目录已保存');
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  async function chooseWorldPath() {
+    setError('');
+    setStatus('');
+    try {
+      const picked = await pickWorkspaceDirectory(worldPath);
+      if (!picked) return;
+      await openWorldFolderRequest(picked, { rebind_project_id: projectId });
+      setWorldPath(picked);
+      setStatus('当前世界的文件夹已更新');
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  }
+
+  return (
+    <>
+      <SettingRow
+        title="新建世界的默认目录"
+        description="之后新建的世界会放在这个目录下的同名文件夹里，并写入 .zivith/workspace.json。"
+      >
+        <FolderPick path={root} label="选择默认目录" onPick={() => void chooseRoot()} />
+      </SettingRow>
+      <SettingRow
+        title="当前世界的文件夹"
+        description="选择另一个已有文件夹。不会自动搬走里面的文件。"
+      >
+        <FolderPick path={worldPath} label="选择文件夹" onPick={() => void chooseWorldPath()} />
+      </SettingRow>
+      {status ? <p className="px-1 text-xs text-zinc-500">{status}</p> : null}
+      {error ? (
+        <p className="px-1 text-xs text-red-600" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function GeneralSection({ projectId }: { projectId: string }) {
   const [effort, setEffort] = useState<ChatEffort>('balanced');
   const [writeMode, setWriteMode] = useState<AgentWriteMode>('confirm');
   const [ready, setReady] = useState(false);
@@ -200,6 +298,7 @@ function GeneralSection() {
     <div>
       <h2 className="text-base font-semibold text-zinc-900">常规</h2>
       <div className="mt-4 grid gap-3">
+        <FolderSettings projectId={projectId} />
         <SettingRow
           title="Agent 写入模式"
           description="Agent 可以改 IP Core 与 Studio 里的世界实体。写入会留下提案记录；删除项目等高危操作始终询问。"
@@ -252,16 +351,34 @@ function GeneralSection() {
   );
 }
 
-/** 外观：只列真实存在的固定项，不做假开关。 */
+/** 外观：主题写入本机，时间线与工作台共用，不做假开关。 */
 function AppearanceSection() {
+  const [theme, setTheme] = useAppearanceTheme();
   return (
     <div>
       <h2 className="text-base font-semibold text-zinc-900">外观</h2>
       <div className="mt-4 grid gap-3">
-        <SettingRow title="主题" description="Chat 与 Studio 均为浅色，暂不提供深色主题。">
-          <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500">
-            浅色 · 固定
-          </span>
+        <SettingRow
+          title="主题"
+          description="浅色与 Studio 其余界面一致。深色时工作台和时间线改用深色背景。"
+        >
+          <div className="flex rounded-lg border border-zinc-200 p-0.5">
+            {(['light', 'dark'] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                aria-pressed={theme === item}
+                className={`rounded-md px-2.5 py-1 text-xs ${
+                  theme === item
+                    ? 'bg-zinc-900 text-white'
+                    : 'text-zinc-600 hover:bg-zinc-50'
+                }`}
+                onClick={() => setTheme(item)}
+              >
+                {item === 'light' ? '浅色' : '深色'}
+              </button>
+            ))}
+          </div>
         </SettingRow>
         <SettingRow title="代码主题" description="Zivith 不含代码编辑器，无代码高亮设置。">
           <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500">不适用</span>
@@ -277,7 +394,7 @@ function MemorySection({ projectId }: { projectId: string }) {
     <div>
       <h2 className="text-base font-semibold text-zinc-900">记忆</h2>
       <p className="mt-1 text-sm text-zinc-500">
-        对话中的事实会自动归档为记忆。与已有设定矛盾的内容不会自动写入，会以内联确认卡出现在对话里。
+            世界构建对话里，助手可以归档设定笔记。和角色交谈会留下全文日志，重要的收成精简记录，问还记得时先查目录再答；世界事件仍须确认才写入。与已有设定矛盾的内容不会自动写入，会以内联确认卡出现在对话里。
       </p>
       <ul className="mt-4 grid gap-2 text-sm text-zinc-700">
         <li className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
@@ -287,9 +404,9 @@ function MemorySection({ projectId }: { projectId: string }) {
           </p>
         </li>
         <li className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-          <p className="font-medium">记忆面板（L1 原子 / L2 核心块）</p>
+          <p className="font-medium">世界笔记与角色记忆</p>
           <p className="mt-1 text-sm text-zinc-500">
-            选中角色后，右侧「全书档案」可改扮演会读的记忆。下方记忆面板也能编辑 L2。
+            选中角色后，右侧「TA 记得什么」是这个角色的经历和精简后的重要聊天。下方「世界笔记」是世界级短事实和主题摘要，不是某一时刻的人生。
           </p>
           <Link
             href={`/projects/${projectId}/world`}
@@ -377,7 +494,7 @@ function SettingRow({
         <p className="text-sm font-medium text-zinc-900">{title}</p>
         <p className="mt-0.5 text-sm text-zinc-500">{description}</p>
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="min-w-0 shrink">{children}</div>
     </div>
   );
 }

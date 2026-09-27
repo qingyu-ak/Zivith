@@ -22,9 +22,12 @@
 | [0014](0014-layered-memory-system.md) | 分层记忆系统 | 已接受 | 2026-08-23 |
 | [0015](0015-novel-import-is-batch-memory-ingest.md) | 小说导入即批量记忆摄取（预授权写入 + 整体撤销） | 已接受 | 2026-08-30 |
 | [0016](0016-local-creative-surface-is-electron.md) | 本地创作面是 Electron 窗口；工作区身份是绝对路径 | 已接受 | 2026-09-02 |
+| [0017](0017-voice-input-is-local-streaming-stt.md) | 语音输入是本地流式 STT 能力，引擎隔离在能力边界之后 | 已接受 | 2026-09-13 |
 
 ADR-0001 至 0005 自根目录 `ARCHITECTURE-DECISIONS.md` 迁入，早于
 [架构宪章](../architecture-principles.md)；新 ADR 必须遵循指南中的完整模板。
+
+**产品宪法优先（2026-09-16）：** 与 [Product Constitution](../../product/Product-Constitution.md) 冲突的**产品目标 / 完成定义**以产品宪法为准。ADR-0010 / 0014 / 0015 / 0008 已加 overlay。架构围栏（确认后写库、对话不是世界、不新增 `World` 表）仍有效。
 
 ADR-0008 是首份 **宪章修订（Constitutional Amendment）**——这是
 [architecture-principles.md](../architecture-principles.md) 变更的唯一机制。它在记录本决策的同一次变更中修订了 §1、§3、§9 与 §10。ADR-0008、0009 与 0010 均由

@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@zivith/ui'],
+  // 工作区包以 TS 源码形式被消费：UI 组件、空间视图（@zivith/cosmos）、领域合同子路径（@zivith/domain/space）。
+  transpilePackages: ['@zivith/ui', '@zivith/cosmos', '@zivith/domain'],
   // 桌面创作面不要露出 Next 开发角标（左下黑底 N）。
   devIndicators: false,
   // 用户环境用 127.0.0.1 访问（本机代理劫持 localhost），允许其 HMR 连接，

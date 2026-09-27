@@ -3,6 +3,11 @@ import type { ProviderCatalogDTO, ProviderId } from './types';
 export type ChatEffort = 'fast' | 'balanced' | 'deep';
 
 export const CHAT_EFFORT_KEY = 'zivith.chatEffort';
+export const CHAT_EFFORT_STOP_KEY = 'zivith.chatEffortStop';
+export const CHAT_FAST_KEY = 'zivith.chatFast';
+export const CHAT_THINKING_KEY = 'zivith.chatThinking';
+export const CHAT_CONTEXT_WINDOW_KEY = 'zivith.chatContextWindow';
+export const CHAT_EFFORT_STOPS: ChatEffort[] = ['fast', 'balanced', 'deep'];
 
 export const CHAT_EFFORT_LABEL: Record<ChatEffort, string> = {
   fast: '快速',
@@ -46,6 +51,82 @@ export function readStoredEffort(): ChatEffort {
 export function writeStoredEffort(effort: ChatEffort) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(CHAT_EFFORT_KEY, effort);
+}
+
+export function readStoredStopIndex(): number | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(CHAT_EFFORT_STOP_KEY);
+  if (raw == null || raw.trim() === '') return null;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+export function writeStoredStopIndex(index: number) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(CHAT_EFFORT_STOP_KEY, String(index));
+}
+
+export function asChatFast(value: unknown): boolean {
+  return value === '1' || value === 'true';
+}
+
+export function readStoredFast(): boolean {
+  if (typeof window === 'undefined') return false;
+  return asChatFast(window.localStorage.getItem(CHAT_FAST_KEY));
+}
+
+export function writeStoredFast(fast: boolean) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(CHAT_FAST_KEY, fast ? '1' : '0');
+}
+
+export function asChatThinking(value: unknown): boolean {
+  return value === '1' || value === 'true';
+}
+
+export function readStoredThinking(): boolean {
+  if (typeof window === 'undefined') return false;
+  return asChatThinking(window.localStorage.getItem(CHAT_THINKING_KEY));
+}
+
+export function writeStoredThinking(enabled: boolean) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(CHAT_THINKING_KEY, enabled ? '1' : '0');
+}
+
+export function asContextWindow(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function readStoredContextWindow(): number | null {
+  if (typeof window === 'undefined') return null;
+  return asContextWindow(window.localStorage.getItem(CHAT_CONTEXT_WINDOW_KEY));
+}
+
+export function writeStoredContextWindow(tokens: number | null) {
+  if (typeof window === 'undefined') return;
+  if (tokens == null) {
+    window.localStorage.removeItem(CHAT_CONTEXT_WINDOW_KEY);
+    return;
+  }
+  window.localStorage.setItem(CHAT_CONTEXT_WINDOW_KEY, String(tokens));
+}
+
+export function effortIndex(effort: ChatEffort): number {
+  const index = CHAT_EFFORT_STOPS.indexOf(effort);
+  return index < 0 ? 1 : index;
+}
+
+export function effortFromIndex(index: number): ChatEffort {
+  const clamped = Math.min(CHAT_EFFORT_STOPS.length - 1, Math.max(0, Math.round(index)));
+  return CHAT_EFFORT_STOPS[clamped] ?? 'balanced';
+}
+
+export function formatModelEffortTrigger(modelLabel: string, effort: ChatEffort): string {
+  return `${modelLabel} ${CHAT_EFFORT_LABEL[effort]}`;
 }
 
 export function estimateMessageTokens(texts: string[]): number {

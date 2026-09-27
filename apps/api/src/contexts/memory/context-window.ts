@@ -28,6 +28,8 @@ export interface ContextWindowInput {
   tokenBudget: number;
   /** 保留最近 N 条原文（默认 8）。 */
   keepRecentMessages: number;
+  /** 已折进摘要的最后一条；再淘汰时从其后开始，避免每轮重压同一段。 */
+  summarizedUntilMessageId?: string | null;
 }
 
 export interface ContextWindowResult {
@@ -37,14 +39,20 @@ export interface ContextWindowResult {
   tokenEstimate: number;
 }
 
-/** 预算分配：③滚动摘要 + ④最近K条原文；older 一律淘汰。 */
+/** 预算分配：③滚动摘要 + ④最近K条原文；older 一律不进 prompt。 */
 export function buildBudgetedHistory(input: ContextWindowInput): ContextWindowResult {
   const keep = Math.max(2, input.keepRecentMessages);
   const older = input.history.slice(0, Math.max(0, input.history.length - keep));
   const recent = input.history.slice(-keep);
+  const summarizedUntil = input.summarizedUntilMessageId ?? null;
+  let evictFrom = 0;
+  if (summarizedUntil) {
+    const summarizedIndex = older.findIndex((message) => message.id === summarizedUntil);
+    if (summarizedIndex >= 0) evictFrom = summarizedIndex + 1;
+  }
+  const evicted: ContextMessage[] = older.slice(evictFrom);
   const summaryTokens = estimateTokens(input.previousSummary);
   let used = summaryTokens + estimateMessagesTokens(recent);
-  const evicted: ContextMessage[] = [...older];
   const window = [...recent];
   while (used > input.tokenBudget && window.length > 2) {
     const removed = window.shift();
@@ -103,14 +111,40 @@ export async function compressHistory(options: {
       },
       memorySummarySchema,
     );
-    return result.data.summary;
+    return clipRollingSummary(result.data.summary);
   }
-  return ruleSummarize(options.evicted, options.previousSummary);
+  return clipRollingSummary(ruleSummarize(options.evicted, options.previousSummary));
 }
 
 export const CONTEXT_TOKEN_BUDGET_DEFAULT = 24_000;
+export const ROLLING_SUMMARY_MAX_TOKENS = 1_000;
 
 export function contextTokenBudget(): number {
   const value = Number(process.env.MEMORY_CONTEXT_TOKEN_BUDGET ?? CONTEXT_TOKEN_BUDGET_DEFAULT);
   return Number.isFinite(value) && value > 1_000 ? value : CONTEXT_TOKEN_BUDGET_DEFAULT;
+}
+
+/** 滚动摘要只服务当下窗口，不当档案越积越长。 */
+export function clipRollingSummary(
+  text: string,
+  maxTokens = ROLLING_SUMMARY_MAX_TOKENS,
+): string {
+  const trimmed = text.trim();
+  if (!trimmed || estimateTokens(trimmed) <= maxTokens) return trimmed;
+  const lines = trimmed
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const kept: string[] = [];
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const next = [lines[index]!, ...kept];
+    if (estimateTokens(next.join('\n')) > maxTokens) break;
+    kept.unshift(lines[index]!);
+  }
+  if (kept.length > 0) return kept.join('\n');
+  let cut = trimmed;
+  while (cut.length > 24 && estimateTokens(cut) > maxTokens) {
+    cut = cut.slice(0, Math.floor(cut.length * 0.8));
+  }
+  return cut;
 }

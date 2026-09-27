@@ -1,12 +1,14 @@
 # Zivith 架构原则
 
-> Zivith 的架构宪章
+> Zivith 的**架构**宪章（不是产品宪法）
 >
 > Version: 1.1
 >
 > Status: Ratified — living document, amendable only by explicit ADR
 >
 > Horizon: 5–10 years
+>
+> 产品宪法：[Product Constitution](../product/Product-Constitution.md)（2026-09-16 立宪）。本文只约束世界如何被系统表示。要不要做、用户能否独立完成、算不算完成，以产品宪法为准。不得用本文为「功能完整」辩护而绕过 Journey 验收；也不得为走通 Journey 而默默改领域契约。
 >
 > Related: [Product-Positioning.md](../product/Product-Positioning.md), [Design-Philosophy.md](../product/Design-Philosophy.md), [Core-Domain-Model.md](../domain/Core-Domain-Model.md), [Technical-Architecture.md](../engineering/Technical-Architecture.md), [AI-Agent-Collaboration.md](../domain/AI-Agent-Collaboration.md), [Entity + State + Timeline + Track](entity-state-timeline-track.md), [ADR-0007](adr/0007-preserve-current-state-with-immutable-creative-history.md), [ADR-0008](adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)
 
@@ -28,7 +30,7 @@
 
 模型执行生成。Zivith 管理生成所无法承载的东西：创作意图、世界规则、角色关系、时间演进，以及制作语境。完整的 IP 永远不会「一句话就成」——需求要被探索，方向要被修订，世界规则要被维护，关系要在多年中演化。由此得出一个反直觉却经久的结论：**生成模型越强，管理创作语境的系统就越有价值**（[ADR-0008](adr/0008-zivith-is-an-ai-understandable-ip-creation-system.md)）。
 
-电影制作仍是该 IP 的首要且最深表达。`Story → Scene → Shot → Output` 是被管理世界的表达与输出层——不是系统的顶层目的。
+电影制作仍是该 IP 的首要且最深表达。`Story → Scene → Shot → Output` 是被管理世界的表达与输出层——不是系统的顶层目的。**V0.x 第一验收单位是产品宪法的 Journey A–F（创造世界、与角色互动、世界变化可理解），不是成片。**
 
 其架构形态是操作系统。「操作系统」不是营销隐喻，而是带有三根支柱的架构承诺；整部宪章都是对它们的展开：
 

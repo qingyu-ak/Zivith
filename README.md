@@ -108,6 +108,7 @@ pnpm format        # Format supported files
 pnpm format:check  # Check formatting without writing
 pnpm db:migrate    # Apply database migrations
 pnpm db:seed       # Seed local development data
+node scripts/voice-model.mjs  # Download the pinned local STT model (optional; ADR-0017)
 ```
 
 Each workspace package should expose the relevant scripts consumed by Turborepo.

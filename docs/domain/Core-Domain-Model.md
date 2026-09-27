@@ -10,6 +10,7 @@
 >
 > Related Documents:
 >
+> - [Product-Constitution.md](../product/Product-Constitution.md)（产品宪法；用户说的「世界」= `Project`）
 > - [Product-Positioning.md](../product/Product-Positioning.md)
 > - [Design-Philosophy.md](../product/Design-Philosophy.md)
 > - [Shot-Specification.md](Shot-Specification.md)
@@ -84,7 +85,7 @@
 
 # 3. 世界层
 
-领域分为两层。**世界层**描述创作宇宙中存在什么、处于何种状态。**表达层**——第 4 节的创作层级——描述该世界如何被讲述与交付。
+领域分为两层。**世界层**描述创作宇宙中存在什么、处于何种状态。**表达层**——第 4 节的创作层级——描述该世界如何被讲述与交付。产品宪法口中的「世界」就是这里的 `Project`，不另建 `World` 实体。
 
 ```
 

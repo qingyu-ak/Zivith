@@ -14,10 +14,19 @@ function persist(value: string | null) {
   else window.sessionStorage.removeItem(SETTINGS_RETURN_KEY);
 }
 
-/** 点进设置前记下当前界面；已在设置页内则不覆盖。 */
+/** 点进设置 / 帮助 / 登录前记下当前界面；已在这些页内则不覆盖。 */
 export function captureSettingsReturn(path?: string) {
   const value = path ?? currentLocation();
-  if (!value || value.includes('/settings')) return;
+  if (!value) return;
+  const pathname = value.split(/[?#]/, 1)[0] ?? value;
+  if (
+    pathname.includes('/settings') ||
+    pathname === '/help' ||
+    pathname === '/login' ||
+    pathname === '/register'
+  ) {
+    return;
+  }
   persist(value);
 }
 

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, type PrismaClient } from '@zivith/database';
 import {
@@ -22,10 +23,19 @@ import { instrumentProviderBundle } from '../contexts/usage/instrument.js';
 import { withUsageContext } from '../contexts/usage/context.js';
 import { ApiError } from '../errors.js';
 import { ensureProjectMember } from '../contexts/world/local-user.js';
-import { archiveWorldWorkspace, syncWorkspaceMarkerName } from '../contexts/world/workspace.js';
+import {
+  archiveWorldWorkspace,
+  archiveRoleplayChatsForCharacter,
+  createWorldProject,
+  syncWorkspaceMarkerName,
+} from '../contexts/world/workspace.js';
 import type { StoragePort } from '../ports/index.js';
 import { getRuntimeModelOverride, getRuntimeProviderOverride } from './providers.js';
 import { maybeRecordEntityChange } from '../contexts/history/index.js';
+import {
+  ensureAssetBaseline,
+  recordAssetHistory,
+} from '../contexts/history/record-asset-change.js';
 
 /** Prefer remote/data URLs stored on Media; only sign object storage for local keys. */
 async function resolveMediaAccessUrl(
@@ -186,6 +196,36 @@ export function parseAssetPatchInput(
   }
   if (data.type === 'location') delete data.type;
   return locationSchema.partial().parse(data);
+}
+
+/** Strip world-time stage fields so they never land in Asset.data. */
+export function splitAssetHistoryMeta(input: unknown): {
+  body: Record<string, unknown>;
+  asOfWorldEventId?: string | null;
+  stageLabel?: string | null;
+} {
+  const record = z.record(z.unknown()).parse(input);
+  const rawAsOf = record.as_of_world_event_id;
+  const rawLabel = record.stage_label;
+  let asOfWorldEventId: string | null | undefined;
+  if (rawAsOf === undefined) asOfWorldEventId = undefined;
+  else if (rawAsOf === null || rawAsOf === '') asOfWorldEventId = null;
+  else asOfWorldEventId = z.string().uuid().parse(rawAsOf);
+  let stageLabel: string | null | undefined;
+  if (rawLabel === undefined) stageLabel = undefined;
+  else if (rawLabel === null) stageLabel = null;
+  else stageLabel = z.string().trim().max(80).parse(rawLabel);
+  const body = { ...record };
+  delete body.as_of_world_event_id;
+  delete body.stage_label;
+  const result: {
+    body: Record<string, unknown>;
+    asOfWorldEventId?: string | null;
+    stageLabel?: string | null;
+  } = { body };
+  if (asOfWorldEventId !== undefined) result.asOfWorldEventId = asOfWorldEventId;
+  if (stageLabel !== undefined) result.stageLabel = stageLabel;
+  return result;
 }
 
 export function assetDto<T extends Record<string, unknown>>(asset: T): Record<string, unknown> {
@@ -424,23 +464,28 @@ export function registerResourceRoutes(
   db: PrismaClient,
   storage?: StoragePort,
 ): void {
-  app.get('/projects', async () =>
-    db.project.findMany({
+  app.get('/projects', async () => {
+    const projects = await db.project.findMany({
       where: { deletedAt: null },
       orderBy: { updatedAt: 'desc' },
-    }),
-  );
+    });
+    // §19 路径管理：currentPath 只是本机最近位置，列表顺便报告文件夹是否仍在，
+    // 供前端展示「当前文件夹不存在 → [重新定位][移除本机绑定]」。
+    return projects.map((project) => ({
+      ...project,
+      workspace_exists:
+        project.workspacePath === null ? null : fs.existsSync(project.workspacePath),
+    }));
+  });
   app.post('/projects', async (request, reply) => {
     const body = projectBody.parse(request.body);
-    const project = await db.project.create({
-      data: clean({
-        ownerId: request.user.sub,
-        name: body.name,
-        description: body.description,
-        defaults: json(body.defaults ?? {}),
-        worldview: body.worldview ? json(parseWorldview(body.worldview)) : undefined,
-        members: { create: { userId: request.user.sub, role: 'owner' as const } },
-      }),
+    const project = await createWorldProject(db, {
+      name: body.name,
+      description: body.description ?? null,
+      memberUserId: request.user.sub,
+      seed: false,
+      ...(body.worldview ? { worldview: json(parseWorldview(body.worldview)) } : {}),
+      ...(body.defaults ? { defaults: json({ language: 'zh-CN', ...body.defaults }) } : {}),
     });
     return reply.status(201).send(project);
   });
@@ -477,6 +522,12 @@ export function registerResourceRoutes(
       throw new ApiError(403, 'OWNER_REQUIRED', '仅项目所有者可删除项目');
     await archiveWorldWorkspace(db, id);
     return reply.status(204).send();
+  });
+  // §19 移除本机绑定：保留世界运行数据，只清除与本机文件夹的路径关联。
+  app.delete('/projects/:id/workspace', async (request) => {
+    const { id } = idParams.parse(request.params);
+    await requireMember(db, request.user.sub, id, true);
+    return db.project.update({ where: { id }, data: { workspacePath: null } });
   });
   app.get('/projects/:id/settings', async (request) => {
     const { id } = idParams.parse(request.params);
@@ -1083,6 +1134,16 @@ export function registerResourceRoutes(
     if (asset.type === 'character') {
       await ensureDefaultAppearanceVariant(db, asset);
     }
+    await recordAssetHistory(db, {
+      asset,
+      changeKind: 'create',
+      eventType: 'entity.created',
+      idempotencyKey: `asset:create:${asset.id}`,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'POST /projects/:pid/assets',
+    });
     return reply.status(201).send(assetDto(asset));
   });
   app.get('/assets/:id', async (request) => {
@@ -1186,7 +1247,12 @@ export function registerResourceRoutes(
     if (asset.type !== 'character' && asset.type !== 'location') {
       throw new ApiError(400, 'UNSUPPORTED_ASSET_TYPE', '当前仅支持角色和地点资产');
     }
-    const body = parseAssetPatchInput(asset.type, request.body);
+    const { body: patchInput, asOfWorldEventId, stageLabel } = splitAssetHistoryMeta(request.body);
+    const body = parseAssetPatchInput(asset.type, patchInput);
+    await ensureAssetBaseline(db, asset, {
+      sourceType: 'http',
+      actorId: request.user.sub,
+    });
     const updated = await db.asset.update({
       where: { id },
       data: clean({
@@ -1201,6 +1267,18 @@ export function registerResourceRoutes(
         data: json({ ...(asset.data as object), ...body }),
       }),
     });
+    await recordAssetHistory(db, {
+      asset: updated,
+      changeKind: 'update',
+      eventType: 'entity.changed',
+      idempotencyKey: `asset:update:${updated.id}:${updated.updatedAt.toISOString()}`,
+      actorId: request.user.sub,
+      actorType: 'user',
+      sourceType: 'http',
+      sourceId: 'PATCH /assets/:id',
+      asOfWorldEventId: asOfWorldEventId ?? null,
+      stageLabel: stageLabel ?? null,
+    });
     return assetDto(updated);
   });
   app.delete('/assets/:id', async (request, reply) => {
@@ -1208,6 +1286,9 @@ export function registerResourceRoutes(
     const asset = await db.asset.findFirst({ where: { id, deletedAt: null } });
     if (!asset) throw new ApiError(404, 'ASSET_NOT_FOUND', '资产不存在');
     await requireMember(db, request.user.sub, asset.projectId, true);
+    if (asset.type === 'character') {
+      await archiveRoleplayChatsForCharacter(db, asset.projectId, asset.id);
+    }
     await db.asset.update({ where: { id }, data: { deletedAt: new Date() } });
     return reply.status(204).send();
   });

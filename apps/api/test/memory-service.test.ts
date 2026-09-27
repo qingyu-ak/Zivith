@@ -237,6 +237,42 @@ describe('MemoryService.ingest（同步快速路径）', () => {
     expect(enqueued[0]).toMatchObject({ type: 'memory_refine', payload: { message_id: 'm1' } });
   });
 
+  it('roleplay ingest only archives condensed important chat, not filler', async () => {
+    const store = new FakeStore();
+    const { service, enqueued } = makeService(store);
+    const ops = await service.ingest({
+      messageId: 'm-rp',
+      threadId: 't-rp',
+      projectId: 'p1',
+      content: '好的。林澈性格冷静。随便聊聊吧。',
+      world,
+      ingestMode: 'roleplay',
+    });
+    expect(ops.added).toBe(1);
+    expect(store.atoms).toHaveLength(1);
+    expect(store.atoms[0]?.content.length).toBeLessThanOrEqual(80);
+    expect(enqueued).toHaveLength(1);
+  });
+
+  it('roleplay ingest attaches unlinked important chat to the speaking character', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    await service.ingest({
+      messageId: 'm-dock',
+      threadId: 't-rp',
+      projectId: 'p1',
+      content: '我喜欢去旧码头。',
+      world,
+      ingestMode: 'roleplay',
+      defaultEntity: { entityType: 'character', entityId: 'c1' },
+    });
+    expect(store.atoms[0]).toMatchObject({
+      entityType: 'character',
+      entityId: 'c1',
+      factType: 'preference',
+    });
+  });
+
   it('second identical ingest is NOOP (no new atoms, no enqueue)', async () => {
     const store = new FakeStore();
     const { service, enqueued } = makeService(store);
@@ -424,6 +460,48 @@ describe('MemoryService.processRefine（深加工）', () => {
       topic: '酒德麻衣',
       content: '酒德麻衣记得自己是混血种。',
       version: 2,
+    });
+  });
+
+  it('patches an imported trait atom in place', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    await store.createAtom({
+      projectId: 'p1',
+      threadId: null,
+      sourceMessageId: null,
+      entityType: 'character',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '出场 34 章',
+      confidence: 0.6,
+      dedupHash: 'old',
+      memoryOp: 'ADD',
+    });
+    const updated = await service.patchAtom('atom-1', '混血种专员，卡塞尔学院执行部。');
+    expect(updated).toMatchObject({
+      id: 'atom-1',
+      content: '混血种专员，卡塞尔学院执行部。',
+      memoryOp: 'UPDATE',
+    });
+    expect(updated.dedupHash).not.toBe('old');
+  });
+
+  it('creates a manual fact on a character', async () => {
+    const store = new FakeStore();
+    const { service } = makeService(store);
+    const created = await service.createManualAtom('p1', {
+      entityType: 'character',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '路明非是废柴。',
+    });
+    expect(created).toMatchObject({
+      projectId: 'p1',
+      entityId: 'c1',
+      factType: 'trait',
+      content: '路明非是废柴。',
+      memoryOp: 'ADD',
     });
   });
 

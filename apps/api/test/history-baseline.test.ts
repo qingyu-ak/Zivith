@@ -60,6 +60,7 @@ describe('backfillEntityBaselines', () => {
       visualAssetRequirement: { findMany: vi.fn().mockResolvedValue([]) },
       worldEvent: { findMany: vi.fn().mockResolvedValue([]) },
       relationship: { findMany: vi.fn().mockResolvedValue([]) },
+      asset: { findMany: vi.fn().mockResolvedValue([]) },
       entityRevision,
       $transaction: vi.fn(),
     } as unknown as PrismaClient;
@@ -118,6 +119,7 @@ describe('backfillEntityBaselines', () => {
       visualAssetRequirement: { findMany: vi.fn().mockResolvedValue([]) },
       worldEvent: { findMany: vi.fn().mockResolvedValue([]) },
       relationship: { findMany: vi.fn().mockResolvedValue([]) },
+      asset: { findMany: vi.fn().mockResolvedValue([]) },
       entityRevision: { findFirst: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<void>) => fn(tx)),
     } as unknown as PrismaClient;

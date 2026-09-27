@@ -12,13 +12,17 @@ import {
   studioHrefForEntity,
 } from '@/lib/creator-chat-nav';
 import { createStudioEntity, type StudioCreateKind } from '@/lib/studio-entity-create';
-import { WORKSPACE_LAYOUT_KEYS, usePersistedFlag } from '@/lib/workspace-layout';
+import { studioTreeView } from '@/lib/studio-tree-view';
+import { WORKSPACE_LAYOUT_KEYS, usePersistedFlag, usePersistedPx } from '@/lib/workspace-layout';
+import { ResizeHandle } from '@/components/world/workspace-split';
 import { IconAgent, IconPanelRight } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
 import { StudioMenuBar } from '@/components/studio-menu-bar';
 import { StudioAgentPanel } from '@/components/studio-agent-panel';
+import { parseWorldCanvasView, worldCanvasHref } from '@/lib/world-canvas';
 import { useCollapsedSidebar } from '@/lib/sidebar-state';
 import { isDesktopApp, pickWorkspaceDirectory } from '@/lib/desktop';
+import { persistLastLocation } from '@/lib/last-location';
 import { EntityExplorer } from './world/entity-explorer';
 import { StudioSelectionProvider, useStudioSelection } from './world/studio-selection';
 
@@ -40,8 +44,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     WORKSPACE_LAYOUT_KEYS.agentPanelOpen,
     false,
   );
+  const [explorerWidth, setExplorerWidth] = usePersistedPx(
+    WORKSPACE_LAYOUT_KEYS.leftWidth,
+    240,
+    180,
+    520,
+  );
+  const [agentWidth, setAgentWidth] = usePersistedPx(
+    WORKSPACE_LAYOUT_KEYS.agentWidth,
+    360,
+    280,
+    720,
+  );
 
   const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
+
+  useEffect(() => {
+    persistLastLocation(pathname);
+  }, [pathname]);
 
   useEffect(() => {
     if (pathname.startsWith('/creator-chats')) return;
@@ -141,7 +161,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-[calc(100dvh-2.75rem)] flex-1">
         <StudioSelectionProvider key={projectId ?? 'no-project'} projectId={projectId ?? ''}>
           {showExplorer && !explorerCollapsed && (
-            <aside className="sticky top-11 h-[calc(100dvh-2.75rem)] w-[268px] shrink-0 overflow-y-auto border-r border-line bg-[#f7f8fa]">
+            <aside
+              className="sticky top-11 h-[calc(100dvh-2.75rem)] shrink-0 overflow-x-hidden overflow-y-auto border-r border-line bg-[var(--z-chrome)]"
+              style={{ width: explorerWidth }}
+            >
               {projectId ? (
                 <ExplorerTree projectId={projectId} pathname={pathname} />
               ) : (
@@ -149,9 +172,26 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             </aside>
           )}
+          {showExplorer && !explorerCollapsed ? (
+            <ResizeHandle
+              orientation="vertical"
+              label="调整左侧栏宽度"
+              onDrag={(delta) => setExplorerWidth((width) => width + delta)}
+            />
+          ) : null}
           <main className="min-w-0 flex-1 bg-white">{children}</main>
           {agentOpen && projectId ? (
-            <aside className="sticky top-11 h-[calc(100dvh-2.75rem)] w-[380px] shrink-0 overflow-hidden border-l border-line bg-white">
+            <ResizeHandle
+              orientation="vertical"
+              label="调整对话栏宽度"
+              onDrag={(delta) => setAgentWidth((width) => width - delta)}
+            />
+          ) : null}
+          {agentOpen && projectId ? (
+            <aside
+              className="sticky top-11 h-[calc(100dvh-2.75rem)] shrink-0 overflow-hidden border-l border-line bg-white"
+              style={{ width: agentWidth }}
+            >
               <StudioAgentPanel projectId={projectId} />
             </aside>
           ) : null}
@@ -179,8 +219,8 @@ function ExplorerTree({ projectId, pathname }: { projectId: string; pathname: st
   async function handleCreate(
     kind: StudioCreateKind,
     extras?: Parameters<typeof createStudioEntity>[3],
-  ) {
-    if (!resources || creatingKind) return;
+  ): Promise<boolean> {
+    if (!resources || creatingKind) return false;
     setCreatingKind(kind);
     setCreateError('');
     try {
@@ -192,21 +232,45 @@ function ExplorerTree({ projectId, pathname }: { projectId: string; pathname: st
       if (!pathname.startsWith(worldPath)) {
         router.push(studioHrefForEntity(projectId, next));
       }
+      return true;
     } catch (reason) {
       setCreateError(errorMessage(reason));
+      return false;
     } finally {
       setCreatingKind(null);
     }
   }
 
   if (!resources) {
+    const treeView = studioTreeView({
+      loading,
+      error,
+      ready: false,
+    });
+    const retrying = treeView === 'loading';
     return (
-      <p
-        className={`px-4 py-4 text-xs ${error ? 'text-red-600' : 'text-zinc-500'}`}
-        role={error ? 'alert' : undefined}
-      >
-        {error || (loading ? '正在加载项目树…' : '无法加载项目树')}
-      </p>
+      <div className="space-y-2 px-4 py-4">
+        <p
+          className={`text-xs ${treeView === 'error' || treeView === 'missing' ? 'text-red-600' : 'text-zinc-500'}`}
+          role={treeView === 'error' || treeView === 'missing' ? 'alert' : undefined}
+        >
+          {retrying
+            ? '正在加载项目树…'
+            : error || '无法加载项目树'}
+        </p>
+        {treeView === 'error' || treeView === 'missing' ? (
+          <button
+            type="button"
+            disabled={retrying}
+            className="rounded-md border border-line px-2 py-1 text-xs text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+            onClick={() => {
+              void reload();
+            }}
+          >
+            重试
+          </button>
+        ) : null}
+      </div>
     );
   }
 
@@ -281,9 +345,10 @@ function StudioModeCluster({
   onToggleRight: () => void;
 }) {
   const searchParams = useSearchParams();
-  const line = searchParams.get('line');
-  const worldHref = `/projects/${projectId}/world`;
-  const creationHref = `${worldHref}?line=production`;
+  const canvas = parseWorldCanvasView(searchParams);
+  const worldHref = worldCanvasHref(projectId, 'world', searchParams);
+  const creationHref = worldCanvasHref(projectId, 'production', searchParams);
+  const spaceHref = worldCanvasHref(projectId, 'space', searchParams);
 
   return (
     <div className="flex items-center gap-1">
@@ -295,9 +360,9 @@ function StudioModeCluster({
         <Link
           href={worldHref}
           role="tab"
-          aria-selected={onWorld && line !== 'production'}
+          aria-selected={onWorld && canvas === 'world'}
           className={`rounded-md px-2.5 py-0.5 text-xs transition ${
-            onWorld && line !== 'production'
+            onWorld && canvas === 'world'
               ? 'bg-white text-zinc-900 shadow-sm'
               : 'text-zinc-500 hover:text-zinc-700'
           }`}
@@ -307,14 +372,26 @@ function StudioModeCluster({
         <Link
           href={creationHref}
           role="tab"
-          aria-selected={onWorld && line === 'production'}
+          aria-selected={onWorld && canvas === 'production'}
           className={`rounded-md px-2.5 py-0.5 text-xs transition ${
-            onWorld && line === 'production'
+            onWorld && canvas === 'production'
               ? 'bg-white text-zinc-900 shadow-sm'
               : 'text-zinc-500 hover:text-zinc-700'
           }`}
         >
           创作线
+        </Link>
+        <Link
+          href={spaceHref}
+          role="tab"
+          aria-selected={onWorld && canvas === 'space'}
+          className={`rounded-md px-2.5 py-0.5 text-xs transition ${
+            onWorld && canvas === 'space'
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-700'
+          }`}
+        >
+          空间
         </Link>
       </div>
       <TopBarLink href={productionHref} label="制作" active={pathname.includes('/production')} />

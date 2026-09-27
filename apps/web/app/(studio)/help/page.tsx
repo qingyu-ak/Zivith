@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { IconArrowLeft } from '@/components/nav-icons';
 import { APP_VERSION, buildBugReportTemplate, FEEDBACK_CHANNELS } from '@/lib/help-feedback';
+import { readLastLocation } from '@/lib/last-location';
+import { resolveOverlayReturn } from '@/lib/nav-overlay';
 
 type HelpSection = 'docs' | 'feedback';
 
@@ -12,6 +16,7 @@ const NAV: Array<{ id: HelpSection; label: string }> = [
 ];
 
 export default function HelpPage() {
+  const router = useRouter();
   const [section, setSection] = useState<HelpSection>('docs');
 
   useEffect(() => {
@@ -19,9 +24,21 @@ export default function HelpPage() {
     if (NAV.some((item) => item.id === hash)) setSection(hash);
   }, []);
 
+  function leaveHelp() {
+    router.push(resolveOverlayReturn(readLastLocation() ?? '/projects'));
+  }
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 p-5 sm:flex-row sm:p-8">
       <aside className="w-full shrink-0 sm:w-48">
+        <button
+          type="button"
+          className="mb-3 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-sm text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
+          onClick={leaveHelp}
+        >
+          <IconArrowLeft className="size-4" />
+          返回
+        </button>
         <h1 className="text-lg font-semibold text-zinc-900">帮助与反馈</h1>
         <nav className="mt-4 grid gap-0.5" aria-label="帮助与反馈分组">
           {NAV.map((item) => (
@@ -55,14 +72,20 @@ function HelpDocs() {
       <DocsCard title="快速上手">
         <ol className="list-decimal space-y-1 pl-5">
           <li>
-            在 <b>对话</b> 里描述你想创造的世界，例如「我想创造一个东方玄幻世界」。
+            先到 <b>新建世界</b>：从零开始，用小说 TXT 预览后再创建，或打开已有的{' '}
+            <code className="rounded bg-zinc-100 px-1">.zivith</code> 工程文件夹。
           </li>
           <li>
-            世界构建者会给出<b>提案</b>（新建项目 / 角色 / 地点 /
+            创建一个<b>角色</b>（填写名字），再开始与 TA 对话。也可以在世界构建者里用提案记下主角。
+          </li>
+          <li>
+            世界构建者会给出<b>提案</b>（新建世界 / 角色 / 地点 /
             事件等）。默认每步确认后写入；也可在输入条切换半自动、计划模式或完全访问。
           </li>
           <li>
-            左侧活动栏进入<b>世界</b>工作区：时间线、实体（角色/地点/事件）、资产、记忆都在这里。
+            左侧资源树进入<b>世界</b>工作区。顶栏可在<b>世界</b>（时间线）、<b>创作线</b>、
+            <b>空间</b>（恒星系 / 星球 / 地点）之间切换。空间里可再上到<b>宇宙</b>
+            星云换世界；新建、删除、绑文件夹仍在项目列表。
           </li>
           <li>「实体」页可管理角色卡与资产，「故事」「制作」负责章节与生成流水线。</li>
         </ol>
@@ -126,16 +149,15 @@ function HelpDocs() {
       <DocsCard title="记忆系统">
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            对话中的事实会自动归档为记忆（L1 原子，按实体聚合成 L2
-            核心块）。本轮归档会收成「想了一下」，点开可看条数。
+            和角色交谈时，TA 只记得当前<b>世界时间</b>之前亲历的事。聊天全文留下来当日志；重要的收成精简记录；问还记得时先查目录再答。点「调整记忆」可查看、改或忘掉。世界事件仍须确认才进时间线。
           </li>
           <li>
-            与已有设定矛盾的内容<b>不会自动写入</b>
+            世界构建对话里，助手可以归档设定笔记（本轮会收成「想了一下」）。和已有设定矛盾的内容<b>不会自动写入</b>
             ：对话里会出现冲突确认卡，由你选择保留新卡还是已有卡。
           </li>
           <li>
-            选中角色后，在右侧属性的「全书档案」里查看和修改；下方记忆面板也可编辑
-            L2。展开核心块可溯源到原句。
+            选中角色后，点右上角「编辑角色卡」改名称/简介/个性。短事实和档案正文在右侧「TA
+            记得什么」里可编辑。下方「世界笔记」是世界级短事实，不是角色在某一时刻的人生。
           </li>
         </ul>
       </DocsCard>

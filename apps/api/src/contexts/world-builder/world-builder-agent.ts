@@ -4,11 +4,13 @@ import type { LLMAdapter } from '../../ports/llm.js';
 import { buildWorldBuilderSystemPrompt, type WorldBuilderFocus } from './prompt.js';
 import type { WorldContext } from './world-context.js';
 import {
+  conflictReportedInText,
   detectWorldConflicts,
   formatConflictAppendix,
   formatConflictCheckReply,
   mergeConflictSummaries,
   normalizeEntityName,
+  unreportedConflicts,
   wantsConflictCheck,
 } from './conflict-detector.js';
 import {
@@ -16,11 +18,16 @@ import {
   formatGuidanceFollowUp,
   formatGuidanceReply,
   mergeOpenQuestions,
+  replacementForRepeatedReply,
+  replyAlreadyAsks,
+  replyRepeatsPrevious,
+  skipGapsAnsweredThisTurn,
   skipGapsCoveredByProposals,
   wantsGuidanceTurn,
   wantsStudioHandoff,
 } from './guidance.js';
 import type { EffectiveAgentEffort } from '../agent-effort.js';
+import { eventTitleFromText, inferRelationshipKind, mentionedCharacters } from './text-extract.js';
 
 export type WorldStage = 'bootstrap' | 'growing' | 'mature';
 
@@ -146,9 +153,18 @@ function extractEntityName(text: string): string | null {
   ];
   for (const pattern of candidates) {
     const match = text.match(pattern);
-    if (match && match[1] && match[1].trim().length >= 1) return match[1].trim();
+    const candidate = match?.[1]?.trim();
+    if (candidate && candidate.length >= 1 && !isNamePlaceholder(candidate)) return candidate;
   }
   return null;
+}
+
+/** 「再添加一个角色」抽出来的「一个」不是名字（审计 P0-4）。 */
+const NAME_PLACEHOLDER =
+  /^(?:一个|一位|一名|一座|一处|一场|一段|新的?|这个|那个|某个|某位|某人|几个|两个|他们|她们|它们|他|她|它|我|你|人)$/;
+
+function isNamePlaceholder(value: string): boolean {
+  return NAME_PLACEHOLDER.test(value);
 }
 
 const WORLDVIEW_GENRE_PATTERN =
@@ -232,7 +248,7 @@ function applyGuidance(
 ): WorldBuilderResponse {
   if (wantsConflictCheck(input.text)) return response;
   const gaps = skipGapsCoveredByProposals(
-    detectWorldGaps(input.world),
+    skipGapsAnsweredThisTurn(detectWorldGaps(input.world), input.history, input.text),
     response.proposals.map((proposal) => proposal.kind),
   ).slice(0, 3);
   const questions = mergeOpenQuestions(response.world_state.open_questions, gaps);
@@ -271,15 +287,24 @@ function applyGuidance(
 
   let { reply } = response;
   const next = gaps[0];
+  const repeated = !wantsGuidanceTurn(input.text) &&
+    !wantsStudioHandoff(input.text) &&
+    replyRepeatsPrevious(reply, input.history);
+  if (repeated) {
+    reply = replacementForRepeatedReply(input.text, next?.question);
+  }
   if (
+    !repeated &&
     response.proposals.length > 0 &&
     next &&
     !input.focus &&
+    !replyAlreadyAsks(reply) &&
     !reply.includes(next.question) &&
     !reply.includes('下一步我想问')
   ) {
     reply += formatGuidanceFollowUp(next);
   } else if (
+    !repeated &&
     !input.focus &&
     response.proposals.length === 0 &&
     gaps.length > 0 &&
@@ -309,8 +334,13 @@ function applyDetectedConflicts(
   if (checking) {
     proposals = [];
     reply = formatConflictCheckReply(detected);
-  } else if (detected.length > 0 && !/设定冲突/.test(reply)) {
-    reply = `${reply}${formatConflictAppendix(detected)}`;
+  } else {
+    const fresh = unreportedConflicts(input.history, detected).filter(
+      (item) => !conflictReportedInText(reply, item),
+    );
+    if (fresh.length > 0) {
+      reply = `${reply}${formatConflictAppendix(fresh)}`;
+    }
   }
   return {
     ...response,
@@ -453,9 +483,22 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
         },
       };
     }
+    // 抽不到名字就不出提案：「未命名主角」落库只会制造脏数据（审计 P0-4）。
+    if (!extracted) {
+      return {
+        reply:
+          '我来帮你建立角色档案。先告诉我这个角色叫什么？有了名字我再整理成提案。\n顺便可以说说：\n1. 身份\n2. 性格核心（比如：冷静、热血、偏执）\n3. 他/她的目标或欲望是什么？',
+        proposals: [],
+        world_state: {
+          stage: 'growing',
+          open_questions: ['角色名字', '性格核心', '目标欲望'],
+          conflicts,
+        },
+      };
+    }
     proposals.push(
       mockProposal('create_character', projectId, {
-        name: extractEntityName(text) ?? (hasCharacters ? '新角色' : '未命名主角'),
+        name: extracted,
         description: text.length > 40 ? text.slice(0, 200) : '由对话引导创建的角色',
       }),
     );
@@ -489,9 +532,21 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
         },
       };
     }
+    if (!extracted) {
+      return {
+        reply:
+          '好的，我们建立一个核心地点。它叫什么名字？有了名字我再整理成提案。\n再说说：\n1. 一座城市、一片区域，还是一个建筑？\n2. 它在这个世界里的地位（家园 / 战场 / 圣地…）？',
+        proposals: [],
+        world_state: {
+          stage: 'growing',
+          open_questions: ['地点名字', '地点形态', '地点地位'],
+          conflicts,
+        },
+      };
+    }
     proposals.push(
       mockProposal('create_location', projectId, {
-        name: extractEntityName(text) ?? (hasLocations ? '新地点' : '未命名地点'),
+        name: extracted,
         description: '由对话引导创建的核心地点',
       }),
     );
@@ -504,10 +559,24 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
   }
 
   if (wantsEvent && !asking && (!hasEvents || incremental)) {
+    // 事件标题：优先抽到的名字，否则用这句话本身；都不行就只问。
+    const eventTitle = extractEntityName(text) ?? eventTitleFromText(text);
+    if (!eventTitle) {
+      return {
+        reply:
+          '这个世界发生过什么？请描述一个关键事件：\n1. 事件名称\n2. 它发生在什么时候（世界纪元 / 年份）\n3. 它对世界产生了什么影响？',
+        proposals: [],
+        world_state: {
+          stage: 'growing',
+          open_questions: ['事件名称', '时间定位', '世界影响'],
+          conflicts,
+        },
+      };
+    }
     proposals.push(
       mockProposal('create_world_event', projectId, {
-        title: extractEntityName(text) ?? (hasEvents ? '新事件' : '关键事件'),
-        description: '由对话引导创建的世界事件',
+        title: eventTitle,
+        description: text.length > 40 ? text.slice(0, 500) : '由对话引导创建的世界事件',
         world_time_envelope: { order: 1 },
       }),
     );
@@ -529,28 +598,35 @@ function mockWorldBuilderDraft(input: WorldBuilderInput): WorldBuilderResponse {
     hasCharacters &&
     (world.relationships.length === 0 || incremental)
   ) {
-    const a = world.characters[0];
-    if (!a) {
+    // 关系必须是两个不同角色；从文本里认出两个已存在的名字才出提案（审计 P0-4：禁止自指）。
+    const mentioned = mentionedCharacters(text, world.characters);
+    const [a, b] = mentioned;
+    if (!a || !b) {
+      const known = world.characters
+        .slice(0, 5)
+        .map((character) => `「${character.name}」`)
+        .join('、');
       return {
-        reply: '我注意到你想建立角色关系。不过世界档案里暂时没有可用的角色，先告诉我主角是谁？',
-        proposals,
-        world_state: { stage: 'growing', open_questions: ['主角信息'], conflicts },
+        reply: `我看到你提到了关系。目前世界里有角色${known}。你想建立谁和谁的关系？关系类型是（伙伴 / 对手 / 家人 / 师徒…）？`,
+        proposals: [],
+        world_state: { stage: 'growing', open_questions: ['关系双方', '关系类型'], conflicts },
       };
     }
+    const relation = inferRelationshipKind(text);
     proposals.push(
       mockProposal('create_relationship', projectId, {
-        kind: 'bond',
+        kind: relation.kind,
         source: { type: 'asset', id: a.id },
-        target: { type: 'asset', id: a.id },
-        direction: 'undirected',
-        label: '同伴',
-        description: '由对话引导创建的角色关系',
+        target: { type: 'asset', id: b.id },
+        direction: relation.direction,
+        label: relation.label,
+        description: text.slice(0, 500),
       }),
     );
     return {
-      reply: `我看到你提到了关系。目前世界里有角色「${a.name}」。你想建立谁和谁的关系？关系类型是（伙伴 / 对手 / 家人 / 师徒…）？`,
+      reply: `我整理了「${a.name}」与「${b.name}」的关系提案（${relation.label}），确认后写入世界档案。`,
       proposals,
-      world_state: { stage: 'growing', open_questions: ['关系双方', '关系类型'], conflicts },
+      world_state: { stage: 'growing', open_questions: ['关系细节'], conflicts },
     };
   }
 
@@ -610,6 +686,16 @@ export class WorldBuilderAgent {
       .slice(-historyTurns)
       .join('\n');
 
+    const assistantHistory = input.history
+      .filter((message) => message.role === 'assistant')
+      .map((message) => message.content)
+      .join('\n');
+    const alreadyReported = wantsConflictCheck(input.text)
+      ? []
+      : detectWorldConflicts(input.world, { text: input.text })
+          .filter((item) => conflictReportedInText(assistantHistory, item))
+          .map((item) => item.summary);
+
     const completion = await this.llm.completeStructured(
       {
         request_id: `world-builder:${Date.now()}`,
@@ -619,6 +705,9 @@ export class WorldBuilderAgent {
           input.stage,
           input.focus,
           input.memoryDigest ?? null,
+          alreadyReported,
+          input.history,
+          input.text,
         ),
         user_prompt: JSON.stringify({
           recent_conversation: historyText,

@@ -54,9 +54,14 @@ export function isSparseImportArchive(content: string): boolean {
 export function eventsExperiencedBy(
   resources: WorldResourcesDTO,
   characterId: string,
+  asOfPresentationOrder?: number,
 ): WorldEventDTO[] {
   return resources.entities.world_events
     .filter((event) => worldEventCharacterIds(event).includes(characterId))
+    .filter(
+      (event) =>
+        asOfPresentationOrder === undefined || worldEventOrder(event) <= asOfPresentationOrder,
+    )
     .slice()
     .sort(
       (a, b) =>
@@ -92,22 +97,49 @@ function entityName(resources: WorldResourcesDTO, id: string): string {
   return '某人';
 }
 
+export interface CharacterRelationView {
+  id: string;
+  otherName: string;
+  kind: string;
+  name: string;
+  description: string;
+  label: string;
+}
+
 export function relationshipsForCharacter(
   resources: WorldResourcesDTO,
   characterId: string,
-): Array<{ id: string; label: string }> {
+): CharacterRelationView[] {
   return resources.entities.relationships
     .map((relationship) => {
       const { sourceId, targetId } = relationshipEnds(relationship);
       if (sourceId !== characterId && targetId !== characterId) return null;
       const otherId = sourceId === characterId ? targetId : sourceId;
       const other = entityName(resources, otherId);
-      const kind = relationship.label?.trim() || relationship.kind || '关系';
-      const extra = relationship.description?.trim();
+      const kind = relationship.kind?.trim() || 'related';
+      const name = relationship.label?.trim() ?? '';
+      const extra = relationship.description?.trim() ?? '';
+      const shown = name || kind;
       return {
         id: relationship.id,
-        label: extra ? `与「${other}」：${kind}（${extra}）` : `与「${other}」：${kind}`,
+        otherName: other,
+        kind,
+        name,
+        description: extra,
+        label: extra ? `与「${other}」：${shown}（${extra}）` : `与「${other}」：${shown}`,
       };
     })
-    .filter((item): item is { id: string; label: string } => Boolean(item));
+    .filter((item): item is CharacterRelationView => Boolean(item));
+}
+
+export function characterIdsWithout(event: WorldEventDTO, characterId: string): string[] {
+  return worldEventCharacterIds(event).filter((id) => id !== characterId);
+}
+
+/** 「调整记忆」里的重要聊天：一行短句，不是对白复读。 */
+export function compactMemoryLine(text: string, maxChars = 80): string {
+  const trimmed = text.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return '';
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, maxChars).replace(/[，。；、,.!?！？\s]*$/, '')}…`;
 }

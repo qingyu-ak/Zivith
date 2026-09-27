@@ -8,6 +8,7 @@ import {
   projectBody,
   sceneBodySchema,
   sceneDto,
+  splitAssetHistoryMeta,
   storyBodySchema,
 } from '../src/routes/resources.js';
 
@@ -127,6 +128,20 @@ describe('asset contracts', () => {
     expect(response.weather_default).toBe('rainy');
     expect(response.referenceImages).toEqual(['media_1']);
     expect(response.data).toEqual({ type: 'interior', weather_default: 'rainy' });
+  });
+
+  it('keeps stage binding off the asset data payload', () => {
+    const split = splitAssetHistoryMeta({
+      personality: '谨慎',
+      as_of_world_event_id: '11111111-1111-4111-8111-111111111111',
+      stage_label: '觉醒',
+    });
+    expect(split.body).toEqual({ personality: '谨慎' });
+    expect(split.asOfWorldEventId).toBe('11111111-1111-4111-8111-111111111111');
+    expect(split.stageLabel).toBe('觉醒');
+    expect(splitAssetHistoryMeta({ name: '林夜', as_of_world_event_id: '' }).asOfWorldEventId).toBe(
+      null,
+    );
   });
 
   it('flattens character data so world resources Inspector can read personality', () => {

@@ -1,5 +1,7 @@
 /// <reference types="vitest/globals" />
 import {
+  characterIdsWithout,
+  compactMemoryLine,
   eventsExperiencedBy,
   isSparseImportArchive,
   relationshipsForCharacter,
@@ -83,9 +85,41 @@ describe('character memory inventory', () => {
     ]);
   });
 
+  it('hides later plot when playing at an earlier world time', () => {
+    expect(eventsExperiencedBy(resources(), 'c2', 1).map((item) => item.title)).toEqual([
+      '路明非入学',
+    ]);
+    expect(eventsExperiencedBy(resources(), 'c2').map((item) => item.title)).toEqual([
+      '路明非入学',
+      '卡塞尔毕业',
+    ]);
+  });
+
+  it('drops a character from an event without touching others', () => {
+    const [event] = resources().entities.world_events;
+    expect(characterIdsWithout(event!, 'c1')).toEqual(['c2']);
+  });
+
   it('lists relationships in readable form', () => {
     expect(relationshipsForCharacter(resources(), 'c1')).toEqual([
-      { id: 'r1', label: '与「路明非」：师徒' },
+      {
+        id: 'r1',
+        otherName: '路明非',
+        kind: 'mentor',
+        name: '师徒',
+        description: '',
+        label: '与「路明非」：师徒',
+      },
     ]);
+  });
+});
+
+describe('compactMemoryLine', () => {
+  it('keeps short important chat and truncates a verbatim dump', () => {
+    expect(compactMemoryLine('林夕怕黑')).toBe('林夕怕黑');
+    const dumped = '我怕黑，晚上一个人走那条巷子的时候一定要有人陪着，还要记得带灯，否则我会停下来不敢往前。'.repeat(2);
+    const compact = compactMemoryLine(dumped, 40);
+    expect(compact.length).toBeLessThan(dumped.length);
+    expect(compact.endsWith('…')).toBe(true);
   });
 });

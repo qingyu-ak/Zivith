@@ -53,9 +53,11 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 文档按**谁可以改、多久改一次**分组。文件夹位置决定权重：`product/` 的陈述高于 `planning/` 的笔记；`planning/` 笔记是快照，不是契约。
 
+**产品宪法**（[Product Constitution](product/Product-Constitution.md)）自 2026-09-16 起约束「做什么、如何验收、Agent 如何执行任务」。**架构宪章**（[Architecture Principles](architecture/architecture-principles.md)）继续约束「世界如何被系统表示」。功能任务书与 planning 笔记不得覆盖产品宪法。
+
 | 文件夹 | 回答什么 | 变更节奏 | 变更权限 |
 |--------|---------|----------------|---------------------|
-| [`product/`](product) | Zivith 为何存在 | 年级别 | 宪法级修正 ADR |
+| [`product/`](product) | Zivith 为何存在、产品如何验收 | 年级别 | 产品宪法由所有者明示修订；其余定位/术语走 ADR |
 | [`domain/`](domain) | 对象是什么 | 按决策 | ADR 或 RFC |
 | [`engineering/`](engineering) | 如何构建 | 按阶段 | 常规 PR 评审 |
 | [`planning/`](planning) | 接下来做什么 | 周级别 | 常规 PR 评审 |
@@ -66,7 +68,8 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 | 我想知道 | 阅读 |
 |----------------|------|
-| Zivith 是什么，以及它拒绝构建什么 | [Product Positioning](product/Product-Positioning.md) — **从这里开始** |
+| 产品怎么做、算不算完成、Agent 如何执行任务 | [Product Constitution](product/Product-Constitution.md) — **从这里开始（产品宪法）** |
+| Zivith 是什么，以及它拒绝构建什么 | [Product Positioning](product/Product-Positioning.md) |
 | 某个概念的官方名称 | [Product Positioning §3](product/Product-Positioning.md) 术语约定 |
 | 某设计选择为何如此 | [ADR index](architecture/adr/README.md) |
 | 我是否有权做某个设计选择 | [Architecture Principles](architecture/architecture-principles.md)，然后 [ADR Guide](architecture/adr-guide.md) |
@@ -76,7 +79,9 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 | 评审关卡在哪里、是否强制 | [AI Agent Collaboration](domain/AI-Agent-Collaboration.md) |
 | API 或适配器长什么样 | [Technical Architecture](engineering/Technical-Architecture.md) |
 | 写代码前应遵循的约定 | [Code Agent Design Guide](engineering/Code-Agent-Design-Guide.md) |
-| 现在该做什么 | [Next Tasks](planning/Next-Tasks.md) |
+| 现在该做什么（产品） | [Product Constitution](product/Product-Constitution.md) — Journey A–F；写代码前填 §25 |
+| 现在工程上有哪些轨道快照 | [Next Tasks](planning/Next-Tasks.md)（从属于产品宪法，不是优先级） |
+| 工程加固怎么走、当前版本基线 | [Hardening Roadmap](engineering/hardening-roadmap.md) · [Baseline](engineering/hardening-baseline.md) |
 | 某个界面或路由应落在哪里 | [UI Information Architecture](product/UI-Information-Architecture.md) |
 | 记忆、小说导入、角色扮演如何工作 | [Memory / Novel / Roleplay 设计](planning/Memory-Novel-Roleplay-Design.md) |
 
@@ -84,6 +89,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 | 文档 | 说明 |
 |----------|-------------|
+| [Product Constitution](product/Product-Constitution.md) | **产品宪法**：成熟度、Journey 验收、UI 状态、Agent 任务模板。高于功能任务书 |
 | [Product Positioning](product/Product-Positioning.md) | 北极星、术语约定，以及 Zivith 刻意不构建什么 |
 | [Design Philosophy](product/Design-Philosophy.md) | 产品愿景、原则、世界层与创作层级 |
 | [UI Information Architecture](product/UI-Information-Architecture.md) | 世界优先的界面结构、路由图、World/Production 视图、Creator Chat 位置 |
@@ -104,12 +110,14 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 |----------|-------------|
 | [Technical Architecture](engineering/Technical-Architecture.md) | 系统设计、适配器、API、队列、BYOK 与数据存储 |
 | [Code Agent Design Guide](engineering/Code-Agent-Design-Guide.md) | 面向 AI 代码 Agent 的实现约定 |
+| [Engineering Hardening Roadmap](engineering/hardening-roadmap.md) | 工程加固过程（Stage A→F）；登录/多租户按 ADR-0013 不做 |
+| [Hardening Baseline](engineering/hardening-baseline.md) | Phase 0 冻结快照：这个版本实际是什么状态 |
 
 ### planning/ — 何时
 
 | 文档 | 说明 |
 |----------|-------------|
-| [Next Tasks](planning/Next-Tasks.md) | 当前工程 backlog（创造层 v1 已闭环；M1–M3 已落地；长篇导入验收已通过；I3 Organization 待晋级证据；Phase 3 稍后） |
+| [Next Tasks](planning/Next-Tasks.md) | 工程轨道快照（从属于产品宪法，不是「下一步做什么」） |
 | [Implementation Plan](planning/Implementation-Plan.md) | 分阶段路线图与实时进度勾选 |
 | [Development Log](planning/Development-Log.md) | 逐次修改的开发记录（每次提交同步追加） |
 | [Memory / Novel / Roleplay 设计](planning/Memory-Novel-Roleplay-Design.md) | 分层记忆、小说导入、时间锚定扮演 |
@@ -120,7 +128,7 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 
 | 文档 | 说明 |
 |----------|-------------|
-| [Architecture Principles](architecture/architecture-principles.md) | 长期架构宪法，约束后续所有 ADR 与 RFC |
+| [Architecture Principles](architecture/architecture-principles.md) | 长期**架构**宪章，约束领域契约与 ADR；不覆盖产品宪法的 Journey 验收 |
 | [ADR Guide](architecture/adr-guide.md) | 何时、如何记录架构决策（[ADR index](architecture/adr/README.md)） |
 | [RFC Guide](architecture/rfc-guide.md) | 重大变更的提案、评审、风险、迁移与验收流程 |
 | [Entity + State + Timeline + Track](architecture/entity-state-timeline-track.md) | Entity State 历史、Presentation-led Timeline、可变 World Time 维度、语义 Tracks，以及分阶段落地 |
@@ -185,12 +193,12 @@ Zivith 走另一条路：每一件创作产物都是持久的、可编辑的、�
 | Track I — IP Core world entities | I1 / I2 落地 | WorldEvent（ADR-0011）与 Relationship（ADR-0012）已入 domain contract；Organization 待真实项目证据 |
 | Track J — Creator Chat | **已完成** | 世界优先的持续对话创作面，应用默认页 `/`，无登录（ADR-0010 修订 / ADR-0013）；流式 SSE + 冲突检测 + 主动引导 v1；历史栏世界/角色 Tab（2026-08-30） |
 | Track K — World-first UI | **已完成 v1** | Studio 为 IDE 壳（图标活动栏，主画布 `/world`，2026-09-01）；项目根仍是故事列表；`/world` 三栏工作区（可拖分栏、轴标签抽稀，2026-08-30）+ Inspector 可编辑；世界观 Chat→Studio 闭环；见 UI Information Architecture |
-| Track M — Memory / Novel / Roleplay | **M1–M3 已落地** | 分层记忆（ADR-0014）；小说导入批量预授权写入 + 整体撤销（ADR-0015）；时间锚定扮演，复用 Creator Chat 消息层、不反写世界实体。用户默认读者，可改选角色卡或新建自己 |
+| Track M — Memory / Novel / Roleplay | **M1–M3 工程 v1** | 分层记忆（ADR-0014）；小说导入批量预授权写入 + 整体撤销（ADR-0015）；时间锚定扮演。**产品宪法：** 扮演可产生需确认的世界变化；写世界仍是 Journey E 缺口，不是「永不反写」 |
 | Phase 3–5 | Not started | 生成生产化，在 IP Core 之后重新排序（ADR-0008） |
 
 **仓库：** 活跃 monorepo（`apps/web`、`apps/api`、`apps/desktop`、`packages/*`）。  
 **策略：** B-Line — 先 Agent 管线；真 SiliconFlow 路径已在 Track G 验证。自 2026-07-31 起 IP Core 优先；2026-08-04 创造层优先（分支 `feat/creator-layer-first`，2026-08-16 合并进 `main`）。  
-**近期焦点：** [Next Tasks](planning/Next-Tasks.md) — 阶段 D Electron 工作区路径已落地（ADR-0016，2026-09-02）。Track W（把世界写成文件夹文件）未开始，须另开计划。I3 Organization 仍需晋级证据，不插队。
+**近期焦点：** [产品宪法](product/Product-Constitution.md) 的核心 Journey。工程快照见 [Next Tasks](planning/Next-Tasks.md)。上一份 P0 总任务书未再次启用前不按其顺序插队。
 
 ---
 

@@ -16,6 +16,7 @@ export default tseslint.config(
       'apps/api/scripts/**',
       'apps/api/vitest.config.ts',
       'apps/web/vitest.config.ts',
+      'experiments/cosmos/vite.config.ts',
     ],
   },
   eslint.configs.recommended,
@@ -44,7 +45,7 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    files: ['**/*.{test,spec}.{ts,tsx}'],
+    files: ['**/*.{test,spec}.{ts,tsx}', '**/test/helpers/**/*.ts'],
     languageOptions: {
       globals: globals.vitest,
     },

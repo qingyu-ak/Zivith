@@ -11,3 +11,16 @@ export {
   type RecordEntityChangeInput,
   type RecordEntityChangeResult,
 } from './record-entity-change.js';
+export {
+  ensureAssetBaseline,
+  historyEntityTypeForAsset,
+  recordAssetHistory,
+  type RecordAssetHistoryInput,
+  type WorldAssetType,
+} from './record-asset-change.js';
+export {
+  entityRevisionDto,
+  getEntityRevision,
+  listEntityRevisions,
+  type EntityRevisionDTO,
+} from './entity-revisions.js';

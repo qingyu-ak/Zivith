@@ -7,6 +7,14 @@
 - **Reversibility:** Reversible
 - **Source RFC:** [IP World Model Repositioning RFC](../rfc/IP-World-Model-Repositioning-RFC.md)
 
+## Product Constitution overlay（2026-09-16）
+
+[产品宪法](../../product/Product-Constitution.md) 覆盖本 ADR 的**产品完成定义**，不废止围栏：
+
+- **仍有效：** 写库必须提案并经用户确认；对话记录不是世界本身；产物默认 `draft`。
+- **不再有效作为完成标准：** 「扮演路径不得产生世界变化」。宪法 Journey C/E 要求与角色对话可以产生记忆 / 事件 / 关系 / 世界状态，确认后写入 Studio 可见。
+- **实现现状：** 扮演仍只沉淀记忆，这是缺口，不是本 ADR 要永久禁止的行为。扮演写世界必须走与世界构建相同的确认围栏。
+
 ## Revision
 
 2026-08-04 按「创造层优先」实现计划修订：Creator Chat 从「有终点的引导向导」改为 **Codex 风格持续对话 agent**——打开应用即进入（`/`），无登录门禁，对话围绕「世界」持续进行，确认提案即自动落库。本修订与下列治理变更同批生效：

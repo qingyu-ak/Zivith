@@ -42,6 +42,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Failed to activate the package manager.' }
 & pnpm install
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
 
+# ADR-0017 V1: 语音模型尽力而为下载(≈190MB, sha256 校验);失败不阻塞 setup,
+# 语音输入保持禁用(可稍后重跑 `node scripts/voice-model.mjs`)。
+& node scripts/voice-model.mjs
+if ($LASTEXITCODE -ne 0) {
+    Write-Host 'Voice model download failed; voice input stays disabled (rerun: node scripts/voice-model.mjs).'
+}
+
 & docker compose up -d --wait postgres redis minio
 if ($LASTEXITCODE -ne 0) { throw 'Infrastructure services failed to start.' }
 

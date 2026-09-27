@@ -3,11 +3,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { navigationHistoryFor } from '@/lib/navigation-history';
+import { isNavOverlay } from '@/lib/nav-overlay';
 import { IconArrowLeft, IconArrowRight, IconSidebar } from './nav-icons';
+import { DesktopWindowControls } from './desktop-window-controls';
 
 /**
  * Chat 与 Studio 共用顶栏（Electron 里就是窗口标题栏）。
- * 两边各有一套会话级路径栈（surface 分栈）：换壳跳转不把对岸页面推进当前栈。
+ * 前进 / 后退走全局浏览栈，从对话进设置或帮助后能回到原对话。
  */
 export function TopBar({
   surface,
@@ -40,7 +42,10 @@ export function TopBar({
   }, [locationKey, surface]);
 
   function goBack() {
-    const target = navigationHistoryFor(surface).back();
+    const history = navigationHistoryFor(surface);
+    const target = isNavOverlay(history.current)
+      ? history.backLeaving(isNavOverlay)
+      : history.back();
     if (target) router.push(target);
   }
 
@@ -51,10 +56,9 @@ export function TopBar({
 
   return (
     <header
-      className="sticky top-0 z-40 flex h-11 shrink-0 items-center gap-1 border-b border-line bg-[#f7f8fa] px-2 select-none [-webkit-app-region:drag]"
+      className="sticky top-0 z-40 flex h-11 w-full shrink-0 items-center gap-1 border-b border-line bg-[var(--z-chrome)] pl-2 select-none [-webkit-app-region:drag]"
       style={{
         paddingLeft: 'max(0.5rem, env(titlebar-area-x, 0.5rem))',
-        width: 'env(titlebar-area-width, 100%)',
         height: 'env(titlebar-area-height, 2.75rem)',
       }}
     >
@@ -86,8 +90,9 @@ export function TopBar({
       ) : null}
       <span className="flex-1" />
       {right ? (
-        <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">{right}</div>
+        <div className="flex items-center gap-1 pr-1 [-webkit-app-region:no-drag]">{right}</div>
       ) : null}
+      <DesktopWindowControls />
     </header>
   );
 }

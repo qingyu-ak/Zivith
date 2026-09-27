@@ -12,6 +12,83 @@
 
 ---
 
+## 2026-09-21 · c58e82a · feat(chat) · 角色感、群聊再开、扮演角色刻度回退
+
+收完 09-16 积压 4，并修 Journey D 走查里挡住闭环的洞。群聊提示词把角色卡「个性」提前成说话锁，每拍最多一个括号动作且禁用近期动作，空拍不再把长亲历当讲义。归档后再点「开始群聊」不再 404（死线程关掉、`force_new`）。World Builder 同一条 event_order_collision 不再每轮复述。扮演侧边横条可回退到角色句（头指针 + 抑制 + 软删本场写入）；Studio Agent 仍只能回退用户句。D 主路径 2.1–2.5 已实测。未改：已写入事件再提会再出卡；免 Docker。
+
+- **feat(api)** `character-voice.ts` `buildVoiceLock` / `clampStageDirections`；`canRollbackToMessage`；归档时关闭 `RoleplayThread`；`force_new`；`unreportedConflicts`；重试 `lastMessageForTurn`
+- **feat(web)** 群聊启动一律 `forceNew`；死 `thread_id` 不再复用
+- **test** `character-voice` / `group-chat-flow` / `conversation-rollback` / `conflict-detector` / `workspace`
+- **docs** `task-s25-character-voice.md`、`task-s25-character-tick-rollback.md`、`human-walk-journey-de.md`
+- 模块：roleplay / creator-chat / world-builder / conversation-rollback
+
+## 2026-09-21 · e41650a · feat(chat) · 群聊拍间 3.5s、侧面刻度、扮演 AI 接管
+
+落地 2026-09-16 群聊实测积压的前三项（Journey D）。拍间留白改为上一句上屏后再等 3.5 秒（用户开口后的第一句不拖）。Chat / 扮演每句对白一条右侧竖条，悬停展示说话人与摘要，点选回退；Studio Agent 仍只给用户句打点。用户「你扮演」为书中角色时可点「AI 接管」，生成句以 `role=user` 写入该角色；「我来演」或打字接回。读者身份无此按钮。剩「角色感不强」未做。
+
+- **feat(web)** `GROUP_BEAT_MS = 3500`；`conversation-ticks-rail.tsx`；Chat `dialogueTicks` / Agent `userTicks`；`AI 接管` / `我来演`
+- **feat(api)** `ghostwrite`：空内容、说话人为 `user_character_asset_id`，落库 `role=user`；空拍不再把上一句用户（含代打）当「读者沉默」
+- **test** api `group-chat-flow` / `group-continue` / `roleplay-agent`；web `group-chat-rhythm` / `conversation-ticks`
+- **docs** `task-s25-ai-takeover.md`、`next-session-2026-09-16.md`
+- 模块：roleplay / creator-chat / studio-agent-panel
+
+## 2026-09-16 · 927b49b · feat(studio) · 新建世界到群聊一直说入库；实测积压留到下次
+
+从扮演世界变化之后的工作区一次入库：新建世界 / TXT / 第一个角色、按世界时间记得与交谈三层、群聊 v1（分人认知、暂停/插话/用户句回退）以及互聊节奏、「让他们一直说」、空拍自己找话题。产品所有者实测问题（互聊太快、角色句回退与侧面竖条、扮演中途 AI 接管、角色感）记在 [next-session-2026-09-16.md](next-session-2026-09-16.md)，下次先出修改计划。人工 Journey D/E 走查仍缺。
+
+- **feat(api,web)** 群聊、回退、记忆窗口、新建世界与角色
+- **docs** `task-s25-*`、`next-session-2026-09-16.md`
+- 模块：roleplay / creator-chat / memory / novel-import / prisma group_chat_rollback
+
+## 2026-09-13 · 23b0c7e · docs · 工程加固冻结基线纳入 Track V
+
+用户拍板 Track V 进冻结。基线 HEAD 含 `7900f7e`（语音）与 `c6d2157`（导入记忆可编辑）。Stage A 仍等冻结文档入库后开。
+
+- 模块：`hardening-roadmap.md`、`hardening-baseline.md`、`Next-Tasks.md`
+
+## 2026-09-13 · c6d2157 · feat(web,api) · 导入角色的记忆可改可增
+
+小说导入后右侧「TA 记得什么」短事实原先只能删除。补 PATCH/POST 记忆原子，角色档案与记忆面板可编辑、可新增；角色卡按钮改为「编辑角色卡」，避免和记忆编辑挤在一起。
+
+- **feat(api)** `PATCH /memory/atoms/:id`、`POST /memory/projects/:id/atoms`
+- **feat(web)** `character-archive.tsx` / `memory-panel.tsx`
+- 模块：memory 路由与服务、Inspector 角色档案
+
+## 2026-09-13 · 7900f7e · feat(voice) · 本地流式听写（ADR-0017 Track V）
+
+Creator Chat 与 Studio Agent 输入条增加本机 sherpa-onnx 流式听写：音频经 AudioWorklet → 回环 WebSocket → API 适配器，零持久化、失败不回退云端。V0 实测后改用标准版双语 zipformer（int8 ≈190MB）。纳入工程加固冻结基线。
+
+- **feat(api)** `ports/stt.ts`、`adapters/sherpa-stt.ts`、`contexts/voice/`、`routes/voice.ts`
+- **feat(web)** 麦克风按钮、worklet、转写插入输入框（发送前可编辑）
+- **feat(desktop)** 仅对本应用 origin 放行 `media`
+- **chore** `scripts/voice-model.mjs` sha256 供给；`.voice-models/` gitignore
+- 模块：voice 适配器 / 路由 / chat-composer / studio-agent-panel / main.cjs
+
+## 2026-09-12 · 243e03a · fix(desktop) · 修复「桌面端打不开」：隐形窗口不再霸占单实例锁
+
+用户桌面端无法打开：屏幕无窗口但残留 4 个 Zivith.exe 持有单实例锁，再次双击时新进程 `app.quit()`、旧实例 `second-instance` 只对 `show:false` 的隐形窗口做 `focus()`，毫无效果。根因是 `mainWindow.loadURL(WEB_URL)` 被 `void` 吞掉：web 编译期加载失败后窗口永不 `ready-to-show`，进程带着隐形窗口常驻。修复：`loadMainWindowUrl` 失败重试（5 次每次 2s），仍失败强制 `show()` + 错误弹窗，保证窗口可见可关闭；`second-instance` 增加对不可见窗口的 `show()`。现场处理：taskkill 僵尸实例后经 Zivith.vbs 重启，窗口正常显示并获焦。
+
+- **fix(desktop)** `apps/desktop/src/main.cjs`
+- 回归验证：node --check 语法通过；prettier 全绿；实机重启后窗口出现（list_apps 确认 Zivith active）
+
+## 2026-09-12 · f055390 · fix(api,web) · 世界身份保护：重绑定 / 运行副本 / 导入收回
+
+审查 30b36b9 的四个必修项。**H1**：`openWithRebind` 先检查 `workspace.json`（§19 worldId 校验后再绑路径）——目标文件夹属于本地存活/归档的其他世界时拒绝（`WORLD_IDENTITY_CONFLICT`，绝不覆盖其身份文件）；外来孤儿 worldId 允许显式重绑（§18.3 [重新绑定]）；损坏标记拒绝（走 §18.2）；无标记文件夹允许绑定（无可破坏身份，是找回丢失标记世界的唯一入口）。**H4**：孤儿「运行副本」沿用文件里的稳定 worldId（`createWorldProject` 支持显式 id），不再新造 UUID 回写 workspace.json。**H3**：§18.1 对话改走 `/world/folders/open` + `on_missing=import`，由服务端收回已有绑定（含归档）或导入新世界，不再被 create 的 `WORLD_PATH_CONFLICT` 卡死。**H2**：新建项目表单增加可选世界文件夹（桌面端，走 `/world/folders/create`，§7）；未绑定项目卡增加「绑定文件夹」。附带：复制文件夹抢占 currentPath 时报 `WORLD_IDENTITY_CONFLICT` 需显式选择；studio 菜单栏打开失败弹出原因不再静默跳转。
+
+- **fix(api)** `apps/api/src/contexts/world/workspace.ts`（rebind 门禁 / 孤儿沿用 worldId / 副本冲突检测）
+- **fix(web)** `apps/web/lib/world-folder.ts`（§18.1 走 import）、`projects/page.tsx`（§7 表单 + 绑定入口）、`studio-menu-bar.tsx`
+- **test** api workspace 33 例（+4：重绑定三态门禁、副本冲突）；web world-folder 9 例
+- 回归验证：turbo typecheck 6/6；test 全绿（api 265+1 skipped、web 137、domain 58）；eslint / prettier 全绿
+
+## 2026-09-12 · 30b36b9 · feat(api,web) · 世界文件夹身份 V1（world-folder-v1 设计落地）
+
+按 [world-folder-v1.md](world-folder-v1.md) 把 Track W1 的临时标记升级为 V1 规范：`.zivith/workspace.json` 写入 `format/formatVersion/worldId/createdAt/zivith.minVersion`（兼容读取旧 `{version,id,name}`）；`initializeWorldFolder` 建 `.zivith/` + `world/ characters/ locations/ stories/ scenes/ sources/ assets/{images,audio,video}` 基础目录（幂等、失败严格报错）。新增 `createWorldInFolder`（§7 创建：文件夹检查 → 初始化 → 数据库 World 同 worldId，初始化失败补偿删行）。`openWorldFolder` 不再静默降级（§18）：默认对 `NOT_A_ZIVITH_WORLD` / `WORKSPACE_CORRUPT` / `WORLD_NOT_FOUND` 明确报错，由前端 inspect → 确认对话框 → `on_missing/on_corrupt/on_orphan/rebind_project_id` 显式选择；移动/改名/换盘符仍按 worldId 重绑（§9），归档世界重新打开自动恢复；路径被另一项目绑定时报 `WORLD_IDENTITY_CONFLICT`（§18.4，不自动合并）。路由新增 `/world/folders/inspect`、`/world/folders/create`，`/world/folders/open` 支持选项；`GET /projects` 带 `workspace_exists`，`DELETE /projects/:id/workspace` 解绑（§19）。Web 端 `lib/world-folder.ts` 统一流程接入 projects 页 / studio 菜单栏 / chat 面板，项目卡展示「当前文件夹不存在 → 重新定位 / 移除本机绑定」。设计文档入库为 `docs/planning/world-folder-v1.md`。
+
+- **feat(api)** `apps/api/src/contexts/world/workspace.ts`（核心服务重写）、`apps/api/src/routes/world.ts`、`apps/api/src/routes/resources.ts`
+- **test(api)** `apps/api/test/workspace.test.ts` 重写扩至 29 例：spec 格式/旧格式兼容/损坏/基础目录/创建补偿/孤儿/冲突/重绑定/移动改名重绑定/不静默创建
+- **feat(web)** `apps/web/lib/world-folder.ts`（+11 例测试）、`projects/page.tsx`、`studio-menu-bar.tsx`、`chat-panel.tsx`、`lib/types.ts`
+- 回归验证：turbo typecheck 6/6；test 全绿（api 261+1 skipped POSIX-only、web 139、domain 58）；eslint / prettier 全绿
+
 ## 2026-09-12 · d0cd17a · fix(api) · SSE flush 类型与 Node ServerResponse 对齐
 
 `flushHttpStream` 参数写成弱类型 `{ flush?: () => void }`，`reply.raw`（ServerResponse）无法赋入。改成 `object` 再探测 flush，桌面壳及时刷出 SSE 的行为不变。
