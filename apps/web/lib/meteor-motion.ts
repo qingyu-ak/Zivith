@@ -81,6 +81,12 @@ export interface MeteorStarPose {
   durationScale: number;
   travelPx: number;
   driftPx: number;
+  /** Perpendicular bow, in px. Zero keeps a straight slope. */
+  arcX: number;
+  arcY: number;
+  /** 0–1. Dimmer stars stay quieter than the bright ones. */
+  glow: number;
+  tailPx: number;
 }
 
 function unit(seed: number): number {
@@ -93,18 +99,32 @@ function unit(seed: number): number {
 export function meteorCapsuleStars(count: number, seed = 1): MeteorStarPose[] {
   return Array.from({ length: count }, (_, index) => {
     const along = unit(seed * 17 + index * 13 + 1);
+    const band = index % 3;
+    const left =
+      band === 0 ? 74 + along * 24 : band === 1 ? 42 + along * 30 : 12 + along * 28;
     const wait = unit(seed * 29 + index * 19 + 5);
     const size = unit(seed * 41 + index * 7 + 3);
     const pace = unit(seed * 53 + index * 11 + 9);
-    const run = 20 + unit(seed * 23 + index * 31 + 2) * 8;
+    const glow = unit(seed * 61 + index * 37 + 4);
+    const tail = unit(seed * 71 + index * 19 + 6);
+    const run = 40 + unit(seed * 23 + index * 31 + 2) * 6;
+    const drop = meteorSlopeDrop(run);
+    const arc = index === (seed % Math.max(count, 1));
+    const bow = arc ? 3.2 : 0;
+    const sin = Math.sin((LOGO_METEOR_DEG * Math.PI) / 180);
+    const cos = Math.cos((LOGO_METEOR_DEG * Math.PI) / 180);
     return {
-      left: `${16 + along * 76}%`,
+      left: `${left}%`,
       top: '0%',
       delayMs: Math.round(wait * 1600),
-      sizePx: 1.5 + size * 2.6,
-      durationScale: 0.65 + pace * 0.8,
+      sizePx: 2.2 + size * 1.4,
+      durationScale: 0.82 + pace * 0.28,
       travelPx: Math.round(run),
-      driftPx: Math.round(meteorSlopeDrop(run)),
+      driftPx: Math.round(drop),
+      arcX: Math.round(-bow * sin * 10) / 10,
+      arcY: Math.round(-bow * cos * 10) / 10,
+      glow: 0.86 + glow * 0.14,
+      tailPx: Math.round(6 + tail * 18),
     };
   });
 }
@@ -123,6 +143,10 @@ export function meteorTrackStars(count: number, seed = 1): MeteorStarPose[] {
       durationScale: 0.75 + unit(seed + index * 59) * 0.6,
       travelPx: 0,
       driftPx: 0,
+      arcX: 0,
+      arcY: 0,
+      glow: 1,
+      tailPx: 0,
     };
   });
 }
@@ -141,6 +165,10 @@ export function meteorStarLayout(count: number): MeteorStarPose[] {
       durationScale: 1,
       travelPx: 0,
       driftPx: 0,
+      arcX: 0,
+      arcY: 0,
+      glow: 1,
+      tailPx: 0,
     };
   });
 }
@@ -148,7 +176,7 @@ export function meteorStarLayout(count: number): MeteorStarPose[] {
 export function stopParticleCount(index: number, count: number, reduced: boolean): number {
   if (reduced) return 0;
   const t = count <= 1 ? 1 : index / Math.max(1, count - 1);
-  return Math.round(2 + t * 8);
+  return Math.round(3 + t * 10);
 }
 
 export function meteorSettleMs(): number {

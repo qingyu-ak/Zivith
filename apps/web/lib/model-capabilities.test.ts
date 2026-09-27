@@ -47,7 +47,7 @@ describe('model capabilities', () => {
     expect(modelEffortStops('Qwen/Qwen3.6-27B')).toHaveLength(3);
     expect(starBrightness(0, 5, false)).toBeLessThan(starBrightness(4, 5, false));
     expect(starBrightness(2, 5, true)).toBeGreaterThan(starBrightness(2, 5, false));
-    expect(stopFill(0, 4)).toBe('0%');
+    expect(stopFill(0, 4)).toBe('22px');
     expect(stopFill(3, 4)).toBe('100%');
   });
 

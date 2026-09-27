@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import { MeteorField, usePrefersReducedMotion } from '@/components/brand/meteor-field';
 import { IconBolt, IconBrain, IconCheck, IconChevron } from '@/components/nav-icons';
 import {
@@ -85,6 +85,16 @@ export function ModelEffortPicker({
   const bright = starBrightness(safeStop, stops.length, thinkingEnabled);
   const starCount = stopParticleCount(safeStop, stops.length, reduced);
   const topStop = stops.length > 0 && safeStop === stops.length - 1;
+  const [showHint, setShowHint] = useState(false);
+  useEffect(() => {
+    if (!topStop) {
+      setShowHint(false);
+      return;
+    }
+    setShowHint(true);
+    const timer = window.setTimeout(() => setShowHint(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [topStop]);
 
   return (
     <div className="relative">
@@ -147,21 +157,27 @@ export function ModelEffortPicker({
                     </button>
                   ) : null}
                 </div>
-                <div className="min-w-0 flex-1 text-center">
-                  <p
-                    className="text-[15px] font-medium leading-5"
-                    style={{ color: topStop ? '#7c5cff' : METEOR_BLUE }}
-                  >
-                    {stopLabel}
+                <div className="relative min-w-0 flex-1 text-center">
+                  <p className={`h-5 text-[15px] font-medium leading-5 ${showHint ? 'invisible' : ''}`}>
+                    <span style={{ color: topStop ? '#7c5cff' : METEOR_BLUE }}>{stopLabel}</span>
                   </p>
                   <button
                     type="button"
-                    className="mt-0.5 inline-flex max-w-full items-center gap-0.5 text-[13px] text-zinc-500 hover:text-zinc-800"
+                    className={`mt-0.5 inline-flex max-w-full items-center gap-0.5 text-[13px] text-zinc-500 hover:text-zinc-800 ${
+                      showHint ? 'invisible' : ''
+                    }`}
+                    tabIndex={showHint ? -1 : 0}
+                    aria-hidden={showHint}
                     onClick={() => onView('model')}
                   >
                     <span className="truncate">{modelLabel}</span>
                     <IconChevron className="size-3 -rotate-90" />
                   </button>
+                  {showHint ? (
+                    <p className="effort-hint pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2">
+                      这一档会更快的消耗词元
+                    </p>
+                  ) : null}
                 </div>
                 {supportsThinking ? (
                   <button
@@ -180,9 +196,32 @@ export function ModelEffortPicker({
                 )}
               </div>
               <div className="relative mt-3">
-                <div className="effort-rail" data-effort={stopEffort} data-top={topStop ? 'true' : 'false'}>
+                <div
+                  className="effort-rail"
+                  data-effort={stopEffort}
+                  data-top={topStop ? 'true' : 'false'}
+                  data-thinking={thinkingEnabled ? 'on' : 'off'}
+                >
                   <div className="effort-rail-fill" style={{ width: stopFill(safeStop, stops.length) }} />
-                  {topStop ? (
+                  {topStop ? null : (
+                    <div className="effort-stops">
+                      {stops.map((item, index) => (
+                        <span
+                          key={`${item.label}-${index}`}
+                          className={index <= safeStop ? 'is-on' : undefined}
+                          style={{
+                            left:
+                              stops.length <= 1
+                                ? '11px'
+                                : `calc(11px + (100% - 22px) * ${index / (stops.length - 1)})`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {topStop ? (
+                  <div className="pointer-events-none absolute -top-1.5 right-0 bottom-0 left-0 z-[4] overflow-hidden">
                     <MeteorField
                       effort={stopEffort}
                       fast={fast}
@@ -193,20 +232,8 @@ export function ModelEffortPicker({
                       seed={safeStop * 13 + (thinkingEnabled ? 5 : 1)}
                       particles={starCount}
                     />
-                  ) : (
-                    <div className="effort-stops">
-                      {stops.map((item, index) => (
-                        <span
-                          key={`${item.label}-${index}`}
-                          className={index <= safeStop ? 'is-on' : undefined}
-                          style={{
-                            left: `${stops.length <= 1 ? 0 : (index / (stops.length - 1)) * 100}%`,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ) : null}
                 <input
                   className="meteor-effort-slider"
                   type="range"

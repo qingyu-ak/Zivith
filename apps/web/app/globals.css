@@ -38,8 +38,14 @@ select {
   }
 
   .meteor-star,
-  .meteor-star-slot {
+  .meteor-star-slot,
+  .meteor-flight {
     display: none !important;
+  }
+
+  .effort-rail[data-thinking='on'],
+  .effort-rail[data-thinking='on'] .effort-rail-fill {
+    animation: none !important;
   }
 }
 
@@ -87,9 +93,8 @@ select {
   position: absolute;
   inset: 0;
   z-index: 1;
-  width: auto;
-  height: auto;
-  overflow: hidden;
+  overflow: visible;
+  pointer-events: none;
   color: #ffffff;
 }
 
@@ -124,16 +129,76 @@ select {
   animation: zivith-star-meteor var(--meteor-duration) linear infinite;
 }
 
-.meteor-field[data-size='capsule'] .meteor-star {
+.meteor-flight {
+  position: absolute;
+  width: 0;
+  height: 0;
+  animation: zivith-capsule-pass var(--meteor-duration) cubic-bezier(0.4, 0.22, 0.36, 0.9) infinite;
+}
+
+.meteor-flight.is-arc {
+  animation-name: zivith-capsule-arc;
+}
+
+.meteor-head {
+  position: absolute;
   border-radius: 999px;
-  clip-path: none;
   background: #fff;
-  filter: none;
-  box-shadow:
-    2px -2.2px 0 rgba(255, 255, 255, 0.55),
-    4px -4.4px 0.5px rgba(255, 255, 255, 0.28),
-    6.5px -7.2px 1px rgba(255, 255, 255, 0.12);
-  animation: zivith-capsule-pass var(--meteor-duration) linear infinite;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.95);
+}
+
+.meteor-tail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--tail, 14px);
+  height: 2.5px;
+  border-radius: 999px;
+  transform: translateY(-50%) rotate(-48deg);
+  transform-origin: left center;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.28) 42%,
+    transparent 100%
+  );
+}
+
+@keyframes zivith-capsule-pass {
+  0% {
+    opacity: 0;
+    transform: translate3d(10px, -6px, 0);
+  }
+  22% {
+    opacity: var(--star-bright, 1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--star-travel, -24px), var(--star-drift, 26px), 0);
+  }
+}
+
+@keyframes zivith-capsule-arc {
+  0% {
+    opacity: 0;
+    transform: translate3d(10px, -6px, 0);
+  }
+  18% {
+    opacity: var(--star-bright, 1);
+  }
+  46% {
+    opacity: var(--star-bright, 1);
+    transform: translate3d(
+      calc(var(--star-travel) * 0.5 + var(--arc-x, 0px)),
+      calc(var(--star-drift) * 0.42 + var(--arc-y, 0px)),
+      0
+    );
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--star-travel, -22px), var(--star-drift, 24px), 0);
+  }
 }
 
 .meteor-field[data-fast='on'] .meteor-star {
@@ -191,20 +256,6 @@ select {
   }
 }
 
-@keyframes zivith-capsule-pass {
-  0% {
-    opacity: 0;
-    transform: translate3d(6px, -10px, 0) scale(0.7);
-  }
-  14% {
-    opacity: var(--star-bright, 1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(var(--star-travel, -22px), var(--star-drift, 24px), 0) scale(0.85);
-  }
-}
-
 .meteor-field[data-size='slider'] .meteor-star {
   border-radius: 999px;
   clip-path: none;
@@ -212,6 +263,76 @@ select {
   filter: none;
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
   animation: zivith-star-twinkle var(--meteor-duration) ease-in-out infinite;
+}
+
+.effort-hint {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  background-image: linear-gradient(
+    100deg,
+    #7c5cff 0%,
+    #7c5cff 42%,
+    #ffffff 50%,
+    #7c5cff 58%,
+    #7c5cff 100%
+  );
+  background-size: 220% 100%;
+  background-position: 120% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: effort-hint-sheen 0.95s ease-out 1;
+}
+
+@keyframes effort-hint-sheen {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
+}
+
+.effort-rail[data-thinking='on'] {
+  animation: effort-halo-ring 3.8s ease-in-out infinite;
+}
+
+.effort-rail[data-thinking='on'] .effort-rail-fill {
+  background-image: linear-gradient(
+    100deg,
+    #4f8cff 0%,
+    #6d78ff 28%,
+    #b7a6ff 46%,
+    #7a6cff 62%,
+    #4f8cff 100%
+  );
+  background-size: 220% 100%;
+  animation: effort-halo 3.8s ease-in-out infinite;
+}
+
+@keyframes effort-halo {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes effort-halo-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(124, 92, 255, 0);
+  }
+  50% {
+    box-shadow: 0 0 14px 1px rgba(124, 92, 255, 0.28);
+  }
 }
 
 .effort-rail {
@@ -223,10 +344,12 @@ select {
 }
 
 .effort-rail-fill {
-  position: relative;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  height: auto;
   overflow: hidden;
-  border-radius: 999px;
   background: linear-gradient(90deg, #4f8cff 0%, #6a78ff 52%, #8b63f6 100%);
   transition: width 180ms ease;
 }

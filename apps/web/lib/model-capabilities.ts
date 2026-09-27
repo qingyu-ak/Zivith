@@ -76,8 +76,9 @@ export function clampStopIndex(index: number, count: number): number {
 }
 
 export function stopFill(index: number, count: number): string {
-  if (count <= 1 || index <= 0) return '0%';
-  return `${(index / (count - 1)) * 100}%`;
+  if (count <= 1 || index <= 0) return '22px';
+  if (index >= count - 1) return '100%';
+  return `max(22px, ${(index / (count - 1)) * 100}%)`;
 }
 
 /** Higher gears glow more. Deep thinking adds another step of brightness. */

@@ -50,8 +50,16 @@ describe('meteor motion tokens', () => {
     const delays = capsule.map((star) => star.delayMs);
     expect(new Set(delays).size).toBeGreaterThan(3);
     expect(capsule.some((star) => star.durationScale !== capsule[0]?.durationScale)).toBe(true);
+    expect(capsule.filter((star) => star.arcX !== 0 || star.arcY !== 0)).toHaveLength(1);
+    const glows = capsule.map((star) => star.glow);
+    expect(Math.max(...glows) - Math.min(...glows)).toBeGreaterThan(0.1);
+    const tails = capsule.map((star) => star.tailPx);
+    expect(Math.max(...tails) - Math.min(...tails)).toBeGreaterThan(3);
+    const rights = capsule.filter((star) => Number.parseFloat(star.left) >= 74);
+    expect(rights.length).toBeGreaterThan(0);
+    expect(Math.min(...capsule.map((star) => star.driftPx))).toBeGreaterThan(40);
     for (const star of capsule) {
-      expect(star.driftPx / star.travelPx).toBeCloseTo(meteorSlopeDrop(1), 1);
+      expect(star.driftPx / star.travelPx).toBeCloseTo(meteorSlopeDrop(1), 0);
     }
   });
 

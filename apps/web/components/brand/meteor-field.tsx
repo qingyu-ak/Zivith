@@ -117,25 +117,46 @@ export function MeteorField({
     >
       {size === 'status' ? <MeteorMark className="meteor-mark" /> : null}
       {!reduced &&
-        stars.map((star, index) => (
-          <span
-            key={index}
-            className="meteor-star-slot"
-            style={{ left: star.left, top: star.top }}
-          >
+        stars.map((star, index) =>
+          size === 'capsule' ? (
             <span
-              className="meteor-star"
+              key={index}
+              className={`meteor-flight${star.arcX || star.arcY ? ' is-arc' : ''}`}
               style={{
-                width: star.sizePx,
-                height: star.sizePx,
+                left: star.left,
+                top: star.top,
                 animationDelay: `${star.delayMs}ms`,
                 animationDuration: `${Math.round(duration * star.durationScale)}ms`,
                 ['--star-travel' as string]: `${-star.travelPx}px`,
                 ['--star-drift' as string]: `${star.driftPx}px`,
+                ['--arc-x' as string]: `${star.arcX}px`,
+                ['--arc-y' as string]: `${star.arcY}px`,
+                ['--tail' as string]: `${star.tailPx}px`,
+                ['--star-bright' as string]: String(star.glow),
               }}
-            />
-          </span>
-        ))}
+            >
+              <span className="meteor-tail" />
+              <span
+                className="meteor-head"
+                style={{ width: star.sizePx, height: star.sizePx }}
+              />
+            </span>
+          ) : (
+            <span key={index} className="meteor-star-slot" style={{ left: star.left, top: star.top }}>
+              <span
+                className="meteor-star"
+                style={{
+                  width: star.sizePx,
+                  height: star.sizePx,
+                  animationDelay: `${star.delayMs}ms`,
+                  animationDuration: `${Math.round(duration * star.durationScale)}ms`,
+                  ['--star-travel' as string]: `${-star.travelPx}px`,
+                  ['--star-drift' as string]: `${star.driftPx}px`,
+                }}
+              />
+            </span>
+          ),
+        )}
     </span>
   );
 }
