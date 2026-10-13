@@ -604,11 +604,12 @@ function EmptyWorldActions({ resources }: { resources: WorldResourcesDTO }) {
           existingNames={resources.entities.characters.map((item) => item.name)}
           allowTalk={false}
           compact
-          onCreated={async (character) => {
-            await reload({ silent: true });
-            const next = { kind: 'character' as const, id: character.id };
-            setSelection(next);
-            requestEdit(next);
+          onCreated={(character) => {
+            void reload({ silent: true }).then(() => {
+              const next = { kind: 'character' as const, id: character.id };
+              setSelection(next);
+              requestEdit(next);
+            });
           }}
         />
       ) : (

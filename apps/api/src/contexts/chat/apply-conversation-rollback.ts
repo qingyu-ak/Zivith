@@ -99,7 +99,7 @@ export async function applyConversationRollback(
 async function revertCreatedEntity(
   db: PrismaClient,
   entity: { kind: string; entityId: string; entityType: string; title: string },
-): Promise<'reverted' | string> {
+): Promise<string> {
   if (entity.kind === 'create_world_event' || entity.entityType === 'world_event') {
     const row = await db.worldEvent.findFirst({ where: { id: entity.entityId } });
     if (!row || row.deletedAt) return '已经不在时间线上';

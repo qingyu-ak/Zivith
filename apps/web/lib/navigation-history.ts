@@ -65,6 +65,7 @@ const appHistory = new NavigationHistory();
 export const CHAT_SURFACE = 'chat';
 export const STUDIO_SURFACE = 'studio';
 
-export function navigationHistoryFor(_surface?: string): NavigationHistory {
+export function navigationHistoryFor(surface?: string): NavigationHistory {
+  void surface;
   return appHistory;
 }

@@ -367,7 +367,9 @@ export function WorldWorkspace() {
                       focusedDimension ? isPrimaryWorldline(focusedDimension) : true
                     }
                     onClipCommit={commitClip}
-                    onCreateTrack={view === 'world' ? createFromTimeline : undefined}
+                    onCreateTrack={
+                      view === 'world' ? (kind) => void createFromTimeline(kind) : undefined
+                    }
                     onEditItem={view === 'world' ? editFromTimeline : undefined}
                     creatingKind={creatingKind}
                   />
