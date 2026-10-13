@@ -836,9 +836,14 @@ async function createRoleplayReply(
         content: response.reply,
         world,
         ingestMode: 'roleplay',
-        defaultEntity: roleplay.userCharacterAssetId
-          ? { entityType: 'character', entityId: roleplay.userCharacterAssetId }
-          : undefined,
+        ...(roleplay.userCharacterAssetId
+          ? {
+              defaultEntity: {
+                entityType: 'character',
+                entityId: roleplay.userCharacterAssetId,
+              },
+            }
+          : {}),
       });
       if (evicted.length > 0) {
         await memory.updateThreadSummary(roleplay.threadId, evicted);

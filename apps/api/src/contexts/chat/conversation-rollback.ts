@@ -2,7 +2,7 @@ export function stampAppliedEntityIds(
   raw: unknown,
   results: Array<{ kind: string; entity_id: string; entity_type: string }>,
 ): unknown[] {
-  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const list: unknown[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
   const queue = [...results];
   return list.map((item) => {
     if (!item || typeof item !== 'object') return item;

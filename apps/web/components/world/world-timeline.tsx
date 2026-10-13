@@ -145,7 +145,8 @@ function canEditOnTrack(kind: string): boolean {
 }
 
 /** 世界线是语义轨，不是剪辑软件：禁止拖块、拉长短。 */
-function canTrimClipLikeNle(_kind: string): boolean {
+function canTrimClipLikeNle(kind: string): boolean {
+  void kind;
   return false;
 }
 

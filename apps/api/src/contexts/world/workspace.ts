@@ -691,7 +691,8 @@ export function allocateWorldFolder(name: string, root = readWorldsRoot()): stri
   fs.mkdirSync(root, { recursive: true });
   const base =
     name
-      .replace(/[<>:"/\\|?*\u0000]/g, '')
+      .replace(/[<>:"/\\|?*]/g, '')
+      .replaceAll('\0', '')
       .trim()
       .slice(0, 80) || '未命名世界';
   for (let index = 1; index < 100; index += 1) {
