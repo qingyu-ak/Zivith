@@ -5,7 +5,10 @@ import {
   pickCharacterAtomsForAnchor,
   resolveAtomSourceKind,
 } from '../src/contexts/roleplay/character-cognition.js';
-import { buildRoleplaySystemPrompt, type CharacterState } from '../src/contexts/roleplay/roleplay-agent.js';
+import {
+  buildRoleplaySystemPrompt,
+  type CharacterState,
+} from '../src/contexts/roleplay/roleplay-agent.js';
 
 describe('characterAtomVisibleAtAnchor', () => {
   it('always includes manual facts', () => {

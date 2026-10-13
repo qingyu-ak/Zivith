@@ -178,7 +178,12 @@ export async function sendRoleplayTurn(
   onEvent: (event: string, data: unknown) => void,
   effort?: 'fast' | 'balanced' | 'deep',
   signal?: AbortSignal,
-  options?: { retry?: boolean; speakerAssetId?: string; mutedAssetIds?: string[]; ghostwrite?: boolean },
+  options?: {
+    retry?: boolean;
+    speakerAssetId?: string;
+    mutedAssetIds?: string[];
+    ghostwrite?: boolean;
+  },
 ): Promise<void> {
   await postChatTurn(
     `/roleplay/threads/${roleplayThreadId}/messages`,
@@ -289,19 +294,22 @@ export async function createRoleplayThread(
   participantAssetIds?: string[],
   options?: { forceNew?: boolean },
 ): Promise<{ id: string; thread_id: string; reused: boolean }> {
-  const created = await api<{ id: string; thread_id: string; reused: boolean }>('/roleplay/threads', {
-    method: 'POST',
-    body: {
-      project_id: projectId,
-      character_asset_id: characterAssetId,
-      ...(anchoredWorldEventId ? { anchored_world_event_id: anchoredWorldEventId } : {}),
-      ...(userCharacterAssetId ? { user_character_asset_id: userCharacterAssetId } : {}),
-      ...(participantAssetIds && participantAssetIds.length >= 2
-        ? { participant_asset_ids: participantAssetIds }
-        : {}),
-      ...(options?.forceNew ? { force_new: true } : {}),
+  const created = await api<{ id: string; thread_id: string; reused: boolean }>(
+    '/roleplay/threads',
+    {
+      method: 'POST',
+      body: {
+        project_id: projectId,
+        character_asset_id: characterAssetId,
+        ...(anchoredWorldEventId ? { anchored_world_event_id: anchoredWorldEventId } : {}),
+        ...(userCharacterAssetId ? { user_character_asset_id: userCharacterAssetId } : {}),
+        ...(participantAssetIds && participantAssetIds.length >= 2
+          ? { participant_asset_ids: participantAssetIds }
+          : {}),
+        ...(options?.forceNew ? { force_new: true } : {}),
+      },
     },
-  });
+  );
   if (!created?.thread_id) throw new Error('没能打开这场对话');
   return created;
 }

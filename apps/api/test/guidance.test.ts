@@ -105,8 +105,7 @@ describe('skipGapsAnsweredThisTurn', () => {
       [
         {
           role: 'assistant',
-          content:
-            '「魔法」在东方玄幻里更像灵气、道法还是血脉？这个世界的力量从哪里来？',
+          content: '「魔法」在东方玄幻里更像灵气、道法还是血脉？这个世界的力量从哪里来？',
         },
         { role: 'user', content: '道统传承' },
       ],
@@ -144,9 +143,9 @@ describe('replyRepeatsPrevious', () => {
         { role: 'user', content: '天底下只有一条大道' },
       ]),
     ).toBe(true);
-    expect(replyRepeatsPrevious('记下了。', [{ role: 'assistant', content: repeatedDaoReply }])).toBe(
-      false,
-    );
+    expect(
+      replyRepeatsPrevious('记下了。', [{ role: 'assistant', content: repeatedDaoReply }]),
+    ).toBe(false);
   });
 });
 

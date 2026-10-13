@@ -74,7 +74,9 @@ describe('ruleSummarize', () => {
 describe('clipRollingSummary', () => {
   it('keeps a short summary intact and trims an oversized one', () => {
     expect(clipRollingSummary('此前说过怕黑。')).toBe('此前说过怕黑。');
-    const bulky = Array.from({ length: 80 }, (_, index) => `第${index}行很长的摘要内容。`).join('\n');
+    const bulky = Array.from({ length: 80 }, (_, index) => `第${index}行很长的摘要内容。`).join(
+      '\n',
+    );
     const clipped = clipRollingSummary(bulky, 40);
     expect(estimateTokens(clipped)).toBeLessThanOrEqual(40);
     expect(clipped.length).toBeLessThan(bulky.length);

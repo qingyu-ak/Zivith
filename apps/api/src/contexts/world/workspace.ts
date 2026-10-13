@@ -689,7 +689,11 @@ export function writeWorldsRoot(folder: string): string {
 /** 在默认目录下准备一个同名空文件夹。重名则加序号。已有世界文件夹不会被占用。 */
 export function allocateWorldFolder(name: string, root = readWorldsRoot()): string {
   fs.mkdirSync(root, { recursive: true });
-  const base = name.replace(/[<>:"/\\|?*\u0000]/g, '').trim().slice(0, 80) || '未命名世界';
+  const base =
+    name
+      .replace(/[<>:"/\\|?*\u0000]/g, '')
+      .trim()
+      .slice(0, 80) || '未命名世界';
   for (let index = 1; index < 100; index += 1) {
     const folderName = index === 1 ? base : `${base} ${index}`;
     const candidate = path.join(root, folderName);

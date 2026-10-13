@@ -163,10 +163,7 @@ export function IconChevron(props: IconProps) {
   );
 }
 
-export function IconBolt({
-  filled = false,
-  ...props
-}: IconProps & { filled?: boolean }) {
+export function IconBolt({ filled = false, ...props }: IconProps & { filled?: boolean }) {
   return (
     <svg
       {...base}

@@ -222,8 +222,9 @@ describe('group chat + tick rollback (mock provider)', () => {
       method: 'GET',
       url: `/api/v1/world/creator-chats/${threadId}`,
     });
-    const live = (thread.json() as { thread: { is_group: boolean }; messages: Array<{ role: string }> })
-      .messages;
+    const live = (
+      thread.json() as { thread: { is_group: boolean }; messages: Array<{ role: string }> }
+    ).messages;
     expect(thread.json()).toMatchObject({ thread: { is_group: true } });
     expect(live.filter((item) => item.role === 'user')).toHaveLength(1);
   });
@@ -274,9 +275,9 @@ describe('group chat + tick rollback (mock provider)', () => {
       method: 'GET',
       url: `/api/v1/world/creator-chats/${threadId}`,
     });
-    const user = (
-      thread.json() as { messages: Array<{ id: string; role: string }> }
-    ).messages.find((item) => item.role === 'user');
+    const user = (thread.json() as { messages: Array<{ id: string; role: string }> }).messages.find(
+      (item) => item.role === 'user',
+    );
     expect(user).toBeDefined();
 
     const rolled = await app.inject({
@@ -301,7 +302,8 @@ describe('group chat + tick rollback (mock provider)', () => {
       method: 'GET',
       url: `/api/v1/world/creator-chats/${threadId}`,
     });
-    const liveMessages = (live.json() as { messages: Array<{ id: string; role: string }> }).messages;
+    const liveMessages = (live.json() as { messages: Array<{ id: string; role: string }> })
+      .messages;
     expect(liveMessages.map((item) => item.id)).toEqual([user!.id]);
   });
 

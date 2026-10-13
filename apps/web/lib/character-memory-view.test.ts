@@ -117,7 +117,10 @@ describe('character memory inventory', () => {
 describe('compactMemoryLine', () => {
   it('keeps short important chat and truncates a verbatim dump', () => {
     expect(compactMemoryLine('林夕怕黑')).toBe('林夕怕黑');
-    const dumped = '我怕黑，晚上一个人走那条巷子的时候一定要有人陪着，还要记得带灯，否则我会停下来不敢往前。'.repeat(2);
+    const dumped =
+      '我怕黑，晚上一个人走那条巷子的时候一定要有人陪着，还要记得带灯，否则我会停下来不敢往前。'.repeat(
+        2,
+      );
     const compact = compactMemoryLine(dumped, 40);
     expect(compact.length).toBeLessThan(dumped.length);
     expect(compact.endsWith('…')).toBe(true);

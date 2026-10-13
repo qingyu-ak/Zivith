@@ -165,9 +165,9 @@ describe('draftWorldChangesByRule', () => {
       description: '林晚亲手将一封信交到雾城酒馆店主陈叔手中，陈叔收下信件并请她喝了一碗热茶。',
     };
     const names = ['林晚', '陈叔'];
-    expect(
-      contentRestatesEvent('林晚在雾城酒馆向陈叔递交了信件，并喝了热茶。', event, names),
-    ).toBe(true);
+    expect(contentRestatesEvent('林晚在雾城酒馆向陈叔递交了信件，并喝了热茶。', event, names)).toBe(
+      true,
+    );
     expect(contentRestatesEvent('林晚确认信已亲手交到陈叔手上，茶也喝了。', event, names)).toBe(
       true,
     );

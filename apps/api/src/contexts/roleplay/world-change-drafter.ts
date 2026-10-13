@@ -105,10 +105,7 @@ function titleForCompare(title: string): string {
   return title.replace(/（[^）]*）|\([^)]*\)/g, '');
 }
 
-function characterNameKeys(character: {
-  name: string;
-  aliases?: string[];
-}): string[] {
+function characterNameKeys(character: { name: string; aliases?: string[] }): string[] {
   return [character.name, ...(character.aliases ?? [])]
     .map((name) => name.trim())
     .filter((name) => name.length >= 2);

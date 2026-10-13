@@ -42,9 +42,7 @@ export function useMeteorPhase({
   const [phase, setPhase] = useState<MeteorPhase>('idle');
 
   useEffect(() => {
-    setPhase((current) =>
-      nextMeteorPhase(current, { sending, hasStream, stopped, failed }),
-    );
+    setPhase((current) => nextMeteorPhase(current, { sending, hasStream, stopped, failed }));
   }, [sending, hasStream, stopped, failed]);
 
   useEffect(() => {
@@ -136,13 +134,14 @@ export function MeteorField({
               }}
             >
               <span className="meteor-tail" />
-              <span
-                className="meteor-head"
-                style={{ width: star.sizePx, height: star.sizePx }}
-              />
+              <span className="meteor-head" style={{ width: star.sizePx, height: star.sizePx }} />
             </span>
           ) : (
-            <span key={index} className="meteor-star-slot" style={{ left: star.left, top: star.top }}>
+            <span
+              key={index}
+              className="meteor-star-slot"
+              style={{ left: star.left, top: star.top }}
+            >
               <span
                 className="meteor-star"
                 style={{

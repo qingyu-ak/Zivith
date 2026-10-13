@@ -218,7 +218,8 @@ export default function NewWorldPage() {
               </Field>
             ) : null}
             <p className="text-xs leading-5 text-zinc-500">
-              创建后会在默认目录下自动建同名文件夹，并写入 .zivith/workspace.json。默认目录和当前世界的路径可在设置 → 常规里改。
+              创建后会在默认目录下自动建同名文件夹，并写入
+              .zivith/workspace.json。默认目录和当前世界的路径可在设置 → 常规里改。
             </p>
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={creating}>

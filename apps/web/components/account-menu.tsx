@@ -11,11 +11,7 @@ import { IconGear, IconHelp, IconLogout } from './nav-icons';
 const itemClass =
   'flex items-center gap-3 px-3 py-2.5 text-sm text-[var(--z-fg-muted)] hover:bg-[var(--z-wash)] hover:text-[var(--z-fg)]';
 
-export function AccountMenu({
-  settingsHref,
-}: {
-  settingsHref: string;
-}) {
+export function AccountMenu({ settingsHref }: { settingsHref: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -79,7 +75,11 @@ export function AccountMenu({
               帮助与反馈
             </Link>
             {signedIn ? (
-              <button type="button" className={`w-full text-left ${itemClass}`} onClick={() => void logout()}>
+              <button
+                type="button"
+                className={`w-full text-left ${itemClass}`}
+                onClick={() => void logout()}
+              >
                 <IconLogout className="size-4" />
                 退出登录
               </button>

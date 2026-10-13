@@ -476,36 +476,40 @@ function registerWorldEventRoutes(app: FastifyInstance, db: PrismaClient) {
     });
   });
 
-async function forgetChatFactsForEvent(
-  db: PrismaClient,
-  event: { projectId: string; title: string; description: string | null },
-) {
-  const [characters, atoms] = await Promise.all([
-    db.asset.findMany({
-      where: { projectId: event.projectId, type: 'character', deletedAt: null },
-      select: { name: true },
-    }),
-    db.memoryAtom.findMany({
-      where: {
-        projectId: event.projectId,
-        status: 'active',
-        factType: { in: ['event', 'episodic'] },
-      },
-      select: { id: true, content: true },
-    }),
-  ]);
-  const names = characters.map((character) => character.name);
-  const ids = atoms
-    .filter((atom) =>
-      contentRestatesEvent(atom.content, { title: event.title, description: event.description }, names),
-    )
-    .map((atom) => atom.id);
-  if (ids.length === 0) return;
-  await db.memoryAtom.updateMany({
-    where: { id: { in: ids } },
-    data: { status: 'invalidated', validTo: new Date() },
-  });
-}
+  async function forgetChatFactsForEvent(
+    db: PrismaClient,
+    event: { projectId: string; title: string; description: string | null },
+  ) {
+    const [characters, atoms] = await Promise.all([
+      db.asset.findMany({
+        where: { projectId: event.projectId, type: 'character', deletedAt: null },
+        select: { name: true },
+      }),
+      db.memoryAtom.findMany({
+        where: {
+          projectId: event.projectId,
+          status: 'active',
+          factType: { in: ['event', 'episodic'] },
+        },
+        select: { id: true, content: true },
+      }),
+    ]);
+    const names = characters.map((character) => character.name);
+    const ids = atoms
+      .filter((atom) =>
+        contentRestatesEvent(
+          atom.content,
+          { title: event.title, description: event.description },
+          names,
+        ),
+      )
+      .map((atom) => atom.id);
+    if (ids.length === 0) return;
+    await db.memoryAtom.updateMany({
+      where: { id: { in: ids } },
+      data: { status: 'invalidated', validTo: new Date() },
+    });
+  }
 
   app.delete('/world-events/:id', async (request, reply) => {
     const { id } = entityParams.parse(request.params);
@@ -1428,12 +1432,18 @@ function registerCreatorChatRoutes(
   app.get('/folders/root', () => ({ path: readWorldsRoot() }));
 
   app.put('/folders/root', (request) => {
-    const body = z.object({ path: z.string().trim().min(1) }).strict().parse(request.body ?? {});
+    const body = z
+      .object({ path: z.string().trim().min(1) })
+      .strict()
+      .parse(request.body ?? {});
     return { path: writeWorldsRoot(body.path) };
   });
 
   app.post('/folders/allocate', (request) => {
-    const body = z.object({ name: z.string().trim().min(1).max(200) }).strict().parse(request.body ?? {});
+    const body = z
+      .object({ name: z.string().trim().min(1).max(200) })
+      .strict()
+      .parse(request.body ?? {});
     return { path: allocateWorldFolder(body.name) };
   });
 

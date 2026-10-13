@@ -91,9 +91,13 @@ export function extractCandidateAtoms(text: string, world: WorldContext | null):
 
 export const IMPORTANT_CHAT_MAX_CHARS = 80;
 const ROLEPLAY_ATOM_CAP = 4;
-const CHAT_FILLER = /^(嗯+|啊+|哦+|额+|好的?|是啊?|哈哈+|呵呵+|谢谢|没事|继续|然后呢|知道了)[。！？!?…\s]*$/;
+const CHAT_FILLER =
+  /^(嗯+|啊+|哦+|额+|好的?|是啊?|哈哈+|呵呵+|谢谢|没事|继续|然后呢|知道了)[。！？!?…\s]*$/;
 
-export function condenseImportantChat(content: string, maxChars = IMPORTANT_CHAT_MAX_CHARS): string {
+export function condenseImportantChat(
+  content: string,
+  maxChars = IMPORTANT_CHAT_MAX_CHARS,
+): string {
   const trimmed = content.trim().replace(/\s+/g, ' ');
   if (!trimmed) return '';
   if (trimmed.length <= maxChars) return trimmed;

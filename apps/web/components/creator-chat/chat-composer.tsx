@@ -28,8 +28,17 @@ import {
   type ChatEffort,
 } from '@/lib/chat-composer';
 import { meteorStatusLabel } from '@/lib/meteor-motion';
-import { clampContextWindow, clampStopIndex, modelCapabilities, modelEffortStops } from '@/lib/model-capabilities';
-import { MeteorField, useMeteorPhase, usePrefersReducedMotion } from '@/components/brand/meteor-field';
+import {
+  clampContextWindow,
+  clampStopIndex,
+  modelCapabilities,
+  modelEffortStops,
+} from '@/lib/model-capabilities';
+import {
+  MeteorField,
+  useMeteorPhase,
+  usePrefersReducedMotion,
+} from '@/components/brand/meteor-field';
 import { ModelEffortPicker } from '@/components/creator-chat/model-effort-picker';
 import type { ProviderCatalogDTO, ProviderId, WorldResourcesDTO } from '@/lib/types';
 import {

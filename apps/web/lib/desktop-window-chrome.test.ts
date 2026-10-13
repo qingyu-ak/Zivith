@@ -34,7 +34,9 @@ describe('desktop window chrome', () => {
   });
 
   it('uses the same light canvas as the web background token', () => {
-    expect(chrome.chromeForTheme('light').backgroundColor).toBe(WINDOW_CHROME.light.backgroundColor);
+    expect(chrome.chromeForTheme('light').backgroundColor).toBe(
+      WINDOW_CHROME.light.backgroundColor,
+    );
   });
 
   it('remembers the last theme in userData', () => {

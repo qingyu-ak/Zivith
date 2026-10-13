@@ -84,8 +84,6 @@ describe('group chat rhythm', () => {
         { role: 'assistant', speaker_asset_id: 'a' },
       ]),
     ).toBe('a');
-    expect(
-      lastSpokenSpeakerId([{ role: 'user', speaker_asset_id: 'me' }]),
-    ).toBe('me');
+    expect(lastSpokenSpeakerId([{ role: 'user', speaker_asset_id: 'me' }])).toBe('me');
   });
 });

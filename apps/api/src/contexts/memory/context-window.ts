@@ -125,10 +125,7 @@ export function contextTokenBudget(): number {
 }
 
 /** 滚动摘要只服务当下窗口，不当档案越积越长。 */
-export function clipRollingSummary(
-  text: string,
-  maxTokens = ROLLING_SUMMARY_MAX_TOKENS,
-): string {
+export function clipRollingSummary(text: string, maxTokens = ROLLING_SUMMARY_MAX_TOKENS): string {
   const trimmed = text.trim();
   if (!trimmed || estimateTokens(trimmed) <= maxTokens) return trimmed;
   const lines = trimmed

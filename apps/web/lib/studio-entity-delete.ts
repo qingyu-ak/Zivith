@@ -2,11 +2,7 @@ import { isPlayableCharacter } from './create-world-character';
 import type { WorldResourcesDTO, WorldSelection } from './types';
 
 export type StudioDeletableKind =
-  | 'character'
-  | 'location'
-  | 'scene'
-  | 'world_event'
-  | 'relationship';
+  'character' | 'location' | 'scene' | 'world_event' | 'relationship';
 
 export function studioDeleteTarget(
   selection: WorldSelection,
