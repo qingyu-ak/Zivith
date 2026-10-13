@@ -154,7 +154,7 @@ export function contentRestatesEvent(
   const world = {
     projectId: '',
     projectName: '',
-    worldview: {},
+    worldview: { rules: [] },
     stories: [],
     characters: names.map((name, index) => ({
       id: `c${index}`,

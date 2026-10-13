@@ -341,7 +341,7 @@ export function buildRoleplaySystemPrompt(
     '\n## 这一拍怎么说话',
     buildVoiceLock({
       name: state.name,
-      personality: state.personality,
+      personality: state.personality ?? null,
       persona: state.persona,
       avoidDirections,
     }),
