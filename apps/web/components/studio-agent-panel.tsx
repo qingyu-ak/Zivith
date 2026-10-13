@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, errorMessage, rollbackCreatorChat, sendCreatorChatTurn, unwrapList } from '@/lib/api';
-import type { CreatorChatMessageDTO, WorldSelection } from '@/lib/types';
+import type {
+  CreatorChatMessageDTO,
+  ProviderCatalogDTO,
+  ProviderId,
+  WorldSelection,
+} from '@/lib/types';
 import {
   CHAT_FOCUS_LABEL,
   chatHrefForStudio,
@@ -11,6 +16,7 @@ import {
   normalizeThread,
   pickStudioAgentThread,
   resolveThreadForProject,
+  settingsHrefFor,
   studioAgentThreadKey,
   type ChatFocus,
 } from '@/lib/creator-chat-nav';
@@ -26,15 +32,31 @@ import {
 } from '@/lib/agent-write-mode';
 import {
   CHAT_EFFORT_HINT,
-  CHAT_EFFORT_LABEL,
   CHAT_EFFORT_TOKEN_CAP,
   estimateMessageTokens,
+  filterLlmChoices,
   formatContextMeter,
   contextUsagePercent,
+  llmChoices,
+  readStoredContextWindow,
   readStoredEffort,
+  readStoredFast,
+  readStoredStopIndex,
+  readStoredThinking,
+  selectedLlmLabel,
+  writeStoredContextWindow,
   writeStoredEffort,
+  writeStoredFast,
+  writeStoredStopIndex,
+  writeStoredThinking,
   type ChatEffort,
 } from '@/lib/chat-composer';
+import {
+  clampContextWindow,
+  clampStopIndex,
+  modelCapabilities,
+  modelEffortStops,
+} from '@/lib/model-capabilities';
 import { rollbackPreview, rollbackSlice, userTicks } from '@/lib/conversation-ticks';
 import { ConversationTicksRail } from '@/components/creator-chat/conversation-ticks-rail';
 import {
@@ -77,7 +99,9 @@ import { MentionMenu } from './creator-chat/mention-menu';
 import { MessageActions } from './creator-chat/message-actions';
 import { ThoughtSummary } from './creator-chat/thought-summary';
 import { ProposalCard } from './creator-chat/proposal-card';
-import { ModelPicker } from './model-picker';
+import { ModelEffortPicker } from './creator-chat/model-effort-picker';
+
+type PickerView = 'main' | 'model' | 'context';
 
 interface ProjectUsageDTO {
   total_calls: number;
@@ -124,6 +148,15 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
   const [context, setContext] = useState<ThreadContextDTO | null>(null);
   const [writeMenuOpen, setWriteMenuOpen] = useState(false);
   const [threadMenuOpen, setThreadMenuOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerView, setPickerView] = useState<PickerView>('main');
+  const [fast, setFast] = useState(false);
+  const [thinking, setThinking] = useState(false);
+  const [contextWindow, setContextWindow] = useState<number | null>(null);
+  const [stopIndex, setStopIndex] = useState(1);
+  const [catalog, setCatalog] = useState<ProviderCatalogDTO | null>(null);
+  const [savingModel, setSavingModel] = useState(false);
+  const [modelQuery, setModelQuery] = useState('');
   const [pinnedFocus, setPinnedFocus] = useState<ChatFocus | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [cursor, setCursor] = useState(0);
@@ -138,6 +171,8 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const writeMenuRef = useRef<HTMLDivElement | null>(null);
   const threadMenuRef = useRef<HTMLDivElement | null>(null);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
   const inputRef = useRef(input);
   inputRef.current = input;
@@ -188,19 +223,33 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
   useEffect(() => {
     setEffort(readStoredEffort());
     setWriteMode(readStoredWriteMode());
+    setFast(readStoredFast());
+    setThinking(readStoredThinking());
+    setContextWindow(readStoredContextWindow());
+    const storedStop = readStoredStopIndex();
+    if (storedStop != null) setStopIndex(storedStop);
+    void api<ProviderCatalogDTO>('/providers')
+      .then(setCatalog)
+      .catch(() => setCatalog(null));
   }, []);
 
   useEffect(() => {
-    if (!writeMenuOpen && !threadMenuOpen) return;
+    if (!writeMenuOpen && !threadMenuOpen && !pickerOpen) return;
     function onPointer(event: MouseEvent) {
       const target = event.target as Node;
       if (!writeMenuRef.current?.contains(target)) setWriteMenuOpen(false);
       if (!threadMenuRef.current?.contains(target)) setThreadMenuOpen(false);
+      if (pickerOpen && !pickerRef.current?.contains(target)) {
+        setPickerOpen(false);
+        setPickerView('main');
+      }
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setWriteMenuOpen(false);
         setThreadMenuOpen(false);
+        setPickerOpen(false);
+        setPickerView('main');
       }
     }
     document.addEventListener('mousedown', onPointer);
@@ -209,7 +258,15 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
       document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [writeMenuOpen, threadMenuOpen]);
+  }, [writeMenuOpen, threadMenuOpen, pickerOpen]);
+
+  useEffect(() => {
+    if (!pickerOpen || pickerView !== 'model') {
+      setModelQuery('');
+      return;
+    }
+    searchRef.current?.focus();
+  }, [pickerOpen, pickerView]);
 
   useEffect(() => {
     setMentionIndex(0);
@@ -561,6 +618,44 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
     approximate: !context,
     llmCalls: usage ? (llmUsage?.calls ?? 0) : null,
   });
+  const choices = llmChoices(catalog);
+  const visibleChoices = filterLlmChoices(choices, modelQuery);
+  const modelLabel = selectedLlmLabel(catalog);
+  const settingsHref = settingsHrefFor(projectId, [], 'models');
+  const currentModel = catalog?.models.llm ?? '';
+  const capabilities = modelCapabilities(currentModel);
+  const stops = modelEffortStops(currentModel);
+  const safeStop = clampStopIndex(stopIndex, stops.length);
+  const thinkingOn = capabilities.thinking && thinking;
+
+  async function pickModel(provider: ProviderId, model: string) {
+    setSavingModel(true);
+    try {
+      const result = await api<{
+        selection: ProviderCatalogDTO['selection'];
+        models: ProviderCatalogDTO['models'];
+      }>('/providers/selection', {
+        method: 'PUT',
+        body: { llm: provider, models: { llm: model } },
+      });
+      setCatalog((current) =>
+        current
+          ? {
+              ...current,
+              selection: result.selection,
+              models: { ...current.models, ...result.models },
+            }
+          : current,
+      );
+      setPickerOpen(false);
+      setPickerView('main');
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setSavingModel(false);
+    }
+  }
+
   const currentPending = threadId
     ? unconfirmedProposalCount(threadId, worldThreads, threadId, messages)
     : 0;
@@ -576,6 +671,8 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             aria-label="切换对话"
             onClick={() => {
               setWriteMenuOpen(false);
+              setPickerOpen(false);
+              setPickerView('main');
               setThreadMenuOpen((open) => !open);
             }}
           >
@@ -651,130 +748,130 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
       ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
-      <div className="min-h-0 h-full overflow-x-hidden overflow-y-auto px-3 py-3">
-        {loading ? (
-          <p className="text-xs text-zinc-400">正在打开当前项目的 Agent 对话…</p>
-        ) : messages.length === 0 && !streamText ? (
-          <p className="text-xs leading-5 text-zinc-400">
-            输入 @ 引用实体作为本轮聚焦。提案在这里就地确认。
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {messages.map((message) => {
-              const parsed = parseProposals(message);
-              const writeAction = decideWriteAction(
-                writeMode,
-                parsed.proposals.map((item) => item.kind),
-              );
-              const retry = retryTargetForMessage(messages, message.id);
-              if (message.role === 'system') {
+        <div className="min-h-0 h-full overflow-x-hidden overflow-y-auto px-3 py-3">
+          {loading ? (
+            <p className="text-xs text-zinc-400">正在打开当前项目的 Agent 对话…</p>
+          ) : messages.length === 0 && !streamText ? (
+            <p className="text-xs leading-5 text-zinc-400">
+              输入 @ 引用实体作为本轮聚焦。提案在这里就地确认。
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {messages.map((message) => {
+                const parsed = parseProposals(message);
+                const writeAction = decideWriteAction(
+                  writeMode,
+                  parsed.proposals.map((item) => item.kind),
+                );
+                const retry = retryTargetForMessage(messages, message.id);
+                if (message.role === 'system') {
+                  return (
+                    <li key={message.id}>
+                      <p className="text-center text-[11px] text-zinc-400">{message.content}</p>
+                    </li>
+                  );
+                }
                 return (
-                  <li key={message.id}>
-                    <p className="text-center text-[11px] text-zinc-400">{message.content}</p>
+                  <li key={message.id} className="group">
+                    {message.role === 'user' ? (
+                      <div>
+                        <p className="ml-6 whitespace-pre-wrap rounded-xl bg-zinc-100 px-3 py-2 text-[13px] leading-6 text-zinc-800">
+                          {message.content}
+                        </p>
+                        <MessageActions
+                          copyText={message.content}
+                          align="end"
+                          busy={sending}
+                          retry={() => {
+                            if (retry?.ok) void sendContent(retry.content, { retry: true });
+                          }}
+                          retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
+                        />
+                      </div>
+                    ) : (
+                      <div className="mr-2">
+                        <p className="whitespace-pre-wrap text-[13px] leading-6 text-zinc-800">
+                          {message.content}
+                        </p>
+                        {parsed.proposals.length > 0 ? (
+                          <div className="mt-2">
+                            <ProposalCard
+                              threadId={message.thread_id || threadId || ''}
+                              messageId={message.id}
+                              proposals={parsed.proposals}
+                              applied={parsed.applied}
+                              rejected={parsed.rejected}
+                              applying={applyingProposalIds.includes(message.id)}
+                              plan={writeAction === 'plan'}
+                              executeLabel={writeAction === 'plan' ? '按此计划写入' : undefined}
+                              studioLink={false}
+                              onApplied={() => {
+                                if (threadId) {
+                                  void loadHistory(threadId).catch(() => {});
+                                  void loadContext(threadId, effort);
+                                }
+                                void reload({ silent: true });
+                              }}
+                              onRejected={() => {
+                                if (threadId) void loadHistory(threadId).catch(() => {});
+                              }}
+                            />
+                          </div>
+                        ) : null}
+                        <MessageActions
+                          copyText={message.content}
+                          busy={sending}
+                          retry={() => {
+                            if (retry?.ok) void sendContent(retry.content, { retry: true });
+                          }}
+                          retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
+                        />
+                      </div>
+                    )}
                   </li>
                 );
-              }
-              return (
-                <li key={message.id} className="group">
-                  {message.role === 'user' ? (
-                    <div>
-                      <p className="ml-6 whitespace-pre-wrap rounded-xl bg-zinc-100 px-3 py-2 text-[13px] leading-6 text-zinc-800">
-                        {message.content}
-                      </p>
-                      <MessageActions
-                        copyText={message.content}
-                        align="end"
-                        busy={sending}
-                        retry={() => {
-                          if (retry?.ok) void sendContent(retry.content, { retry: true });
-                        }}
-                        retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
-                      />
-                    </div>
-                  ) : (
-                    <div className="mr-2">
-                      <p className="whitespace-pre-wrap text-[13px] leading-6 text-zinc-800">
-                        {message.content}
-                      </p>
-                      {parsed.proposals.length > 0 ? (
-                        <div className="mt-2">
-                          <ProposalCard
-                            threadId={message.thread_id || threadId || ''}
-                            messageId={message.id}
-                            proposals={parsed.proposals}
-                            applied={parsed.applied}
-                            rejected={parsed.rejected}
-                            applying={applyingProposalIds.includes(message.id)}
-                            plan={writeAction === 'plan'}
-                            executeLabel={writeAction === 'plan' ? '按此计划写入' : undefined}
-                            studioLink={false}
-                            onApplied={() => {
-                              if (threadId) {
-                                void loadHistory(threadId).catch(() => {});
-                                void loadContext(threadId, effort);
-                              }
-                              void reload({ silent: true });
-                            }}
-                            onRejected={() => {
-                              if (threadId) void loadHistory(threadId).catch(() => {});
-                            }}
-                          />
-                        </div>
-                      ) : null}
-                      <MessageActions
-                        copyText={message.content}
-                        busy={sending}
-                        retry={() => {
-                          if (retry?.ok) void sendContent(retry.content, { retry: true });
-                        }}
-                        retryBlocked={retry && !retry.ok ? retry.blocked : retry ? null : 'empty'}
-                      />
-                    </div>
-                  )}
+              })}
+              {(sending || stopped || !!streamText) && (
+                <li className="group">
+                  <p className="whitespace-pre-wrap text-[13px] leading-6 text-zinc-800">
+                    {streamText}
+                    {sending && !streamText ? '正在思考…' : ''}
+                  </p>
+                  {stopped && streamText ? (
+                    <p className="mt-1 text-[11px] text-zinc-400">已停止生成</p>
+                  ) : null}
+                  {streamText ? (
+                    <MessageActions
+                      copyText={streamText}
+                      busy={sending}
+                      retry={() => {
+                        const content = lastUserContent(messages) ?? lastSentRef.current;
+                        if (content.trim()) void sendContent(content, { retry: true });
+                      }}
+                      retryBlocked={
+                        lastUserContent(messages) || lastSentRef.current.trim() ? null : 'empty'
+                      }
+                    />
+                  ) : null}
                 </li>
-              );
-            })}
-            {(sending || stopped || !!streamText) && (
-              <li className="group">
-                <p className="whitespace-pre-wrap text-[13px] leading-6 text-zinc-800">
-                  {streamText}
-                  {sending && !streamText ? '正在思考…' : ''}
-                </p>
-                {stopped && streamText ? (
-                  <p className="mt-1 text-[11px] text-zinc-400">已停止生成</p>
-                ) : null}
-                {streamText ? (
-                  <MessageActions
-                    copyText={streamText}
-                    busy={sending}
-                    retry={() => {
-                      const content = lastUserContent(messages) ?? lastSentRef.current;
-                      if (content.trim()) void sendContent(content, { retry: true });
-                    }}
-                    retryBlocked={
-                      lastUserContent(messages) || lastSentRef.current.trim() ? null : 'empty'
-                    }
-                  />
-                ) : null}
-              </li>
-            )}
-          </ul>
-        )}
-        {memoryNote && !sending ? <ThoughtSummary note={memoryNote} className="mt-2" /> : null}
-        <div ref={endRef} />
-      </div>
-      {userTicks(messages).length > 0 ? (
-        <div className="pointer-events-none absolute inset-y-0 right-1 z-10 flex items-start pt-3">
-          <div className="pointer-events-auto max-h-full">
-            <ConversationTicksRail
-              ticks={userTicks(messages)}
-              userLabel="你"
-              assistantLabel="助手"
-              onPick={(messageId) => setRollbackTickId(messageId)}
-            />
-          </div>
+              )}
+            </ul>
+          )}
+          {memoryNote && !sending ? <ThoughtSummary note={memoryNote} className="mt-2" /> : null}
+          <div ref={endRef} />
         </div>
-      ) : null}
+        {userTicks(messages).length > 0 ? (
+          <div className="pointer-events-none absolute inset-y-0 right-1 z-10 flex items-start pt-3">
+            <div className="pointer-events-auto max-h-full">
+              <ConversationTicksRail
+                ticks={userTicks(messages)}
+                userLabel="你"
+                assistantLabel="助手"
+                onPick={(messageId) => setRollbackTickId(messageId)}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <form
@@ -866,6 +963,12 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             }}
             onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
             onKeyUp={(event) => setCursor(event.currentTarget.selectionStart)}
+            onMouseDown={() => {
+              if (pickerOpen) {
+                setPickerOpen(false);
+                setPickerView('main');
+              }
+            }}
             onKeyDown={(event) => {
               if (mentionOpen) {
                 if (event.key === 'ArrowDown') {
@@ -925,7 +1028,11 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
                 aria-expanded={writeMenuOpen}
                 aria-label={`写入模式：${AGENT_WRITE_MODE_LABEL[writeMode]}`}
                 title={AGENT_WRITE_MODE_HINT[writeMode]}
-                onClick={() => setWriteMenuOpen((open) => !open)}
+                onClick={() => {
+                  setPickerOpen(false);
+                  setPickerView('main');
+                  setWriteMenuOpen((open) => !open);
+                }}
               >
                 <WriteModeIcon mode={writeMode} />
                 <span>{AGENT_WRITE_MODE_SHORT[writeMode]}</span>
@@ -976,6 +1083,8 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
               title="输入 @ 引用实体"
               disabled={busy}
               onClick={() => {
+                setPickerOpen(false);
+                setPickerView('main');
                 const at = areaRef.current?.selectionStart ?? input.length;
                 const next = insertAtTrigger(input, at);
                 setInput(next.text);
@@ -990,25 +1099,60 @@ export function StudioAgentPanel({ projectId }: { projectId: string }) {
             >
               @
             </button>
-            <ModelPicker projectId={projectId} />
-            <select
-              className="max-w-24 rounded-full bg-transparent px-1.5 py-0.5 text-[11px] text-zinc-600 outline-none transition hover:bg-zinc-100"
-              value={effort}
-              title={CHAT_EFFORT_HINT[effort]}
-              aria-label="努力程度"
-              onChange={(event) => {
-                const next = event.target.value as ChatEffort;
-                setEffort(next);
-                writeStoredEffort(next);
-              }}
-            >
-              {(['fast', 'balanced', 'deep'] as const).map((item) => (
-                <option key={item} value={item}>
-                  {CHAT_EFFORT_LABEL[item]}
-                </option>
-              ))}
-            </select>
             <span className="min-w-0 flex-1" />
+            <div ref={pickerRef} className="relative shrink-0">
+              <ModelEffortPicker
+                open={pickerOpen}
+                view={pickerView}
+                onOpen={() => {
+                  setWriteMenuOpen(false);
+                  setThreadMenuOpen(false);
+                  if (pickerOpen) {
+                    setPickerOpen(false);
+                    setPickerView('main');
+                    return;
+                  }
+                  setPickerOpen(true);
+                  setPickerView('main');
+                }}
+                onView={setPickerView}
+                stops={stops}
+                stopIndex={safeStop}
+                onStopChange={(index, nextEffort) => {
+                  setStopIndex(index);
+                  writeStoredStopIndex(index);
+                  setEffort(nextEffort);
+                  writeStoredEffort(nextEffort);
+                }}
+                fast={fast}
+                onFastChange={(next) => {
+                  setFast(next);
+                  writeStoredFast(next);
+                }}
+                thinkingEnabled={thinkingOn}
+                onThinkingChange={(next) => {
+                  setThinking(next);
+                  writeStoredThinking(next);
+                }}
+                supportsThinking={capabilities.thinking}
+                contextWindows={capabilities.contextWindows}
+                contextWindow={clampContextWindow(contextWindow, capabilities.contextWindows)}
+                onContextWindowChange={(tokens) => {
+                  setContextWindow(tokens);
+                  writeStoredContextWindow(tokens);
+                  setPickerView('main');
+                }}
+                modelLabel={modelLabel}
+                catalog={catalog}
+                saving={savingModel}
+                visibleChoices={visibleChoices}
+                modelQuery={modelQuery}
+                onModelQueryChange={setModelQuery}
+                searchRef={searchRef}
+                settingsHref={settingsHref}
+                onPickModel={(provider, model) => void pickModel(provider, model)}
+              />
+            </div>
             {sending && !input.trim() ? (
               <button
                 type="button"

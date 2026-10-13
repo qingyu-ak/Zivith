@@ -16,6 +16,11 @@ const LAYOUT_EVENT = 'zivith-layout';
 /** Agent 打开时 Inspector 让出宽度，保持 Cursor 式「画布 + Agent」主栏。 */
 export const INSPECTOR_WIDTH_WHEN_AGENT = 248;
 
+/** 选择器弹层 17.5rem，再窄会裁切档位条和「确认」。 */
+export const AGENT_PANEL_MIN_WIDTH = 360;
+export const AGENT_PANEL_DEFAULT_WIDTH = 360;
+export const AGENT_PANEL_MAX_WIDTH = 720;
+
 export function clampPx(value: number, min: number, max: number): number {
   if (Number.isNaN(value)) return min;
   return Math.min(max, Math.max(min, Math.round(value)));

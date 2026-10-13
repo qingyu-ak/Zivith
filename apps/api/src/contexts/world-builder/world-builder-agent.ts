@@ -287,7 +287,8 @@ function applyGuidance(
 
   let { reply } = response;
   const next = gaps[0];
-  const repeated = !wantsGuidanceTurn(input.text) &&
+  const repeated =
+    !wantsGuidanceTurn(input.text) &&
     !wantsStudioHandoff(input.text) &&
     replyRepeatsPrevious(reply, input.history);
   if (repeated) {

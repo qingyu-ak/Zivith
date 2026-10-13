@@ -27,8 +27,12 @@ describe('parseRestorablePath', () => {
     expect(parseRestorablePath('/login')).toBeNull();
     expect(parseRestorablePath('/register')).toBeNull();
     expect(parseRestorablePath('/projects/new')).toBeNull();
-    expect(parseRestorablePath('/projects/22afd996-d076-4b15-a6bc-b856e6dfa962/settings')).toBeNull();
-    expect(parseRestorablePath('/projects/22afd996-d076-4b15-a6bc-b856e6dfa962/production')).toBeNull();
+    expect(
+      parseRestorablePath('/projects/22afd996-d076-4b15-a6bc-b856e6dfa962/settings'),
+    ).toBeNull();
+    expect(
+      parseRestorablePath('/projects/22afd996-d076-4b15-a6bc-b856e6dfa962/production'),
+    ).toBeNull();
     expect(parseRestorablePath('javascript:alert(1)')).toBeNull();
     expect(parseRestorablePath('https://evil.example/creator-chats')).toBeNull();
   });

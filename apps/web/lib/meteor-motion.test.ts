@@ -115,9 +115,7 @@ describe('meteor thinking phase', () => {
   it('labels thinking, speaker, and chain-of-thought without a spinner phrase', () => {
     expect(meteorStatusLabel({ phase: 'idle' })).toBeNull();
     expect(meteorStatusLabel({ phase: 'thinking' })).toBe('正在思考…');
-    expect(meteorStatusLabel({ phase: 'thinking', thinkingEnabled: true })).toBe(
-      '正在深度思考…',
-    );
+    expect(meteorStatusLabel({ phase: 'thinking', thinkingEnabled: true })).toBe('正在深度思考…');
     expect(meteorStatusLabel({ phase: 'thinking', speaker: '陈默' })).toBe('陈默正在说…');
   });
 });

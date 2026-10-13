@@ -214,7 +214,13 @@ export function createMemoryPrisma() {
   const creatorChatMessage = table(
     'creatorChatMessage',
     { thread: (row) => creatorChatThread.rows.find((thread) => thread.id === row.threadId) },
-    { proposal: null, proposalKey: null, proposalState: null, speakerAssetId: null, suppressed: false },
+    {
+      proposal: null,
+      proposalKey: null,
+      proposalState: null,
+      speakerAssetId: null,
+      suppressed: false,
+    },
   );
   const db = {
     user: table('user'),
@@ -258,7 +264,12 @@ export function createMemoryPrisma() {
     roleplayThread: table(
       'roleplayThread',
       {},
-      { status: 'active', userCharacterAssetId: null, anchoredWorldEventId: null, participantAssetIds: [] },
+      {
+        status: 'active',
+        userCharacterAssetId: null,
+        anchoredWorldEventId: null,
+        participantAssetIds: [],
+      },
     ),
     memoryCore: table('memoryCore'),
     memoryAtom: table('memoryAtom'),

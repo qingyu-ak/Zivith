@@ -4,10 +4,16 @@ import {
   formatRoleplayRecall,
   roleplayThreadVisibleAtAnchor,
 } from '../src/contexts/roleplay/chat-recall.js';
-import { buildRoleplaySystemPrompt, type CharacterState } from '../src/contexts/roleplay/roleplay-agent.js';
+import {
+  buildRoleplaySystemPrompt,
+  type CharacterState,
+} from '../src/contexts/roleplay/roleplay-agent.js';
 
 describe('roleplayThreadVisibleAtAnchor', () => {
-  const eventOrderById = new Map<string, number | null>([['e-early', 1], ['e-later', 9]]);
+  const eventOrderById = new Map<string, number | null>([
+    ['e-early', 1],
+    ['e-later', 9],
+  ]);
 
   it('hides a 全书读完 thread when playing at an earlier anchor', () => {
     expect(

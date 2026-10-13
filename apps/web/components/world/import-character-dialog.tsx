@@ -87,7 +87,11 @@ export function ImportCharacterDialog({
           <h2 id="import-character-title" className="text-sm font-medium text-zinc-800">
             从其他世界导入角色
           </h2>
-          <button type="button" className="text-xs text-zinc-400 hover:text-zinc-700" onClick={onCancel}>
+          <button
+            type="button"
+            className="text-xs text-zinc-400 hover:text-zinc-700"
+            onClick={onCancel}
+          >
             取消
           </button>
         </div>

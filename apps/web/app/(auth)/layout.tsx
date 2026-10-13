@@ -21,12 +21,15 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               让每个世界决定都可见、可编辑、可复用。
             </h1>
             <p className="mt-6 max-w-lg leading-7 text-[var(--z-fg-subtle)]">
-              建角色、地点和事件，再走进去说话。AI 提出变化，你确认之后才写进世界——对话不会悄悄改设定。
+              建角色、地点和事件，再走进去说话。AI
+              提出变化，你确认之后才写进世界——对话不会悄悄改设定。
             </p>
           </div>
           <p className="text-sm text-[var(--z-fg-subtle)]">世界为核 · 你来确认 · 角色记得</p>
         </section>
-        <section data-auth-form className="grid place-items-center px-6 py-12">{children}</section>
+        <section data-auth-form className="grid place-items-center px-6 py-12">
+          {children}
+        </section>
       </main>
     </div>
   );

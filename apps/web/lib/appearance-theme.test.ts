@@ -1,10 +1,6 @@
 /// <reference types="vitest/globals" />
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  WINDOW_CHROME,
-  asAppearanceTheme,
-  syncDesktopAppearanceTheme,
-} from './appearance-theme';
+import { WINDOW_CHROME, asAppearanceTheme, syncDesktopAppearanceTheme } from './appearance-theme';
 
 describe('asAppearanceTheme', () => {
   it('only treats dark as dark', () => {

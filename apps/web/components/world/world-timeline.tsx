@@ -9,7 +9,13 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { WorldLineItem, WorldLineModel, WorldSelection } from '@/lib/types';
-import { clipPlotBox, createOrderScale, integerTicks, paddedOrderDomain, thinByMinGap } from '@/lib/world-scale';
+import {
+  clipPlotBox,
+  createOrderScale,
+  integerTicks,
+  paddedOrderDomain,
+  thinByMinGap,
+} from '@/lib/world-scale';
 import {
   overlayFocusOfItem,
   isTimelineItemActive,
@@ -131,9 +137,7 @@ function persistWrites(kind: string): boolean {
 function canCreateOnTrack(
   kind: string,
 ): kind is 'character' | 'location' | 'scene' | 'world_event' {
-  return (
-    kind === 'character' || kind === 'location' || kind === 'scene' || kind === 'world_event'
-  );
+  return kind === 'character' || kind === 'location' || kind === 'scene' || kind === 'world_event';
 }
 
 function canEditOnTrack(kind: string): boolean {

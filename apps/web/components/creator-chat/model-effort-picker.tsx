@@ -4,11 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, type RefObject } from 'react';
 import { MeteorField, usePrefersReducedMotion } from '@/components/brand/meteor-field';
 import { IconBolt, IconBrain, IconCheck, IconChevron } from '@/components/nav-icons';
-import {
-  displayModelId,
-  type ChatEffort,
-  type LlmChoice,
-} from '@/lib/chat-composer';
+import { displayModelId, type ChatEffort, type LlmChoice } from '@/lib/chat-composer';
 import { captureSettingsReturn } from '@/lib/settings-return';
 import {
   clampContextWindow,
@@ -102,7 +98,7 @@ export function ModelEffortPicker({
     <div className="relative">
       <button
         type="button"
-        className="inline-flex h-8 max-w-[14rem] items-center gap-1 rounded-full px-2 text-xs text-[var(--z-fg-muted)] hover:bg-[var(--z-wash)]"
+        className="inline-flex h-8 min-w-0 max-w-[14rem] items-center gap-1 rounded-full px-2 text-xs text-[var(--z-fg-muted)] hover:bg-[var(--z-wash)]"
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={onOpen}
@@ -160,7 +156,9 @@ export function ModelEffortPicker({
                   ) : null}
                 </div>
                 <div className="relative min-w-0 flex-1 text-center">
-                  <p className={`h-5 text-[15px] font-medium leading-5 ${showHint ? 'invisible' : ''}`}>
+                  <p
+                    className={`h-5 text-[15px] font-medium leading-5 ${showHint ? 'invisible' : ''}`}
+                  >
                     <span style={{ color: topStop ? '#7c5cff' : METEOR_BLUE }}>{stopLabel}</span>
                   </p>
                   <button
@@ -209,7 +207,10 @@ export function ModelEffortPicker({
                   data-fast={fast ? 'on' : 'off'}
                   data-thinking={thinkingEnabled ? 'on' : 'off'}
                 >
-                  <div className="effort-rail-fill" style={{ width: stopFill(safeStop, stops.length) }} />
+                  <div
+                    className="effort-rail-fill"
+                    style={{ width: stopFill(safeStop, stops.length) }}
+                  />
                   {topStop ? null : (
                     <div className="effort-stops">
                       {stops.map((item, index) => (
@@ -345,7 +346,9 @@ function ModelList({
                       {choice.tag}
                     </span>
                   ) : null}
-                  {active ? <IconCheck className="size-4 shrink-0 text-[var(--z-fg-muted)]" /> : null}
+                  {active ? (
+                    <IconCheck className="size-4 shrink-0 text-[var(--z-fg-muted)]" />
+                  ) : null}
                 </button>
               </div>
             );

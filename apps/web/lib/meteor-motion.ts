@@ -100,8 +100,7 @@ export function meteorCapsuleStars(count: number, seed = 1): MeteorStarPose[] {
   return Array.from({ length: count }, (_, index) => {
     const along = unit(seed * 17 + index * 13 + 1);
     const band = index % 3;
-    const left =
-      band === 0 ? 74 + along * 24 : band === 1 ? 42 + along * 30 : 12 + along * 28;
+    const left = band === 0 ? 74 + along * 24 : band === 1 ? 42 + along * 30 : 12 + along * 28;
     const wait = unit(seed * 29 + index * 19 + 5);
     const size = unit(seed * 41 + index * 7 + 3);
     const pace = unit(seed * 53 + index * 11 + 9);
@@ -109,7 +108,7 @@ export function meteorCapsuleStars(count: number, seed = 1): MeteorStarPose[] {
     const tail = unit(seed * 71 + index * 19 + 6);
     const run = 40 + unit(seed * 23 + index * 31 + 2) * 6;
     const drop = meteorSlopeDrop(run);
-    const arc = index === (seed % Math.max(count, 1));
+    const arc = index === seed % Math.max(count, 1);
     const bow = arc ? 3.2 : 0;
     const sin = Math.sin((LOGO_METEOR_DEG * Math.PI) / 180);
     const cos = Math.cos((LOGO_METEOR_DEG * Math.PI) / 180);

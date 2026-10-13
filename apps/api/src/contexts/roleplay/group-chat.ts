@@ -2,7 +2,11 @@ const MAX_GROUP_SIZE = 3;
 
 export function parseParticipantIds(value: unknown, fallbackCharacterId: string): string[] {
   const fromJson = Array.isArray(value)
-    ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.trim().length > 0))]
+    ? [
+        ...new Set(
+          value.filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
+        ),
+      ]
     : [];
   if (fromJson.length >= 2) return fromJson.slice(0, MAX_GROUP_SIZE);
   return fallbackCharacterId ? [fallbackCharacterId] : [];

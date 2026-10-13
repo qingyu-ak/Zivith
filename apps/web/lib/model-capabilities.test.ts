@@ -28,9 +28,7 @@ describe('model capabilities', () => {
     expect(modelCapabilities('deepseek-r1').thinking).toBe(true);
     expect(modelCapabilities('Qwen/QwQ-32B').thinking).toBe(true);
     expect(modelCapabilities('deepseek-v4-flash').contextWindows).toEqual([]);
-    expect(hasContextWindowChoice(modelCapabilities('deepseek-v4-pro').contextWindows)).toBe(
-      false,
-    );
+    expect(hasContextWindowChoice(modelCapabilities('deepseek-v4-pro').contextWindows)).toBe(false);
   });
 
   it('gives each model three to five effort stops', () => {

@@ -171,7 +171,10 @@ export function ChatSidebar({
         </label>
       </div>
 
-      <nav className="mt-3 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-3" aria-label="工作区列表">
+      <nav
+        className="mt-3 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-3"
+        aria-label="工作区列表"
+      >
         <div className="flex items-center gap-0.5 px-2 pb-1 pt-1">
           <p className="min-w-0 flex-1 text-[11px] text-zinc-400">项目</p>
           <button

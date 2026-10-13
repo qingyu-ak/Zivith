@@ -15,7 +15,15 @@ function IconMinimize() {
 function IconMaximize() {
   return (
     <svg viewBox="0 0 10 10" className={iconClass} aria-hidden>
-      <rect x="1.4" y="1.4" width="7.2" height="7.2" fill="none" stroke="currentColor" strokeWidth="1.1" />
+      <rect
+        x="1.4"
+        y="1.4"
+        width="7.2"
+        height="7.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.1"
+      />
     </svg>
   );
 }

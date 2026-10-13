@@ -46,7 +46,8 @@ export function appliedEntitiesFromProposal(raw: unknown): Array<{
     out.push({
       kind: typeof record.kind === 'string' ? record.kind : '',
       entityId,
-      entityType: typeof payload.applied_entity_type === 'string' ? payload.applied_entity_type : '',
+      entityType:
+        typeof payload.applied_entity_type === 'string' ? payload.applied_entity_type : '',
       title,
     });
   }

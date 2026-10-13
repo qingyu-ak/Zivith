@@ -68,7 +68,9 @@ export function WorldTimeBar({
   return (
     <div className="shrink-0 border-b border-line bg-violet-50/60 px-4 py-2.5 dark:border-violet-900/40 dark:bg-violet-950/30">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold tracking-wider text-violet-800 dark:text-violet-200">世界时间</span>
+        <span className="text-xs font-semibold tracking-wider text-violet-800 dark:text-violet-200">
+          世界时间
+        </span>
         <span className="text-[11px] text-zinc-500">点维度切换叠层，不换算真实日历</span>
         {dimensions.map((dimension) => {
           const active = selectedDimensionId === dimension.id;

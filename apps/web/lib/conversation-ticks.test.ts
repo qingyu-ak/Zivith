@@ -17,7 +17,9 @@ const messages = [
     role: 'assistant',
     content: '记下了',
     proposal_state: 'applied',
-    proposal: [{ kind: 'create_world_event', payload: { title: '北境集结', applied_entity_id: 'e1' } }],
+    proposal: [
+      { kind: 'create_world_event', payload: { title: '北境集结', applied_entity_id: 'e1' } },
+    ],
   },
 ];
 

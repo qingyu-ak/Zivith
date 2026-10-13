@@ -17,7 +17,11 @@ import { studioTalkActionView } from '@/lib/studio-talk-action';
 import { isPlayableCharacter } from '@/lib/create-world-character';
 import { DIMENSION_KIND_LABEL, resolveDisplayDimensions, worldTimeCaption } from '@/lib/world-line';
 import { useState, type ReactNode } from 'react';
-import type { RelationshipCreateInput, StudioCreateExtras, StudioCreateKind } from '@/lib/studio-entity-create';
+import type {
+  RelationshipCreateInput,
+  StudioCreateExtras,
+  StudioCreateKind,
+} from '@/lib/studio-entity-create';
 import { ImportCharacterDialog } from './import-character-dialog';
 import {
   namedRefLabel,
@@ -297,7 +301,10 @@ export function EntityExplorer({
   onSelect: (selection: Exclude<WorldSelection, null>) => void;
   threads?: CreatorChatThreadDTO[];
   onNewChat?: () => void;
-  onCreate?: (kind: StudioCreateKind, extras?: StudioCreateExtras) => void | Promise<void | boolean>;
+  onCreate?: (
+    kind: StudioCreateKind,
+    extras?: StudioCreateExtras,
+  ) => void | Promise<void | boolean>;
   creatingKind?: StudioCreateKind | null;
   createError?: string;
 }) {
@@ -458,9 +465,7 @@ export function EntityExplorer({
                   : undefined
               }
               onSecondary={
-                onCreate
-                  ? () => void onCreate('character', { copyFromId: item.id })
-                  : undefined
+                onCreate ? () => void onCreate('character', { copyFromId: item.id }) : undefined
               }
               actionLabel="对话"
               actionDisabled={talkBusy}

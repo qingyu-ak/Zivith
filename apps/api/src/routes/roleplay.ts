@@ -242,13 +242,12 @@ export function registerRoleplayRoutes(
     });
     const chatIds = [...new Set(listed.map((thread) => thread.threadId))];
     const liveChatIds = new Set(
-      (
-        chatIds.length
-          ? await db.creatorChatThread.findMany({
-              where: { id: { in: chatIds }, state: 'active' },
-              select: { id: true },
-            })
-          : []
+      (chatIds.length
+        ? await db.creatorChatThread.findMany({
+            where: { id: { in: chatIds }, state: 'active' },
+            select: { id: true },
+          })
+        : []
       ).map((chat) => chat.id),
     );
     const threads = listed.filter((thread) => liveChatIds.has(thread.threadId));

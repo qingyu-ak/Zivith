@@ -13,7 +13,14 @@ import {
 } from '@/lib/creator-chat-nav';
 import { createStudioEntity, type StudioCreateKind } from '@/lib/studio-entity-create';
 import { studioTreeView } from '@/lib/studio-tree-view';
-import { WORKSPACE_LAYOUT_KEYS, usePersistedFlag, usePersistedPx } from '@/lib/workspace-layout';
+import {
+  AGENT_PANEL_DEFAULT_WIDTH,
+  AGENT_PANEL_MAX_WIDTH,
+  AGENT_PANEL_MIN_WIDTH,
+  WORKSPACE_LAYOUT_KEYS,
+  usePersistedFlag,
+  usePersistedPx,
+} from '@/lib/workspace-layout';
 import { ResizeHandle } from '@/components/world/workspace-split';
 import { IconAgent, IconPanelRight } from '@/components/nav-icons';
 import { TopBar } from '@/components/top-bar';
@@ -52,9 +59,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const [agentWidth, setAgentWidth] = usePersistedPx(
     WORKSPACE_LAYOUT_KEYS.agentWidth,
-    360,
-    280,
-    720,
+    AGENT_PANEL_DEFAULT_WIDTH,
+    AGENT_PANEL_MIN_WIDTH,
+    AGENT_PANEL_MAX_WIDTH,
   );
 
   const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
@@ -190,7 +197,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {agentOpen && projectId ? (
             <aside
               className="sticky top-11 h-[calc(100dvh-2.75rem)] shrink-0 overflow-hidden border-l border-line bg-white"
-              style={{ width: agentWidth }}
+              style={{ width: agentWidth, minWidth: AGENT_PANEL_MIN_WIDTH }}
             >
               <StudioAgentPanel projectId={projectId} />
             </aside>
@@ -254,9 +261,7 @@ function ExplorerTree({ projectId, pathname }: { projectId: string; pathname: st
           className={`text-xs ${treeView === 'error' || treeView === 'missing' ? 'text-red-600' : 'text-zinc-500'}`}
           role={treeView === 'error' || treeView === 'missing' ? 'alert' : undefined}
         >
-          {retrying
-            ? '正在加载项目树…'
-            : error || '无法加载项目树'}
+          {retrying ? '正在加载项目树…' : error || '无法加载项目树'}
         </p>
         {treeView === 'error' || treeView === 'missing' ? (
           <button

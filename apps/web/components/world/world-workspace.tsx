@@ -116,12 +116,7 @@ export function WorldWorkspace() {
 
   function editFromTimeline(item: WorldLineItem) {
     const kind = item.entityType;
-    if (
-      kind !== 'character' &&
-      kind !== 'location' &&
-      kind !== 'scene' &&
-      kind !== 'world_event'
-    ) {
+    if (kind !== 'character' && kind !== 'location' && kind !== 'scene' && kind !== 'world_event') {
       return;
     }
     const next = { kind, id: item.id };
@@ -419,7 +414,10 @@ export function WorldWorkspace() {
                   setDockHeight((height) => clampPx(height - delta, 40, max));
                 }}
               />
-              <div className="min-h-0 shrink-0 overflow-x-hidden overflow-y-auto" style={{ height: dockHeight }}>
+              <div
+                className="min-h-0 shrink-0 overflow-x-hidden overflow-y-auto"
+                style={{ height: dockHeight }}
+              >
                 {view === 'world' && (
                   <DockSection title="副驾驶" open={copilotOpen} onToggle={toggleCopilot}>
                     <CoPilotPanel resources={resources} onSelect={setSelection} showTitle={false} />

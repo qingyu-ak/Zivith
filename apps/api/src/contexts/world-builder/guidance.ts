@@ -176,7 +176,11 @@ export function replyRepeatsPrevious(
   if (current.length < 24 || previous.length < 24) return false;
   if (current === previous || current.includes(previous) || previous.includes(current)) return true;
   let shared = 0;
-  while (shared < current.length && shared < previous.length && current[shared] === previous[shared]) {
+  while (
+    shared < current.length &&
+    shared < previous.length &&
+    current[shared] === previous[shared]
+  ) {
     shared += 1;
   }
   return shared >= 40;

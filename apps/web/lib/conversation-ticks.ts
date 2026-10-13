@@ -47,7 +47,9 @@ export function rollbackSlice<T extends { id: string }>(
 
 function proposalList(raw: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(raw)) {
-    return raw.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
+    return raw.filter(
+      (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object',
+    );
   }
   if (raw && typeof raw === 'object') return [raw as Record<string, unknown>];
   return [];
